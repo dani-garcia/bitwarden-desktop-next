@@ -1,36 +1,26 @@
 param(
-    [string]$OutDir = "img\latest",
-    [string]$WindowTitle = "Bitwarden [Next]"
+    [string]$OutDir = "img\latest"
 )
 
-$ErrorActionPreference = "Continue"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$screenshotScript = Join-Path $scriptDir "screenshot.ps1"
+$exe = Join-Path $scriptDir "target\debug\bitwarden-desktop-native.exe"
+$ErrorActionPreference = "Continue"
 
-# Ensure output directory exists
 New-Item -ItemType Directory -Force -Path (Join-Path $scriptDir $OutDir) | Out-Null
 
-# Build
 Write-Host "Building..." -ForegroundColor Cyan
 Push-Location $scriptDir
 cargo build 2>&1 | Out-Null
 Pop-Location
 
-# Screenshot login screen
-Write-Host "Launching app (login screen)..." -ForegroundColor Cyan
-$proc = Start-Process -FilePath (Join-Path $scriptDir "target\debug\bitwarden-desktop-native.exe") -PassThru
-Start-Sleep -Seconds 5
-& $screenshotScript -OutputPath (Join-Path $scriptDir "$OutDir\Login.png") -WindowTitle $WindowTitle
-Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
-Start-Sleep -Seconds 1
-
-# Screenshot vault screen
-Write-Host "Launching app (vault screen)..." -ForegroundColor Cyan
-$env:DEV_SCREEN = "vault"
-$proc = Start-Process -FilePath (Join-Path $scriptDir "target\debug\bitwarden-desktop-native.exe") -PassThru
-Start-Sleep -Seconds 5
-& $screenshotScript -OutputPath (Join-Path $scriptDir "$OutDir\Main.png") -WindowTitle $WindowTitle
-Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+Write-Host "Capturing login screen..." -ForegroundColor Cyan
+$env:DEV_SCREENSHOT = Join-Path $scriptDir "$OutDir\Login.png"
 $env:DEV_SCREEN = $null
+& $exe 2>&1 | Out-Null
+
+Write-Host "Capturing vault screen..." -ForegroundColor Cyan
+$env:DEV_SCREENSHOT = Join-Path $scriptDir "$OutDir\Main.png"
+$env:DEV_SCREEN = "vault"
+& $exe 2>&1 | Out-Null
 
 Write-Host "Done! Screenshots in $OutDir/" -ForegroundColor Green

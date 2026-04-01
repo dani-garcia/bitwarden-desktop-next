@@ -120,9 +120,70 @@ Menu entries from `clients/apps/desktop/src/main/menu/`:
 - `menu.bitwarden.ts` — macOS-only app menu (prepended on macOS)
 
 ### Current Implementation
-- Uses `muda` crate for native OS menus
-- All menu items are stubs (no event handling wired yet)
-- Attached via `Window::Opened` subscription → `raw_id()` → `init_for_hwnd()`
+- **macOS**: Native menu via `muda` crate (`init_for_nsapp()`)
+- **Windows/Linux**: Custom-drawn menu bar inside iced window (avoids 1px transparent gap from native Win32 menus)
+- Menu items are stubs (no event handling wired yet)
+- Shortcuts shown in dropdown items, platform-specific (Ctrl on Win/Linux, Cmd on macOS)
+
+### Enabled/Disabled State Rules
+Source: `clients/apps/desktop/src/main/menu/menu.*.ts`
+
+Most items depend on vault lock state. The key conditions are:
+
+| Condition | Meaning | Affected Items |
+|-----------|---------|----------------|
+| `!isLocked` | Vault is unlocked | Add items, Search, Generator, Settings, Import/Export, Copy username/password/TOTP, all Account items |
+| `hasAccounts` | At least one account exists | Lock All, Log Out |
+| `hasLockableAccounts` | Has accounts that support locking | Lock Vault submenu |
+| `hasAuthenticatedAccounts` | Has synced accounts | Sync Vault |
+| always | No condition | Undo/Redo/Cut/Copy/Paste, Zoom, Fullscreen, Minimize, Close, all Help items |
+
+### Keyboard Shortcuts
+Source: Electron `accelerator` strings in menu.*.ts. All use `CmdOrCtrl+` which maps to Cmd on macOS, Ctrl on Windows/Linux.
+
+**File**:
+- New Login: Ctrl/Cmd+N
+- Settings: Ctrl/Cmd+,
+- Lock All Vaults: Ctrl/Cmd+L
+
+**Edit**:
+- Undo/Redo: Ctrl/Cmd+Z / Ctrl/Cmd+Y (macOS uses Cmd+Shift+Z for Redo)
+- Cut/Copy/Paste: Ctrl/Cmd+X/C/V
+- Select All: Ctrl/Cmd+A
+- Copy Username: Ctrl/Cmd+U
+- Copy Password: Ctrl/Cmd+P
+- Copy TOTP: Ctrl/Cmd+T
+
+**View**:
+- Search: Ctrl/Cmd+F
+- Generator: Ctrl/Cmd+G
+- Zoom In/Out/Reset: Ctrl/Cmd+ +/-/0
+- Toggle Fullscreen: F11 (macOS: Ctrl+Cmd+F)
+- Reload: Ctrl/Cmd+Shift+R
+
+**Window**:
+- Minimize: Ctrl/Cmd+M
+- Hide to Tray: Ctrl/Cmd+Shift+M
+- Always on Top: Ctrl/Cmd+Shift+T
+- Close: Ctrl/Cmd+W
+
+### macOS-Specific App Menu ("Bitwarden")
+On macOS, a "Bitwarden" menu is prepended (via `menu.bitwarden.ts`) with:
+- About Bitwarden, Check for Updates
+- Settings, Lock Vault, Lock All, Log Out (moved from File menu)
+- Services, Hide/Hide Others/Show All, Quit
+These items are removed from the File menu on macOS to follow platform conventions.
+
+### Submenus (not yet implemented)
+Several items open submenus rather than performing a direct action:
+- **New Item** → Login, Card, Identity, Secure Note, SSH Key (each with Ctrl/Cmd+Shift+L/C/I/S/K)
+- **Lock Vault** → Lists each account email
+- **Log Out** → Lists each account email
+- **Legal** → Terms of Service, Privacy Policy
+- **Follow Us** → Blog, Twitter, Facebook, GitHub, Mastodon
+- **Get Mobile App** → iOS, Android
+- **Get Browser Extension** → Chrome, Firefox, Opera, Edge, Safari
+- **Troubleshooting** → Toggle Hardware Acceleration
 
 ## Screens
 

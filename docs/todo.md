@@ -2,8 +2,13 @@
 
 ## Next Up
 
-- **Tray icon** — Use `tray-icon` crate (sister to `muda`, same raw window handle approach). Should show Bitwarden shield icon, right-click context menu with Lock/Quit.
+- **Tray icon** — Use `tray-icon` crate (sister to `muda`, same raw window handle approach). Should show Bitwarden shield icon, right-click context menu with Lock/Quit. Iced PR https://github.com/iced-rs/iced/pull/3021 adds native tray support but is still **open** (targeting 1.0), so use `tray-icon` crate directly for now.
 - **Executable icon** — Embed `.ico` in the Windows executable via `winresource` build script. Use the Bitwarden shield icon. Also set the window icon via iced's `window::Settings::icon`.
+- **Screenshots via iced** — Replace `screenshot.ps1` with `iced::window::screenshot()` for cross-platform, in-process screenshots. This avoids OS-level window capture issues (wrong window, focus problems). Could be triggered via a `DEV_SCREENSHOT` env var or a dev-only message.
+
+## Developer Experience
+
+- **Hot reloading** — Iced PR https://github.com/iced-rs/iced/pull/3000 is **merged** into master (June 2025). Uses `hot` feature flag + `subsecond`/`cargo-hot`. Not in iced 0.14 release yet — requires iced from git or waiting for 0.15/1.0. Worth switching to when available.
 
 ## UI Polish
 

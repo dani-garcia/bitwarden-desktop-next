@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app;
+pub mod icons;
 mod menu;
 mod mock;
 mod state;
@@ -15,6 +16,7 @@ fn main() -> iced::Result {
         .subscription(App::subscription)
         .title("Bitwarden [Next]")
         .font(include_bytes!("../assets/InterVariable.ttf").as_slice())
+        .font(icons::FONT_BYTES)
         .default_font(iced::Font {
             family: iced::font::Family::Name("Inter"),
             weight: iced::font::Weight::Normal,

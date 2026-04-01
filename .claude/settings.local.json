@@ -19,7 +19,15 @@
       "Bash(sed -i 's/`;$//' /c/Users/Dani/Desktop/test/assets/bg-right.svg)",
       "Bash(find /c/Users/Dani/Desktop/test/clients/libs -name *lock-image* -o -name *locked* -o -name *vault-locked*)",
       "Bash(find /c/Users/Dani/Desktop/test/clients/libs/assets/src/svg/svgs -name *eye*)",
-      "Bash(powershell -ExecutionPolicy Bypass -File \"C:/Users/Dani/Desktop/test/screenshot-all.ps1\" -OutDir \"img/version3\")"
+      "Bash(powershell -ExecutionPolicy Bypass -File \"C:/Users/Dani/Desktop/test/screenshot-all.ps1\" -OutDir \"img/version3\")",
+      "WebFetch(domain:github.com)",
+      "Read(//c/Users/Dani/.cargo/registry/src/**)",
+      "Bash(find C:UsersDani.cargoregistrysrc -type d -name *iced*)",
+      "Bash(find C:UsersDani.cargoregistrysrc -type f -name *icon*)",
+      "Bash(xargs grep:*)",
+      "Bash(find /c/Users/Dani/.cargo/registry/src -maxdepth 2 -type d -name *icon* -o -name *font*)",
+      "WebSearch",
+      "WebFetch(domain:crates.io)"
     ]
   }
 }

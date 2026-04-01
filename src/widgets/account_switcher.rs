@@ -1,6 +1,7 @@
 use iced::widget::{button, column, container, row, text};
 use iced::{Alignment, Element, Fill, Padding};
 
+use crate::icons;
 use crate::state::UserId;
 use crate::theme;
 
@@ -30,7 +31,12 @@ pub fn trigger<'a>(
         .to_uppercase()
         .to_string();
 
-    let arrow = if dropdown_open { "\u{2303}" } else { "\u{2304}" };
+    let arrow = if dropdown_open {
+        icons::CHEVRON_UP
+    } else {
+        icons::CHEVRON_DOWN
+    }
+    .render(14.0, theme::TEXT_SECONDARY);
 
     button(
         row![
@@ -49,7 +55,7 @@ pub fn trigger<'a>(
                 text(active_server).size(12).color(theme::TEXT_SECONDARY),
             ]
             .spacing(1),
-            text(arrow).size(16).color(theme::TEXT_SECONDARY),
+            arrow,
         ]
         .spacing(8)
         .align_y(Alignment::Center),
@@ -131,27 +137,23 @@ pub fn dropdown<'a>(
         .collect();
 
     items.push(
-        button(
-            text("+ Add account")
-                .size(12)
-                .color(theme::TEXT_SECONDARY),
-        )
-        .padding(Padding::from([8.0, 12.0]))
-        .width(Fill)
-        .style(|_theme, status| {
-            let bg = match status {
-                button::Status::Hovered => theme::ITEM_HOVER,
-                _ => iced::Color::TRANSPARENT,
-            };
-            button::Style {
-                background: Some(iced::Background::Color(bg)),
-                text_color: theme::TEXT_SECONDARY,
-                border: iced::Border::default(),
-                shadow: iced::Shadow::default(),
-                snap: false,
-            }
-        })
-        .into(),
+        button(text("+ Add account").size(12).color(theme::TEXT_SECONDARY))
+            .padding(Padding::from([8.0, 12.0]))
+            .width(Fill)
+            .style(|_theme, status| {
+                let bg = match status {
+                    button::Status::Hovered => theme::ITEM_HOVER,
+                    _ => iced::Color::TRANSPARENT,
+                };
+                button::Style {
+                    background: Some(iced::Background::Color(bg)),
+                    text_color: theme::TEXT_SECONDARY,
+                    border: iced::Border::default(),
+                    shadow: iced::Shadow::default(),
+                    snap: false,
+                }
+            })
+            .into(),
     );
 
     container(column(items).spacing(0))

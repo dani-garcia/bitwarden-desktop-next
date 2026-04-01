@@ -1,4 +1,4 @@
-use iced::widget::{column, container, row, rule, stack, Space};
+use iced::widget::{Space, column, container, row, rule, stack};
 use iced::{Alignment, Element, Fill, Length, Padding};
 
 use crate::state::{CipherItem, SidebarFilter};
@@ -16,6 +16,7 @@ pub enum VaultMessage {
     AccountSwitcher(AccountSwitcherMessage),
 }
 
+#[allow(clippy::too_many_arguments)] // Will be refactored when extracting components
 pub fn view<'a>(
     active_email: &'a str,
     active_server: &'a str,
@@ -26,9 +27,8 @@ pub fn view<'a>(
     accounts: &'a [AccountEntry],
     dropdown_open: bool,
 ) -> Element<'a, VaultMessage> {
-    let switcher_trigger =
-        account_switcher::trigger(active_email, active_server, dropdown_open)
-            .map(VaultMessage::AccountSwitcher);
+    let switcher_trigger = account_switcher::trigger(active_email, active_server, dropdown_open)
+        .map(VaultMessage::AccountSwitcher);
 
     let search = search_bar::view(search_query).map(VaultMessage::Search);
 
@@ -57,11 +57,13 @@ pub fn view<'a>(
     let layout = column![top_bar, main_content].height(Fill);
 
     let dropdown_layer: Element<'a, VaultMessage> = if dropdown_open {
-        let dd = account_switcher::dropdown(active_email, accounts)
-            .map(VaultMessage::AccountSwitcher);
+        let dd =
+            account_switcher::dropdown(active_email, accounts).map(VaultMessage::AccountSwitcher);
         column![
             Space::new().height(Length::Fixed(44.0)),
-            container(dd).align_right(Fill).padding(Padding::from([0.0, 16.0])),
+            container(dd)
+                .align_right(Fill)
+                .padding(Padding::from([0.0, 16.0])),
         ]
         .width(Fill)
         .into()

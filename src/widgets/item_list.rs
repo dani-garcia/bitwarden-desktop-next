@@ -1,4 +1,4 @@
-use iced::widget::{button, column, container, row, scrollable, text, Column};
+use iced::widget::{Column, button, column, container, row, scrollable, text};
 use iced::{Alignment, Element, Fill, Padding};
 
 use crate::state::CipherItem;
@@ -11,7 +11,9 @@ pub enum ItemListMessage {
 
 // Generate a deterministic color from a string
 fn initial_color(name: &str) -> iced::Color {
-    let hash: u32 = name.bytes().fold(0u32, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u32));
+    let hash: u32 = name
+        .bytes()
+        .fold(0u32, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u32));
     let hue = (hash % 360) as f32;
     // HSL to RGB with fixed saturation=0.5, lightness=0.45
     let s: f32 = 0.5;
@@ -54,23 +56,19 @@ pub fn view<'a>(
                 .to_string();
             let circle_color = initial_color(&item.name);
 
-            let icon_circle = container(
-                text(initial)
-                    .size(13)
-                    .color(theme::TEXT_PRIMARY),
-            )
-            .width(32)
-            .height(32)
-            .center_x(32)
-            .center_y(32)
-            .style(move |_theme| container::Style {
-                background: Some(iced::Background::Color(circle_color)),
-                border: iced::Border {
-                    radius: 16.0.into(),
+            let icon_circle = container(text(initial).size(13).color(theme::TEXT_PRIMARY))
+                .width(32)
+                .height(32)
+                .center_x(32)
+                .center_y(32)
+                .style(move |_theme| container::Style {
+                    background: Some(iced::Background::Color(circle_color)),
+                    border: iced::Border {
+                        radius: 16.0.into(),
+                        ..Default::default()
+                    },
                     ..Default::default()
-                },
-                ..Default::default()
-            });
+                });
 
             let info = column![
                 text(&item.name).size(14).color(theme::TEXT_PRIMARY),

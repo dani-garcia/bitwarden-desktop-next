@@ -13,8 +13,10 @@ use crate::widgets::sidebar::SidebarMessage;
 pub enum Message {
     Login(LoginMessage),
     Vault(VaultMessage),
+    MenuBar(crate::widgets::menu_bar::MenuBarMessage),
     WindowOpened(iced::window::Id),
     GotRawId(u64),
+    ScreenshotTaken(iced::window::Screenshot),
 }
 
 pub struct App {
@@ -25,12 +27,15 @@ pub struct App {
     active_filter: SidebarFilter,
     selected_item: Option<usize>,
     dropdown_open: bool,
+    open_menu: Option<usize>,
+    open_submenu: Option<usize>,
     // Cached/computed data stored to avoid lifetime issues in view()
     cached_email: String,
     cached_server: String,
     cached_accounts: Vec<AccountEntry>,
     cached_items: Vec<CipherItem>,
     menu_attached: bool,
+    window_id: Option<iced::window::Id>,
 }
 
 impl App {
@@ -60,11 +65,14 @@ impl App {
             active_filter: SidebarFilter::AllItems,
             selected_item: None,
             dropdown_open: false,
+            open_menu: None,
+            open_submenu: None,
             cached_email: String::new(),
             cached_server: String::new(),
             cached_accounts: Vec::new(),
             cached_items: Vec::new(),
             menu_attached: false,
+            window_id: None,
         };
         app.refresh_cache();
 
@@ -88,12 +96,61 @@ impl App {
         match message {
             Message::Login(msg) => self.handle_login(msg),
             Message::Vault(msg) => self.handle_vault(msg),
+            Message::MenuBar(msg) => {
+                use crate::widgets::menu_bar::MenuBarMessage;
+                match msg {
+                    MenuBarMessage::TopLevelClicked(i) => {
+                        self.open_menu = if self.open_menu == Some(i) {
+                            None
+                        } else {
+                            Some(i)
+                        };
+                        self.open_submenu = None;
+                    }
+                    MenuBarMessage::TopLevelHovered(i) => {
+                        self.open_menu = Some(i);
+                        self.open_submenu = None;
+                    }
+                    MenuBarMessage::SubMenuHovered(_menu, item) => {
+                        self.open_submenu = if item == usize::MAX {
+                            None
+                        } else {
+                            Some(item)
+                        };
+                    }
+                    MenuBarMessage::ItemClicked(_menu, _item) => {
+                        self.open_menu = None;
+                        self.open_submenu = None;
+                        // TODO: wire menu actions
+                    }
+                    MenuBarMessage::SubMenuItemClicked(_menu, _parent, _sub) => {
+                        self.open_menu = None;
+                        self.open_submenu = None;
+                        // TODO: wire submenu actions
+                    }
+                }
+            }
             Message::WindowOpened(id) => {
                 self.menu_attached = true;
-                return iced::window::raw_id::<Message>(id).map(Message::GotRawId);
+                self.window_id = Some(id);
+
+                let attach_menu = iced::window::raw_id::<Message>(id).map(Message::GotRawId);
+
+                // Auto-screenshot on startup if DEV_SCREENSHOT is set
+                let screenshot_task = if std::env::var("DEV_SCREENSHOT").is_ok() {
+                    iced::window::screenshot(id).map(Message::ScreenshotTaken)
+                } else {
+                    iced::Task::none()
+                };
+
+                return attach_menu.chain(screenshot_task);
             }
             Message::GotRawId(raw_id) => {
                 crate::menu::attach_menu(raw_id);
+                return iced::Task::none();
+            }
+            Message::ScreenshotTaken(screenshot) => {
+                save_screenshot(&screenshot);
                 return iced::Task::none();
             }
         }
@@ -102,7 +159,7 @@ impl App {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        match self.state.screen {
+        let page: Element<'_, Message> = match self.state.screen {
             Screen::Login => login::view(
                 &self.cached_email,
                 &self.cached_server,
@@ -123,6 +180,29 @@ impl App {
                 self.dropdown_open,
             )
             .map(Message::Vault),
+        };
+
+        if crate::menu::should_draw_menu() {
+            let menu_bar =
+                crate::widgets::menu_bar::view(self.open_menu).map(Message::MenuBar);
+            let content = iced::widget::column![menu_bar, page].height(iced::Fill);
+
+            let menu_state = self.menu_state();
+            if let Some(dropdown) =
+                crate::widgets::menu_bar::dropdown(self.open_menu, self.open_submenu, &menu_state)
+            {
+                let dropdown = dropdown.map(Message::MenuBar);
+                // Menu bar height (~28px) is the vertical offset for the dropdown
+                let overlay = iced::widget::column![
+                    iced::widget::Space::new().height(iced::Length::Fixed(28.0)),
+                    dropdown,
+                ];
+                iced::widget::stack![content, overlay].into()
+            } else {
+                content.into()
+            }
+        } else {
+            page
         }
     }
 
@@ -176,12 +256,7 @@ impl App {
             AccountSwitcherMessage::SwitchUser(uid) => {
                 self.dropdown_open = false;
                 self.state.active_user = Some(uid.clone());
-                let locked = self
-                    .state
-                    .users
-                    .get(&uid)
-                    .map(|s| s.locked)
-                    .unwrap_or(true);
+                let locked = self.state.users.get(&uid).map(|s| s.locked).unwrap_or(true);
                 if locked {
                     self.state.screen = Screen::Login;
                     self.password_input.clear();
@@ -235,12 +310,15 @@ impl App {
             return vec![];
         };
 
-        let items = session.vault_items.iter().filter(|item| match self.active_filter {
-            SidebarFilter::AllItems => true,
-            SidebarFilter::Favorites => false,
-            SidebarFilter::Category(cat) => item.category == cat,
-            SidebarFilter::Trash => false,
-        });
+        let items = session
+            .vault_items
+            .iter()
+            .filter(|item| match self.active_filter {
+                SidebarFilter::AllItems => true,
+                SidebarFilter::Favorites => false,
+                SidebarFilter::Category(cat) => item.category == cat,
+                SidebarFilter::Trash => false,
+            });
 
         let query = self.search_query.to_lowercase();
         if query.is_empty() {
@@ -262,4 +340,44 @@ impl App {
                 .collect()
         }
     }
+
+    fn menu_state(&self) -> crate::menu::MenuState {
+        let has_accounts = !self.state.users.is_empty();
+        let is_locked = self
+            .state
+            .active_user
+            .as_ref()
+            .and_then(|uid| self.state.users.get(uid))
+            .map(|s| s.locked)
+            .unwrap_or(true);
+        let has_lockable = self.state.users.values().any(|s| !s.locked);
+
+        crate::menu::MenuState {
+            is_locked,
+            has_accounts,
+            has_lockable_accounts: has_lockable,
+            has_authenticated_accounts: has_accounts,
+        }
+    }
+}
+
+fn save_screenshot(screenshot: &iced::window::Screenshot) {
+    let path = std::env::var("DEV_SCREENSHOT").unwrap_or_else(|_| "screenshot.png".into());
+    let dir = std::path::Path::new(&path).parent();
+    if let Some(dir) = dir {
+        let _ = std::fs::create_dir_all(dir);
+    }
+
+    let file = std::fs::File::create(&path).expect("Failed to create screenshot file");
+    let w = std::io::BufWriter::new(file);
+    let mut encoder = png::Encoder::new(w, screenshot.size.width, screenshot.size.height);
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    let mut writer = encoder.write_header().expect("Failed to write PNG header");
+    writer
+        .write_image_data(&screenshot.rgba)
+        .expect("Failed to write PNG data");
+
+    eprintln!("Screenshot saved to {path}");
+    std::process::exit(0);
 }

@@ -49,4 +49,3 @@ pub enum SidebarFilter {
     Category(CipherCategory),
     Trash,
 }
-

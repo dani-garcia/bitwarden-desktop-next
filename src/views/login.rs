@@ -1,6 +1,7 @@
-use iced::widget::{button, column, container, row, stack, svg, text, text_input, Space};
+use iced::widget::{Space, button, column, container, row, stack, svg, text, text_input};
 use iced::{Alignment, Element, Fill, Length, Padding};
 
+use crate::icons;
 use crate::theme;
 use crate::widgets::account_switcher::{self, AccountEntry, AccountSwitcherMessage};
 
@@ -21,8 +22,8 @@ pub fn view<'a>(
     accounts: &'a [AccountEntry],
     dropdown_open: bool,
 ) -> Element<'a, LoginMessage> {
-    let switcher_trigger = account_switcher::trigger(email, server, dropdown_open)
-        .map(LoginMessage::AccountSwitcher);
+    let switcher_trigger =
+        account_switcher::trigger(email, server, dropdown_open).map(LoginMessage::AccountSwitcher);
 
     let logo = svg(svg::Handle::from_path("assets/logo-white.svg"))
         .width(209)
@@ -76,14 +77,23 @@ pub fn view<'a>(
         input
     };
 
-    // Eye icon: 👁 for show, 👁‍🗨 variant for hide — using simple text
-    let toggle_label = if show_password { "Hide" } else { "Show" };
-    let toggle_button = button(text(toggle_label).size(14).color(theme::TEXT_SECONDARY))
+    let toggle_icon = if show_password {
+        icons::EYE
+    } else {
+        icons::EYE_SLASH
+    }
+    .render(16.0, theme::TEXT_SECONDARY);
+
+    let toggle_button = button(toggle_icon)
         .on_press(LoginMessage::TogglePasswordVisibility)
         .padding(Padding::from([10.0, 12.0]))
         .style(|_theme, status| {
             let bg = match status {
-                button::Status::Hovered => iced::Color::from_rgb(0x1f as f32 / 255.0, 0x2a as f32 / 255.0, 0x3c as f32 / 255.0),
+                button::Status::Hovered => iced::Color::from_rgb(
+                    0x1f as f32 / 255.0,
+                    0x2a as f32 / 255.0,
+                    0x3c as f32 / 255.0,
+                ),
                 _ => iced::Color::TRANSPARENT,
             };
             button::Style {
@@ -108,18 +118,17 @@ pub fn view<'a>(
     });
 
     // Input border container
-    let input_border =
-        container(row![password_input, toggle_button].align_y(Alignment::Center))
-            .width(Fill)
-            .style(|_theme| container::Style {
-                background: Some(iced::Background::Color(iced::Color::TRANSPARENT)),
-                border: iced::Border {
-                    color: theme::BORDER,
-                    width: 1.0,
-                    radius: 4.0.into(),
-                },
-                ..Default::default()
-            });
+    let input_border = container(row![password_input, toggle_button].align_y(Alignment::Center))
+        .width(Fill)
+        .style(|_theme| container::Style {
+            background: Some(iced::Background::Color(iced::Color::TRANSPARENT)),
+            border: iced::Border {
+                color: theme::BORDER,
+                width: 1.0,
+                radius: 4.0.into(),
+            },
+            ..Default::default()
+        });
 
     // Stack the floating label on top of the input, offset up
     let password_field = stack![
@@ -136,7 +145,11 @@ pub fn view<'a>(
     .width(Fill)
     .style(|_theme, status| {
         let bg = match status {
-            button::Status::Hovered => iced::Color::from_rgb(0xaa as f32 / 255.0, 0xc3 as f32 / 255.0, 0xef as f32 / 255.0),
+            button::Status::Hovered => iced::Color::from_rgb(
+                0xaa as f32 / 255.0,
+                0xc3 as f32 / 255.0,
+                0xef as f32 / 255.0,
+            ),
             _ => theme::ACCENT,
         };
         button::Style {
@@ -161,7 +174,11 @@ pub fn view<'a>(
     .width(Fill)
     .style(|_theme, status| {
         let bg = match status {
-            button::Status::Hovered => iced::Color::from_rgb(0x1f as f32 / 255.0, 0x2a as f32 / 255.0, 0x3c as f32 / 255.0),
+            button::Status::Hovered => iced::Color::from_rgb(
+                0x1f as f32 / 255.0,
+                0x2a as f32 / 255.0,
+                0x3c as f32 / 255.0,
+            ),
             _ => iced::Color::TRANSPARENT,
         };
         button::Style {
@@ -222,8 +239,7 @@ pub fn view<'a>(
 
     let bg_illustrations = column![
         Space::new().height(Fill),
-        row![bg_left, Space::new().width(Fill), bg_right]
-            .align_y(Alignment::End),
+        row![bg_left, Space::new().width(Fill), bg_right].align_y(Alignment::End),
     ]
     .width(Fill)
     .height(Fill);
@@ -234,7 +250,12 @@ pub fn view<'a>(
             .color(theme::TEXT_SECONDARY),
     )
     .center_x(Fill)
-    .padding(Padding { top: 12.0, right: 0.0, bottom: 20.0, left: 0.0 });
+    .padding(Padding {
+        top: 12.0,
+        right: 0.0,
+        bottom: 20.0,
+        left: 0.0,
+    });
 
     // Main foreground content — card pinned near top, not vertically centered
     let foreground = column![
@@ -254,7 +275,9 @@ pub fn view<'a>(
         container(
             column![
                 Space::new().height(Length::Fixed(44.0)),
-                container(dd).align_right(Fill).padding(Padding::from([0.0, 16.0])),
+                container(dd)
+                    .align_right(Fill)
+                    .padding(Padding::from([0.0, 16.0])),
             ]
             .width(Fill),
         )

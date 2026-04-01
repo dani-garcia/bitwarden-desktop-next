@@ -19,10 +19,11 @@ cargo clippy                   # Lint check (must pass clean)
 ## Key Files
 
 - `src/app.rs` — Root state, message routing, view dispatch. All state changes go through `update()`.
-- `src/menu.rs` — Native menu bar via `muda` crate. Attached via `Window::Opened` subscription + `raw_id()`.
+- `src/menu.rs` — Menu structure (labels, shortcuts, enabled states). Native `muda` on macOS, custom-drawn on Windows/Linux.
+- `src/icons.rs` — Bootstrap Icons integration. `Icon` type with `.render()`. Constants auto-generated from CSS by `build.rs`.
 - `src/theme.rs` — Color constants. **TODO**: refactor to trait-based theme system for light/dark mode.
 - `src/views/login.rs` — Lock screen. `src/views/vault.rs` — Main vault view.
-- `src/widgets/` — Reusable components: sidebar, item_list, search_bar, account_switcher.
+- `src/widgets/` — Reusable components: sidebar, item_list, search_bar, account_switcher, menu_bar.
 - `src/mock.rs` — Fake users/vault items. `src/state.rs` — Core types.
 
 ## Reference App
@@ -32,7 +33,7 @@ The official Bitwarden app is in `clients/` (git submodule). Key locations:
 - Logo SVG: `clients/apps/web/src/images/logo-white.svg`
 - Background illustrations: `clients/libs/assets/src/svg/svgs/background-{left,right}-illustration.ts`
 - Lock icon: `clients/libs/assets/src/svg/svgs/lock.icon.ts`
-- Menu entries: `clients/apps/desktop/src/main/menu/menu.*.ts`
+- Menu entries + shortcuts + enabled states: `clients/apps/desktop/src/main/menu/menu.*.ts`
 - Desktop SCSS (legacy): `clients/apps/desktop/src/scss/`
 
 ## Docs
