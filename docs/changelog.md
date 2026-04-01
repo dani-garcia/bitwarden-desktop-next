@@ -72,19 +72,30 @@ First working stub UI with both screens functional.
 - Inter font loaded from `assets/InterVariable.ttf` (matches official Bitwarden app)
 - Font sizes bumped +2 across the board for better readability
 
-### Native Menu Bar
-- Added `muda` crate for native OS menus (Windows HWND / macOS NSApp)
-- Menu bar matches official app: File, Edit, View, Account, Window, Help
-- Menu entries sourced from `clients/apps/desktop/src/main/menu/`
-- Attached via iced subscription: `Window::Opened` event → `raw_id()` → `init_for_hwnd()`
+### Menu Bar
+- macOS: native menu via `muda` crate (`init_for_nsapp()`)
+- Windows/Linux: custom-drawn menu bar inside iced window (avoids 1px transparent gap from native Win32 menus)
+- Full menu structure: File, Edit, View, Account, Window, Help
+- Menu entries with platform-specific keyboard shortcuts (Ctrl on Win/Linux, Cmd on macOS)
+- Submenus open on hover, render as separate panel beside the parent dropdown
+- `MenuState` struct controls enabled/disabled per item (`!isLocked`, `hasAccounts`, etc.)
 - Menu items are stubs (no functionality wired yet)
+
+### Icons
+- Bootstrap Icons v1.13.1 integrated via TTF font
+- `build.rs` auto-generates `Icon` constants from the Bootstrap Icons CSS
+- `Icon` type with `.render(size, color)` method for type-safe usage
+- Used in sidebar (category icons), search bar (magnifying glass), password toggle (eye), account switcher (chevrons), menu submenus (chevron-right)
 
 ### Infrastructure
 - `DEV_SCREEN=vault` env var to skip to vault screen without recompilation
-- `screenshot.ps1` captures window by title
-- `screenshot-all.ps1` automates login + vault screenshots
+- `DEV_SCREENSHOT=path.png` captures via iced's `window::screenshot()` API and exits
+- `screenshot-all.ps1` automates login + vault screenshots (no OS-level window capture)
 - Window title changed to "Bitwarden [Next]" to avoid conflict with real Bitwarden app
 - Default window size 1080x720, min 600x480
+- Window background color set via `iced::theme::Style` to prevent transparent artifacts
+- Console hidden in release builds (`windows_subsystem = "windows"`)
+- Release profile: LTO, single codegen unit, strip, opt-level "s", panic abort
 
 ### Assets added
 - `assets/logo-white.svg` — Bitwarden wordmark + shield
@@ -92,12 +103,14 @@ First working stub UI with both screens functional.
 - `assets/bg-left.svg` — Left background illustration
 - `assets/bg-right.svg` — Right background illustration
 - `assets/InterVariable.ttf` — Inter variable font
+- `assets/bootstrap-icons-1.13.1.ttf` — Bootstrap Icons font
+- `assets/bootstrap-icons-1.13.1.css` — Bootstrap Icons CSS (for build.rs code generation)
 
 **Remaining differences vs original**:
 - Sidebar lacks indented tree hierarchy (Vault > All vaults > My vault)
-- Missing magnifying glass icon in search bar
 - Colors are still module-level constants, not a switchable theme system (no light mode)
 - No tray icon
 - No executable/window icon
-- Menu items are non-functional stubs
+- Menu items are non-functional stubs (no actions wired)
+- Menu submenus for Lock vault / Log out should be dynamically populated with account emails
 - Vault screen hasn't been iterated on as much as login screen

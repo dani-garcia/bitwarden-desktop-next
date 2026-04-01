@@ -14,6 +14,7 @@ pub enum Message {
     Login(LoginMessage),
     Vault(VaultMessage),
     MenuBar(crate::widgets::menu_bar::MenuBarMessage),
+    KeyPressed(iced::keyboard::Event),
     WindowOpened(iced::window::Id),
     GotRawId(u64),
     ScreenshotTaken(iced::window::Screenshot),
@@ -29,6 +30,7 @@ pub struct App {
     dropdown_open: bool,
     open_menu: Option<usize>,
     open_submenu: Option<usize>,
+    fullscreen: bool,
     // Cached/computed data stored to avoid lifetime issues in view()
     cached_email: String,
     cached_server: String,
@@ -67,6 +69,7 @@ impl App {
             dropdown_open: false,
             open_menu: None,
             open_submenu: None,
+            fullscreen: false,
             cached_email: String::new(),
             cached_server: String::new(),
             cached_accounts: Vec::new(),
@@ -80,16 +83,21 @@ impl App {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        if self.menu_attached {
-            return Subscription::none();
-        }
-        iced::event::listen_with(|event, _status, _id| {
-            if let iced::Event::Window(iced::window::Event::Opened { .. }) = event {
-                Some(Message::WindowOpened(_id))
-            } else {
-                None
-            }
-        })
+        let window_sub = if !self.menu_attached {
+            iced::event::listen_with(|event, _status, id| {
+                if let iced::Event::Window(iced::window::Event::Opened { .. }) = event {
+                    Some(Message::WindowOpened(id))
+                } else {
+                    None
+                }
+            })
+        } else {
+            Subscription::none()
+        };
+
+        let keyboard_sub = iced::keyboard::listen().map(Message::KeyPressed);
+
+        Subscription::batch([window_sub, keyboard_sub])
     }
 
     pub fn update(&mut self, message: Message) -> iced::Task<Message> {
@@ -118,18 +126,40 @@ impl App {
                             Some(item)
                         };
                     }
-                    MenuBarMessage::ItemClicked(_menu, _item) => {
+                    MenuBarMessage::ItemClicked(menu, item) => {
                         self.open_menu = None;
                         self.open_submenu = None;
-                        // TODO: wire menu actions
+                        if let Some(action) = crate::menu::MENUS
+                            .get(menu)
+                            .and_then(|(_, entries)| entries.get(item))
+                            .and_then(|e| e.action)
+                        {
+                            return self.handle_menu_action(action);
+                        }
                     }
-                    MenuBarMessage::SubMenuItemClicked(_menu, _parent, _sub) => {
+                    MenuBarMessage::SubMenuItemClicked(menu, parent, sub) => {
                         self.open_menu = None;
                         self.open_submenu = None;
-                        // TODO: wire submenu actions
+                        if let Some(action) = crate::menu::MENUS
+                            .get(menu)
+                            .and_then(|(_, entries)| entries.get(parent))
+                            .and_then(|e| e.children.get(sub))
+                            .and_then(|e| e.action)
+                        {
+                            return self.handle_menu_action(action);
+                        }
                     }
                 }
             }
+            Message::KeyPressed(iced::keyboard::Event::KeyPressed { key, modifiers, .. }) => {
+                let state = self.menu_state();
+                if let Some(action) = crate::menu::find_shortcut_action(&key, modifiers, &state) {
+                    self.open_menu = None;
+                    self.open_submenu = None;
+                    return self.handle_menu_action(action);
+                }
+            }
+            Message::KeyPressed(_) => {}
             Message::WindowOpened(id) => {
                 self.menu_attached = true;
                 self.window_id = Some(id);
@@ -339,6 +369,64 @@ impl App {
                 .cloned()
                 .collect()
         }
+    }
+
+    fn handle_menu_action(&mut self, action: crate::menu::MenuAction) -> iced::Task<Message> {
+        use crate::menu::MenuAction;
+        match action {
+            MenuAction::Quit => {
+                std::process::exit(0);
+            }
+            MenuAction::LockAllVaults => {
+                for session in self.state.users.values_mut() {
+                    session.locked = true;
+                }
+                self.state.screen = Screen::Login;
+                self.password_input.clear();
+                self.show_password = false;
+                self.refresh_cache();
+            }
+            MenuAction::ToggleFullScreen => {
+                if let Some(id) = self.window_id {
+                    self.fullscreen = !self.fullscreen;
+                    let mode = if self.fullscreen {
+                        iced::window::Mode::Fullscreen
+                    } else {
+                        iced::window::Mode::Windowed
+                    };
+                    return iced::window::set_mode(id, mode);
+                }
+            }
+            MenuAction::Minimize => {
+                if let Some(id) = self.window_id {
+                    return iced::window::minimize(id, true);
+                }
+            }
+            MenuAction::Close => {
+                if let Some(id) = self.window_id {
+                    return iced::window::close(id);
+                }
+            }
+            MenuAction::SearchVault => {
+                // If locked, can't search — do nothing
+                if self.state.screen == Screen::Vault {
+                    // Focus would go to search bar; for now just clear and let user type
+                    self.search_query.clear();
+                    self.refresh_cache();
+                }
+            }
+            MenuAction::SyncNow | MenuAction::Reload => {
+                // Stub: would trigger sync/reload in real app
+                self.refresh_cache();
+            }
+            MenuAction::HideToTray | MenuAction::ToggleAlwaysOnTop => {
+                // Stub: requires tray icon / window level support not yet implemented
+            }
+            MenuAction::About => {
+                // Stub: would show about dialog
+            }
+        }
+        iced::Task::none()
     }
 
     fn menu_state(&self) -> crate::menu::MenuState {

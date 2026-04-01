@@ -45,10 +45,9 @@ The official Bitwarden app is in `clients/` (git submodule). Key locations:
 
 ## Screenshots
 
-`screenshot.ps1` captures the app window by title. Images stored in `img/version{N}/`.
+`screenshot-all.ps1` captures both screens using iced's built-in `window::screenshot()` API.
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File screenshot.ps1 -OutputPath "img/versionN/Login.png"
 powershell -ExecutionPolicy Bypass -File screenshot-all.ps1 -OutDir "img/versionN"
 ```
 

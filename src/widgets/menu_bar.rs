@@ -79,46 +79,38 @@ pub fn dropdown<'a>(
     let index = open_menu?;
     let (_, entries) = menu::MENUS.get(index)?;
 
-    // Render main dropdown items (no inline submenus)
     let items = render_entries(entries, index, open_submenu, state);
     let main_panel = styled_panel(column(items).spacing(2).width(DROPDOWN_WIDTH));
 
-    // If a submenu is open, render it as a separate panel
-    let panels: Element<'_, MenuBarMessage> = if let Some(sub_idx) = open_submenu {
-        if let Some(entry) = entries.get(sub_idx) {
-            let sub_entries = entry.sub_items();
-            if !sub_entries.is_empty() {
-                // Calculate vertical offset: approximate height of items above the submenu entry
-                let v_offset: f32 = entries[..sub_idx]
-                    .iter()
-                    .map(|e| if e.is_separator() { 9.0 } else { ITEM_PADDING.top + ITEM_PADDING.bottom + 16.0 })
-                    .sum::<f32>()
-                    + 6.0; // panel top padding
+    if let Some(sub_idx) = open_submenu
+        && let Some(entry) = entries.get(sub_idx)
+        && !entry.children.is_empty()
+    {
+        let v_offset: f32 = entries[..sub_idx]
+            .iter()
+            .map(|e| if e.is_separator() { 9.0 } else { ITEM_PADDING.top + ITEM_PADDING.bottom + 16.0 })
+            .sum::<f32>()
+            + 6.0;
 
-                let sub_items: Vec<Element<'_, MenuBarMessage>> = sub_entries
-                    .iter()
-                    .enumerate()
-                    .map(|(sub_i, sub_entry)| {
-                        render_submenu_item(sub_entry, index, sub_idx, sub_i, state)
-                    })
-                    .collect();
+        let sub_items: Vec<Element<'_, MenuBarMessage>> = entry.children
+            .iter()
+            .enumerate()
+            .map(|(sub_i, sub_entry)| {
+                render_submenu_item(sub_entry, index, sub_idx, sub_i, state)
+            })
+            .collect();
 
-                let sub_panel = styled_panel(column(sub_items).spacing(2).width(SUBMENU_WIDTH));
+        let sub_panel = styled_panel(column(sub_items).spacing(2).width(SUBMENU_WIDTH));
 
-                let sub_with_offset = column![
-                    iced::widget::Space::new().height(v_offset),
-                    sub_panel,
-                ];
+        let sub_with_offset = column![
+            iced::widget::Space::new().height(v_offset),
+            sub_panel,
+        ];
 
-                return Some(build_offset_row(index, row![main_panel, sub_with_offset].spacing(4)));
-            }
-        }
-        build_offset_row(index, main_panel)
-    } else {
-        build_offset_row(index, main_panel)
-    };
+        return Some(build_offset_row(index, row![main_panel, sub_with_offset].spacing(4)));
+    }
 
-    Some(panels)
+    Some(build_offset_row(index, main_panel))
 }
 
 /// Wrap content in a styled dropdown panel.
@@ -178,7 +170,7 @@ fn render_entry<'a>(
     menu_index: usize,
     item_index: usize,
     open_submenu: Option<usize>,
-    _state: &MenuState,
+    state: &MenuState,
 ) -> Element<'a, MenuBarMessage> {
     if entry.is_separator() {
         return container(rule::horizontal(1).style(|_theme| rule::Style {
@@ -191,14 +183,14 @@ fn render_entry<'a>(
         .into();
     }
 
-    let enabled = entry.is_enabled(_state);
+    let enabled = entry.is_enabled(state);
     let is_sub = entry.is_submenu();
     let sub_is_open = is_sub && open_submenu == Some(item_index);
 
     let label_color = if enabled { theme::TEXT_PRIMARY } else { theme::TEXT_MUTED };
     let shortcut_color = if enabled { theme::TEXT_SECONDARY } else { theme::TEXT_MUTED };
 
-    let label_text = text(entry.label()).size(13).color(label_color);
+    let label_text = text(entry.label).size(13).color(label_color);
 
     let content: Element<'_, MenuBarMessage> = if is_sub {
         row![
@@ -209,20 +201,17 @@ fn render_entry<'a>(
         .spacing(16)
         .align_y(Alignment::Center)
         .into()
+    } else if let Some(shortcut_text) = entry.shortcut_display() {
+        row![
+            label_text,
+            iced::widget::Space::new().width(Fill),
+            text(shortcut_text).size(11).color(shortcut_color),
+        ]
+        .spacing(16)
+        .align_y(Alignment::Center)
+        .into()
     } else {
-        let shortcut = entry.shortcut_text();
-        if !shortcut.is_empty() {
-            row![
-                label_text,
-                iced::widget::Space::new().width(Fill),
-                text(shortcut).size(11).color(shortcut_color),
-            ]
-            .spacing(16)
-            .align_y(Alignment::Center)
-            .into()
-        } else {
-            label_text.into()
-        }
+        label_text.into()
     };
 
     let mut btn = button(content)
@@ -252,7 +241,6 @@ fn render_entry<'a>(
         btn = btn.on_press(MenuBarMessage::ItemClicked(menu_index, item_index));
     }
 
-    // Wrap in mouse_area for hover-based submenu opening / closing
     if is_sub && enabled {
         mouse_area(btn)
             .on_enter(MenuBarMessage::SubMenuHovered(menu_index, item_index))
@@ -287,14 +275,13 @@ fn render_submenu_item<'a>(
     let enabled = entry.is_enabled(state);
     let label_color = if enabled { theme::TEXT_PRIMARY } else { theme::TEXT_MUTED };
 
-    let label_text = text(entry.label()).size(13).color(label_color);
+    let label_text = text(entry.label).size(13).color(label_color);
 
-    let shortcut = entry.shortcut_text();
-    let content: Element<'_, MenuBarMessage> = if !shortcut.is_empty() {
+    let content: Element<'_, MenuBarMessage> = if let Some(shortcut_text) = entry.shortcut_display() {
         row![
             label_text,
             iced::widget::Space::new().width(Fill),
-            text(shortcut)
+            text(shortcut_text)
                 .size(11)
                 .color(if enabled { theme::TEXT_SECONDARY } else { theme::TEXT_MUTED }),
         ]

@@ -2,31 +2,80 @@
 use muda::{Menu, MenuItem as MudaMenuItem, PredefinedMenuItem, Submenu};
 
 // ---------------------------------------------------------------------------
-// Shortcut helpers
+// Shortcut
 // ---------------------------------------------------------------------------
 
-/// Shortcut with Ctrl on Windows/Linux, Cmd on macOS.
-const fn ck(key: &'static str, mac: &'static str) -> Shortcut {
-    Shortcut { win: key, mac }
-}
-
-/// Same shortcut string on all platforms (e.g. "F11").
-const fn same(key: &'static str) -> Shortcut {
-    Shortcut { win: key, mac: key }
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ShortcutKey {
+    Char(char), // lowercase letter or symbol
+    F(u8),      // F1..F12
 }
 
 #[derive(Clone, Copy)]
 pub struct Shortcut {
-    win: &'static str,
-    mac: &'static str,
+    pub ctrl_cmd: bool, // Ctrl on Win/Linux, Cmd on macOS
+    pub shift: bool,
+    pub key: ShortcutKey,
+}
+
+/// Ctrl/Cmd + key
+const fn cmd(key: char) -> Shortcut {
+    Shortcut { ctrl_cmd: true, shift: false, key: ShortcutKey::Char(key) }
+}
+
+/// Ctrl/Cmd + Shift + key
+const fn cmd_shift(key: char) -> Shortcut {
+    Shortcut { ctrl_cmd: true, shift: true, key: ShortcutKey::Char(key) }
+}
+
+/// Function key alone
+const fn fkey(n: u8) -> Shortcut {
+    Shortcut { ctrl_cmd: false, shift: false, key: ShortcutKey::F(n) }
 }
 
 impl Shortcut {
-    pub fn text(&self) -> &'static str {
+    /// Platform-aware display text (e.g. "Ctrl+N" on Win, "Cmd+N" on Mac).
+    pub fn display(&self) -> String {
+        let mut s = String::new();
         if cfg!(target_os = "macos") {
-            self.mac
+            if self.ctrl_cmd { s.push_str("Cmd+"); }
+            if self.shift { s.push_str("Shift+"); }
         } else {
-            self.win
+            if self.ctrl_cmd { s.push_str("Ctrl+"); }
+            if self.shift { s.push_str("Shift+"); }
+        }
+        match self.key {
+            ShortcutKey::Char(c) if c.is_ascii_alphabetic() => s.push(c.to_ascii_uppercase()),
+            ShortcutKey::Char(c) => s.push(c),
+            ShortcutKey::F(n) => { s.push('F'); s.push_str(&n.to_string()); }
+        }
+        s
+    }
+
+    /// Returns true if an iced keyboard event matches this shortcut.
+    pub fn matches(
+        &self,
+        key: &iced::keyboard::Key,
+        modifiers: iced::keyboard::Modifiers,
+    ) -> bool {
+        if modifiers.command() != self.ctrl_cmd { return false; }
+        if modifiers.shift() != self.shift { return false; }
+
+        match (&self.key, key) {
+            (ShortcutKey::Char(c), iced::keyboard::Key::Character(s)) => {
+                s.chars().next()
+                    .is_some_and(|pressed| pressed.eq_ignore_ascii_case(c))
+            }
+            (ShortcutKey::F(n), iced::keyboard::Key::Named(named)) => {
+                use iced::keyboard::key::Named::*;
+                let matched = match named {
+                    F1 => 1, F2 => 2, F3 => 3, F4 => 4, F5 => 5, F6 => 6,
+                    F7 => 7, F8 => 8, F9 => 9, F10 => 10, F11 => 11, F12 => 12,
+                    _ => return false,
+                };
+                *n == matched
+            }
+            _ => false,
         }
     }
 }
@@ -78,189 +127,236 @@ impl EnabledWhen {
 }
 
 // ---------------------------------------------------------------------------
-// Menu item types
+// Actions
+// ---------------------------------------------------------------------------
+
+/// Identifies an actionable menu command.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MenuAction {
+    Quit,
+    LockAllVaults,
+    SyncNow,
+    SearchVault,
+    ToggleFullScreen,
+    Reload,
+    Minimize,
+    HideToTray,
+    ToggleAlwaysOnTop,
+    Close,
+    About,
+}
+
+// ---------------------------------------------------------------------------
+// MenuEntry (flat struct with builder)
 // ---------------------------------------------------------------------------
 
 #[derive(Clone, Copy)]
-#[allow(dead_code)] // SubMenu items field used by macOS native menu, sub_items() for future drawn submenus
-pub enum MenuEntry {
-    Item {
-        label: &'static str,
-        shortcut: Option<Shortcut>,
-        enabled: EnabledWhen,
-    },
-    Separator,
-    SubMenu {
-        label: &'static str,
-        items: &'static [MenuEntry],
-        enabled: EnabledWhen,
-    },
+pub struct MenuEntry {
+    pub label: &'static str,
+    pub shortcut: Option<Shortcut>,
+    pub enabled: EnabledWhen,
+    pub action: Option<MenuAction>,
+    pub children: &'static [MenuEntry],
+}
+
+/// Separator constant.
+const SEP: MenuEntry = MenuEntry {
+    label: "",
+    shortcut: None,
+    enabled: EnabledWhen::Always,
+    action: None,
+    children: &[],
+};
+
+/// Start building a menu entry.
+#[allow(non_snake_case)]
+const fn E(label: &'static str) -> MenuEntry {
+    MenuEntry {
+        label,
+        shortcut: None,
+        enabled: EnabledWhen::Always,
+        action: None,
+        children: &[],
+    }
 }
 
 impl MenuEntry {
-    pub fn label(&self) -> &'static str {
-        match self {
-            Self::Item { label, .. } | Self::SubMenu { label, .. } => label,
-            Self::Separator => "",
-        }
+    const fn key(mut self, s: Shortcut) -> Self { self.shortcut = Some(s); self }
+    const fn when(mut self, e: EnabledWhen) -> Self { self.enabled = e; self }
+    const fn action(mut self, a: MenuAction) -> Self { self.action = Some(a); self }
+    const fn sub(mut self, items: &'static [MenuEntry]) -> Self { self.children = items; self }
+
+    pub fn is_separator(&self) -> bool { self.label.is_empty() && self.children.is_empty() }
+    pub fn is_submenu(&self) -> bool { !self.children.is_empty() || self.is_submenu_placeholder() }
+    pub fn is_enabled(&self, state: &MenuState) -> bool { self.enabled.check(state) }
+
+    /// Submenus with empty children (e.g. "Lock vault", "Log out") are placeholders
+    /// for dynamically populated content. They still render as submenus.
+    fn is_submenu_placeholder(&self) -> bool {
+        matches!(self.enabled, EnabledWhen::HasLockable | EnabledWhen::HasAccounts)
+            && self.action.is_none()
+            && self.shortcut.is_none()
+            && self.children.is_empty()
+            && !self.label.is_empty()
     }
 
-    pub fn shortcut_text(&self) -> &'static str {
-        match self {
-            Self::Item { shortcut: Some(s), .. } => s.text(),
-            _ => "",
-        }
-    }
-
-    pub fn is_separator(&self) -> bool {
-        matches!(self, Self::Separator)
-    }
-
-    pub fn is_submenu(&self) -> bool {
-        matches!(self, Self::SubMenu { .. })
-    }
-
-    pub fn is_enabled(&self, state: &MenuState) -> bool {
-        match self {
-            Self::Item { enabled, .. } | Self::SubMenu { enabled, .. } => enabled.check(state),
-            Self::Separator => true,
-        }
-    }
-
-    #[allow(dead_code)] // Will be used when drawn submenus are implemented
-    pub fn sub_items(&self) -> &'static [MenuEntry] {
-        match self {
-            Self::SubMenu { items, .. } => items,
-            _ => &[],
-        }
+    pub fn shortcut_display(&self) -> Option<String> {
+        self.shortcut.map(|s| s.display())
     }
 }
-
-// Shorthand constructors
-const fn item(label: &'static str, enabled: EnabledWhen) -> MenuEntry {
-    MenuEntry::Item { label, shortcut: None, enabled }
-}
-
-const fn item_s(label: &'static str, shortcut: Shortcut, enabled: EnabledWhen) -> MenuEntry {
-    MenuEntry::Item { label, shortcut: Some(shortcut), enabled }
-}
-
-const fn sub(label: &'static str, items: &'static [MenuEntry], enabled: EnabledWhen) -> MenuEntry {
-    MenuEntry::SubMenu { label, items, enabled }
-}
-
-const S: MenuEntry = MenuEntry::Separator;
-
-use EnabledWhen::*;
 
 // ---------------------------------------------------------------------------
 // Menu definitions
 // ---------------------------------------------------------------------------
 
+use EnabledWhen::*;
+use MenuAction::*;
+
 pub const MENUS: &[(&str, &[MenuEntry])] = &[
     ("File", &[
-        item_s("New login",        ck("Ctrl+N", "Cmd+N"),              Unlocked),
-        sub("New item", &[
-            item_s("Login",        ck("Ctrl+Shift+L", "Cmd+Shift+L"),  Always),
-            item_s("Card",         ck("Ctrl+Shift+C", "Cmd+Shift+C"),  Always),
-            item_s("Identity",     ck("Ctrl+Shift+I", "Cmd+Shift+I"),  Always),
-            item_s("Secure note",  ck("Ctrl+Shift+S", "Cmd+Shift+S"),  Always),
-            item_s("SSH key",      ck("Ctrl+Shift+K", "Cmd+Shift+K"),  Always),
-        ], Unlocked),
-        item("New folder",                                             Unlocked),
-        S,
-        item("Sync now",                                               HasAuthenticated),
-        item("Import",                                                 Unlocked),
-        item("Export",                                                 Unlocked),
-        S,
-        item_s("Settings",         ck("Ctrl+,", "Cmd+,"),              Unlocked),
+        E("New login").key(cmd('n')).when(Unlocked),
+        E("New item").when(Unlocked).sub(&[
+            E("Login").key(cmd_shift('l')),
+            E("Card").key(cmd_shift('c')),
+            E("Identity").key(cmd_shift('i')),
+            E("Secure note").key(cmd_shift('s')),
+            E("SSH key").key(cmd_shift('k')),
+        ]),
+        E("New folder").when(Unlocked),
+        SEP,
+        E("Sync now").when(HasAuthenticated).action(SyncNow),
+        E("Import").when(Unlocked),
+        E("Export").when(Unlocked),
+        SEP,
+        E("Settings").key(cmd(',')).when(Unlocked),
         // Lock/Log out submenus: dynamically populated with account emails at runtime
-        sub("Lock vault", &[],                                         HasLockable),
-        item_s("Lock all vaults",  ck("Ctrl+L", "Cmd+L"),              HasAccounts),
-        sub("Log out", &[],                                            HasAccounts),
-        S,
-        item("Quit Bitwarden",                                         Always),
+        E("Lock vault").when(HasLockable).sub(&[]),
+        E("Lock all vaults").key(cmd('l')).when(HasAccounts).action(LockAllVaults),
+        E("Log out").when(HasAccounts).sub(&[]),
+        SEP,
+        E("Quit Bitwarden").action(Quit),
     ]),
     ("Edit", &[
-        item_s("Undo",                              ck("Ctrl+Z", "Cmd+Z"),           Always),
-        item_s("Redo",                              ck("Ctrl+Y", "Cmd+Shift+Z"),     Always),
-        S,
-        item_s("Cut",                               ck("Ctrl+X", "Cmd+X"),           Always),
-        item_s("Copy",                              ck("Ctrl+C", "Cmd+C"),           Always),
-        item_s("Paste",                             ck("Ctrl+V", "Cmd+V"),           Always),
-        S,
-        item_s("Select all",                        ck("Ctrl+A", "Cmd+A"),           Always),
-        S,
-        item_s("Copy username",                     ck("Ctrl+U", "Cmd+U"),           Unlocked),
-        item_s("Copy password",                     ck("Ctrl+P", "Cmd+P"),           Unlocked),
-        item_s("Copy verification code (TOTP)",     ck("Ctrl+T", "Cmd+T"),           Unlocked),
+        E("Undo").key(cmd('z')),
+        E("Redo").key(cmd('y')),
+        SEP,
+        E("Cut").key(cmd('x')),
+        E("Copy").key(cmd('c')),
+        E("Paste").key(cmd('v')),
+        SEP,
+        E("Select all").key(cmd('a')),
+        SEP,
+        E("Copy username").key(cmd('u')).when(Unlocked),
+        E("Copy password").key(cmd('p')).when(Unlocked),
+        E("Copy verification code (TOTP)").key(cmd('t')).when(Unlocked),
     ]),
     ("View", &[
-        item_s("Search vault",     ck("Ctrl+F", "Cmd+F"),              Unlocked),
-        S,
-        item_s("Generator",        ck("Ctrl+G", "Cmd+G"),              Unlocked),
-        item("Generator history",                                      Unlocked),
-        S,
-        item_s("Zoom in",          ck("Ctrl++", "Cmd++"),              Always),
-        item_s("Zoom out",         ck("Ctrl+-", "Cmd+-"),              Always),
-        item_s("Reset zoom",       ck("Ctrl+0", "Cmd+0"),             Always),
-        S,
-        item_s("Toggle full screen", same("F11"),                      Always),
-        S,
-        item_s("Reload",           ck("Ctrl+Shift+R", "Cmd+Shift+R"), Always),
+        E("Search vault").key(cmd('f')).when(Unlocked).action(SearchVault),
+        SEP,
+        E("Generator").key(cmd('g')).when(Unlocked),
+        E("Generator history").when(Unlocked),
+        SEP,
+        E("Zoom in").key(cmd('+')),
+        E("Zoom out").key(cmd('-')),
+        E("Reset zoom").key(cmd('0')),
+        SEP,
+        E("Toggle full screen").key(fkey(11)).action(ToggleFullScreen),
+        SEP,
+        E("Reload").key(cmd_shift('r')).action(Reload),
     ]),
     ("Account", &[
-        item("Premium membership",                                     Unlocked),
-        item("Change master password",                                 Unlocked),
-        item("Two-step login",                                         Unlocked),
-        item("Fingerprint phrase",                                     Unlocked),
-        S,
-        item("Delete account",                                         Unlocked),
+        E("Premium membership").when(Unlocked),
+        E("Change master password").when(Unlocked),
+        E("Two-step login").when(Unlocked),
+        E("Fingerprint phrase").when(Unlocked),
+        SEP,
+        E("Delete account").when(Unlocked),
     ]),
     ("Window", &[
-        item_s("Minimize",         ck("Ctrl+M", "Cmd+M"),              Always),
-        item_s("Hide to tray",     ck("Ctrl+Shift+M", "Cmd+Shift+M"), Always),
-        item_s("Always on top",    ck("Ctrl+Shift+T", "Cmd+Shift+T"), Always),
-        S,
-        item_s("Close",            ck("Ctrl+W", "Cmd+W"),              Always),
+        E("Minimize").key(cmd('m')).action(Minimize),
+        E("Hide to tray").key(cmd_shift('m')).action(HideToTray),
+        E("Always on top").key(cmd_shift('t')).action(ToggleAlwaysOnTop),
+        SEP,
+        E("Close").key(cmd('w')).action(Close),
     ]),
     ("Help", &[
-        item("Help & feedback",                                        Always),
-        item("File a bug report",                                      Always),
-        sub("Legal", &[
-            item("Terms of service",                                   Always),
-            item("Privacy policy",                                     Always),
-        ], Always),
-        S,
-        sub("Follow us", &[
-            item("Blog",                                               Always),
-            item("Twitter",                                            Always),
-            item("Facebook",                                           Always),
-            item("GitHub",                                             Always),
-            item("Mastodon",                                           Always),
-        ], Always),
-        S,
-        item("Go to web vault",                                        Always),
-        S,
-        sub("Get mobile app", &[
-            item("iOS",                                                Always),
-            item("Android",                                            Always),
-        ], Always),
-        sub("Get browser extension", &[
-            item("Chrome",                                             Always),
-            item("Firefox",                                            Always),
-            item("Opera",                                              Always),
-            item("Edge",                                               Always),
-            item("Safari",                                             Always),
-        ], Always),
-        S,
-        sub("Troubleshooting", &[
-            item("Toggle hardware acceleration",                       Always),
-        ], Always),
-        S,
-        item("About Bitwarden",                                        Always),
+        E("Help & feedback"),
+        E("File a bug report"),
+        E("Legal").sub(&[
+            E("Terms of service"),
+            E("Privacy policy"),
+        ]),
+        SEP,
+        E("Follow us").sub(&[
+            E("Blog"),
+            E("Twitter"),
+            E("Facebook"),
+            E("GitHub"),
+            E("Mastodon"),
+        ]),
+        SEP,
+        E("Go to web vault"),
+        SEP,
+        E("Get mobile app").sub(&[
+            E("iOS"),
+            E("Android"),
+        ]),
+        E("Get browser extension").sub(&[
+            E("Chrome"),
+            E("Firefox"),
+            E("Opera"),
+            E("Edge"),
+            E("Safari"),
+        ]),
+        SEP,
+        E("Troubleshooting").sub(&[
+            E("Toggle hardware acceleration"),
+        ]),
+        SEP,
+        E("About Bitwarden").action(About),
     ]),
 ];
+
+// ---------------------------------------------------------------------------
+// Shortcut → action lookup (for keyboard handling)
+// ---------------------------------------------------------------------------
+
+/// Find the MenuAction for a keyboard event, checking all menus and submenus.
+pub fn find_shortcut_action(
+    key: &iced::keyboard::Key,
+    modifiers: iced::keyboard::Modifiers,
+    state: &MenuState,
+) -> Option<MenuAction> {
+    for (_label, entries) in MENUS {
+        if let Some(action) = find_in_entries(entries, key, modifiers, state) {
+            return Some(action);
+        }
+    }
+    None
+}
+
+fn find_in_entries(
+    entries: &[MenuEntry],
+    key: &iced::keyboard::Key,
+    modifiers: iced::keyboard::Modifiers,
+    state: &MenuState,
+) -> Option<MenuAction> {
+    for entry in entries {
+        if let Some(s) = entry.shortcut
+            && s.matches(key, modifiers)
+            && entry.is_enabled(state)
+            && let Some(action) = entry.action
+        {
+            return Some(action);
+        }
+        if !entry.children.is_empty()
+            && let Some(action) = find_in_entries(entry.children, key, modifiers, state)
+        {
+            return Some(action);
+        }
+    }
+    None
+}
 
 // ---------------------------------------------------------------------------
 // Native menu (macOS only)
@@ -296,16 +392,14 @@ fn append_entries_to_submenu(submenu: &Submenu, entries: &[MenuEntry]) {
     let items: Vec<Box<dyn muda::IsMenuItem>> = entries
         .iter()
         .map(|entry| -> Box<dyn muda::IsMenuItem> {
-            match entry {
-                MenuEntry::Separator => Box::new(PredefinedMenuItem::separator()),
-                MenuEntry::Item { label, .. } => {
-                    Box::new(MudaMenuItem::new(*label, true, None))
-                }
-                MenuEntry::SubMenu { label, items, .. } => {
-                    let sub = Submenu::new(*label, true);
-                    append_entries_to_submenu(&sub, items);
-                    Box::new(sub)
-                }
+            if entry.is_separator() {
+                Box::new(PredefinedMenuItem::separator())
+            } else if !entry.children.is_empty() {
+                let sub = Submenu::new(entry.label, true);
+                append_entries_to_submenu(&sub, entry.children);
+                Box::new(sub)
+            } else {
+                Box::new(MudaMenuItem::new(entry.label, true, None))
             }
         })
         .collect();
