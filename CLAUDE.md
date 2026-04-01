@@ -19,6 +19,7 @@ cargo clippy                   # Lint check (must pass clean)
 ## Key Files
 
 - `src/app.rs` — Root state, message routing, view dispatch. All state changes go through `update()`.
+- `src/menu.rs` — Native menu bar via `muda` crate. Attached via `Window::Opened` subscription + `raw_id()`.
 - `src/theme.rs` — Color constants. **TODO**: refactor to trait-based theme system for light/dark mode.
 - `src/views/login.rs` — Lock screen. `src/views/vault.rs` — Main vault view.
 - `src/widgets/` — Reusable components: sidebar, item_list, search_bar, account_switcher.
@@ -30,6 +31,8 @@ The official Bitwarden app is in `clients/` (git submodule). Key locations:
 - Button styles: `clients/libs/components/src/button/button.component.ts` (12px border-radius, Tailwind)
 - Logo SVG: `clients/apps/web/src/images/logo-white.svg`
 - Background illustrations: `clients/libs/assets/src/svg/svgs/background-{left,right}-illustration.ts`
+- Lock icon: `clients/libs/assets/src/svg/svgs/lock.icon.ts`
+- Menu entries: `clients/apps/desktop/src/main/menu/menu.*.ts`
 - Desktop SCSS (legacy): `clients/apps/desktop/src/scss/`
 
 ## Docs
@@ -45,6 +48,7 @@ The official Bitwarden app is in `clients/` (git submodule). Key locations:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File screenshot.ps1 -OutputPath "img/versionN/Login.png"
+powershell -ExecutionPolicy Bypass -File screenshot-all.ps1 -OutDir "img/versionN"
 ```
 
 ## Design Notes
@@ -52,3 +56,4 @@ powershell -ExecutionPolicy Bypass -File screenshot.ps1 -OutputPath "img/version
 - All colors must be theme-swappable (light/dark mode support planned).
 - Account switcher should show server URL (e.g. "bitwarden.com") and a dropdown arrow.
 - Match the new Bitwarden component library styles, not the legacy desktop SCSS.
+- SCSS color values don't match actual rendered colors — always verify with a color picker.

@@ -12,115 +12,130 @@ The app has two style systems. The **newer component library** (Tailwind-based) 
 
 ### New Component Library (active)
 - **Source**: `clients/libs/components/src/button/button.component.ts`
-- **Border radius**: `tw-rounded-xl` = **12px**
+- **Border radius**: `tw-rounded-xl` = **12px** (we use 20px for a more pill-shaped look matching the actual rendered app)
 - **Default button padding**: `9px 16px` (vertical/horizontal)
 - **Font size**: 14px (0.875rem)
-- **Border width**: 1px (implied by `calc(0.625rem - 1px)` padding adjustment)
+- **Border width**: 1px
 
 ### Old Desktop SCSS (legacy, being phased out)
 - **Source**: `clients/apps/desktop/src/scss/buttons.scss`
-- **Border radius**: `$border-radius` = **3px** (from `variables.scss:13`)
+- **Border radius**: `$border-radius` = **3px**
 - **Padding**: `7px 15px`
-- **Border**: `1px solid`
-- **Font size**: `$font-size-base` (14px)
 
-### Current App Values (what we should match)
-
-Based on visual inspection of the original screenshots and the newer component library:
-
+### Current Implementation
 | Property | Primary (Unlock) | Secondary (Log out) |
 |----------|------------------|---------------------|
-| Border radius | 12px | 12px |
-| Border width | 0px (filled) | 1px |
-| Padding | ~9px 16px | ~9px 16px |
-| Font size | 14px | 14px |
-
-**Status (v3)**: Updated to match — 12px radius, correct colors, correct border widths.
+| Border radius | 20px | 20px |
+| Background | `#6baefa` (transparent on hover: `#aac3ef`) | transparent (hover: `#1f2a3c`) |
+| Text color | dark (`#070b18`) | accent blue (`#6baefa`) |
+| Border | same as bg | accent blue (`#6baefa`) |
 
 ## Logo
 
 ### Files Found
 - **White SVG**: `clients/apps/web/src/images/logo-white.svg` (290x45 viewbox, white fill)
 - **Desktop PNG (white)**: `clients/apps/desktop/src/images/logo-white@2x.png`
-- **Desktop PNG (dark)**: `clients/apps/desktop/src/images/logo-dark@2x.png`
-- **Icon components**: `clients/libs/assets/src/svg/svgs/bitwarden-logo.icon.ts`, `bitwarden-icon.ts`
+- **Icon components**: `clients/libs/assets/src/svg/svgs/bitwarden-logo.icon.ts`
 
-The logo SVG contains both the shield icon and the "bitwarden" wordmark. The shield is the left portion of the SVG path.
+### Current Implementation
+Logo SVG copied to `assets/logo-white.svg` and rendered via iced's `svg` widget at 209x35.
 
-### Usage in Our App
-Currently we render "bitwarden" as styled text in the sidebar. For better fidelity, we should either:
-1. Embed the SVG as an iced `Image` or `Svg` widget (iced supports SVG via the `svg` feature)
-2. Continue with text but match the font weight (bold "bit" + regular "warden")
+## Lock Screen Icon
 
-## Login Page Background
+- **Source**: `clients/libs/assets/src/svg/svgs/lock.icon.ts`
+- Extracted to `assets/lock-icon.svg` with dark theme colors baked in
+- Rendered at 64x60 above the "Your vault is locked" title
 
-### Decorative Illustrations
-- **Left illustration**: `clients/libs/assets/src/svg/svgs/background-left-illustration.ts`
-- **Right illustration**: `clients/libs/assets/src/svg/svgs/background-right-illustration.ts`
-- **Layout component**: `clients/libs/components/src/landing-layout/landing-layout.component.ts`
+## Login Page Background Illustrations
 
-These are inline SVG components (TypeScript, not standalone files). They render gear/shield decorative shapes at the bottom corners.
+- **Left**: `clients/libs/assets/src/svg/svgs/background-left-illustration.ts`
+- **Right**: `clients/libs/assets/src/svg/svgs/background-right-illustration.ts`
+- Extracted to `assets/bg-left.svg` and `assets/bg-right.svg` with dark theme fill colors
+- Rendered at bottom corners, fixed size, 11% opacity
 
-**Styling**:
-- Positioned at bottom-left and bottom-right
-- Width: 35%, max-width: 450px
-- **Opacity: 11%** (`tw-opacity-[.11]`)
-- Colors use themed fill classes: `tw-fill-illustration-bg-primary`, `tw-fill-illustration-bg-secondary`, etc.
-
-### Implementation Plan
-Extract the SVG path data from the TypeScript files, save as standalone `.svg` files, and render them in the login view using iced's SVG support (requires `svg` feature on iced crate).
+### Illustration Colors (dark theme)
+From `clients/libs/components/src/tw-theme.css` (dark mode section):
+- `tw-fill-illustration-outline` → `rgb(23, 93, 220)` = `#175ddc`
+- `tw-fill-illustration-bg-primary` → `rgb(170, 195, 239)` = `#aac3ef`
+- `tw-fill-illustration-bg-secondary` → `rgb(121, 161, 233)` = `#79a1e9`
+- `tw-fill-illustration-bg-tertiary` → `rgb(243, 246, 249)` = `#f3f6f9`
+- `tw-fill-illustration-logo` → `rgb(255, 255, 255)` = `#ffffff`
+- `tw-fill-illustration-tertiary` → `rgb(255, 191, 0)` = `#ffbf00` (gold stars on lock)
 
 ## Color Palette (Dark Theme)
 
-### Official Theme Values
-From `clients/apps/desktop/src/scss/variables.scss` and the Tailwind config:
+**Important**: The SCSS values in `variables.scss` do NOT match the actual rendered colors. Always verify with a color picker against the running app.
 
-| Role | Our Current | Notes |
-|------|-------------|-------|
-| Background | `#171e2b` | Close to original |
-| Sidebar BG | `#1a2332` | Close to original |
-| Card BG | `#212b3c` | Close to original |
-| Accent/Primary | `#175ddc` | Official brand blue |
-| Text Primary | `#ffffff` | Correct |
-| Text Secondary | `#8b95a5` | Close |
-| Border | `#2c3544` | Close |
+### Actual Rendered Colors (picked from running app)
+| Role | Hex | Source |
+|------|-----|--------|
+| Main window background | `#070b18` | Color picker |
+| Header / account bar | `#1e2939` | Color picker |
+| Card background | `#101828` | Color picker |
+| Sidebar background | `#1d293d` | `--color-nav-bg-primary` (gray-800) |
+| Input/button hover | `#1f2a3c` | Color picker |
+| Border | `#4c525f` | `boxBorderColor` in SCSS |
+| Primary accent | `#6baefa` | `--color-brand-400` (dark mode) |
+| Accent hover | `#aac3ef` | Color picker |
+| Text primary | `#ffffff` | |
+| Text secondary | `#bac0ce` | `mutedColor` in SCSS |
 
-**Note**: Colors will need to be refactored from module-level constants to a theme struct/trait system to support light/dark mode switching.
+### SCSS Values (for reference, may not match rendered)
+From `clients/apps/desktop/src/scss/variables.scss` (dark theme map):
+- `backgroundColor`: `#1f242e`
+- `backgroundColorAlt2`: `#15181e` (used as window bg in `window.main.ts`)
+- `boxBackgroundColor`: `#2f343d`
+- `boxBorderColor`: `#4c525f`
+- `buttonBackgroundColor`: `#272b32`
+- `primaryColor` / `buttonPrimaryColor`: `#6f9df1`
+
+## Font
+
+- **Font family**: Inter (`$font-family-sans-serif` in `variables.scss`)
+- **Source**: https://github.com/rsms/inter (bundled as `assets/InterVariable.ttf`)
+- **Weight**: Normal (400) for body, Bold for "bit" in logo text
 
 ## Account Switcher
 
-### Original Behavior
-- Shows user avatar (initials in colored circle) + email
-- Shows server URL below email (e.g., "bitwarden.com")
-- Has a dropdown arrow (▼) indicator
-- Dropdown lists all accounts with locked/unlocked status
+### Original Behavior (see `img/original/Account.png`)
+- Shows initials circle + email + server URL + up/down arrow
+- Dropdown pops under the bar as a floating panel
+- Dropdown shows other accounts (not the active one) + "+ Add account"
 
-### Our Current State
-- Shows initial circle + email
-- Missing: server URL display
-- Missing: dropdown arrow indicator
-- `AccountEntry` struct needs a `server_url: String` field added
+### Current Implementation
+- Trigger: initials + email + server + arrow (⌃/⌄)
+- Dropdown: floats via `stack!` at the page level (not inside the top bar)
+- Excludes active account, includes "+ Add account"
+
+## Native Menu Bar
+
+### Source
+Menu entries from `clients/apps/desktop/src/main/menu/`:
+- `menu.file.ts` — Add items, sync/import/export, settings, lock, quit
+- `menu.edit.ts` — Undo/redo, cut/copy/paste, copy username/password/TOTP
+- `menu.view.ts` — Search, generator, zoom, fullscreen, reload
+- `menu.account.ts` — Premium, change password, 2FA, fingerprint, delete
+- `menu.window.ts` — Minimize, hide to menu bar, always on top, close
+- `menu.help.ts` — Help, bug report, legal, follow us, web vault, mobile/browser, about
+- `menu.bitwarden.ts` — macOS-only app menu (prepended on macOS)
+
+### Current Implementation
+- Uses `muda` crate for native OS menus
+- All menu items are stubs (no event handling wired yet)
+- Attached via `Window::Opened` subscription → `raw_id()` → `init_for_hwnd()`
 
 ## Screens
 
 ### Login/Lock Screen
-- Centered card on dark background with decorative illustrations (bottom corners)
-- Lock icon above "Your vault is locked" title (we don't have this yet)
-- Email display (read-only)
-- Password input with visibility toggle (eye icon inside input)
-- "Unlock" primary button
-- "Unlock with Windows Hello" secondary button (optional, future)
-- "Log out" button
-- Account switcher in top-right
+- Top bar: account switcher (right), bitwarden logo below on main background (left)
+- Lock icon (shield with stars) centered
+- "Your vault is locked" + email
+- Card: floating label input, Unlock button, "or", Log out button
+- Background illustrations at bottom corners (11% opacity)
+- "Accessing bitwarden.com" status text at bottom
 
 ### Main Vault Screen
-- **Top bar**: Search input (with magnifying glass icon) + account switcher
-- **Sidebar**: Logo header, collapsible tree navigation with icons
-  - Vault section (All vaults, My vault, shared vaults — tree hierarchy)
-  - Types section (Favorites, Login, Card, Identity, Secure Note, SSH Key)
-  - Separator
-  - Archive, Trash
-  - Collections, Folders
-  - Send, Generator
-- **Item list**: Scrollable, each item has colored initial circle + name + subtitle
-- **Detail pane** (future): Shows item details on selection
+- **Top bar**: Search input + account switcher
+- **Sidebar**: "bitwarden / Password Manager" header, category tree navigation
+- **Item list**: Scrollable, colored initial circles + name + subtitle
+- **Detail pane** (future): Item details on selection

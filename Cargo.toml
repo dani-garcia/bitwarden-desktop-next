@@ -6,3 +6,8 @@ edition = "2024"
 [dependencies]
 iced = { version = "0.14", features = ["tokio", "svg"] }
 muda = "0.15"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
