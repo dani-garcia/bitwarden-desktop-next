@@ -21,6 +21,7 @@ pub struct UserSession {
 
 #[derive(Debug, Clone)]
 pub struct CipherItem {
+    pub id: String,
     pub name: String,
     pub username: Option<String>,
     pub url: Option<String>,
@@ -47,5 +48,21 @@ pub enum SidebarFilter {
     AllItems,
     Favorites,
     Category(CipherCategory),
+    Archive,
     Trash,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SidebarMode {
+    Collapsed,
+    Expanded,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NavSection {
+    Vault,
+    Send,
+    Generator,
+    Import,
+    Export,
 }

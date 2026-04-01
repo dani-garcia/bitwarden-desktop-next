@@ -1,5 +1,5 @@
 use iced::widget::{button, column, container, row, text};
-use iced::{Alignment, Element, Fill, Padding};
+use iced::{Alignment, Element, Fill};
 
 use crate::icons;
 use crate::state::UserId;
@@ -18,7 +18,44 @@ pub struct AccountEntry {
     pub locked: bool,
 }
 
-/// Renders just the trigger button (initials + email + server + arrow)
+/// Renders a round avatar circle trigger for the vault header.
+pub fn avatar_trigger<'a>(active_email: &'a str) -> Element<'a, AccountSwitcherMessage> {
+    let initials = active_email
+        .chars()
+        .take(2)
+        .collect::<String>()
+        .to_uppercase();
+
+    button(
+        container(text(initials).size(13).color(theme::TEXT_PRIMARY))
+            .width(36)
+            .height(36)
+            .align_x(iced::alignment::Horizontal::Center)
+            .align_y(iced::alignment::Vertical::Center)
+            .style(|_theme| container::Style {
+                background: Some(iced::Background::Color(theme::AVATAR_BG)),
+                border: iced::Border {
+                    radius: 18.0.into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }),
+    )
+    .on_press(AccountSwitcherMessage::ToggleDropdown)
+    .padding(0)
+    .style(|_theme, _status| button::Style {
+        background: Some(iced::Background::Color(iced::Color::TRANSPARENT)),
+        text_color: theme::TEXT_PRIMARY,
+        border: iced::Border::default(),
+        shadow: iced::Shadow::default(),
+        snap: false,
+    })
+    .into()
+}
+
+/// Renders just the trigger button (initials + email + server + arrow).
+/// Used by the login page's legacy account switcher bar. May be removed later.
+#[allow(dead_code)]
 pub fn trigger<'a>(
     active_email: &'a str,
     active_server: &'a str,
@@ -41,7 +78,7 @@ pub fn trigger<'a>(
     button(
         row![
             container(text(initials).size(12).color(theme::TEXT_PRIMARY))
-                .padding(Padding::from([4.0, 8.0]))
+                .padding([4, 8])
                 .style(|_theme| container::Style {
                     background: Some(iced::Background::Color(theme::ACCENT)),
                     border: iced::Border {
@@ -61,7 +98,7 @@ pub fn trigger<'a>(
         .align_y(Alignment::Center),
     )
     .on_press(AccountSwitcherMessage::ToggleDropdown)
-    .padding(Padding::from([4.0, 8.0]))
+    .padding([4, 8])
     .style(|_theme, _status| button::Style {
         background: Some(iced::Background::Color(iced::Color::TRANSPARENT)),
         text_color: theme::TEXT_PRIMARY,
@@ -94,7 +131,7 @@ pub fn dropdown<'a>(
             button(
                 row![
                     container(text(initial).size(11).color(theme::TEXT_PRIMARY))
-                        .padding(Padding::from([3.0, 7.0]))
+                        .padding([3, 7])
                         .style(|_theme| container::Style {
                             background: Some(iced::Background::Color(theme::ACCENT)),
                             border: iced::Border {
@@ -117,7 +154,7 @@ pub fn dropdown<'a>(
                 .align_y(Alignment::Center),
             )
             .on_press(AccountSwitcherMessage::SwitchUser(uid))
-            .padding(Padding::from([6.0, 12.0]))
+            .padding([6, 12])
             .width(Fill)
             .style(|_theme, status| {
                 let bg = match status {
@@ -138,7 +175,7 @@ pub fn dropdown<'a>(
 
     items.push(
         button(text("+ Add account").size(12).color(theme::TEXT_SECONDARY))
-            .padding(Padding::from([8.0, 12.0]))
+            .padding([8, 12])
             .width(Fill)
             .style(|_theme, status| {
                 let bg = match status {
@@ -158,7 +195,7 @@ pub fn dropdown<'a>(
 
     container(column(items).spacing(0))
         .width(240)
-        .padding(Padding::from([4.0, 0.0]))
+        .padding([4, 0])
         .style(|_theme| container::Style {
             background: Some(iced::Background::Color(theme::CARD_BG)),
             border: iced::Border {

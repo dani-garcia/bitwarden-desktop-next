@@ -17,15 +17,22 @@ fn main() -> iced::Result {
         .title("Bitwarden [Next]")
         .font(include_bytes!("../assets/InterVariable.ttf").as_slice())
         .font(icons::FONT_BYTES)
+        .font(icons::BWI_FONT_BYTES)
         .default_font(iced::Font {
             family: iced::font::Family::Name("Inter"),
             weight: iced::font::Weight::Normal,
             ..iced::Font::DEFAULT
         })
         .window(iced::window::Settings {
-            size: iced::Size::new(1080.0, 720.0),
-            min_size: Some(iced::Size::new(600.0, 480.0)),
+            size: iced::Size::new(1024.0, 800.0),
+            min_size: Some(iced::Size::new(800.0, 750.0)),
+            decorations: cfg!(target_os = "macos"),
+            platform_specific: iced::window::settings::platform::PlatformSpecific {
+                undecorated_shadow: true,
+                ..Default::default()
+            },
             ..Default::default()
         })
+        .antialiasing(true)
         .run()
 }

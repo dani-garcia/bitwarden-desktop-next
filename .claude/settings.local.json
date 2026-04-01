@@ -27,7 +27,10 @@
       "Bash(xargs grep:*)",
       "Bash(find /c/Users/Dani/.cargo/registry/src -maxdepth 2 -type d -name *icon* -o -name *font*)",
       "WebSearch",
-      "WebFetch(domain:crates.io)"
+      "WebFetch(domain:crates.io)",
+      "Bash(grep -i \"DASH\\\\|FULLSCREEN\\\\|X_LG\\\\|SQUARE\\\\|WINDOW\\\\|CHEVRON_BAR\" \"c:/Users/Dani/Desktop/test/target/debug/build\"/*/out/bootstrap_icons_generated.rs)",
+      "Bash(cargo b:*)",
+      "Bash(cargo fmt:*)"
     ]
   }
 }

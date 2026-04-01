@@ -20,17 +20,29 @@ pub struct Shortcut {
 
 /// Ctrl/Cmd + key
 const fn cmd(key: char) -> Shortcut {
-    Shortcut { ctrl_cmd: true, shift: false, key: ShortcutKey::Char(key) }
+    Shortcut {
+        ctrl_cmd: true,
+        shift: false,
+        key: ShortcutKey::Char(key),
+    }
 }
 
 /// Ctrl/Cmd + Shift + key
 const fn cmd_shift(key: char) -> Shortcut {
-    Shortcut { ctrl_cmd: true, shift: true, key: ShortcutKey::Char(key) }
+    Shortcut {
+        ctrl_cmd: true,
+        shift: true,
+        key: ShortcutKey::Char(key),
+    }
 }
 
 /// Function key alone
 const fn fkey(n: u8) -> Shortcut {
-    Shortcut { ctrl_cmd: false, shift: false, key: ShortcutKey::F(n) }
+    Shortcut {
+        ctrl_cmd: false,
+        shift: false,
+        key: ShortcutKey::F(n),
+    }
 }
 
 impl Shortcut {
@@ -38,39 +50,60 @@ impl Shortcut {
     pub fn display(&self) -> String {
         let mut s = String::new();
         if cfg!(target_os = "macos") {
-            if self.ctrl_cmd { s.push_str("Cmd+"); }
-            if self.shift { s.push_str("Shift+"); }
+            if self.ctrl_cmd {
+                s.push_str("Cmd+");
+            }
+            if self.shift {
+                s.push_str("Shift+");
+            }
         } else {
-            if self.ctrl_cmd { s.push_str("Ctrl+"); }
-            if self.shift { s.push_str("Shift+"); }
+            if self.ctrl_cmd {
+                s.push_str("Ctrl+");
+            }
+            if self.shift {
+                s.push_str("Shift+");
+            }
         }
         match self.key {
             ShortcutKey::Char(c) if c.is_ascii_alphabetic() => s.push(c.to_ascii_uppercase()),
             ShortcutKey::Char(c) => s.push(c),
-            ShortcutKey::F(n) => { s.push('F'); s.push_str(&n.to_string()); }
+            ShortcutKey::F(n) => {
+                s.push('F');
+                s.push_str(&n.to_string());
+            }
         }
         s
     }
 
     /// Returns true if an iced keyboard event matches this shortcut.
-    pub fn matches(
-        &self,
-        key: &iced::keyboard::Key,
-        modifiers: iced::keyboard::Modifiers,
-    ) -> bool {
-        if modifiers.command() != self.ctrl_cmd { return false; }
-        if modifiers.shift() != self.shift { return false; }
+    pub fn matches(&self, key: &iced::keyboard::Key, modifiers: iced::keyboard::Modifiers) -> bool {
+        if modifiers.command() != self.ctrl_cmd {
+            return false;
+        }
+        if modifiers.shift() != self.shift {
+            return false;
+        }
 
         match (&self.key, key) {
-            (ShortcutKey::Char(c), iced::keyboard::Key::Character(s)) => {
-                s.chars().next()
-                    .is_some_and(|pressed| pressed.eq_ignore_ascii_case(c))
-            }
+            (ShortcutKey::Char(c), iced::keyboard::Key::Character(s)) => s
+                .chars()
+                .next()
+                .is_some_and(|pressed| pressed.eq_ignore_ascii_case(c)),
             (ShortcutKey::F(n), iced::keyboard::Key::Named(named)) => {
                 use iced::keyboard::key::Named::*;
                 let matched = match named {
-                    F1 => 1, F2 => 2, F3 => 3, F4 => 4, F5 => 5, F6 => 6,
-                    F7 => 7, F8 => 8, F9 => 9, F10 => 10, F11 => 11, F12 => 12,
+                    F1 => 1,
+                    F2 => 2,
+                    F3 => 3,
+                    F4 => 4,
+                    F5 => 5,
+                    F6 => 6,
+                    F7 => 7,
+                    F8 => 8,
+                    F9 => 9,
+                    F10 => 10,
+                    F11 => 11,
+                    F12 => 12,
                     _ => return false,
                 };
                 *n == matched
@@ -181,20 +214,40 @@ const fn E(label: &'static str) -> MenuEntry {
 }
 
 impl MenuEntry {
-    const fn key(mut self, s: Shortcut) -> Self { self.shortcut = Some(s); self }
-    const fn when(mut self, e: EnabledWhen) -> Self { self.enabled = e; self }
-    const fn action(mut self, a: MenuAction) -> Self { self.action = Some(a); self }
-    const fn sub(mut self, items: &'static [MenuEntry]) -> Self { self.children = items; self }
+    const fn key(mut self, s: Shortcut) -> Self {
+        self.shortcut = Some(s);
+        self
+    }
+    const fn when(mut self, e: EnabledWhen) -> Self {
+        self.enabled = e;
+        self
+    }
+    const fn action(mut self, a: MenuAction) -> Self {
+        self.action = Some(a);
+        self
+    }
+    const fn sub(mut self, items: &'static [MenuEntry]) -> Self {
+        self.children = items;
+        self
+    }
 
-    pub fn is_separator(&self) -> bool { self.label.is_empty() && self.children.is_empty() }
-    pub fn is_submenu(&self) -> bool { !self.children.is_empty() || self.is_submenu_placeholder() }
-    pub fn is_enabled(&self, state: &MenuState) -> bool { self.enabled.check(state) }
+    pub fn is_separator(&self) -> bool {
+        self.label.is_empty() && self.children.is_empty()
+    }
+    pub fn is_submenu(&self) -> bool {
+        !self.children.is_empty() || self.is_submenu_placeholder()
+    }
+    pub fn is_enabled(&self, state: &MenuState) -> bool {
+        self.enabled.check(state)
+    }
 
     /// Submenus with empty children (e.g. "Lock vault", "Log out") are placeholders
     /// for dynamically populated content. They still render as submenus.
     fn is_submenu_placeholder(&self) -> bool {
-        matches!(self.enabled, EnabledWhen::HasLockable | EnabledWhen::HasAccounts)
-            && self.action.is_none()
+        matches!(
+            self.enabled,
+            EnabledWhen::HasLockable | EnabledWhen::HasAccounts
+        ) && self.action.is_none()
             && self.shortcut.is_none()
             && self.children.is_empty()
             && !self.label.is_empty()
@@ -213,108 +266,130 @@ use EnabledWhen::*;
 use MenuAction::*;
 
 pub const MENUS: &[(&str, &[MenuEntry])] = &[
-    ("File", &[
-        E("New login").key(cmd('n')).when(Unlocked),
-        E("New item").when(Unlocked).sub(&[
-            E("Login").key(cmd_shift('l')),
-            E("Card").key(cmd_shift('c')),
-            E("Identity").key(cmd_shift('i')),
-            E("Secure note").key(cmd_shift('s')),
-            E("SSH key").key(cmd_shift('k')),
-        ]),
-        E("New folder").when(Unlocked),
-        SEP,
-        E("Sync now").when(HasAuthenticated).action(SyncNow),
-        E("Import").when(Unlocked),
-        E("Export").when(Unlocked),
-        SEP,
-        E("Settings").key(cmd(',')).when(Unlocked),
-        // Lock/Log out submenus: dynamically populated with account emails at runtime
-        E("Lock vault").when(HasLockable).sub(&[]),
-        E("Lock all vaults").key(cmd('l')).when(HasAccounts).action(LockAllVaults),
-        E("Log out").when(HasAccounts).sub(&[]),
-        SEP,
-        E("Quit Bitwarden").action(Quit),
-    ]),
-    ("Edit", &[
-        E("Undo").key(cmd('z')),
-        E("Redo").key(cmd('y')),
-        SEP,
-        E("Cut").key(cmd('x')),
-        E("Copy").key(cmd('c')),
-        E("Paste").key(cmd('v')),
-        SEP,
-        E("Select all").key(cmd('a')),
-        SEP,
-        E("Copy username").key(cmd('u')).when(Unlocked),
-        E("Copy password").key(cmd('p')).when(Unlocked),
-        E("Copy verification code (TOTP)").key(cmd('t')).when(Unlocked),
-    ]),
-    ("View", &[
-        E("Search vault").key(cmd('f')).when(Unlocked).action(SearchVault),
-        SEP,
-        E("Generator").key(cmd('g')).when(Unlocked),
-        E("Generator history").when(Unlocked),
-        SEP,
-        E("Zoom in").key(cmd('+')),
-        E("Zoom out").key(cmd('-')),
-        E("Reset zoom").key(cmd('0')),
-        SEP,
-        E("Toggle full screen").key(fkey(11)).action(ToggleFullScreen),
-        SEP,
-        E("Reload").key(cmd_shift('r')).action(Reload),
-    ]),
-    ("Account", &[
-        E("Premium membership").when(Unlocked),
-        E("Change master password").when(Unlocked),
-        E("Two-step login").when(Unlocked),
-        E("Fingerprint phrase").when(Unlocked),
-        SEP,
-        E("Delete account").when(Unlocked),
-    ]),
-    ("Window", &[
-        E("Minimize").key(cmd('m')).action(Minimize),
-        E("Hide to tray").key(cmd_shift('m')).action(HideToTray),
-        E("Always on top").key(cmd_shift('t')).action(ToggleAlwaysOnTop),
-        SEP,
-        E("Close").key(cmd('w')).action(Close),
-    ]),
-    ("Help", &[
-        E("Help & feedback"),
-        E("File a bug report"),
-        E("Legal").sub(&[
-            E("Terms of service"),
-            E("Privacy policy"),
-        ]),
-        SEP,
-        E("Follow us").sub(&[
-            E("Blog"),
-            E("Twitter"),
-            E("Facebook"),
-            E("GitHub"),
-            E("Mastodon"),
-        ]),
-        SEP,
-        E("Go to web vault"),
-        SEP,
-        E("Get mobile app").sub(&[
-            E("iOS"),
-            E("Android"),
-        ]),
-        E("Get browser extension").sub(&[
-            E("Chrome"),
-            E("Firefox"),
-            E("Opera"),
-            E("Edge"),
-            E("Safari"),
-        ]),
-        SEP,
-        E("Troubleshooting").sub(&[
-            E("Toggle hardware acceleration"),
-        ]),
-        SEP,
-        E("About Bitwarden").action(About),
-    ]),
+    (
+        "File",
+        &[
+            E("New login").key(cmd('n')).when(Unlocked),
+            E("New item").when(Unlocked).sub(&[
+                E("Login").key(cmd_shift('l')),
+                E("Card").key(cmd_shift('c')),
+                E("Identity").key(cmd_shift('i')),
+                E("Secure note").key(cmd_shift('s')),
+                E("SSH key").key(cmd_shift('k')),
+            ]),
+            E("New folder").when(Unlocked),
+            SEP,
+            E("Sync now").when(HasAuthenticated).action(SyncNow),
+            E("Import").when(Unlocked),
+            E("Export").when(Unlocked),
+            SEP,
+            E("Settings").key(cmd(',')).when(Unlocked),
+            // Lock/Log out submenus: dynamically populated with account emails at runtime
+            E("Lock vault").when(HasLockable).sub(&[]),
+            E("Lock all vaults")
+                .key(cmd('l'))
+                .when(HasAccounts)
+                .action(LockAllVaults),
+            E("Log out").when(HasAccounts).sub(&[]),
+            SEP,
+            E("Quit Bitwarden").action(Quit),
+        ],
+    ),
+    (
+        "Edit",
+        &[
+            E("Undo").key(cmd('z')),
+            E("Redo").key(cmd('y')),
+            SEP,
+            E("Cut").key(cmd('x')),
+            E("Copy").key(cmd('c')),
+            E("Paste").key(cmd('v')),
+            SEP,
+            E("Select all").key(cmd('a')),
+            SEP,
+            E("Copy username").key(cmd('u')).when(Unlocked),
+            E("Copy password").key(cmd('p')).when(Unlocked),
+            E("Copy verification code (TOTP)")
+                .key(cmd('t'))
+                .when(Unlocked),
+        ],
+    ),
+    (
+        "View",
+        &[
+            E("Search vault")
+                .key(cmd('f'))
+                .when(Unlocked)
+                .action(SearchVault),
+            SEP,
+            E("Generator").key(cmd('g')).when(Unlocked),
+            E("Generator history").when(Unlocked),
+            SEP,
+            E("Zoom in").key(cmd('+')),
+            E("Zoom out").key(cmd('-')),
+            E("Reset zoom").key(cmd('0')),
+            SEP,
+            E("Toggle full screen")
+                .key(fkey(11))
+                .action(ToggleFullScreen),
+            SEP,
+            E("Reload").key(cmd_shift('r')).action(Reload),
+        ],
+    ),
+    (
+        "Account",
+        &[
+            E("Premium membership").when(Unlocked),
+            E("Change master password").when(Unlocked),
+            E("Two-step login").when(Unlocked),
+            E("Fingerprint phrase").when(Unlocked),
+            SEP,
+            E("Delete account").when(Unlocked),
+        ],
+    ),
+    (
+        "Window",
+        &[
+            E("Minimize").key(cmd('m')).action(Minimize),
+            E("Hide to tray").key(cmd_shift('m')).action(HideToTray),
+            E("Always on top")
+                .key(cmd_shift('t'))
+                .action(ToggleAlwaysOnTop),
+            SEP,
+            E("Close").key(cmd('w')).action(Close),
+        ],
+    ),
+    (
+        "Help",
+        &[
+            E("Help & feedback"),
+            E("File a bug report"),
+            E("Legal").sub(&[E("Terms of service"), E("Privacy policy")]),
+            SEP,
+            E("Follow us").sub(&[
+                E("Blog"),
+                E("Twitter"),
+                E("Facebook"),
+                E("GitHub"),
+                E("Mastodon"),
+            ]),
+            SEP,
+            E("Go to web vault"),
+            SEP,
+            E("Get mobile app").sub(&[E("iOS"), E("Android")]),
+            E("Get browser extension").sub(&[
+                E("Chrome"),
+                E("Firefox"),
+                E("Opera"),
+                E("Edge"),
+                E("Safari"),
+            ]),
+            SEP,
+            E("Troubleshooting").sub(&[E("Toggle hardware acceleration")]),
+            SEP,
+            E("About Bitwarden").action(About),
+        ],
+    ),
 ];
 
 // ---------------------------------------------------------------------------
@@ -372,7 +447,7 @@ pub fn attach_menu(_raw_id: u64) {
 #[cfg(not(target_os = "macos"))]
 pub fn attach_menu(_raw_id: u64) {}
 
-pub const fn should_draw_menu() -> bool {
+pub const fn should_draw_title_bar() -> bool {
     !cfg!(target_os = "macos")
 }
 

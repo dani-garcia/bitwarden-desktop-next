@@ -10,17 +10,14 @@ macro_rules! hex {
 // Colors picked from the actual running Bitwarden app with a color picker.
 // Note: SCSS values in variables.scss differ from rendered colors — always verify visually.
 
-/// Main window background — #070b18
-pub const BACKGROUND: Color = hex!(0x07, 0x0b, 0x18);
+/// Main window background — #202733
+pub const BACKGROUND: Color = hex!(0x20, 0x27, 0x33);
 
-/// Sidebar / nav background — #1d293d
-pub const SIDEBAR_BG: Color = hex!(0x1d, 0x29, 0x3d);
+/// Header / title bar / sidebar background — #303946
+pub const HEADER_BG: Color = hex!(0x30, 0x39, 0x46);
 
-/// Header / account switcher bar background — #1e2939
-pub const HEADER_BG: Color = hex!(0x1e, 0x29, 0x39);
-
-/// Card / box background — #101828
-pub const CARD_BG: Color = hex!(0x10, 0x18, 0x28);
+/// Detail pane background — #121a27
+pub const CARD_BG: Color = hex!(0x12, 0x1a, 0x27);
 
 /// Box/item hover background — #3c424e
 pub const ITEM_HOVER: Color = hex!(0x3c, 0x42, 0x4e);
@@ -34,14 +31,32 @@ pub const TEXT_PRIMARY: Color = Color::WHITE;
 /// Secondary text — #bac0ce
 pub const TEXT_SECONDARY: Color = hex!(0xba, 0xc0, 0xce);
 
-/// Muted / disabled text — #6e788a
-pub const TEXT_MUTED: Color = hex!(0x6e, 0x78, 0x8a);
+/// Muted / disabled text — #8898b5
+pub const TEXT_MUTED: Color = hex!(0x88, 0x98, 0xb5);
 
-/// Primary border — #4c525f
-pub const BORDER: Color = hex!(0x4c, 0x52, 0x5f);
+/// Primary border / separators — #303946
+pub const BORDER: Color = hex!(0x30, 0x39, 0x46);
 
 /// Input background — #1f242e
 pub const INPUT_BG: Color = hex!(0x1f, 0x24, 0x2e);
 
 /// Selected item / active accent — brand-700 #175ddc
 pub const SELECTED_BG: Color = hex!(0x17, 0x5d, 0xdc);
+
+/// Sidebar selected item background — #121a27
+pub const SIDEBAR_SELECTED: Color = hex!(0x12, 0x1a, 0x27);
+
+/// Primary action button background — #65abff
+pub const BUTTON_PRIMARY: Color = hex!(0x65, 0xab, 0xff);
+
+/// Avatar circle background — cyan #2cd8d5
+pub const AVATAR_BG: Color = hex!(0x2c, 0xd8, 0xd5);
+
+/// Table column header text — #8898b5
+pub const TABLE_HEADER: Color = hex!(0x88, 0x98, 0xb5);
+
+/// Title bar close button hover — standard Windows red #e81123
+pub const TITLEBAR_CLOSE_HOVER: Color = hex!(0xe8, 0x11, 0x23);
+
+/// Title bar minimize/maximize button hover — subtle highlight
+pub const TITLEBAR_BTN_HOVER: Color = hex!(0x2d, 0x37, 0x48);

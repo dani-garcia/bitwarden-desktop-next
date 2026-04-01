@@ -22,23 +22,9 @@ pub fn view<'a>(
     accounts: &'a [AccountEntry],
     dropdown_open: bool,
 ) -> Element<'a, LoginMessage> {
-    let switcher_trigger =
-        account_switcher::trigger(email, server, dropdown_open).map(LoginMessage::AccountSwitcher);
-
     let logo = svg(svg::Handle::from_path("assets/logo-white.svg"))
         .width(209)
         .height(35);
-
-    let top_bar = container(
-        row![Space::new().width(Fill), switcher_trigger]
-            .align_y(Alignment::Center)
-            .padding(Padding::from([8.0, 16.0])),
-    )
-    .width(Fill)
-    .style(|_theme| container::Style {
-        background: Some(iced::Background::Color(theme::HEADER_BG)),
-        ..Default::default()
-    });
 
     // Lock icon SVG
     let lock_icon = svg(svg::Handle::from_path("assets/lock-icon.svg"))
@@ -57,7 +43,7 @@ pub fn view<'a>(
             .on_input(LoginMessage::PasswordChanged)
             .on_submit(LoginMessage::Unlock)
             .size(16)
-            .padding(Padding::from([10.0, 12.0]))
+            .padding([10, 12])
             .width(Fill)
             .style(|_theme, _status| text_input::Style {
                 background: iced::Background::Color(iced::Color::TRANSPARENT),
@@ -86,7 +72,7 @@ pub fn view<'a>(
 
     let toggle_button = button(toggle_icon)
         .on_press(LoginMessage::TogglePasswordVisibility)
-        .padding(Padding::from([10.0, 12.0]))
+        .padding([10, 12])
         .style(|_theme, status| {
             let bg = match status {
                 button::Status::Hovered => iced::Color::from_rgb(
@@ -111,9 +97,9 @@ pub fn view<'a>(
             .size(12)
             .color(theme::TEXT_SECONDARY),
     )
-    .padding(Padding::from([0.0, 4.0]))
+    .padding([0, 4])
     .style(|_theme| container::Style {
-        background: Some(iced::Background::Color(theme::CARD_BG)),
+        background: Some(iced::Background::Color(theme::BACKGROUND)),
         ..Default::default()
     });
 
@@ -133,13 +119,13 @@ pub fn view<'a>(
     // Stack the floating label on top of the input, offset up
     let password_field = stack![
         column![Space::new().height(Length::Fixed(8.0)), input_border],
-        container(floating_label).padding(Padding::from([0.0, 12.0])),
+        container(floating_label).padding([0, 12]),
     ];
 
     let unlock_button = button(
         container(text("Unlock").size(16).color(theme::BACKGROUND))
             .center_x(Fill)
-            .padding(Padding::from([4.0, 8.0])),
+            .padding([4, 8]),
     )
     .on_press(LoginMessage::Unlock)
     .width(Fill)
@@ -168,7 +154,7 @@ pub fn view<'a>(
     let logout_button = button(
         container(text("Log out").size(16).color(theme::ACCENT))
             .center_x(Fill)
-            .padding(Padding::from([4.0, 8.0])),
+            .padding([4, 8]),
     )
     .on_press(LoginMessage::LogOut)
     .width(Fill)
@@ -208,7 +194,7 @@ pub fn view<'a>(
     .max_width(450)
     .padding(32)
     .style(|_theme| container::Style {
-        background: Some(iced::Background::Color(theme::CARD_BG)),
+        background: Some(iced::Background::Color(theme::BACKGROUND)),
         border: iced::Border {
             color: theme::BORDER,
             width: 1.0,
@@ -222,9 +208,7 @@ pub fn view<'a>(
         .spacing(8)
         .align_x(Alignment::Center);
 
-    let logo_row = container(logo)
-        .width(Fill)
-        .padding(Padding::from([16.0, 24.0]));
+    let logo_row = container(logo).width(Fill).padding([16, 24]);
 
     // Background illustrations pinned to bottom-left and bottom-right corners (11% opacity)
     let bg_left = svg(svg::Handle::from_path("assets/bg-left.svg"))
@@ -257,10 +241,47 @@ pub fn view<'a>(
         left: 0.0,
     });
 
-    // Main foreground content — card pinned near top, not vertically centered
-    let foreground = column![
-        top_bar,
+    // Round "..." menu button (top-right)
+    let menu_dot_button: Element<'a, LoginMessage> = button(
+        container(icons::THREE_DOTS.render(16.0, theme::ACCENT))
+            .width(36)
+            .height(36)
+            .align_x(iced::alignment::Horizontal::Center)
+            .align_y(iced::alignment::Vertical::Center),
+    )
+    .on_press(LoginMessage::AccountSwitcher(
+        AccountSwitcherMessage::ToggleDropdown,
+    ))
+    .padding(0)
+    .style(|_theme, status| {
+        let bg = match status {
+            button::Status::Hovered => theme::ITEM_HOVER,
+            _ => theme::HEADER_BG,
+        };
+        button::Style {
+            background: Some(iced::Background::Color(bg)),
+            text_color: theme::ACCENT,
+            border: iced::Border {
+                radius: 18.0.into(),
+                ..Default::default()
+            },
+            shadow: iced::Shadow::default(),
+            snap: false,
+        }
+    })
+    .into();
+
+    // Top row: logo left, ... button right
+    let top_row = row![
         logo_row,
+        Space::new().width(Fill),
+        container(menu_dot_button).padding([16, 24]),
+    ]
+    .align_y(Alignment::Center);
+
+    // Main foreground content
+    let foreground = column![
+        top_row,
         Space::new().height(Length::Fixed(40.0)),
         container(center_content).center_x(Fill),
         Space::new().height(Fill),
@@ -269,15 +290,13 @@ pub fn view<'a>(
     .width(Fill)
     .height(Fill);
 
-    // Dropdown overlay (top-right, below the top bar)
+    // Account switcher dropdown overlay (top-right, below the ... button)
     let dropdown_layer: Element<'a, LoginMessage> = if dropdown_open {
         let dd = account_switcher::dropdown(email, accounts).map(LoginMessage::AccountSwitcher);
         container(
             column![
-                Space::new().height(Length::Fixed(44.0)),
-                container(dd)
-                    .align_right(Fill)
-                    .padding(Padding::from([0.0, 16.0])),
+                Space::new().height(Length::Fixed(56.0)),
+                container(dd).align_right(Fill).padding([0, 16]),
             ]
             .width(Fill),
         )
@@ -295,7 +314,7 @@ pub fn view<'a>(
         .width(Fill)
         .height(Fill)
         .style(|_theme| container::Style {
-            background: Some(iced::Background::Color(theme::BACKGROUND)),
+            background: Some(iced::Background::Color(theme::CARD_BG)),
             ..Default::default()
         })
         .into()

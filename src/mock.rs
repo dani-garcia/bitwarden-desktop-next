@@ -32,168 +32,182 @@ pub fn mock_users() -> (HashMap<UserId, UserSession>, UserId) {
     (users, user1_id)
 }
 
+fn item(
+    id: &str,
+    name: &str,
+    username: Option<&str>,
+    url: Option<&str>,
+    category: CipherCategory,
+) -> CipherItem {
+    CipherItem {
+        id: id.into(),
+        name: name.into(),
+        username: username.map(Into::into),
+        url: url.map(Into::into),
+        category,
+    }
+}
+
 fn mock_vault_items_personal() -> Vec<CipherItem> {
+    use CipherCategory::*;
     vec![
-        CipherItem {
-            name: "Gmail".into(),
-            username: Some("alice@example.com".into()),
-            url: Some("mail.google.com".into()),
-            category: CipherCategory::Login,
-        },
-        CipherItem {
-            name: "GitHub".into(),
-            username: Some("alice-dev".into()),
-            url: Some("github.com".into()),
-            category: CipherCategory::Login,
-        },
-        CipherItem {
-            name: "Netflix".into(),
-            username: Some("alice@example.com".into()),
-            url: Some("netflix.com".into()),
-            category: CipherCategory::Login,
-        },
-        CipherItem {
-            name: "Amazon".into(),
-            username: Some("alice@example.com".into()),
-            url: Some("amazon.com".into()),
-            category: CipherCategory::Login,
-        },
-        CipherItem {
-            name: "Reddit".into(),
-            username: Some("alice_online".into()),
-            url: Some("reddit.com".into()),
-            category: CipherCategory::Login,
-        },
-        CipherItem {
-            name: "Steam".into(),
-            username: Some("alice_gamer".into()),
-            url: Some("store.steampowered.com".into()),
-            category: CipherCategory::Login,
-        },
-        CipherItem {
-            name: "Spotify".into(),
-            username: Some("alice@example.com".into()),
-            url: Some("spotify.com".into()),
-            category: CipherCategory::Login,
-        },
-        CipherItem {
-            name: "Bank of Example".into(),
-            username: Some("alice.johnson".into()),
-            url: Some("bankofexample.com".into()),
-            category: CipherCategory::Login,
-        },
-        CipherItem {
-            name: "Home WiFi Router".into(),
-            username: Some("admin".into()),
-            url: Some("192.168.1.1".into()),
-            category: CipherCategory::Login,
-        },
-        CipherItem {
-            name: "Discord".into(),
-            username: Some("alice#1234".into()),
-            url: Some("discord.com".into()),
-            category: CipherCategory::Login,
-        },
-        CipherItem {
-            name: "Twitter / X".into(),
-            username: Some("@alice_j".into()),
-            url: Some("x.com".into()),
-            category: CipherCategory::Login,
-        },
-        CipherItem {
-            name: "LinkedIn".into(),
-            username: Some("alice@example.com".into()),
-            url: Some("linkedin.com".into()),
-            category: CipherCategory::Login,
-        },
-        CipherItem {
-            name: "Dropbox".into(),
-            username: Some("alice@example.com".into()),
-            url: Some("dropbox.com".into()),
-            category: CipherCategory::Login,
-        },
-        CipherItem {
-            name: "Personal Visa".into(),
-            username: None,
-            url: None,
-            category: CipherCategory::Card,
-        },
-        CipherItem {
-            name: "Debit Card".into(),
-            username: None,
-            url: None,
-            category: CipherCategory::Card,
-        },
-        CipherItem {
-            name: "Alice Johnson".into(),
-            username: Some("Personal identity".into()),
-            url: None,
-            category: CipherCategory::Identity,
-        },
-        CipherItem {
-            name: "Recovery Codes Backup".into(),
-            username: None,
-            url: None,
-            category: CipherCategory::SecureNote,
-        },
-        CipherItem {
-            name: "WiFi Passwords".into(),
-            username: None,
-            url: None,
-            category: CipherCategory::SecureNote,
-        },
-        CipherItem {
-            name: "GitHub SSH Key".into(),
-            username: Some("git@github.com".into()),
-            url: None,
-            category: CipherCategory::SshKey,
-        },
+        item(
+            "c1a0-0001",
+            "Gmail",
+            Some("alice@example.com"),
+            Some("mail.google.com"),
+            Login,
+        ),
+        item(
+            "c1a0-0002",
+            "GitHub",
+            Some("alice-dev"),
+            Some("github.com"),
+            Login,
+        ),
+        item(
+            "c1a0-0003",
+            "Netflix",
+            Some("alice@example.com"),
+            Some("netflix.com"),
+            Login,
+        ),
+        item(
+            "c1a0-0004",
+            "Amazon",
+            Some("alice@example.com"),
+            Some("amazon.com"),
+            Login,
+        ),
+        item(
+            "c1a0-0005",
+            "Reddit",
+            Some("alice_online"),
+            Some("reddit.com"),
+            Login,
+        ),
+        item(
+            "c1a0-0006",
+            "Steam",
+            Some("alice_gamer"),
+            Some("store.steampowered.com"),
+            Login,
+        ),
+        item(
+            "c1a0-0007",
+            "Spotify",
+            Some("alice@example.com"),
+            Some("spotify.com"),
+            Login,
+        ),
+        item(
+            "c1a0-0008",
+            "Bank of Example",
+            Some("alice.johnson"),
+            Some("bankofexample.com"),
+            Login,
+        ),
+        item(
+            "c1a0-0009",
+            "Home WiFi Router",
+            Some("admin"),
+            Some("192.168.1.1"),
+            Login,
+        ),
+        item(
+            "c1a0-000a",
+            "Discord",
+            Some("alice#1234"),
+            Some("discord.com"),
+            Login,
+        ),
+        item(
+            "c1a0-000b",
+            "Twitter / X",
+            Some("@alice_j"),
+            Some("x.com"),
+            Login,
+        ),
+        item(
+            "c1a0-000c",
+            "LinkedIn",
+            Some("alice@example.com"),
+            Some("linkedin.com"),
+            Login,
+        ),
+        item(
+            "c1a0-000d",
+            "Dropbox",
+            Some("alice@example.com"),
+            Some("dropbox.com"),
+            Login,
+        ),
+        item("c1a0-000e", "Personal Visa", None, None, Card),
+        item("c1a0-000f", "Debit Card", None, None, Card),
+        item(
+            "c1a0-0010",
+            "Alice Johnson",
+            Some("Personal identity"),
+            None,
+            Identity,
+        ),
+        item("c1a0-0011", "Recovery Codes Backup", None, None, SecureNote),
+        item("c1a0-0012", "WiFi Passwords", None, None, SecureNote),
+        item(
+            "c1a0-0013",
+            "GitHub SSH Key",
+            Some("git@github.com"),
+            None,
+            SshKey,
+        ),
     ]
 }
 
 fn mock_vault_items_work() -> Vec<CipherItem> {
+    use CipherCategory::*;
     vec![
-        CipherItem {
-            name: "Company Jira".into(),
-            username: Some("ajohnson@acmecorp.com".into()),
-            url: Some("acmecorp.atlassian.net".into()),
-            category: CipherCategory::Login,
-        },
-        CipherItem {
-            name: "Company GitHub".into(),
-            username: Some("alice-acme".into()),
-            url: Some("github.com".into()),
-            category: CipherCategory::Login,
-        },
-        CipherItem {
-            name: "AWS Console".into(),
-            username: Some("ajohnson@acmecorp.com".into()),
-            url: Some("aws.amazon.com".into()),
-            category: CipherCategory::Login,
-        },
-        CipherItem {
-            name: "Slack".into(),
-            username: Some("ajohnson".into()),
-            url: Some("acmecorp.slack.com".into()),
-            category: CipherCategory::Login,
-        },
-        CipherItem {
-            name: "Corporate Card".into(),
-            username: None,
-            url: None,
-            category: CipherCategory::Card,
-        },
-        CipherItem {
-            name: "Production DB Credentials".into(),
-            username: None,
-            url: None,
-            category: CipherCategory::SecureNote,
-        },
-        CipherItem {
-            name: "Deploy SSH Key".into(),
-            username: Some("deploy@acmecorp.com".into()),
-            url: None,
-            category: CipherCategory::SshKey,
-        },
+        item(
+            "c2b0-0001",
+            "Company Jira",
+            Some("ajohnson@acmecorp.com"),
+            Some("acmecorp.atlassian.net"),
+            Login,
+        ),
+        item(
+            "c2b0-0002",
+            "Company GitHub",
+            Some("alice-acme"),
+            Some("github.com"),
+            Login,
+        ),
+        item(
+            "c2b0-0003",
+            "AWS Console",
+            Some("ajohnson@acmecorp.com"),
+            Some("aws.amazon.com"),
+            Login,
+        ),
+        item(
+            "c2b0-0004",
+            "Slack",
+            Some("ajohnson"),
+            Some("acmecorp.slack.com"),
+            Login,
+        ),
+        item("c2b0-0005", "Corporate Card", None, None, Card),
+        item(
+            "c2b0-0006",
+            "Production DB Credentials",
+            None,
+            None,
+            SecureNote,
+        ),
+        item(
+            "c2b0-0007",
+            "Deploy SSH Key",
+            Some("deploy@acmecorp.com"),
+            None,
+            SshKey,
+        ),
     ]
 }

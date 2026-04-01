@@ -1,7 +1,8 @@
+use iced::widget::pane_grid;
 use iced::{Element, Subscription};
 
 use crate::mock;
-use crate::state::{AppState, CipherItem, Screen, SidebarFilter};
+use crate::state::{AppState, CipherItem, NavSection, Screen, SidebarFilter, SidebarMode};
 use crate::views::login::{self, LoginMessage};
 use crate::views::vault::{self, VaultMessage};
 use crate::widgets::account_switcher::{AccountEntry, AccountSwitcherMessage};
@@ -13,7 +14,7 @@ use crate::widgets::sidebar::SidebarMessage;
 pub enum Message {
     Login(LoginMessage),
     Vault(VaultMessage),
-    MenuBar(crate::widgets::menu_bar::MenuBarMessage),
+    TitleBar(crate::widgets::title_bar::TitleBarMessage),
     KeyPressed(iced::keyboard::Event),
     WindowOpened(iced::window::Id),
     GotRawId(u64),
@@ -27,17 +28,34 @@ pub struct App {
     search_query: String,
     active_filter: SidebarFilter,
     selected_item: Option<usize>,
+    selected_id: Option<String>,
     dropdown_open: bool,
+    sidebar_mode: SidebarMode,
+    active_section: NavSection,
+    vault_tree_open: bool,
+    send_tree_open: bool,
     open_menu: Option<usize>,
     open_submenu: Option<usize>,
     fullscreen: bool,
+    maximized: bool,
     // Cached/computed data stored to avoid lifetime issues in view()
     cached_email: String,
     cached_server: String,
     cached_accounts: Vec<AccountEntry>,
     cached_items: Vec<CipherItem>,
+    all_items: Vec<CipherItem>,
     menu_attached: bool,
     window_id: Option<iced::window::Id>,
+    // PaneGrid for item list / detail pane split
+    pub pane_state: pane_grid::State<PaneKind>,
+    pub list_pane: pane_grid::Pane,
+    pub detail_pane: pane_grid::Pane,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum PaneKind {
+    List,
+    Detail,
 }
 
 impl App {
@@ -55,6 +73,12 @@ impl App {
             Screen::Login
         };
 
+        let (mut pane_state, list_pane) = pane_grid::State::new(PaneKind::List);
+        let (detail_pane, split_id) = pane_state
+            .split(pane_grid::Axis::Vertical, list_pane, PaneKind::Detail)
+            .unwrap();
+        pane_state.resize(split_id, 0.4);
+
         let mut app = Self {
             state: AppState {
                 users,
@@ -66,16 +90,26 @@ impl App {
             search_query: String::new(),
             active_filter: SidebarFilter::AllItems,
             selected_item: None,
+            selected_id: None,
             dropdown_open: false,
+            sidebar_mode: SidebarMode::Expanded,
+            active_section: NavSection::Vault,
+            vault_tree_open: true,
+            send_tree_open: false,
             open_menu: None,
             open_submenu: None,
             fullscreen: false,
+            maximized: false,
             cached_email: String::new(),
             cached_server: String::new(),
             cached_accounts: Vec::new(),
             cached_items: Vec::new(),
+            all_items: Vec::new(),
             menu_attached: false,
             window_id: None,
+            pane_state,
+            list_pane,
+            detail_pane,
         };
         app.refresh_cache();
 
@@ -101,13 +135,19 @@ impl App {
     }
 
     pub fn update(&mut self, message: Message) -> iced::Task<Message> {
+        let mut extra_task = iced::Task::none();
         match message {
             Message::Login(msg) => self.handle_login(msg),
-            Message::Vault(msg) => self.handle_vault(msg),
-            Message::MenuBar(msg) => {
-                use crate::widgets::menu_bar::MenuBarMessage;
+            Message::Vault(msg) => {
+                if matches!(msg, VaultMessage::Search(_)) {
+                    extra_task = iced::widget::operation::focus(iced::widget::Id::new("vault-search"));
+                }
+                self.handle_vault(msg);
+            }
+            Message::TitleBar(msg) => {
+                use crate::widgets::title_bar::TitleBarMessage;
                 match msg {
-                    MenuBarMessage::TopLevelClicked(i) => {
+                    TitleBarMessage::TopLevelClicked(i) => {
                         self.open_menu = if self.open_menu == Some(i) {
                             None
                         } else {
@@ -115,18 +155,14 @@ impl App {
                         };
                         self.open_submenu = None;
                     }
-                    MenuBarMessage::TopLevelHovered(i) => {
+                    TitleBarMessage::TopLevelHovered(i) => {
                         self.open_menu = Some(i);
                         self.open_submenu = None;
                     }
-                    MenuBarMessage::SubMenuHovered(_menu, item) => {
-                        self.open_submenu = if item == usize::MAX {
-                            None
-                        } else {
-                            Some(item)
-                        };
+                    TitleBarMessage::SubMenuHovered(_menu, item) => {
+                        self.open_submenu = if item == usize::MAX { None } else { Some(item) };
                     }
-                    MenuBarMessage::ItemClicked(menu, item) => {
+                    TitleBarMessage::ItemClicked(menu, item) => {
                         self.open_menu = None;
                         self.open_submenu = None;
                         if let Some(action) = crate::menu::MENUS
@@ -137,7 +173,7 @@ impl App {
                             return self.handle_menu_action(action);
                         }
                     }
-                    MenuBarMessage::SubMenuItemClicked(menu, parent, sub) => {
+                    TitleBarMessage::SubMenuItemClicked(menu, parent, sub) => {
                         self.open_menu = None;
                         self.open_submenu = None;
                         if let Some(action) = crate::menu::MENUS
@@ -147,6 +183,32 @@ impl App {
                             .and_then(|e| e.action)
                         {
                             return self.handle_menu_action(action);
+                        }
+                    }
+                    TitleBarMessage::MinimizeClicked => {
+                        if let Some(id) = self.window_id {
+                            return iced::window::minimize(id, true);
+                        }
+                    }
+                    TitleBarMessage::MaximizeClicked => {
+                        if let Some(id) = self.window_id {
+                            self.maximized = !self.maximized;
+                            return iced::window::toggle_maximize(id);
+                        }
+                    }
+                    TitleBarMessage::CloseClicked => {
+                        if let Some(id) = self.window_id {
+                            return iced::window::close(id);
+                        }
+                    }
+                    TitleBarMessage::DragStart => {
+                        if let Some(id) = self.window_id {
+                            return iced::window::drag(id);
+                        }
+                    }
+                    TitleBarMessage::ResizeEdge(direction) => {
+                        if let Some(id) = self.window_id {
+                            return iced::window::drag_resize(id, direction);
                         }
                     }
                 }
@@ -185,7 +247,7 @@ impl App {
             }
         }
         self.refresh_cache();
-        iced::Task::none()
+        extra_task
     }
 
     pub fn view(&self) -> Element<'_, Message> {
@@ -203,34 +265,48 @@ impl App {
                 &self.cached_email,
                 &self.cached_server,
                 &self.cached_items,
+                &self.all_items,
                 self.selected_item,
+                self.selected_id.as_deref(),
                 self.active_filter,
                 &self.search_query,
                 &self.cached_accounts,
                 self.dropdown_open,
+                self.sidebar_mode,
+                self.active_section,
+                self.vault_tree_open,
+                self.send_tree_open,
+                &self.pane_state,
+                self.list_pane,
+                self.detail_pane,
             )
             .map(Message::Vault),
         };
 
-        if crate::menu::should_draw_menu() {
-            let menu_bar =
-                crate::widgets::menu_bar::view(self.open_menu).map(Message::MenuBar);
-            let content = iced::widget::column![menu_bar, page].height(iced::Fill);
+        if crate::menu::should_draw_title_bar() {
+            let title_bar = crate::widgets::title_bar::view(self.open_menu, self.maximized)
+                .map(Message::TitleBar);
+            let content = iced::widget::column![title_bar, page].height(iced::Fill);
 
             let menu_state = self.menu_state();
-            if let Some(dropdown) =
-                crate::widgets::menu_bar::dropdown(self.open_menu, self.open_submenu, &menu_state)
+            let with_dropdown: Element<'_, Message> = if let Some(dropdown) =
+                crate::widgets::title_bar::dropdown(self.open_menu, self.open_submenu, &menu_state)
             {
-                let dropdown = dropdown.map(Message::MenuBar);
-                // Menu bar height (~28px) is the vertical offset for the dropdown
+                let dropdown = dropdown.map(Message::TitleBar);
                 let overlay = iced::widget::column![
-                    iced::widget::Space::new().height(iced::Length::Fixed(28.0)),
+                    iced::widget::Space::new()
+                        .height(iced::Length::Fixed(crate::widgets::title_bar::height())),
                     dropdown,
                 ];
                 iced::widget::stack![content, overlay].into()
             } else {
                 content.into()
-            }
+            };
+
+            // Wrap with resize handles for custom window chrome
+            crate::widgets::title_bar::resize_wrapper(with_dropdown, |dir| {
+                Message::TitleBar(crate::widgets::title_bar::TitleBarMessage::ResizeEdge(dir))
+            })
         } else {
             page
         }
@@ -263,18 +339,49 @@ impl App {
 
     fn handle_vault(&mut self, msg: VaultMessage) {
         match msg {
-            VaultMessage::Sidebar(SidebarMessage::FilterSelected(filter)) => {
-                self.active_filter = filter;
-                self.selected_item = None;
-            }
-            VaultMessage::ItemList(ItemListMessage::ItemSelected(idx)) => {
-                self.selected_item = Some(idx);
-            }
+            VaultMessage::Sidebar(sidebar_msg) => match sidebar_msg {
+                SidebarMessage::FilterSelected(filter) => {
+                    self.active_filter = filter;
+                    self.selected_item = None;
+                }
+                SidebarMessage::ToggleSidebarMode => {
+                    self.sidebar_mode = match self.sidebar_mode {
+                        SidebarMode::Collapsed => SidebarMode::Expanded,
+                        SidebarMode::Expanded => SidebarMode::Collapsed,
+                    };
+                }
+                SidebarMessage::SectionSelected(section) => {
+                    self.active_section = section;
+                }
+                SidebarMessage::ToggleVaultTree => {
+                    self.vault_tree_open = !self.vault_tree_open;
+                }
+                SidebarMessage::ToggleSendTree => {
+                    self.send_tree_open = !self.send_tree_open;
+                }
+            },
+            VaultMessage::ItemList(item_msg) => match item_msg {
+                ItemListMessage::ItemSelected(idx) => {
+                    self.selected_item = Some(idx);
+                    self.selected_id = self.cached_items.get(idx).map(|i| i.id.clone());
+                }
+                ItemListMessage::OpenExternal(_)
+                | ItemListMessage::CopyUsername(_)
+                | ItemListMessage::MoreOptions(_) => {} // stubs
+            },
             VaultMessage::Search(SearchMessage::QueryChanged(query)) => {
                 self.search_query = query;
-                self.selected_item = None;
             }
+            VaultMessage::CloseDetailPane => {
+                self.selected_item = None;
+                self.selected_id = None;
+            }
+            VaultMessage::PaneResized(event) => {
+                self.pane_state.resize(event.split, event.ratio);
+            }
+            VaultMessage::DetailPane(_) => {} // copy/open stubs
             VaultMessage::AccountSwitcher(asm) => self.handle_account_switcher(asm),
+            VaultMessage::NewItem => {} // stub
         }
     }
 
@@ -327,7 +434,15 @@ impl App {
             })
             .collect();
 
+        self.all_items = active_session
+            .map(|s| s.vault_items.clone())
+            .unwrap_or_default();
         self.cached_items = self.compute_filtered_items();
+
+        // Keep selected_item index in sync with selected_id after filtering
+        if let Some(ref id) = self.selected_id {
+            self.selected_item = self.cached_items.iter().position(|i| i.id == *id);
+        }
     }
 
     fn compute_filtered_items(&self) -> Vec<CipherItem> {
@@ -347,6 +462,7 @@ impl App {
                 SidebarFilter::AllItems => true,
                 SidebarFilter::Favorites => false,
                 SidebarFilter::Category(cat) => item.category == cat,
+                SidebarFilter::Archive => false,
                 SidebarFilter::Trash => false,
             });
 

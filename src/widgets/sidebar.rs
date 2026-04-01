@@ -1,144 +1,456 @@
-use iced::widget::{Column, button, column, container, row, rule, text};
-use iced::{Alignment, Element, Fill, Font, Length, Padding};
+use iced::widget::{Space, button, column, container, row, rule, svg, text};
+use iced::{Alignment, Element, Fill, Length, Padding};
 
 use crate::icons;
-use crate::state::{CipherCategory, SidebarFilter};
+use crate::state::{CipherCategory, NavSection, SidebarFilter, SidebarMode};
 use crate::theme;
+
+const RAIL_WIDTH: f32 = 50.0;
+const PANEL_WIDTH: f32 = 230.0;
+const RAIL_ICON_SIZE: f32 = 18.0;
+const RAIL_BTN_SIZE: f32 = 36.0;
+const ITEM_RADIUS: f32 = 6.0;
+const SIDEBAR_H_PAD: f32 = 8.0;
 
 #[derive(Debug, Clone)]
 pub enum SidebarMessage {
     FilterSelected(SidebarFilter),
+    ToggleSidebarMode,
+    SectionSelected(NavSection),
+    ToggleVaultTree,
+    ToggleSendTree,
 }
 
-pub fn view<'a>(active_filter: SidebarFilter) -> Element<'a, SidebarMessage> {
-    let section = |items: Vec<Element<'a, SidebarMessage>>| -> Element<'a, SidebarMessage> {
-        Column::with_children(items).spacing(2).into()
-    };
+pub fn view<'a>(
+    mode: SidebarMode,
+    active_section: NavSection,
+    active_filter: SidebarFilter,
+    vault_tree_open: bool,
+    send_tree_open: bool,
+) -> Element<'a, SidebarMessage> {
+    if mode == SidebarMode::Expanded {
+        expanded_panel(
+            active_section,
+            active_filter,
+            vault_tree_open,
+            send_tree_open,
+        )
+    } else {
+        icon_rail(mode, active_section)
+    }
+}
 
-    let nav_button =
-        |label: &'a str, icon: icons::Icon, filter: SidebarFilter| -> Element<'a, SidebarMessage> {
-            let is_selected = active_filter == filter;
-            let bg = if is_selected {
-                theme::SELECTED_BG
-            } else {
-                iced::Color::TRANSPARENT
-            };
-            let color = if is_selected {
-                theme::TEXT_PRIMARY
-            } else {
-                theme::TEXT_SECONDARY
-            };
+// ---------------------------------------------------------------------------
+// Icon Rail
+// ---------------------------------------------------------------------------
 
-            button(
-                row![icon.render(14.0, color), text(label).size(13).color(color),]
-                    .spacing(8)
-                    .align_y(Alignment::Center),
-            )
-            .on_press(SidebarMessage::FilterSelected(filter))
-            .padding(Padding::from([6.0, 12.0]))
-            .width(Fill)
-            .style(move |_theme, status| {
-                let bg_color = match status {
-                    button::Status::Hovered if !is_selected => theme::ITEM_HOVER,
-                    _ => bg,
-                };
-                button::Style {
-                    background: Some(iced::Background::Color(bg_color)),
-                    text_color: theme::TEXT_PRIMARY,
-                    border: iced::Border::default(),
-                    shadow: iced::Shadow::default(),
-                    snap: false,
-                }
-            })
-            .into()
-        };
-
-    let section_header = |label: &'a str| -> Element<'a, SidebarMessage> {
-        container(text(label).size(11).color(theme::TEXT_MUTED))
-            .padding(Padding {
-                top: 8.0,
-                right: 12.0,
-                bottom: 4.0,
-                left: 12.0,
-            })
-            .into()
-    };
-
-    let logo_header = container(
-        column![
-            row![
-                text("bit").size(18).color(theme::TEXT_PRIMARY).font(Font {
-                    weight: iced::font::Weight::Bold,
-                    ..Font::DEFAULT
-                }),
-                text("warden").size(18).color(theme::TEXT_PRIMARY),
-            ],
-            text("Password Manager")
-                .size(10)
-                .color(theme::TEXT_SECONDARY),
-        ]
-        .spacing(0),
+fn icon_rail<'a>(_mode: SidebarMode, active_section: NavSection) -> Element<'a, SidebarMessage> {
+    let shield = container(
+        svg(svg::Handle::from_path("assets/bitwarden-shield.svg"))
+            .width(28)
+            .height(28),
     )
-    .padding(Padding {
-        top: 8.0,
-        right: 12.0,
-        bottom: 12.0,
-        left: 12.0,
-    });
+    .padding([12, 0])
+    .width(RAIL_WIDTH)
+    .align_x(iced::alignment::Horizontal::Center);
 
-    let content = column![
-        logo_header,
-        section_header("VAULT"),
-        section(vec![nav_button(
-            "All items",
-            icons::COLLECTION,
-            SidebarFilter::AllItems,
-        )]),
-        section_header("TYPES"),
-        section(vec![
-            nav_button("Favorites", icons::STAR, SidebarFilter::Favorites),
-            nav_button(
-                "Login",
-                icons::GLOBE,
-                SidebarFilter::Category(CipherCategory::Login),
-            ),
-            nav_button(
-                "Card",
-                icons::CREDIT_CARD,
-                SidebarFilter::Category(CipherCategory::Card),
-            ),
-            nav_button(
-                "Identity",
-                icons::PERSON,
-                SidebarFilter::Category(CipherCategory::Identity),
-            ),
-            nav_button(
-                "Secure note",
-                icons::STICKY,
-                SidebarFilter::Category(CipherCategory::SecureNote),
-            ),
-            nav_button(
-                "SSH key",
-                icons::KEY,
-                SidebarFilter::Category(CipherCategory::SshKey),
-            ),
-        ]),
-        rule::horizontal(1),
-        section(vec![nav_button(
-            "Trash",
-            icons::TRASH,
-            SidebarFilter::Trash,
-        )]),
-    ]
-    .spacing(2);
-
-    container(content)
-        .width(Length::Fixed(200.0))
-        .height(Fill)
-        .padding(Padding::from([8.0, 0.0]))
-        .style(|_theme| container::Style {
-            background: Some(iced::Background::Color(theme::SIDEBAR_BG)),
-            ..Default::default()
+    let rail_btn = |icon: icons::BwiIcon, section: NavSection| -> Element<'a, SidebarMessage> {
+        let is_active = active_section == section;
+        button(
+            container(icon.render(RAIL_ICON_SIZE, theme::TEXT_PRIMARY))
+                .width(RAIL_BTN_SIZE)
+                .height(RAIL_BTN_SIZE)
+                .align_x(iced::alignment::Horizontal::Center)
+                .align_y(iced::alignment::Vertical::Center),
+        )
+        .on_press(SidebarMessage::SectionSelected(section))
+        .padding(0)
+        .width(RAIL_WIDTH)
+        .style(move |_theme, status| {
+            let bg = if is_active {
+                theme::SIDEBAR_SELECTED
+            } else {
+                match status {
+                    button::Status::Hovered => theme::ITEM_HOVER,
+                    _ => iced::Color::TRANSPARENT,
+                }
+            };
+            button::Style {
+                background: Some(iced::Background::Color(bg)),
+                text_color: theme::TEXT_PRIMARY,
+                border: iced::Border {
+                    radius: ITEM_RADIUS.into(),
+                    ..Default::default()
+                },
+                shadow: iced::Shadow::default(),
+                snap: false,
+            }
         })
         .into()
+    };
+
+    let toggle_btn: Element<'a, SidebarMessage> = button(
+        container(icons::BWI_ANGLE_RIGHT.render(32.0, theme::TEXT_SECONDARY))
+            .align_x(iced::alignment::Horizontal::Center)
+            .width(Fill),
+    )
+    .on_press(SidebarMessage::ToggleSidebarMode)
+    .padding([6, 0])
+    .width(Fill)
+    .style(|_theme, status| {
+        let bg = match status {
+            button::Status::Hovered => theme::ITEM_HOVER,
+            _ => iced::Color::TRANSPARENT,
+        };
+        button::Style {
+            background: Some(iced::Background::Color(bg)),
+            text_color: theme::TEXT_SECONDARY,
+            border: iced::Border {
+                radius: ITEM_RADIUS.into(),
+                ..Default::default()
+            },
+            shadow: iced::Shadow::default(),
+            snap: false,
+        }
+    })
+    .into();
+
+    container(
+        column![
+            shield,
+            rail_btn(icons::BWI_VAULT, NavSection::Vault),
+            rail_btn(icons::BWI_SEND, NavSection::Send),
+            rail_btn(icons::BWI_GENERATE, NavSection::Generator),
+            rail_btn(icons::BWI_IMPORT, NavSection::Import),
+            rail_btn(icons::BWI_DOWNLOAD, NavSection::Export),
+            Space::new().height(Fill),
+            container(toggle_btn).padding([0, 4]),
+        ]
+        .spacing(4)
+        .align_x(Alignment::Center)
+        .padding(Padding {
+            top: 0.0,
+            right: 4.0,
+            bottom: 10.0,
+            left: 4.0,
+        }),
+    )
+    .width(Length::Fixed(RAIL_WIDTH))
+    .height(Fill)
+    .style(|_theme| container::Style {
+        background: Some(iced::Background::Color(theme::HEADER_BG)),
+        border: iced::Border {
+            radius: 0.0.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    })
+    .into()
+}
+
+// ---------------------------------------------------------------------------
+// Expanded Panel
+// ---------------------------------------------------------------------------
+
+fn expanded_panel<'a>(
+    active_section: NavSection,
+    active_filter: SidebarFilter,
+    vault_tree_open: bool,
+    send_tree_open: bool,
+) -> Element<'a, SidebarMessage> {
+    let mut items: Vec<Element<'a, SidebarMessage>> = Vec::new();
+
+    // Logo header
+    let logo = container(
+        svg(svg::Handle::from_path("assets/password-manager-logo.svg"))
+            .width(Fill)
+            .height(Length::Shrink),
+    )
+    .padding(Padding {
+        top: 10.0,
+        right: 16.0,
+        bottom: 14.0,
+        left: 16.0,
+    });
+    items.push(logo.into());
+
+    // Vault section (collapsible)
+    items.push(section_header(
+        "Vault",
+        icons::BWI_VAULT,
+        vault_tree_open,
+        SidebarMessage::ToggleVaultTree,
+        active_section == NavSection::Vault,
+    ));
+
+    if vault_tree_open {
+        items.push(nav_button(
+            "My Vault",
+            icons::BWI_USER,
+            SidebarFilter::AllItems,
+            active_filter,
+        ));
+        items.push(nav_button(
+            "Favorites",
+            icons::BWI_STAR,
+            SidebarFilter::Favorites,
+            active_filter,
+        ));
+        items.push(nav_button(
+            "Logins",
+            icons::BWI_LOGIN,
+            SidebarFilter::Category(CipherCategory::Login),
+            active_filter,
+        ));
+        items.push(nav_button(
+            "Cards",
+            icons::BWI_CREDIT_CARD,
+            SidebarFilter::Category(CipherCategory::Card),
+            active_filter,
+        ));
+        items.push(nav_button(
+            "Identities",
+            icons::BWI_IDENTITY,
+            SidebarFilter::Category(CipherCategory::Identity),
+            active_filter,
+        ));
+        items.push(nav_button(
+            "Notes",
+            icons::BWI_NOTE,
+            SidebarFilter::Category(CipherCategory::SecureNote),
+            active_filter,
+        ));
+        items.push(nav_button(
+            "SSH keys",
+            icons::BWI_KEY,
+            SidebarFilter::Category(CipherCategory::SshKey),
+            active_filter,
+        ));
+        items.push(nav_button(
+            "Archive",
+            icons::BWI_ARCHIVE,
+            SidebarFilter::Archive,
+            active_filter,
+        ));
+        items.push(nav_button(
+            "Trash",
+            icons::BWI_TRASH,
+            SidebarFilter::Trash,
+            active_filter,
+        ));
+    }
+
+    // Send section (collapsible)
+    items.push(section_header(
+        "Send",
+        icons::BWI_SEND,
+        send_tree_open,
+        SidebarMessage::ToggleSendTree,
+        active_section == NavSection::Send,
+    ));
+
+    // Standalone nav items
+    items.push(standalone_item(
+        "Generator",
+        icons::BWI_GENERATE,
+        NavSection::Generator,
+        active_section,
+    ));
+    items.push(standalone_item(
+        "Import",
+        icons::BWI_IMPORT,
+        NavSection::Import,
+        active_section,
+    ));
+    items.push(standalone_item(
+        "Export",
+        icons::BWI_DOWNLOAD,
+        NavSection::Export,
+        active_section,
+    ));
+
+    // Collapse chevron at bottom
+    let separator = container(rule::horizontal(1).style(|_theme| rule::Style {
+        color: theme::BORDER,
+        radius: 0.0.into(),
+        fill_mode: rule::FillMode::Full,
+        snap: false,
+    }))
+    .padding([4.0, SIDEBAR_H_PAD]);
+
+    let collapse_btn: Element<'a, SidebarMessage> = button(
+        row![icons::BWI_ANGLE_LEFT.render(32.0, theme::TEXT_SECONDARY),].align_y(Alignment::Center),
+    )
+    .on_press(SidebarMessage::ToggleSidebarMode)
+    .padding([8, 16])
+    .width(Fill)
+    .style(|_theme, status| {
+        let bg = match status {
+            button::Status::Hovered => theme::ITEM_HOVER,
+            _ => iced::Color::TRANSPARENT,
+        };
+        button::Style {
+            background: Some(iced::Background::Color(bg)),
+            text_color: theme::TEXT_SECONDARY,
+            border: iced::Border {
+                radius: ITEM_RADIUS.into(),
+                ..Default::default()
+            },
+            shadow: iced::Shadow::default(),
+            snap: false,
+        }
+    })
+    .into();
+
+    container(
+        column![
+            column(items).spacing(2).padding([0.0, SIDEBAR_H_PAD]),
+            Space::new().height(Fill),
+            separator,
+            container(collapse_btn).padding([0.0, SIDEBAR_H_PAD]),
+        ]
+        .padding([10, 0]),
+    )
+    .width(Length::Fixed(PANEL_WIDTH))
+    .height(Fill)
+    .style(|_theme| container::Style {
+        background: Some(iced::Background::Color(theme::HEADER_BG)),
+        border: iced::Border {
+            radius: 0.0.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    })
+    .into()
+}
+
+fn section_header<'a>(
+    label: &'a str,
+    icon: icons::BwiIcon,
+    is_open: bool,
+    toggle_msg: SidebarMessage,
+    _is_active_section: bool,
+) -> Element<'a, SidebarMessage> {
+    let chevron = if is_open {
+        icons::BWI_ANGLE_UP
+    } else {
+        icons::BWI_ANGLE_DOWN
+    };
+    button(
+        row![
+            icon.render(18.0, theme::TEXT_PRIMARY),
+            text(label).size(16).color(theme::TEXT_PRIMARY),
+            Space::new().width(Fill),
+            chevron.render(21.0, theme::TEXT_SECONDARY),
+        ]
+        .spacing(8)
+        .align_y(Alignment::Center),
+    )
+    .on_press(toggle_msg)
+    .padding([8, 12])
+    .width(Fill)
+    .style(|_theme, status| {
+        let bg = match status {
+            button::Status::Hovered => theme::ITEM_HOVER,
+            _ => iced::Color::TRANSPARENT,
+        };
+        button::Style {
+            background: Some(iced::Background::Color(bg)),
+            text_color: theme::TEXT_PRIMARY,
+            border: iced::Border {
+                radius: ITEM_RADIUS.into(),
+                ..Default::default()
+            },
+            shadow: iced::Shadow::default(),
+            snap: false,
+        }
+    })
+    .into()
+}
+
+fn nav_button<'a>(
+    label: &'a str,
+    icon: icons::BwiIcon,
+    filter: SidebarFilter,
+    active_filter: SidebarFilter,
+) -> Element<'a, SidebarMessage> {
+    let is_selected = active_filter == filter;
+
+    button(
+        row![
+            icon.render(17.0, theme::TEXT_PRIMARY),
+            text(label).size(15).color(theme::TEXT_PRIMARY)
+        ]
+        .spacing(8)
+        .align_y(Alignment::Center),
+    )
+    .on_press(SidebarMessage::FilterSelected(filter))
+    .padding(Padding {
+        top: 6.0,
+        right: 12.0,
+        bottom: 6.0,
+        left: 28.0,
+    })
+    .width(Fill)
+    .style(move |_theme, status| {
+        let bg_color = if is_selected {
+            theme::SIDEBAR_SELECTED
+        } else {
+            match status {
+                button::Status::Hovered => theme::ITEM_HOVER,
+                _ => iced::Color::TRANSPARENT,
+            }
+        };
+        button::Style {
+            background: Some(iced::Background::Color(bg_color)),
+            text_color: theme::TEXT_PRIMARY,
+            border: iced::Border {
+                radius: ITEM_RADIUS.into(),
+                ..Default::default()
+            },
+            shadow: iced::Shadow::default(),
+            snap: false,
+        }
+    })
+    .into()
+}
+
+fn standalone_item<'a>(
+    label: &'a str,
+    icon: icons::BwiIcon,
+    section: NavSection,
+    active_section: NavSection,
+) -> Element<'a, SidebarMessage> {
+    let is_active = active_section == section;
+    let color = theme::TEXT_PRIMARY;
+
+    button(
+        row![icon.render(17.0, color), text(label).size(15).color(color)]
+            .spacing(8)
+            .align_y(Alignment::Center),
+    )
+    .on_press(SidebarMessage::SectionSelected(section))
+    .padding([6, 12])
+    .width(Fill)
+    .style(move |_theme, status| {
+        let bg = if is_active {
+            theme::SIDEBAR_SELECTED
+        } else {
+            match status {
+                button::Status::Hovered => theme::ITEM_HOVER,
+                _ => iced::Color::TRANSPARENT,
+            }
+        };
+        button::Style {
+            background: Some(iced::Background::Color(bg)),
+            text_color: theme::TEXT_PRIMARY,
+            border: iced::Border {
+                radius: ITEM_RADIUS.into(),
+                ..Default::default()
+            },
+            shadow: iced::Shadow::default(),
+            snap: false,
+        }
+    })
+    .into()
 }
