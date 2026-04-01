@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:docs.rs)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(cargo build:*)",
+      "Bash(grep -rn \"horizontal_rule\\\\|horizontal_space\\\\|fn horizontal\" ~/.cargo/registry/src/index.crates.io-*/iced_widget-0.14.2/src/rule.rs)",
+      "Bash(grep -rn 'pub struct Padding' ~/.cargo/registry/src/index.crates.io-*/iced_core-0.14.*/src/padding.rs)",
+      "Bash(cargo clippy:*)",
+      "Bash(powershell -ExecutionPolicy Bypass -File \"C:/Users/Dani/Desktop/test/screenshot.ps1\" -OutputPath \"C:/Users/Dani/Desktop/test/img/screenshot_login.png\")",
+      "Bash(taskkill //F //IM bitwarden-desktop-native.exe)",
+      "Bash(powershell -ExecutionPolicy Bypass -File \"C:/Users/Dani/Desktop/test/screenshot.ps1\" -OutputPath \"C:/Users/Dani/Desktop/test/img/version2/Login.png\")",
+      "Bash(powershell -ExecutionPolicy Bypass -Command \"Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait\\(''{ENTER}''\\)\")",
+      "Bash(powershell -ExecutionPolicy Bypass -File \"C:/Users/Dani/Desktop/test/screenshot.ps1\" -OutputPath \"C:/Users/Dani/Desktop/test/img/version2/Main.png\")",
+      "Bash(powershell -ExecutionPolicy Bypass -Command \":*)",
+      "Bash(find C:/Users/Dani/Desktop/test/clients -path *lock*.html -o -path *lock*.scss)",
+      "Bash(find C:/Users/Dani/Desktop/test/clients -path *login*.html -o -path *login*.scss)",
+      "Bash(sed -i 's/`;$//' /c/Users/Dani/Desktop/test/assets/bg-left.svg)",
+      "Bash(sed -i 's/`;$//' /c/Users/Dani/Desktop/test/assets/bg-right.svg)",
+      "Bash(find /c/Users/Dani/Desktop/test/clients/libs -name *lock-image* -o -name *locked* -o -name *vault-locked*)",
+      "Bash(find /c/Users/Dani/Desktop/test/clients/libs/assets/src/svg/svgs -name *eye*)",
+      "Bash(powershell -ExecutionPolicy Bypass -File \"C:/Users/Dani/Desktop/test/screenshot-all.ps1\" -OutDir \"img/version3\")"
+    ]
+  }
+}

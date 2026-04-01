@@ -1,0 +1,170 @@
+use iced::widget::{button, column, container, row, text};
+use iced::{Alignment, Element, Fill, Padding};
+
+use crate::state::UserId;
+use crate::theme;
+
+#[derive(Debug, Clone)]
+pub enum AccountSwitcherMessage {
+    ToggleDropdown,
+    SwitchUser(UserId),
+}
+
+pub struct AccountEntry {
+    pub user_id: UserId,
+    pub email: String,
+    pub server_url: String,
+    pub locked: bool,
+}
+
+/// Renders just the trigger button (initials + email + server + arrow)
+pub fn trigger<'a>(
+    active_email: &'a str,
+    active_server: &'a str,
+    dropdown_open: bool,
+) -> Element<'a, AccountSwitcherMessage> {
+    let initials = active_email
+        .chars()
+        .next()
+        .unwrap_or('?')
+        .to_uppercase()
+        .to_string();
+
+    let arrow = if dropdown_open { "\u{2303}" } else { "\u{2304}" };
+
+    button(
+        row![
+            container(text(initials).size(12).color(theme::TEXT_PRIMARY))
+                .padding(Padding::from([4.0, 8.0]))
+                .style(|_theme| container::Style {
+                    background: Some(iced::Background::Color(theme::ACCENT)),
+                    border: iced::Border {
+                        radius: 12.0.into(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                }),
+            column![
+                text(active_email).size(14).color(theme::TEXT_PRIMARY),
+                text(active_server).size(12).color(theme::TEXT_SECONDARY),
+            ]
+            .spacing(1),
+            text(arrow).size(16).color(theme::TEXT_SECONDARY),
+        ]
+        .spacing(8)
+        .align_y(Alignment::Center),
+    )
+    .on_press(AccountSwitcherMessage::ToggleDropdown)
+    .padding(Padding::from([4.0, 8.0]))
+    .style(|_theme, _status| button::Style {
+        background: Some(iced::Background::Color(iced::Color::TRANSPARENT)),
+        text_color: theme::TEXT_PRIMARY,
+        border: iced::Border::default(),
+        shadow: iced::Shadow::default(),
+        snap: false,
+    })
+    .into()
+}
+
+/// Renders the floating dropdown panel (other accounts + add account)
+pub fn dropdown<'a>(
+    active_email: &'a str,
+    accounts: &'a [AccountEntry],
+) -> Element<'a, AccountSwitcherMessage> {
+    let mut items: Vec<Element<'a, AccountSwitcherMessage>> = accounts
+        .iter()
+        .filter(|a| a.email != active_email)
+        .map(|account| {
+            let uid = account.user_id.clone();
+            let locked_label = if account.locked { " (locked)" } else { "" };
+            let initial = account
+                .email
+                .chars()
+                .next()
+                .unwrap_or('?')
+                .to_uppercase()
+                .to_string();
+
+            button(
+                row![
+                    container(text(initial).size(11).color(theme::TEXT_PRIMARY))
+                        .padding(Padding::from([3.0, 7.0]))
+                        .style(|_theme| container::Style {
+                            background: Some(iced::Background::Color(theme::ACCENT)),
+                            border: iced::Border {
+                                radius: 10.0.into(),
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        }),
+                    column![
+                        text(format!("{}{}", account.email, locked_label))
+                            .size(12)
+                            .color(theme::TEXT_PRIMARY),
+                        text(&account.server_url)
+                            .size(10)
+                            .color(theme::TEXT_SECONDARY),
+                    ]
+                    .spacing(1),
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center),
+            )
+            .on_press(AccountSwitcherMessage::SwitchUser(uid))
+            .padding(Padding::from([6.0, 12.0]))
+            .width(Fill)
+            .style(|_theme, status| {
+                let bg = match status {
+                    button::Status::Hovered => theme::ITEM_HOVER,
+                    _ => iced::Color::TRANSPARENT,
+                };
+                button::Style {
+                    background: Some(iced::Background::Color(bg)),
+                    text_color: theme::TEXT_PRIMARY,
+                    border: iced::Border::default(),
+                    shadow: iced::Shadow::default(),
+                    snap: false,
+                }
+            })
+            .into()
+        })
+        .collect();
+
+    items.push(
+        button(
+            text("+ Add account")
+                .size(12)
+                .color(theme::TEXT_SECONDARY),
+        )
+        .padding(Padding::from([8.0, 12.0]))
+        .width(Fill)
+        .style(|_theme, status| {
+            let bg = match status {
+                button::Status::Hovered => theme::ITEM_HOVER,
+                _ => iced::Color::TRANSPARENT,
+            };
+            button::Style {
+                background: Some(iced::Background::Color(bg)),
+                text_color: theme::TEXT_SECONDARY,
+                border: iced::Border::default(),
+                shadow: iced::Shadow::default(),
+                snap: false,
+            }
+        })
+        .into(),
+    );
+
+    container(column(items).spacing(0))
+        .width(240)
+        .padding(Padding::from([4.0, 0.0]))
+        .style(|_theme| container::Style {
+            background: Some(iced::Background::Color(theme::CARD_BG)),
+            border: iced::Border {
+                color: theme::BORDER,
+                width: 1.0,
+                radius: 4.0.into(),
+            },
+            ..Default::default()
+        })
+        .into()
+}
