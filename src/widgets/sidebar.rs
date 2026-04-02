@@ -1,12 +1,17 @@
-use iced::widget::{Space, button, column, container, row, rule, svg, text};
-use iced::{Alignment, Element, Fill, Length, Padding};
+use iced::{
+    Alignment, Background, Border, Color, Element, Fill, Length, Padding,
+    widget::{Space, button, column, container, row, svg, text},
+};
 
-use crate::icons;
-use crate::state::{CipherCategory, NavSection, SidebarFilter, SidebarMode};
-use crate::theme;
+use crate::{
+    icons,
+    state::{CipherCategory, NavSection, SidebarFilter, SidebarMode},
+    theme,
+    widgets::common,
+};
 
 const RAIL_WIDTH: f32 = 50.0;
-const PANEL_WIDTH: f32 = 230.0;
+const PANEL_WIDTH: f32 = 232.0;
 const RAIL_ICON_SIZE: f32 = 18.0;
 const RAIL_BTN_SIZE: f32 = 36.0;
 const ITEM_RADIUS: f32 = 6.0;
@@ -52,7 +57,7 @@ fn icon_rail<'a>(_mode: SidebarMode, active_section: NavSection) -> Element<'a, 
     )
     .padding([12, 0])
     .width(RAIL_WIDTH)
-    .align_x(iced::alignment::Horizontal::Center);
+    .align_x(Alignment::Center);
 
     let rail_btn = |icon: icons::BwiIcon, section: NavSection| -> Element<'a, SidebarMessage> {
         let is_active = active_section == section;
@@ -60,58 +65,28 @@ fn icon_rail<'a>(_mode: SidebarMode, active_section: NavSection) -> Element<'a, 
             container(icon.render(RAIL_ICON_SIZE, theme::TEXT_PRIMARY))
                 .width(RAIL_BTN_SIZE)
                 .height(RAIL_BTN_SIZE)
-                .align_x(iced::alignment::Horizontal::Center)
-                .align_y(iced::alignment::Vertical::Center),
+                .align_x(Alignment::Center)
+                .align_y(Alignment::Center),
         )
         .on_press(SidebarMessage::SectionSelected(section))
         .padding(0)
         .width(RAIL_WIDTH)
         .style(move |_theme, status| {
-            let bg = if is_active {
-                theme::SIDEBAR_SELECTED
-            } else {
-                match status {
-                    button::Status::Hovered => theme::ITEM_HOVER,
-                    _ => iced::Color::TRANSPARENT,
-                }
-            };
-            button::Style {
-                background: Some(iced::Background::Color(bg)),
-                text_color: theme::TEXT_PRIMARY,
-                border: iced::Border {
-                    radius: ITEM_RADIUS.into(),
-                    ..Default::default()
-                },
-                shadow: iced::Shadow::default(),
-                snap: false,
-            }
+            common::hover_button_style(status, is_active, theme::SIDEBAR_SELECTED, ITEM_RADIUS)
         })
         .into()
     };
 
     let toggle_btn: Element<'a, SidebarMessage> = button(
         container(icons::BWI_ANGLE_RIGHT.render(32.0, theme::TEXT_SECONDARY))
-            .align_x(iced::alignment::Horizontal::Center)
+            .align_x(Alignment::Center)
             .width(Fill),
     )
     .on_press(SidebarMessage::ToggleSidebarMode)
     .padding([6, 0])
     .width(Fill)
     .style(|_theme, status| {
-        let bg = match status {
-            button::Status::Hovered => theme::ITEM_HOVER,
-            _ => iced::Color::TRANSPARENT,
-        };
-        button::Style {
-            background: Some(iced::Background::Color(bg)),
-            text_color: theme::TEXT_SECONDARY,
-            border: iced::Border {
-                radius: ITEM_RADIUS.into(),
-                ..Default::default()
-            },
-            shadow: iced::Shadow::default(),
-            snap: false,
-        }
+        common::hover_button_style(status, false, Color::TRANSPARENT, ITEM_RADIUS)
     })
     .into();
 
@@ -138,8 +113,8 @@ fn icon_rail<'a>(_mode: SidebarMode, active_section: NavSection) -> Element<'a, 
     .width(Length::Fixed(RAIL_WIDTH))
     .height(Fill)
     .style(|_theme| container::Style {
-        background: Some(iced::Background::Color(theme::HEADER_BG)),
-        border: iced::Border {
+        background: Some(Background::Color(theme::HEADER_BG)),
+        border: Border {
             radius: 0.0.into(),
             ..Default::default()
         },
@@ -270,13 +245,7 @@ fn expanded_panel<'a>(
     ));
 
     // Collapse chevron at bottom
-    let separator = container(rule::horizontal(1).style(|_theme| rule::Style {
-        color: theme::BORDER,
-        radius: 0.0.into(),
-        fill_mode: rule::FillMode::Full,
-        snap: false,
-    }))
-    .padding([4.0, SIDEBAR_H_PAD]);
+    let separator = container(common::separator_h()).padding([4.0, SIDEBAR_H_PAD]);
 
     let collapse_btn: Element<'a, SidebarMessage> = button(
         row![icons::BWI_ANGLE_LEFT.render(32.0, theme::TEXT_SECONDARY),].align_y(Alignment::Center),
@@ -285,20 +254,7 @@ fn expanded_panel<'a>(
     .padding([8, 16])
     .width(Fill)
     .style(|_theme, status| {
-        let bg = match status {
-            button::Status::Hovered => theme::ITEM_HOVER,
-            _ => iced::Color::TRANSPARENT,
-        };
-        button::Style {
-            background: Some(iced::Background::Color(bg)),
-            text_color: theme::TEXT_SECONDARY,
-            border: iced::Border {
-                radius: ITEM_RADIUS.into(),
-                ..Default::default()
-            },
-            shadow: iced::Shadow::default(),
-            snap: false,
-        }
+        common::hover_button_style(status, false, Color::TRANSPARENT, ITEM_RADIUS)
     })
     .into();
 
@@ -314,8 +270,8 @@ fn expanded_panel<'a>(
     .width(Length::Fixed(PANEL_WIDTH))
     .height(Fill)
     .style(|_theme| container::Style {
-        background: Some(iced::Background::Color(theme::HEADER_BG)),
-        border: iced::Border {
+        background: Some(Background::Color(theme::HEADER_BG)),
+        border: Border {
             radius: 0.0.into(),
             ..Default::default()
         },
@@ -350,20 +306,7 @@ fn section_header<'a>(
     .padding([8, 12])
     .width(Fill)
     .style(|_theme, status| {
-        let bg = match status {
-            button::Status::Hovered => theme::ITEM_HOVER,
-            _ => iced::Color::TRANSPARENT,
-        };
-        button::Style {
-            background: Some(iced::Background::Color(bg)),
-            text_color: theme::TEXT_PRIMARY,
-            border: iced::Border {
-                radius: ITEM_RADIUS.into(),
-                ..Default::default()
-            },
-            shadow: iced::Shadow::default(),
-            snap: false,
-        }
+        common::hover_button_style(status, false, Color::TRANSPARENT, ITEM_RADIUS)
     })
     .into()
 }
@@ -393,24 +336,7 @@ fn nav_button<'a>(
     })
     .width(Fill)
     .style(move |_theme, status| {
-        let bg_color = if is_selected {
-            theme::SIDEBAR_SELECTED
-        } else {
-            match status {
-                button::Status::Hovered => theme::ITEM_HOVER,
-                _ => iced::Color::TRANSPARENT,
-            }
-        };
-        button::Style {
-            background: Some(iced::Background::Color(bg_color)),
-            text_color: theme::TEXT_PRIMARY,
-            border: iced::Border {
-                radius: ITEM_RADIUS.into(),
-                ..Default::default()
-            },
-            shadow: iced::Shadow::default(),
-            snap: false,
-        }
+        common::hover_button_style(status, is_selected, theme::SIDEBAR_SELECTED, ITEM_RADIUS)
     })
     .into()
 }
@@ -433,24 +359,7 @@ fn standalone_item<'a>(
     .padding([6, 12])
     .width(Fill)
     .style(move |_theme, status| {
-        let bg = if is_active {
-            theme::SIDEBAR_SELECTED
-        } else {
-            match status {
-                button::Status::Hovered => theme::ITEM_HOVER,
-                _ => iced::Color::TRANSPARENT,
-            }
-        };
-        button::Style {
-            background: Some(iced::Background::Color(bg)),
-            text_color: theme::TEXT_PRIMARY,
-            border: iced::Border {
-                radius: ITEM_RADIUS.into(),
-                ..Default::default()
-            },
-            shadow: iced::Shadow::default(),
-            snap: false,
-        }
+        common::hover_button_style(status, is_active, theme::SIDEBAR_SELECTED, ITEM_RADIUS)
     })
     .into()
 }

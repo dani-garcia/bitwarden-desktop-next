@@ -1,9 +1,9 @@
-use iced::widget::{Space, button, column, container, row, rule, scrollable, text};
-use iced::{Alignment, Element, Fill, Font, Padding};
+use iced::{
+    Alignment, Background, Border, Color, Element, Fill, Font, Padding, Shadow,
+    widget::{Space, button, column, container, row, scrollable, text},
+};
 
-use crate::icons;
-use crate::state::CipherItem;
-use crate::theme;
+use crate::{icons, state::CipherItem, theme, widgets::common};
 
 #[derive(Debug, Clone)]
 pub enum DetailPaneMessage {
@@ -27,32 +27,23 @@ pub fn view<'a>(item: &'a CipherItem) -> Element<'a, DetailPaneMessage> {
         credentials_card(item),
     ];
 
-    // --- Autofill options section ---
     if item.url.is_some() {
         sections.push(section_label("Autofill options"));
         sections.push(autofill_card(item));
     }
 
     let body = scrollable(column(sections).spacing(4).padding([12, 20])).height(Fill);
-
     let bottom_bar = bottom_bar();
-
-    let vert_separator = rule::vertical(1).style(|_theme| rule::Style {
-        color: theme::BORDER,
-        radius: 0.0.into(),
-        fill_mode: rule::FillMode::Full,
-        snap: false,
-    });
 
     let pane = container(column![header, body, bottom_bar].spacing(0).height(Fill))
         .width(Fill)
         .height(Fill)
         .style(|_theme| container::Style {
-            background: Some(iced::Background::Color(theme::CARD_BG)),
+            background: Some(Background::Color(theme::CARD_BG)),
             ..Default::default()
         });
 
-    row![vert_separator, pane].height(Fill).into()
+    row![common::separator_v(), pane].height(Fill).into()
 }
 
 // ---------------------------------------------------------------------------
@@ -80,38 +71,18 @@ fn header_row<'a>(item: &'a CipherItem) -> Element<'a, DetailPaneMessage> {
         .on_press(DetailPaneMessage::Close)
         .padding([1, 1])
         .style(|_theme, status| {
-            let bg = match status {
-                button::Status::Hovered => theme::ITEM_HOVER,
-                _ => iced::Color::TRANSPARENT,
-            };
-            button::Style {
-                background: Some(iced::Background::Color(bg)),
-                text_color: theme::TEXT_SECONDARY,
-                border: iced::Border {
-                    radius: 4.0.into(),
-                    ..Default::default()
-                },
-                shadow: iced::Shadow::default(),
-                snap: false,
-            }
+            common::hover_button_style(status, false, Color::TRANSPARENT, theme::RADIUS_SM)
         });
 
     let header =
         container(row![title, Space::new().width(Fill), close_btn].align_y(Alignment::Center))
             .padding([8, 20])
             .style(|_theme| container::Style {
-                background: Some(iced::Background::Color(theme::BACKGROUND)),
+                background: Some(Background::Color(theme::BACKGROUND)),
                 ..Default::default()
             });
 
-    let divider = rule::horizontal(1).style(|_theme| rule::Style {
-        color: theme::BORDER,
-        radius: 0.0.into(),
-        fill_mode: rule::FillMode::Full,
-        snap: false,
-    });
-
-    column![header, divider].spacing(0).into()
+    column![header, common::separator_h()].spacing(0).into()
 }
 
 // ---------------------------------------------------------------------------
@@ -128,8 +99,7 @@ fn section_label<'a>(label: &'a str) -> Element<'a, DetailPaneMessage> {
 
 fn item_details_card<'a>(item: &'a CipherItem) -> Element<'a, DetailPaneMessage> {
     let name_field = field_readonly("Name", &item.name);
-
-    styled_card(column![name_field].spacing(12).into())
+    card_with_margin(common::styled_card(column![name_field].spacing(12).into()))
 }
 
 // ---------------------------------------------------------------------------
@@ -152,7 +122,10 @@ fn credentials_card<'a>(item: &'a CipherItem) -> Element<'a, DetailPaneMessage> 
         "Password",
         "\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}",
         &[icons::BWI_EYE, icons::BWI_COPY],
-        &[DetailPaneMessage::TogglePasswordVisibility, DetailPaneMessage::CopyPassword],
+        &[
+            DetailPaneMessage::TogglePasswordVisibility,
+            DetailPaneMessage::CopyPassword,
+        ],
     ));
 
     if fields.is_empty() {
@@ -164,7 +137,7 @@ fn credentials_card<'a>(item: &'a CipherItem) -> Element<'a, DetailPaneMessage> 
         );
     }
 
-    styled_card(column(fields).spacing(16).into())
+    card_with_margin(common::styled_card(column(fields).spacing(16).into()))
 }
 
 // ---------------------------------------------------------------------------
@@ -188,7 +161,7 @@ fn autofill_card<'a>(item: &'a CipherItem) -> Element<'a, DetailPaneMessage> {
     .spacing(4)
     .align_y(Alignment::Center);
 
-    styled_card(field_row.into())
+    card_with_margin(common::styled_card(field_row.into()))
 }
 
 // ---------------------------------------------------------------------------
@@ -196,13 +169,6 @@ fn autofill_card<'a>(item: &'a CipherItem) -> Element<'a, DetailPaneMessage> {
 // ---------------------------------------------------------------------------
 
 fn bottom_bar<'a>() -> Element<'a, DetailPaneMessage> {
-    let divider = rule::horizontal(1).style(|_theme| rule::Style {
-        color: theme::BORDER,
-        radius: 0.0.into(),
-        fill_mode: rule::FillMode::Full,
-        snap: false,
-    });
-
     let edit_btn = button(text("Edit").size(14).color(theme::CARD_BG))
         .on_press(DetailPaneMessage::Edit)
         .padding([8, 20])
@@ -212,13 +178,13 @@ fn bottom_bar<'a>() -> Element<'a, DetailPaneMessage> {
                 _ => theme::BUTTON_PRIMARY,
             };
             button::Style {
-                background: Some(iced::Background::Color(bg)),
+                background: Some(Background::Color(bg)),
                 text_color: theme::TEXT_PRIMARY,
-                border: iced::Border {
-                    radius: 20.0.into(),
+                border: Border {
+                    radius: theme::RADIUS_PILL.into(),
                     ..Default::default()
                 },
-                shadow: iced::Shadow::default(),
+                shadow: Shadow::default(),
                 snap: false,
             }
         });
@@ -227,31 +193,18 @@ fn bottom_bar<'a>() -> Element<'a, DetailPaneMessage> {
         .on_press(DetailPaneMessage::Delete)
         .padding([6, 6])
         .style(|_theme, status| {
-            let bg = match status {
-                button::Status::Hovered => theme::ITEM_HOVER,
-                _ => iced::Color::TRANSPARENT,
-            };
-            button::Style {
-                background: Some(iced::Background::Color(bg)),
-                text_color: theme::TITLEBAR_CLOSE_HOVER,
-                border: iced::Border {
-                    radius: 4.0.into(),
-                    ..Default::default()
-                },
-                shadow: iced::Shadow::default(),
-                snap: false,
-            }
+            common::hover_button_style(status, false, Color::TRANSPARENT, theme::RADIUS_SM)
         });
 
     let bar =
         container(row![edit_btn, Space::new().width(Fill), delete_btn].align_y(Alignment::Center))
             .padding([8, 20])
             .style(|_theme| container::Style {
-                background: Some(iced::Background::Color(theme::BACKGROUND)),
+                background: Some(Background::Color(theme::BACKGROUND)),
                 ..Default::default()
             });
 
-    column![divider, bar].spacing(0).into()
+    column![common::separator_h(), bar].spacing(0).into()
 }
 
 // ---------------------------------------------------------------------------
@@ -273,10 +226,11 @@ fn field_with_action<'a>(
     icons_list: &[icons::BwiIcon],
     msgs: &[DetailPaneMessage],
 ) -> Element<'a, DetailPaneMessage> {
-    let mut buttons: Vec<Element<'a, DetailPaneMessage>> = Vec::new();
-    for (icon, msg) in icons_list.iter().zip(msgs.iter()) {
-        buttons.push(icon_button(*icon, msg.clone()));
-    }
+    let buttons: Vec<Element<'a, DetailPaneMessage>> = icons_list
+        .iter()
+        .zip(msgs.iter())
+        .map(|(icon, msg)| icon_button(*icon, msg.clone()))
+        .collect();
 
     let buttons_row = row(buttons).spacing(2).align_y(Alignment::Center);
 
@@ -299,43 +253,19 @@ fn icon_button<'a>(icon: icons::BwiIcon, msg: DetailPaneMessage) -> Element<'a, 
         .on_press(msg)
         .padding([6, 6])
         .style(|_theme, status| {
-            let bg = match status {
-                button::Status::Hovered => theme::ITEM_HOVER,
-                _ => iced::Color::TRANSPARENT,
-            };
-            button::Style {
-                background: Some(iced::Background::Color(bg)),
-                text_color: theme::TEXT_PRIMARY,
-                border: iced::Border {
-                    radius: 4.0.into(),
-                    ..Default::default()
-                },
-                shadow: iced::Shadow::default(),
-                snap: false,
-            }
+            common::hover_button_style(status, false, Color::TRANSPARENT, theme::RADIUS_SM)
         })
         .into()
 }
 
-fn styled_card<'a>(content: Element<'a, DetailPaneMessage>) -> Element<'a, DetailPaneMessage> {
-    container(
-        container(content)
-            .padding([12, 16])
-            .width(Fill)
-            .style(|_theme| container::Style {
-                background: Some(iced::Background::Color(theme::BACKGROUND)),
-                border: iced::Border {
-                    radius: 8.0.into(),
-                    ..Default::default()
-                },
-                ..Default::default()
-            }),
-    )
-    .padding(Padding {
-        top: 0.0,
-        right: 0.0,
-        bottom: 8.0,
-        left: 0.0,
-    })
-    .into()
+/// Wraps a card element with bottom margin for section spacing.
+fn card_with_margin<'a>(card: Element<'a, DetailPaneMessage>) -> Element<'a, DetailPaneMessage> {
+    container(card)
+        .padding(Padding {
+            top: 0.0,
+            right: 0.0,
+            bottom: 8.0,
+            left: 0.0,
+        })
+        .into()
 }

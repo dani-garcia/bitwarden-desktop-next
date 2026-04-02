@@ -1,5 +1,4 @@
-use iced::widget::text;
-use iced::{Element, Font};
+use iced::{Element, Font, widget::text};
 
 /// Bootstrap Icons font, loaded in main.rs via `.font()`
 pub const FONT: Font = Font::with_name("bootstrap-icons");

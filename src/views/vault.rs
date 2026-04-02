@@ -1,15 +1,21 @@
-use iced::widget::{Space, button, column, container, pane_grid, row, stack, text};
-use iced::{Alignment, Element, Fill, Font, Length, Padding};
+use iced::{
+    Alignment, Background, Border, Element, Fill, Font, Length, Padding, Shadow,
+    widget::{Space, button, column, container, pane_grid, row, stack, text},
+};
 
-use crate::app::PaneKind;
-use crate::icons;
-use crate::state::{CipherItem, NavSection, SidebarFilter, SidebarMode};
-use crate::theme;
-use crate::widgets::account_switcher::{self, AccountEntry, AccountSwitcherMessage};
-use crate::widgets::detail_pane::{self, DetailPaneMessage};
-use crate::widgets::item_list::{self, ItemListMessage};
-use crate::widgets::search_bar::{self, SearchMessage};
-use crate::widgets::sidebar::{self, SidebarMessage};
+use crate::{
+    app::PaneKind,
+    icons,
+    state::{CipherItem, NavSection, SidebarFilter, SidebarMode},
+    theme,
+    widgets::{
+        account_switcher::{self, AccountEntry, AccountSwitcherMessage},
+        detail_pane::{self, DetailPaneMessage},
+        item_list::{self, ItemListMessage},
+        search_bar::{self, SearchMessage},
+        sidebar::{self, SidebarMessage},
+    },
+};
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)] // DetailPane payload not yet consumed by handler
@@ -87,8 +93,8 @@ pub fn view<'a>(
         .width(Fill)
         .height(Fill)
         .style(|_theme| container::Style {
-            background: Some(iced::Background::Color(theme::BACKGROUND)),
-            border: iced::Border {
+            background: Some(Background::Color(theme::BACKGROUND)),
+            border: Border {
                 radius: iced::border::Radius {
                     top_left: 10.0,
                     top_right: 0.0,
@@ -104,7 +110,7 @@ pub fn view<'a>(
         .width(Fill)
         .height(Fill)
         .style(|_theme| container::Style {
-            background: Some(iced::Background::Color(theme::HEADER_BG)),
+            background: Some(Background::Color(theme::HEADER_BG)),
             ..Default::default()
         });
 
@@ -128,7 +134,7 @@ pub fn view<'a>(
         .width(Fill)
         .height(Fill)
         .style(|_theme| container::Style {
-            background: Some(iced::Background::Color(theme::BACKGROUND)),
+            background: Some(Background::Color(theme::BACKGROUND)),
             ..Default::default()
         })
         .into()
@@ -170,13 +176,13 @@ fn list_content<'a>(
             _ => theme::BUTTON_PRIMARY,
         };
         button::Style {
-            background: Some(iced::Background::Color(bg)),
+            background: Some(Background::Color(bg)),
             text_color: theme::TEXT_PRIMARY,
-            border: iced::Border {
+            border: Border {
                 radius: 20.0.into(),
                 ..Default::default()
             },
-            shadow: iced::Shadow::default(),
+            shadow: Shadow::default(),
             snap: false,
         }
     });

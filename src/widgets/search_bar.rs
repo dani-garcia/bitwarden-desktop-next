@@ -1,8 +1,9 @@
-use iced::widget::{container, row, text_input};
-use iced::{Alignment, Element, Fill};
+use iced::{
+    Alignment, Background, Border, Color, Element, Fill,
+    widget::{container, row, text_input},
+};
 
-use crate::icons;
-use crate::theme;
+use crate::{icons, theme};
 
 #[derive(Debug, Clone)]
 pub enum SearchMessage {
@@ -19,9 +20,9 @@ pub fn view(query: &str) -> Element<'_, SearchMessage> {
         .padding([4, 4])
         .width(Fill)
         .style(|_theme, _status| text_input::Style {
-            background: iced::Background::Color(iced::Color::TRANSPARENT),
-            border: iced::Border {
-                color: iced::Color::TRANSPARENT,
+            background: Background::Color(Color::TRANSPARENT),
+            border: Border {
+                color: Color::TRANSPARENT,
                 width: 0.0,
                 radius: 0.0.into(),
             },
@@ -38,8 +39,8 @@ pub fn view(query: &str) -> Element<'_, SearchMessage> {
             .padding([0, 4]),
     )
     .style(|_theme| container::Style {
-        background: Some(iced::Background::Color(iced::Color::TRANSPARENT)),
-        border: iced::Border {
+        background: Some(Background::Color(Color::TRANSPARENT)),
+        border: Border {
             color: theme::BORDER,
             width: 1.0,
             radius: 4.0.into(),

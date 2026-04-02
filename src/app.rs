@@ -1,14 +1,19 @@
-use iced::widget::pane_grid;
-use iced::{Element, Subscription};
+use iced::{Element, Subscription, widget::pane_grid};
 
-use crate::mock;
-use crate::state::{AppState, CipherItem, NavSection, Screen, SidebarFilter, SidebarMode};
-use crate::views::login::{self, LoginMessage};
-use crate::views::vault::{self, VaultMessage};
-use crate::widgets::account_switcher::{AccountEntry, AccountSwitcherMessage};
-use crate::widgets::item_list::ItemListMessage;
-use crate::widgets::search_bar::SearchMessage;
-use crate::widgets::sidebar::SidebarMessage;
+use crate::{
+    mock,
+    state::{AppState, CipherItem, NavSection, Screen, SidebarFilter, SidebarMode},
+    views::{
+        login::{self, LoginMessage},
+        vault::{self, VaultMessage},
+    },
+    widgets::{
+        account_switcher::{AccountEntry, AccountSwitcherMessage},
+        item_list::ItemListMessage,
+        search_bar::SearchMessage,
+        sidebar::SidebarMessage,
+    },
+};
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -140,7 +145,8 @@ impl App {
             Message::Login(msg) => self.handle_login(msg),
             Message::Vault(msg) => {
                 if matches!(msg, VaultMessage::Search(_)) {
-                    extra_task = iced::widget::operation::focus(iced::widget::Id::new("vault-search"));
+                    extra_task =
+                        iced::widget::operation::focus(iced::widget::Id::new("vault-search"));
                 }
                 self.handle_vault(msg);
             }

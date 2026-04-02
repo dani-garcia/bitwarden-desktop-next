@@ -1,9 +1,12 @@
-use iced::widget::{Space, button, column, container, row, stack, svg, text, text_input};
-use iced::{Alignment, Element, Fill, Length, Padding};
+use iced::{
+    Alignment, Background, Border, Color, Element, Fill, Length, Padding, Shadow,
+    widget::{Space, button, column, container, row, stack, svg, text, text_input},
+};
 
-use crate::icons;
-use crate::theme;
-use crate::widgets::account_switcher::{self, AccountEntry, AccountSwitcherMessage};
+use crate::{
+    icons, theme,
+    widgets::account_switcher::{self, AccountEntry, AccountSwitcherMessage},
+};
 
 #[derive(Debug, Clone)]
 pub enum LoginMessage {
@@ -46,9 +49,9 @@ pub fn view<'a>(
             .padding([10, 12])
             .width(Fill)
             .style(|_theme, _status| text_input::Style {
-                background: iced::Background::Color(iced::Color::TRANSPARENT),
-                border: iced::Border {
-                    color: iced::Color::TRANSPARENT,
+                background: Background::Color(Color::TRANSPARENT),
+                border: Border {
+                    color: Color::TRANSPARENT,
                     width: 0.0,
                     radius: 0.0.into(),
                 },
@@ -75,18 +78,14 @@ pub fn view<'a>(
         .padding([10, 12])
         .style(|_theme, status| {
             let bg = match status {
-                button::Status::Hovered => iced::Color::from_rgb(
-                    0x1f as f32 / 255.0,
-                    0x2a as f32 / 255.0,
-                    0x3c as f32 / 255.0,
-                ),
-                _ => iced::Color::TRANSPARENT,
+                button::Status::Hovered => theme::BUTTON_HOVER_SUBTLE,
+                _ => Color::TRANSPARENT,
             };
             button::Style {
-                background: Some(iced::Background::Color(bg)),
+                background: Some(Background::Color(bg)),
                 text_color: theme::TEXT_SECONDARY,
-                border: iced::Border::default(),
-                shadow: iced::Shadow::default(),
+                border: Border::default(),
+                shadow: Shadow::default(),
                 snap: false,
             }
         });
@@ -99,7 +98,7 @@ pub fn view<'a>(
     )
     .padding([0, 4])
     .style(|_theme| container::Style {
-        background: Some(iced::Background::Color(theme::BACKGROUND)),
+        background: Some(Background::Color(theme::BACKGROUND)),
         ..Default::default()
     });
 
@@ -107,8 +106,8 @@ pub fn view<'a>(
     let input_border = container(row![password_input, toggle_button].align_y(Alignment::Center))
         .width(Fill)
         .style(|_theme| container::Style {
-            background: Some(iced::Background::Color(iced::Color::TRANSPARENT)),
-            border: iced::Border {
+            background: Some(Background::Color(Color::TRANSPARENT)),
+            border: Border {
                 color: theme::BORDER,
                 width: 1.0,
                 radius: 4.0.into(),
@@ -131,22 +130,18 @@ pub fn view<'a>(
     .width(Fill)
     .style(|_theme, status| {
         let bg = match status {
-            button::Status::Hovered => iced::Color::from_rgb(
-                0xaa as f32 / 255.0,
-                0xc3 as f32 / 255.0,
-                0xef as f32 / 255.0,
-            ),
+            button::Status::Hovered => theme::BUTTON_PRIMARY_HOVER,
             _ => theme::ACCENT,
         };
         button::Style {
-            background: Some(iced::Background::Color(bg)),
+            background: Some(Background::Color(bg)),
             text_color: theme::BACKGROUND,
-            border: iced::Border {
+            border: Border {
                 color: bg,
                 width: 1.0,
                 radius: 20.0.into(),
             },
-            shadow: iced::Shadow::default(),
+            shadow: Shadow::default(),
             snap: false,
         }
     });
@@ -160,22 +155,18 @@ pub fn view<'a>(
     .width(Fill)
     .style(|_theme, status| {
         let bg = match status {
-            button::Status::Hovered => iced::Color::from_rgb(
-                0x1f as f32 / 255.0,
-                0x2a as f32 / 255.0,
-                0x3c as f32 / 255.0,
-            ),
-            _ => iced::Color::TRANSPARENT,
+            button::Status::Hovered => theme::BUTTON_HOVER_SUBTLE,
+            _ => Color::TRANSPARENT,
         };
         button::Style {
-            background: Some(iced::Background::Color(bg)),
+            background: Some(Background::Color(bg)),
             text_color: theme::ACCENT,
-            border: iced::Border {
+            border: Border {
                 color: theme::ACCENT,
                 width: 1.0,
                 radius: 20.0.into(),
             },
-            shadow: iced::Shadow::default(),
+            shadow: Shadow::default(),
             snap: false,
         }
     });
@@ -194,8 +185,8 @@ pub fn view<'a>(
     .max_width(450)
     .padding(32)
     .style(|_theme| container::Style {
-        background: Some(iced::Background::Color(theme::BACKGROUND)),
-        border: iced::Border {
+        background: Some(Background::Color(theme::BACKGROUND)),
+        border: Border {
             color: theme::BORDER,
             width: 1.0,
             radius: 16.0.into(),
@@ -246,8 +237,8 @@ pub fn view<'a>(
         container(icons::THREE_DOTS.render(16.0, theme::ACCENT))
             .width(36)
             .height(36)
-            .align_x(iced::alignment::Horizontal::Center)
-            .align_y(iced::alignment::Vertical::Center),
+            .align_x(Alignment::Center)
+            .align_y(Alignment::Center),
     )
     .on_press(LoginMessage::AccountSwitcher(
         AccountSwitcherMessage::ToggleDropdown,
@@ -259,13 +250,13 @@ pub fn view<'a>(
             _ => theme::HEADER_BG,
         };
         button::Style {
-            background: Some(iced::Background::Color(bg)),
+            background: Some(Background::Color(bg)),
             text_color: theme::ACCENT,
-            border: iced::Border {
+            border: Border {
                 radius: 18.0.into(),
                 ..Default::default()
             },
-            shadow: iced::Shadow::default(),
+            shadow: Shadow::default(),
             snap: false,
         }
     })
@@ -314,7 +305,7 @@ pub fn view<'a>(
         .width(Fill)
         .height(Fill)
         .style(|_theme| container::Style {
-            background: Some(iced::Background::Color(theme::CARD_BG)),
+            background: Some(Background::Color(theme::CARD_BG)),
             ..Default::default()
         })
         .into()

@@ -1,9 +1,9 @@
-use iced::widget::{button, column, container, row, text};
-use iced::{Alignment, Element, Fill};
+use iced::{
+    Alignment, Background, Border, Color, Element, Fill, Shadow,
+    widget::{button, column, container, row, text},
+};
 
-use crate::icons;
-use crate::state::UserId;
-use crate::theme;
+use crate::{icons, state::UserId, theme, widgets::common};
 
 #[derive(Debug, Clone)]
 pub enum AccountSwitcherMessage {
@@ -30,11 +30,11 @@ pub fn avatar_trigger<'a>(active_email: &'a str) -> Element<'a, AccountSwitcherM
         container(text(initials).size(13).color(theme::TEXT_PRIMARY))
             .width(36)
             .height(36)
-            .align_x(iced::alignment::Horizontal::Center)
-            .align_y(iced::alignment::Vertical::Center)
+            .align_x(Alignment::Center)
+            .align_y(Alignment::Center)
             .style(|_theme| container::Style {
-                background: Some(iced::Background::Color(theme::AVATAR_BG)),
-                border: iced::Border {
+                background: Some(Background::Color(theme::AVATAR_BG)),
+                border: Border {
                     radius: 18.0.into(),
                     ..Default::default()
                 },
@@ -44,10 +44,10 @@ pub fn avatar_trigger<'a>(active_email: &'a str) -> Element<'a, AccountSwitcherM
     .on_press(AccountSwitcherMessage::ToggleDropdown)
     .padding(0)
     .style(|_theme, _status| button::Style {
-        background: Some(iced::Background::Color(iced::Color::TRANSPARENT)),
+        background: Some(Background::Color(Color::TRANSPARENT)),
         text_color: theme::TEXT_PRIMARY,
-        border: iced::Border::default(),
-        shadow: iced::Shadow::default(),
+        border: Border::default(),
+        shadow: Shadow::default(),
         snap: false,
     })
     .into()
@@ -80,8 +80,8 @@ pub fn trigger<'a>(
             container(text(initials).size(12).color(theme::TEXT_PRIMARY))
                 .padding([4, 8])
                 .style(|_theme| container::Style {
-                    background: Some(iced::Background::Color(theme::ACCENT)),
-                    border: iced::Border {
+                    background: Some(Background::Color(theme::ACCENT)),
+                    border: Border {
                         radius: 12.0.into(),
                         ..Default::default()
                     },
@@ -100,10 +100,10 @@ pub fn trigger<'a>(
     .on_press(AccountSwitcherMessage::ToggleDropdown)
     .padding([4, 8])
     .style(|_theme, _status| button::Style {
-        background: Some(iced::Background::Color(iced::Color::TRANSPARENT)),
+        background: Some(Background::Color(Color::TRANSPARENT)),
         text_color: theme::TEXT_PRIMARY,
-        border: iced::Border::default(),
-        shadow: iced::Shadow::default(),
+        border: Border::default(),
+        shadow: Shadow::default(),
         snap: false,
     })
     .into()
@@ -133,8 +133,8 @@ pub fn dropdown<'a>(
                     container(text(initial).size(11).color(theme::TEXT_PRIMARY))
                         .padding([3, 7])
                         .style(|_theme| container::Style {
-                            background: Some(iced::Background::Color(theme::ACCENT)),
-                            border: iced::Border {
+                            background: Some(Background::Color(theme::ACCENT)),
+                            border: Border {
                                 radius: 10.0.into(),
                                 ..Default::default()
                             },
@@ -157,17 +157,7 @@ pub fn dropdown<'a>(
             .padding([6, 12])
             .width(Fill)
             .style(|_theme, status| {
-                let bg = match status {
-                    button::Status::Hovered => theme::ITEM_HOVER,
-                    _ => iced::Color::TRANSPARENT,
-                };
-                button::Style {
-                    background: Some(iced::Background::Color(bg)),
-                    text_color: theme::TEXT_PRIMARY,
-                    border: iced::Border::default(),
-                    shadow: iced::Shadow::default(),
-                    snap: false,
-                }
+                common::hover_button_style(status, false, Color::TRANSPARENT, 0.0)
             })
             .into()
         })
@@ -178,17 +168,7 @@ pub fn dropdown<'a>(
             .padding([8, 12])
             .width(Fill)
             .style(|_theme, status| {
-                let bg = match status {
-                    button::Status::Hovered => theme::ITEM_HOVER,
-                    _ => iced::Color::TRANSPARENT,
-                };
-                button::Style {
-                    background: Some(iced::Background::Color(bg)),
-                    text_color: theme::TEXT_SECONDARY,
-                    border: iced::Border::default(),
-                    shadow: iced::Shadow::default(),
-                    snap: false,
-                }
+                common::hover_button_style(status, false, Color::TRANSPARENT, 0.0)
             })
             .into(),
     );
@@ -197,8 +177,8 @@ pub fn dropdown<'a>(
         .width(240)
         .padding([4, 0])
         .style(|_theme| container::Style {
-            background: Some(iced::Background::Color(theme::CARD_BG)),
-            border: iced::Border {
+            background: Some(Background::Color(theme::CARD_BG)),
+            border: Border {
                 color: theme::BORDER,
                 width: 1.0,
                 radius: 4.0.into(),

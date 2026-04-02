@@ -1,8 +1,13 @@
-use iced::widget::{button, column, container, mouse_area, row, rule, text};
-use iced::{Alignment, Element, Fill, Padding};
+use iced::{
+    Alignment, Background, Border, Color, Element, Fill, Padding, Shadow,
+    widget::{button, column, container, mouse_area, row, text},
+};
 
-use crate::menu::{self, MenuEntry, MenuState};
-use crate::theme;
+use crate::{
+    menu::{self, MenuEntry, MenuState},
+    theme,
+    widgets::common,
+};
 
 const DROPDOWN_WIDTH: f32 = 280.0;
 const SUBMENU_WIDTH: f32 = 220.0;
@@ -53,14 +58,14 @@ pub fn view<'a>(open_menu: Option<usize>, is_maximized: bool) -> Element<'a, Tit
                     } else {
                         match status {
                             button::Status::Hovered => theme::ITEM_HOVER,
-                            _ => iced::Color::TRANSPARENT,
+                            _ => Color::TRANSPARENT,
                         }
                     };
                     button::Style {
-                        background: Some(iced::Background::Color(bg)),
+                        background: Some(Background::Color(bg)),
                         text_color: theme::TEXT_PRIMARY,
-                        border: iced::Border::default(),
-                        shadow: iced::Shadow::default(),
+                        border: Border::default(),
+                        shadow: Shadow::default(),
                         snap: false,
                     }
                 });
@@ -122,7 +127,7 @@ pub fn view<'a>(open_menu: Option<usize>, is_maximized: bool) -> Element<'a, Tit
         .width(Fill)
         .height(TITLE_BAR_HEIGHT)
         .style(|_theme| container::Style {
-            background: Some(iced::Background::Color(theme::HEADER_BG)),
+            background: Some(Background::Color(theme::HEADER_BG)),
             ..Default::default()
         });
 
@@ -170,8 +175,8 @@ fn window_chrome_button<'a>(
     let icon = container(text(glyph).font(font).size(10).color(theme::TEXT_PRIMARY))
         .width(Fill)
         .height(Fill)
-        .align_x(iced::alignment::Horizontal::Center)
-        .align_y(iced::alignment::Vertical::Center);
+        .align_x(Alignment::Center)
+        .align_y(Alignment::Center);
 
     button(icon)
         .on_press(message)
@@ -181,13 +186,13 @@ fn window_chrome_button<'a>(
         .style(move |_theme, status| {
             let bg = match status {
                 button::Status::Hovered | button::Status::Pressed => hover_color,
-                _ => iced::Color::TRANSPARENT,
+                _ => Color::TRANSPARENT,
             };
             button::Style {
-                background: Some(iced::Background::Color(bg)),
+                background: Some(Background::Color(bg)),
                 text_color: theme::TEXT_PRIMARY,
-                border: iced::Border::default(),
-                shadow: iced::Shadow::default(),
+                border: Border::default(),
+                shadow: Shadow::default(),
                 snap: false,
             }
         })
@@ -258,7 +263,7 @@ pub fn resize_wrapper<'a, M: Clone + 'a>(
         ]
         .spacing(0),
     )
-    .align_y(iced::alignment::Vertical::Bottom)
+    .align_y(Alignment::End)
     .width(Fill)
     .height(Fill)
     .into();
@@ -287,7 +292,7 @@ pub fn resize_wrapper<'a, M: Clone + 'a>(
     )
     .width(Fill)
     .height(Fill)
-    .align_x(iced::alignment::Horizontal::Right)
+    .align_x(Alignment::End)
     .padding(Padding {
         top: CORNER,
         right: 0.0,
@@ -353,8 +358,8 @@ fn styled_panel<'a>(
     container(content)
         .padding([6, 0])
         .style(|_theme| container::Style {
-            background: Some(iced::Background::Color(theme::CARD_BG)),
-            border: iced::Border {
+            background: Some(Background::Color(theme::CARD_BG)),
+            border: Border {
                 color: theme::BORDER,
                 width: 1.0,
                 radius: PANEL_RADIUS.into(),
@@ -375,7 +380,7 @@ fn build_offset_row<'a>(
             break;
         }
         row_items.push(
-            container(text(*label).size(13).color(iced::Color::TRANSPARENT))
+            container(text(*label).size(13).color(Color::TRANSPARENT))
                 .padding([4, 10])
                 .into(),
         );
@@ -404,14 +409,7 @@ fn render_entry<'a>(
     state: &MenuState,
 ) -> Element<'a, TitleBarMessage> {
     if entry.is_separator() {
-        return container(rule::horizontal(1).style(|_theme| rule::Style {
-            color: theme::BORDER,
-            radius: 0.0.into(),
-            fill_mode: rule::FillMode::Full,
-            snap: false,
-        }))
-        .padding([2, 8])
-        .into();
+        return container(common::separator_h()).padding([2, 8]).into();
     }
 
     let enabled = entry.is_enabled(state);
@@ -462,16 +460,16 @@ fn render_entry<'a>(
             } else if enabled {
                 match status {
                     button::Status::Hovered => theme::ITEM_HOVER,
-                    _ => iced::Color::TRANSPARENT,
+                    _ => Color::TRANSPARENT,
                 }
             } else {
-                iced::Color::TRANSPARENT
+                Color::TRANSPARENT
             };
             button::Style {
-                background: Some(iced::Background::Color(bg)),
+                background: Some(Background::Color(bg)),
                 text_color: label_color,
-                border: iced::Border::default(),
-                shadow: iced::Shadow::default(),
+                border: Border::default(),
+                shadow: Shadow::default(),
                 snap: false,
             }
         });
@@ -501,14 +499,7 @@ fn render_submenu_item<'a>(
     state: &MenuState,
 ) -> Element<'a, TitleBarMessage> {
     if entry.is_separator() {
-        return container(rule::horizontal(1).style(|_theme| rule::Style {
-            color: theme::BORDER,
-            radius: 0.0.into(),
-            fill_mode: rule::FillMode::Full,
-            snap: false,
-        }))
-        .padding([2, 8])
-        .into();
+        return container(common::separator_h()).padding([2, 8]).into();
     }
 
     let enabled = entry.is_enabled(state);
@@ -545,16 +536,16 @@ fn render_submenu_item<'a>(
             let bg = if enabled {
                 match status {
                     button::Status::Hovered => theme::ITEM_HOVER,
-                    _ => iced::Color::TRANSPARENT,
+                    _ => Color::TRANSPARENT,
                 }
             } else {
-                iced::Color::TRANSPARENT
+                Color::TRANSPARENT
             };
             button::Style {
-                background: Some(iced::Background::Color(bg)),
+                background: Some(Background::Color(bg)),
                 text_color: label_color,
-                border: iced::Border::default(),
-                shadow: iced::Shadow::default(),
+                border: Border::default(),
+                shadow: Shadow::default(),
                 snap: false,
             }
         });

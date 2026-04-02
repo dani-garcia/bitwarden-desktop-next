@@ -1,4 +1,5 @@
 pub mod account_switcher;
+pub mod common;
 pub mod detail_pane;
 pub mod item_list;
 pub mod search_bar;

@@ -1,9 +1,9 @@
-use iced::widget::{Column, Space, button, column, container, row, rule, scrollable, text};
-use iced::{Alignment, Element, Fill};
+use iced::{
+    Alignment, Background, Border, Color, Element, Fill, Shadow,
+    widget::{Column, Space, button, column, container, row, scrollable, text},
+};
 
-use crate::icons;
-use crate::state::CipherItem;
-use crate::theme;
+use crate::{icons, state::CipherItem, theme, widgets::common};
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)] // usize fields used at emit site, not yet read by handler
@@ -33,7 +33,7 @@ fn initial_color(name: &str) -> iced::Color {
         240..=299 => (x, 0.0, c),
         _ => (c, 0.0, x),
     };
-    iced::Color::from_rgb(r + m, g + m, b + m)
+    Color::from_rgb(r + m, g + m, b + m)
 }
 
 pub fn view<'a>(
@@ -54,13 +54,7 @@ pub fn view<'a>(
     .padding([8, 24])
     .width(Fill);
 
-    let header_divider = container(rule::horizontal(1).style(|_theme| rule::Style {
-        color: theme::BORDER,
-        radius: 0.0.into(),
-        fill_mode: rule::FillMode::Full,
-        snap: false,
-    }))
-    .padding([0, 16]);
+    let header_divider = container(common::separator_h()).padding([0, 16]);
 
     // Item rows
     let item_rows: Vec<Element<'a, ItemListMessage>> = items
@@ -89,8 +83,8 @@ pub fn view<'a>(
                 .center_x(32)
                 .center_y(32)
                 .style(move |_theme| container::Style {
-                    background: Some(iced::Background::Color(circle_color)),
-                    border: iced::Border {
+                    background: Some(Background::Color(circle_color)),
+                    border: Border {
                         radius: 16.0.into(),
                         ..Default::default()
                     },
@@ -125,32 +119,18 @@ pub fn view<'a>(
                 .spacing(12)
                 .align_y(Alignment::Center);
 
-            let bg = if is_selected {
-                theme::ITEM_HOVER
-            } else {
-                iced::Color::TRANSPARENT
-            };
-
             container(
                 button(content)
                     .on_press(ItemListMessage::ItemSelected(i))
                     .padding([8, 8])
                     .width(Fill)
                     .style(move |_theme, status| {
-                        let bg_color = match status {
-                            button::Status::Hovered if !is_selected => theme::ITEM_HOVER,
-                            _ => bg,
-                        };
-                        button::Style {
-                            background: Some(iced::Background::Color(bg_color)),
-                            text_color: theme::TEXT_PRIMARY,
-                            border: iced::Border {
-                                radius: 6.0.into(),
-                                ..Default::default()
-                            },
-                            shadow: iced::Shadow::default(),
-                            snap: false,
-                        }
+                        common::hover_button_style(
+                            status,
+                            is_selected,
+                            theme::ITEM_HOVER,
+                            theme::RADIUS_MD,
+                        )
                     }),
             )
             .padding([0, 16])
@@ -161,16 +141,7 @@ pub fn view<'a>(
     let mut list_items: Vec<Element<'a, ItemListMessage>> = Vec::new();
     for (i, row) in item_rows.into_iter().enumerate() {
         if i > 0 {
-            list_items.push(
-                container(rule::horizontal(1).style(|_theme| rule::Style {
-                    color: theme::BORDER,
-                    radius: 0.0.into(),
-                    fill_mode: rule::FillMode::Full,
-                    snap: false,
-                }))
-                .padding([0, 16])
-                .into(),
-            );
+            list_items.push(container(common::separator_h()).padding([0, 16]).into());
         }
         list_items.push(row);
     }
@@ -184,10 +155,10 @@ pub fn view<'a>(
                 container: container::Style::default(),
                 vertical_rail: scrollable::Rail {
                     background: None,
-                    border: iced::Border::default(),
+                    border: Border::default(),
                     scroller: scrollable::Scroller {
-                        background: iced::Background::Color(theme::ITEM_HOVER),
-                        border: iced::Border {
+                        background: Background::Color(theme::ITEM_HOVER),
+                        border: Border {
                             radius: 4.0.into(),
                             ..Default::default()
                         },
@@ -195,10 +166,10 @@ pub fn view<'a>(
                 },
                 horizontal_rail: scrollable::Rail {
                     background: None,
-                    border: iced::Border::default(),
+                    border: Border::default(),
                     scroller: scrollable::Scroller {
-                        background: iced::Background::Color(theme::ITEM_HOVER),
-                        border: iced::Border {
+                        background: Background::Color(theme::ITEM_HOVER),
+                        border: Border {
                             radius: 4.0.into(),
                             ..Default::default()
                         },
@@ -206,10 +177,10 @@ pub fn view<'a>(
                 },
                 gap: None,
                 auto_scroll: scrollable::AutoScroll {
-                    background: iced::Background::Color(iced::Color::TRANSPARENT),
-                    border: iced::Border::default(),
-                    shadow: iced::Shadow::default(),
-                    icon: iced::Color::TRANSPARENT,
+                    background: Background::Color(Color::TRANSPARENT),
+                    border: Border::default(),
+                    shadow: Shadow::default(),
+                    icon: Color::TRANSPARENT,
                 },
             });
 
@@ -224,20 +195,7 @@ fn action_icon<'a>(icon: icons::Icon, message: ItemListMessage) -> Element<'a, I
         .on_press(message)
         .padding([4, 6])
         .style(|_theme, status| {
-            let bg = match status {
-                button::Status::Hovered => theme::ITEM_HOVER,
-                _ => iced::Color::TRANSPARENT,
-            };
-            button::Style {
-                background: Some(iced::Background::Color(bg)),
-                text_color: theme::TEXT_SECONDARY,
-                border: iced::Border {
-                    radius: 4.0.into(),
-                    ..Default::default()
-                },
-                shadow: iced::Shadow::default(),
-                snap: false,
-            }
+            common::hover_button_style(status, false, Color::TRANSPARENT, theme::RADIUS_SM)
         })
         .into()
 }
