@@ -42,6 +42,82 @@ pub enum TitleBarMessage {
     ResizeEdge(iced::window::Direction),
 }
 
+#[derive(Debug, Clone)]
+pub enum TitleBarAction {
+    MenuAction(crate::menu::MenuAction),
+    Minimize,
+    Maximize,
+    Close,
+    Drag,
+    ResizeEdge(iced::window::Direction),
+}
+
+pub struct TitleBarState {
+    pub open_menu: Option<usize>,
+    pub open_submenu: Option<usize>,
+}
+
+impl TitleBarState {
+    pub fn new() -> Self {
+        Self {
+            open_menu: None,
+            open_submenu: None,
+        }
+    }
+
+    pub fn dismiss_menu(&mut self) {
+        self.open_menu = None;
+        self.open_submenu = None;
+    }
+
+    pub fn update(&mut self, msg: TitleBarMessage) -> Vec<TitleBarAction> {
+        let mut actions = Vec::new();
+        match msg {
+            TitleBarMessage::TopLevelClicked(i) => {
+                self.open_menu = if self.open_menu == Some(i) { None } else { Some(i) };
+                self.open_submenu = None;
+            }
+            TitleBarMessage::DismissMenu => {
+                self.dismiss_menu();
+            }
+            TitleBarMessage::TopLevelHovered(i) => {
+                self.open_menu = Some(i);
+                self.open_submenu = None;
+            }
+            TitleBarMessage::SubMenuHovered(_menu, item) => {
+                self.open_submenu = if item == usize::MAX { None } else { Some(item) };
+            }
+            TitleBarMessage::ItemClicked(menu, item) => {
+                self.dismiss_menu();
+                if let Some(action) = crate::menu::MENUS
+                    .get(menu)
+                    .and_then(|(_, entries)| entries.get(item))
+                    .and_then(|e| e.action)
+                {
+                    actions.push(TitleBarAction::MenuAction(action));
+                }
+            }
+            TitleBarMessage::SubMenuItemClicked(menu, parent, sub) => {
+                self.dismiss_menu();
+                if let Some(action) = crate::menu::MENUS
+                    .get(menu)
+                    .and_then(|(_, entries)| entries.get(parent))
+                    .and_then(|e| e.children.get(sub))
+                    .and_then(|e| e.action)
+                {
+                    actions.push(TitleBarAction::MenuAction(action));
+                }
+            }
+            TitleBarMessage::MinimizeClicked => actions.push(TitleBarAction::Minimize),
+            TitleBarMessage::MaximizeClicked => actions.push(TitleBarAction::Maximize),
+            TitleBarMessage::CloseClicked => actions.push(TitleBarAction::Close),
+            TitleBarMessage::DragStart => actions.push(TitleBarAction::Drag),
+            TitleBarMessage::ResizeEdge(dir) => actions.push(TitleBarAction::ResizeEdge(dir)),
+        }
+        actions
+    }
+}
+
 /// Wrap content with invisible resize handles on all edges.
 pub use self::window_chrome::resize_wrapper;
 

@@ -10,7 +10,7 @@ pub struct AppState {
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)] // Fields mirror the SDK's PasswordManagerClient; not all used in stub UI yet
+#[expect(dead_code)] // Fields mirror the SDK's PasswordManagerClient; not all used in stub UI yet
 pub struct UserSession {
     pub email: String,
     pub display_name: String,

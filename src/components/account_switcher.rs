@@ -3,7 +3,7 @@ use iced::{
     widget::{column, container, row, text},
 };
 
-use crate::{components::{buttons, icons}, state::UserId, theme::{AppColors, AppTheme}};
+use crate::{components::buttons, state::UserId, theme::{AppColors, AppTheme}};
 
 #[derive(Debug, Clone)]
 pub enum AccountSwitcherMessage {
@@ -46,55 +46,6 @@ pub fn avatar_trigger<'a>(
     )
     .on_press(AccountSwitcherMessage::ToggleDropdown)
     .padding(0)
-    .into()
-}
-
-/// Renders just the trigger button (initials + email + server + arrow).
-/// Used by the login page's legacy account switcher bar. May be removed later.
-#[allow(dead_code)]
-pub fn trigger<'a>(
-    active_email: &'a str,
-    active_server: &'a str,
-    dropdown_open: bool,
-    colors: &AppColors,
-) -> Element<'a, AccountSwitcherMessage, AppTheme> {
-    let initials = active_email
-        .chars()
-        .next()
-        .unwrap_or('?')
-        .to_uppercase()
-        .to_string();
-
-    let icon = if dropdown_open {
-        icons::CHEVRON_UP
-    } else {
-        icons::CHEVRON_DOWN
-    };
-
-    buttons::transparent(
-        row![
-            container(text(initials).size(12).color(colors.text_primary))
-                .padding([4, 8])
-                .style(|theme: &AppTheme| container::Style {
-                    background: Some(Background::Color(theme.colors.accent)),
-                    border: Border {
-                        radius: 12.0.into(),
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                }),
-            column![
-                text(active_email).size(14).color(colors.text_primary),
-                text(active_server).size(12).color(colors.text_secondary),
-            ]
-            .spacing(1),
-            icon.render(14.0, colors.text_secondary),
-        ]
-        .spacing(8)
-        .align_y(Alignment::Center),
-    )
-    .on_press(AccountSwitcherMessage::ToggleDropdown)
-    .padding([4, 8])
     .into()
 }
 

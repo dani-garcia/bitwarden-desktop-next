@@ -20,6 +20,58 @@ pub enum LoginMessage {
     AccountSwitcher(AccountSwitcherMessage),
 }
 
+#[derive(Debug, Clone)]
+pub enum LoginAction {
+    Unlock,
+    LogOut,
+    SwitchUser(String),
+}
+
+pub struct LoginView {
+    pub password_input: String,
+    pub show_password: bool,
+    pub dropdown_open: bool,
+}
+
+impl LoginView {
+    pub fn new() -> Self {
+        Self {
+            password_input: String::new(),
+            show_password: false,
+            dropdown_open: false,
+        }
+    }
+
+    pub fn update(
+        &mut self,
+        msg: LoginMessage,
+    ) -> Vec<LoginAction> {
+        let mut actions = Vec::new();
+        match msg {
+            LoginMessage::PasswordChanged(pw) => self.password_input = pw,
+            LoginMessage::TogglePasswordVisibility => self.show_password = !self.show_password,
+            LoginMessage::Unlock => {
+                self.password_input.clear();
+                self.show_password = false;
+                actions.push(LoginAction::Unlock);
+            }
+            LoginMessage::LogOut => {
+                actions.push(LoginAction::LogOut);
+            }
+            LoginMessage::AccountSwitcher(asm) => match asm {
+                AccountSwitcherMessage::ToggleDropdown => {
+                    self.dropdown_open = !self.dropdown_open;
+                }
+                AccountSwitcherMessage::SwitchUser(uid) => {
+                    self.dropdown_open = false;
+                    actions.push(LoginAction::SwitchUser(uid));
+                }
+            },
+        }
+        actions
+    }
+}
+
 pub fn view<'a>(
     email: &'a str,
     server: &'a str,

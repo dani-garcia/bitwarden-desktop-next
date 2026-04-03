@@ -6,12 +6,11 @@ use iced::{
 use crate::{components::{self, buttons, icons}, state::CipherItem, theme::{AppColors, AppTheme, RADIUS_MD}};
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)] // usize fields used at emit site, not yet read by handler
 pub enum ItemListMessage {
     ItemSelected(usize),
-    OpenExternal(usize),
-    CopyUsername(usize),
-    MoreOptions(usize),
+    OpenExternal(#[expect(dead_code)] usize),
+    CopyUsername(#[expect(dead_code)] usize),
+    MoreOptions(#[expect(dead_code)] usize),
 }
 
 // Generate a deterministic color from a string
