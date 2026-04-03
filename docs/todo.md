@@ -3,9 +3,7 @@
 ## Next Up
 
 - **Tray icon** — Use `tray-icon` crate (sister to `muda`, same raw window handle approach). Should show Bitwarden shield icon, right-click context menu with Lock/Quit. Iced PR https://github.com/iced-rs/iced/pull/3021 adds native tray support but is still **open** (targeting 1.0), so use `tray-icon` crate directly for now.
-- **Executable icon** — Embed `.ico` in the Windows executable via `winresource` build script. Use the Bitwarden shield icon. Also set the window icon via iced's `window::Settings::icon`.
-- **Default text size** — Review and update per https://github.com/iced-rs/iced/issues/503 (DPI/scaling). Audit text sizes across all views.
-- **Light theme colors** — Current light palette is a placeholder (naive inversion). Pick real colors from the Bitwarden app's light theme.
+- **Avatar color auto-generation** — Generate avatar background color from username/email hash (like the official app does) instead of using a fixed color.
 
 ## UI Polish
 

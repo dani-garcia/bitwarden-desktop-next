@@ -7,6 +7,7 @@ Lightweight Rust alternative to the Bitwarden desktop app using Iced 0.14 GUI fr
 ```bash
 cargo run                      # Starts on login screen
 cargo clippy                   # Lint check (must pass clean)
+cargo run --bin packager       # Package .app/.dmg/.msi via cargo-packager
 ```
 
 ### Dev Modes
@@ -17,49 +18,60 @@ DEV_BOTH_MENUS=1 cargo run     # Show native + custom menus side-by-side
 
 ## Project Context
 
+- **Cargo workspace** — root `Cargo.toml` defines members: `crates/desktop` (default), `bitwarden_license/*`, `tools/*`. Desktop crate is the only default member.
 - **UI-only stub** — no business logic, crypto, or API calls. A separate SDK (`PasswordManagerClient`) will handle that later.
 - **Multi-user** — state holds `HashMap<UserId, UserSession>`, mirrors the future SDK model.
 - **Iced 0.14** — Elm architecture (message-driven updates). Uses `iced` with `tokio`, `svg`, `advanced` features. `button::Style` requires a `snap: false` field.
-- **Custom theme type** — `AppTheme` implements `iced::theme::Base` + widget `Catalog` traits. Dark/light themes with runtime switching (Help > About Bitwarden). All `.style()` closures receive `&AppTheme`.
+- **Custom theme type** — `AppTheme` implements `iced::theme::Base` + widget `Catalog` traits. Light theme is the default; dark/light toggle via Help > About Bitwarden. All `.style()` closures receive `&AppTheme`.
 - **Dual menu system** — Custom-drawn title bar on Windows/Linux, native muda menu on macOS. Both driven by a single `MENUS` definition with shortcuts, enabled states, and actions. `DEV_BOTH_MENUS=1` shows both simultaneously.
 
 ## Project Structure
 
 ```
-src/
-  app.rs                        — Root App (11 fields), thin message dispatcher, view structs
-  main.rs                       — Entry point, window config, font loading
-  menu.rs                       — MENUS definition, Shortcut, MenuAction, MenuState, native muda bridge
-  mock.rs                       — Fake users/vault items (each item has a stable `id` field)
-  state.rs                      — Core types: AppState, CipherItem, Screen, etc.
+Cargo.toml                      — Workspace root (members: crates/desktop, bitwarden_license/*, tools/*)
+Packager.toml                   — cargo-packager config (.app, .dmg, .msi, signing)
+LICENSE.txt / LICENSE_*.txt     — License files
 
-  theme/
-    mod.rs                      — AppTheme, AppColors, Base impl, radius constants
-    dark.rs                     — Dark palette (colors from actual Bitwarden app)
-    light.rs                    — Light palette (placeholder)
-    catalog.rs                  — Widget Catalog trait impls for AppTheme
+crates/desktop/                 — Main desktop application crate
+  src/
+    app.rs                      — Root App (11 fields), thin message dispatcher, view structs
+    main.rs                     — Entry point, window config, font loading, APP_FONT/APP_FONT_BOLD constants
+    menu.rs                     — MENUS definition, Shortcut, MenuAction, MenuState, native muda bridge
+    mock.rs                     — Fake users/vault items (each item has a stable `id` field)
+    state.rs                    — Core types: AppState, CipherItem, Screen, etc.
 
-  components/
-    mod.rs                      — separator_h(), separator_v(), styled_card() helpers
-    buttons.rs                  — primary(), secondary(), ghost(), ghost_icon(), transparent()
-    icons.rs                    — Bootstrap Icons + BWI icons with .render() and .input_icon()
-    account_switcher.rs         — Shared account dropdown (used by login + vault)
-    drop_down.rs                — Local fork of iced_aw DropDown with BelowLeft/BelowRight/AboveRight
+    theme/
+      mod.rs                    — AppTheme, AppColors, Base impl, radius constants
+      dark.rs                   — Dark palette (colors from actual Bitwarden app)
+      light.rs                  — Light palette (colors from design mockup)
+      catalog.rs                — Widget Catalog trait impls for AppTheme
 
-  views/
-    login/
-      mod.rs                    — LoginView struct + LoginAction + view()
-    vault/
-      mod.rs                    — VaultView struct + VaultAction + PaneKind + view()
-      widgets/
-        sidebar.rs              — Icon rail + expanded nav panel
-        item_list.rs            — Vault item table with action icons
-        detail_pane.rs          — Item detail view (readonly fields, cards)
-        search_bar.rs           — Search input with native text_input icon
-    title_bar/
-      mod.rs                    — TitleBarState + TitleBarAction + view()
-      window_chrome.rs          — Platform chrome icons, resize wrapper
-      dropdown.rs               — Menu dropdown panels + submenu rendering
+    components/
+      mod.rs                    — separator_h(), separator_v(), styled_card() helpers
+      buttons.rs                — primary(), secondary(), ghost(), ghost_icon(), transparent()
+      icons.rs                  — Bootstrap Icons + BWI icons with .render() and .input_icon()
+      account_switcher.rs       — Shared account dropdown (used by login + vault)
+      drop_down.rs              — Local fork of iced_aw DropDown with BelowLeft/BelowRight/AboveRight
+
+    views/
+      login/
+        mod.rs                  — LoginView struct + LoginAction + view()
+      vault/
+        mod.rs                  — VaultView struct + VaultAction + PaneKind + view()
+        widgets/
+          sidebar.rs            — Icon rail + expanded nav panel
+          item_list.rs          — Vault item table with action icons
+          detail_pane.rs        — Item detail view (readonly fields, cards)
+          search_bar.rs         — Search input with native text_input icon
+      title_bar/
+        mod.rs                  — TitleBarState + TitleBarAction + view() + view_empty()
+        window_chrome.rs        — Platform chrome icons, resize wrapper
+        dropdown.rs             — Menu dropdown panels + submenu rendering
+
+tools/
+  packager/                     — Wrapper crate that invokes cargo_packager::cli::run
+
+bitwarden_license/              — Licensed workspace members (future)
 ```
 
 ## Why Things Are the Way They Are
@@ -114,10 +126,13 @@ When any view message arrives, App also dismisses the other view's overlays:
 - All colors come from `AppTheme.colors`. Never hardcode outside `theme/dark.rs` and `theme/light.rs`.
 - Radii (`RADIUS_SM/MD/LG/PILL`) are structural constants, not theme-dependent.
 - In `.style()` closures: `theme.colors.xxx`. For `text().color()` / `icon.render()`: pass `&AppColors`.
+- Sidebar-specific tokens: `nav_text` (white in both themes since sidebar is always dark blue) and `nav_item_hover` for sidebar hover state.
+- Font sizes are consolidated to 5 values: 12, 14, 16, 18, 28.
 
 ### Button Components
 - Use `components::buttons::{primary, secondary, ghost, ghost_icon, transparent}(content)`.
 - Takes `impl Into<Element>`, returns `Button` for chaining.
+- `ghost(content, hover_bg)` and `ghost_icon(content, hover_bg)` take an explicit `hover_bg: Color` parameter instead of reading from theme (needed because sidebar has different bg than content area).
 
 ### Icons
 - `icon.render(size, color)` — renders as Element for general use.
@@ -155,12 +170,27 @@ The official Bitwarden app is in `clients/` (git submodule). Key locations:
 - `docs/todo.md` — Pending work items, next up tasks
 - `docs/design-reference.md` — Official app findings: button styles, colors, logos, illustrations
 
+## Font
+
+- **Inter 18pt** — static weight files: `Inter_18pt-Medium.ttf` (default) + `Inter_18pt-Bold.ttf`. Family name: `"Inter 18pt"`.
+- `APP_FONT` and `APP_FONT_BOLD` constants in `main.rs` reference these fonts.
+- Default weight is Medium (500), not Normal (400). The "18pt" variant uses an open lowercase "g" (double-storey in standard Inter) which better matches the official app.
+
+## Packaging
+
+- `Packager.toml` at workspace root configures `cargo-packager` for .app bundle, .dmg, .msi, icons, and signing.
+- `tools/packager/` is a thin wrapper crate that calls `cargo_packager::cli::run`.
+- Build distributable: `cargo run --bin packager`.
+- Window icon set via `window::Settings::icon` using `assets/icon.png` + `image` crate.
+
 ## Design Notes
 
-- All colors are theme-swappable. Dark/light toggle via Help > About Bitwarden.
+- All colors are theme-swappable. Light is the default theme; dark/light toggle via Help > About Bitwarden.
 - Account switcher uses DropDown overlay with `BelowRight` alignment.
 - Sidebar uses BWI icons (not Bootstrap Icons) to match the official app.
 - SVG logo antialiasing: Iced's resvg rasterizer doesn't match browser-quality. Container constrains visual size while SVG fills available width.
+- `styled_card()` has a subtle shadow (black 20% opacity, offset 0,1, blur 2).
+- On macOS when `should_use_custom_menu_bar()` is false, `title_bar::view_empty()` renders an empty colored strip (no buttons or drag area).
 
 ## Iced Gotchas
 

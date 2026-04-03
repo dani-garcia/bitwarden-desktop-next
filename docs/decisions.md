@@ -12,6 +12,12 @@
 
 **Decision**: Named `bitwarden-desktop-next` to avoid conflict with existing "bitwarden-lite" project.
 
+## Workspace Structure
+
+**Decision**: Organize as a Cargo workspace with the desktop app at `crates/desktop/`, plus `bitwarden_license/*` and `tools/*` as additional members. Only `crates/desktop` is in `default-members`.
+
+**Rationale**: Mirrors the pattern used in other Bitwarden Rust projects. Separates the main application from licensed code and developer tooling. `default-members` ensures `cargo run` / `cargo build` target only the desktop app by default.
+
 ## UI Only (No Business Logic)
 
 **Decision**: This app is stub UI only. All crypto, API, authentication, and vault operations will come from a separate SDK (`PasswordManagerClient`).
@@ -52,11 +58,19 @@
 
 **WOFF→TTF conversion**: The Bootstrap Icons release only ships WOFF/WOFF2, but iced's `fontdb` only supports TTF/OTF. We used the `wuff` crate (pure Rust WOFF decoder) once to convert the WOFF to TTF, saved the result in `assets/`, then removed `wuff` from dependencies.
 
-## Font: Inter
+## Font: Inter 18pt Static (Medium/Bold)
 
-**Decision**: Bundle the Inter variable font (`InterVariable.ttf`) and set it as the iced default font.
+**Decision**: Bundle static Inter 18pt font files (`Inter_18pt-Medium.ttf` + `Inter_18pt-Bold.ttf`) with default weight Medium (500). Family name: `"Inter 18pt"`. Constants `APP_FONT` / `APP_FONT_BOLD` in `main.rs`.
 
-**Rationale**: The official Bitwarden app uses Inter (`$font-family-sans-serif: Inter` in `variables.scss`). Inter is heavier than the default system font, which gives the UI the same visual weight as the original.
+**Previous approach**: Inter variable font (`InterVariable.ttf`) at Normal (400) weight.
+
+**Why changed**: The "18pt" optical size variant has an open lowercase "g" (single-storey) which better matches the official Bitwarden app rendering. The standard Inter variable font uses a closed/double-storey "g" that looked different. Medium (500) weight also better matches the app's visual density. Static font files were chosen over variable to avoid the optical size axis complexity.
+
+## Font Sizes: Consolidated to 5
+
+**Decision**: Use exactly 5 font sizes: 12, 14, 16, 18, 28. Down from 10 distinct sizes.
+
+**Rationale**: Fewer sizes create a more consistent visual hierarchy. These 5 values cover all current needs: 12 for captions, 14 for body/buttons, 16 for emphasis, 18 for section headers, 28 for page titles.
 
 ## Button Style: Pill-Shaped (20px radius)
 
@@ -80,9 +94,9 @@
 
 **Decision**: Custom `AppTheme` struct implementing `iced::theme::Base` + widget `Catalog` traits. Dark/light palettes in separate files.
 
-**Status**: Complete. Runtime toggle via Help > About Bitwarden. Light palette is placeholder.
+**Status**: Complete. Light theme is the default. Runtime toggle via Help > About Bitwarden. Light palette colors picked from design mockup (`designs/Desktop 2025/vault-view item.png`).
 
-**Rationale**: iced 0.14's `application()` is generic over Theme. Custom theme gives `&AppTheme` in all `.style()` closures with direct access to 20+ semantic color tokens. No thread_local or registry needed.
+**Rationale**: iced 0.14's `application()` is generic over Theme. Custom theme gives `&AppTheme` in all `.style()` closures with direct access to 20+ semantic color tokens (including `nav_text` and `nav_item_hover` for sidebar-specific colors). No thread_local or registry needed.
 
 ## Overlays: DropDown Widget (replaces stack! pattern)
 
@@ -111,3 +125,11 @@
 **Decision**: Single `MENUS` definition drives both custom and native menus. `NativeMenuHandle` (on App, not static) bridges events.
 
 **Rationale**: Avoids duplicating menu structure. `Shortcut::to_accelerator()` reuses existing `display()` for muda compatibility. `DEV_BOTH_MENUS=1` shows both simultaneously for comparison.
+
+## Packaging: cargo-packager
+
+**Decision**: Use `cargo-packager` for distribution packaging (.app, .dmg, .msi). Configuration in `Packager.toml` at workspace root. A thin wrapper crate at `tools/packager/` invokes `cargo_packager::cli::run`.
+
+**Previous approach**: `winresource` build script for Windows exe icon, `embed_plist` for macOS bundle metadata.
+
+**Why changed**: `cargo-packager` handles all platform packaging concerns in one place: .app bundle structure, .dmg creation, .msi installer, icon embedding, code signing. The per-platform build script hacks (`winresource`, `embed_plist`) were removed since `cargo-packager` handles these natively.

@@ -62,11 +62,26 @@ From `clients/libs/components/src/tw-theme.css` (dark mode section):
 - `tw-fill-illustration-logo` → `rgb(255, 255, 255)` = `#ffffff`
 - `tw-fill-illustration-tertiary` → `rgb(255, 191, 0)` = `#ffbf00` (gold stars on lock)
 
-## Color Palette (Dark Theme)
+## Color Palette
 
-**Important**: The SCSS values in `variables.scss` do NOT match the actual rendered colors. Always verify with a color picker against the running app.
+**Important**: The SCSS values in `variables.scss` do NOT match the actual rendered colors. Always verify with a color picker against the running app or design mockups.
 
-### Actual Rendered Colors (picked from running app)
+### Light Theme (default — from design mockup)
+| Role | Hex | Notes |
+|------|-----|-------|
+| Sidebar / header background | `#173792` | Dark blue nav background |
+| Content background | `#ffffff` | White |
+| Detail pane background | `#f4f6f9` | Light gray |
+| Card background | `#ffffff` | White |
+| Text primary | `#1a2029` | Near-black |
+| Text secondary | `#5a6d91` | Muted blue-gray |
+| Nav text | `#ffffff` | White (sidebar is always dark) |
+| Sidebar selected | `#011066` | Dark navy |
+| Nav item hover | sidebar-specific | Lighter than selected |
+| Border | `#e7e9ef` | Light gray |
+| Primary accent | `#165ddc` | Bitwarden blue |
+
+### Dark Theme (picked from running app)
 | Role | Hex | Source |
 |------|-----|--------|
 | Main window background | `#070b18` | Color picker |
@@ -91,9 +106,11 @@ From `clients/apps/desktop/src/scss/variables.scss` (dark theme map):
 
 ## Font
 
-- **Font family**: Inter (`$font-family-sans-serif` in `variables.scss`)
-- **Source**: https://github.com/rsms/inter (bundled as `assets/InterVariable.ttf`)
-- **Weight**: Normal (400) for body, Bold for "bit" in logo text
+- **Font family**: Inter 18pt (`$font-family-sans-serif: Inter` in `variables.scss`)
+- **Source**: https://github.com/rsms/inter (bundled as `assets/Inter_18pt-Medium.ttf` + `assets/Inter_18pt-Bold.ttf`)
+- **Weight**: Medium (500) for body, Bold for emphasis. The "18pt" optical size variant uses an open single-storey "g" matching the official app.
+- **Family name**: `"Inter 18pt"` (used in `APP_FONT` / `APP_FONT_BOLD` constants)
+- **Sizes**: 5 values — 12 (captions), 14 (body/buttons), 16 (emphasis), 18 (section headers), 28 (page titles)
 
 ## Account Switcher
 
