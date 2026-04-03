@@ -18,7 +18,7 @@ pub fn view<'a>(
     show_password: bool,
     colors: &'a AppColors,
 ) -> Element<'a, LoginMessage, AppTheme> {
-    let wave_icon = svg(svg::Handle::from_path("assets/wave-icon.svg"))
+    let wave_icon = svg(svg::Handle::from_memory(crate::assets::WAVE_ICON))
         .width(64)
         .height(60);
 

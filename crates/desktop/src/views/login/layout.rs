@@ -26,7 +26,7 @@ pub fn auth_page_shell<'a>(
     dropdown_open: bool,
     colors: &'a AppColors,
 ) -> Element<'a, LoginMessage, AppTheme> {
-    let logo = svg(svg::Handle::from_path("assets/logo-white.svg"))
+    let logo = svg(svg::Handle::from_memory(crate::assets::LOGO_WHITE))
         .width(209)
         .height(35)
         .style(|theme: &AppTheme, _status| svg::Style {
@@ -40,12 +40,12 @@ pub fn auth_page_shell<'a>(
     let logo_row = container(logo).width(Fill).padding([16, 24]);
 
     // Background illustrations
-    let bg_left = svg(svg::Handle::from_path("assets/bg-left.svg"))
+    let bg_left = svg(svg::Handle::from_memory(crate::assets::BG_LEFT))
         .width(Length::Fixed(400.0))
         .height(Length::Fixed(180.0))
         .opacity(0.11);
 
-    let bg_right = svg(svg::Handle::from_path("assets/bg-right.svg"))
+    let bg_right = svg(svg::Handle::from_memory(crate::assets::BG_RIGHT))
         .width(Length::Fixed(400.0))
         .height(Length::Fixed(240.0))
         .opacity(0.11);

@@ -50,7 +50,7 @@ fn icon_rail<'a>(
     colors: &AppColors,
 ) -> Element<'a, SidebarMessage, AppTheme> {
     let shield = container(
-        svg(svg::Handle::from_path("assets/bitwarden-shield.svg"))
+        svg(svg::Handle::from_memory(crate::assets::BITWARDEN_SHIELD))
             .width(28)
             .height(28),
     )
@@ -140,7 +140,7 @@ fn expanded_panel<'a>(
 
     // Logo header
     let logo = container(
-        svg(svg::Handle::from_path("assets/password-manager-logo.svg"))
+        svg(svg::Handle::from_memory(crate::assets::PASSWORD_MANAGER_LOGO))
             .width(Fill)
             .height(Length::Shrink),
     )

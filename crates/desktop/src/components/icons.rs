@@ -52,7 +52,6 @@ include!(concat!(env!("OUT_DIR"), "/bootstrap_icons_generated.rs"));
 // ---------------------------------------------------------------------------
 
 pub const BWI_FONT: Font = Font::with_name("bwi-font");
-pub const BWI_FONT_BYTES: &[u8] = include_bytes!("../../../../assets/bwi-font.ttf");
 
 #[derive(Copy, Clone)]
 pub struct BwiIcon(char);

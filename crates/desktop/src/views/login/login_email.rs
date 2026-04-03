@@ -18,7 +18,7 @@ pub fn view<'a>(
     remember_email: bool,
     colors: &'a AppColors,
 ) -> Element<'a, LoginMessage, AppTheme> {
-    let vault_icon = svg(svg::Handle::from_path("assets/vault-icon.svg"))
+    let vault_icon = svg(svg::Handle::from_memory(crate::assets::VAULT_ICON))
         .width(64)
         .height(60);
 

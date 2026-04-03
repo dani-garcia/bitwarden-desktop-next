@@ -22,7 +22,7 @@ pub fn view<'a>(
     show_password: bool,
     colors: &'a AppColors,
 ) -> Element<'a, LoginMessage, AppTheme> {
-    let lock_icon = svg(svg::Handle::from_path("assets/lock-icon.svg"))
+    let lock_icon = svg(svg::Handle::from_memory(crate::assets::LOCK_ICON))
         .width(64)
         .height(60);
 
