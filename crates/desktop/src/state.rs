@@ -9,6 +9,46 @@ pub struct AppState {
     pub screen: Screen,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnlockMethod {
+    Biometrics,
+    Pin,
+    MasterPassword,
+}
+
+#[derive(Debug, Clone)]
+pub struct UnlockMethods {
+    pub master_password: bool,
+    pub pin: bool,
+    pub biometrics: bool,
+}
+
+impl UnlockMethods {
+    pub fn preferred(&self) -> UnlockMethod {
+        if self.biometrics {
+            UnlockMethod::Biometrics
+        } else if self.pin {
+            UnlockMethod::Pin
+        } else {
+            UnlockMethod::MasterPassword
+        }
+    }
+
+    pub fn alternatives(&self, current: UnlockMethod) -> Vec<UnlockMethod> {
+        let mut alts = Vec::new();
+        if self.biometrics && current != UnlockMethod::Biometrics {
+            alts.push(UnlockMethod::Biometrics);
+        }
+        if self.pin && current != UnlockMethod::Pin {
+            alts.push(UnlockMethod::Pin);
+        }
+        if self.master_password && current != UnlockMethod::MasterPassword {
+            alts.push(UnlockMethod::MasterPassword);
+        }
+        alts
+    }
+}
+
 #[derive(Debug, Clone)]
 #[expect(dead_code)] // Fields mirror the SDK's PasswordManagerClient; not all used in stub UI yet
 pub struct UserSession {
@@ -17,6 +57,7 @@ pub struct UserSession {
     pub server_url: String,
     pub locked: bool,
     pub vault_items: Vec<CipherItem>,
+    pub unlock_methods: UnlockMethods,
 }
 
 #[derive(Debug, Clone)]

@@ -1,0 +1,149 @@
+use iced::{
+    Alignment, Background, Border, Color, Element, Fill, Length, Shadow,
+    theme::Base,
+    widget::{Space, button, column, container, row, stack, svg},
+};
+
+use crate::{
+    components::{
+        account_switcher::{self, AccountEntry, AccountSwitcherMessage},
+        icons,
+    },
+    theme::{AppColors, AppTheme},
+};
+
+use super::LoginMessage;
+
+/// Shared outer shell for all auth screens.
+///
+/// Renders: logo (top-left), account switcher (top-right), center content,
+/// background illustrations, status bar at bottom.
+pub fn auth_page_shell<'a>(
+    center_content: Element<'a, LoginMessage, AppTheme>,
+    status_bar: Element<'a, LoginMessage, AppTheme>,
+    active_email: &'a str,
+    accounts: &'a [AccountEntry],
+    dropdown_open: bool,
+    colors: &'a AppColors,
+) -> Element<'a, LoginMessage, AppTheme> {
+    let logo = svg(svg::Handle::from_path("assets/logo-white.svg"))
+        .width(209)
+        .height(35)
+        .style(|theme: &AppTheme, _status| svg::Style {
+            color: if theme.mode() == iced::theme::Mode::Light {
+                Some(theme.colors.button_primary)
+            } else {
+                None
+            },
+        });
+
+    let logo_row = container(logo).width(Fill).padding([16, 24]);
+
+    // Background illustrations
+    let bg_left = svg(svg::Handle::from_path("assets/bg-left.svg"))
+        .width(Length::Fixed(400.0))
+        .height(Length::Fixed(180.0))
+        .opacity(0.11);
+
+    let bg_right = svg(svg::Handle::from_path("assets/bg-right.svg"))
+        .width(Length::Fixed(400.0))
+        .height(Length::Fixed(240.0))
+        .opacity(0.11);
+
+    let bg_illustrations = column![
+        Space::new().height(Fill),
+        row![bg_left, Space::new().width(Fill), bg_right].align_y(Alignment::End),
+    ]
+    .width(Fill)
+    .height(Fill);
+
+    // Account switcher "..." button
+    let menu_dot_trigger = button(
+        container(icons::THREE_DOTS.render(16.0, Color::WHITE))
+            .width(36)
+            .height(36)
+            .align_x(Alignment::Center)
+            .align_y(Alignment::Center),
+    )
+    .on_press(LoginMessage::AccountSwitcher(
+        AccountSwitcherMessage::ToggleDropdown,
+    ))
+    .padding(0)
+    .style(|theme: &AppTheme, status| {
+        let bg = match status {
+            button::Status::Hovered | button::Status::Pressed => {
+                theme.colors.button_primary_hover
+            }
+            _ => theme.colors.button_primary,
+        };
+        button::Style {
+            background: Some(Background::Color(bg)),
+            text_color: Color::WHITE,
+            border: Border {
+                radius: 18.0.into(),
+                ..Default::default()
+            },
+            shadow: Shadow::default(),
+            snap: false,
+        }
+    });
+
+    let dd_panel = account_switcher::dropdown(active_email, accounts, colors)
+        .map(LoginMessage::AccountSwitcher);
+    let menu_dot_dropdown: Element<'a, LoginMessage, AppTheme> =
+        crate::components::drop_down::DropDown::new(menu_dot_trigger, dd_panel, dropdown_open)
+            .on_dismiss(LoginMessage::AccountSwitcher(
+                AccountSwitcherMessage::ToggleDropdown,
+            ))
+            .alignment(crate::components::drop_down::Alignment::BelowRight)
+            .width(240.0)
+            .offset(4.0)
+            .into();
+
+    let top_row = row![
+        logo_row,
+        Space::new().width(Fill),
+        container(menu_dot_dropdown).padding([16, 24]),
+    ]
+    .align_y(Alignment::Center);
+
+    let foreground = column![
+        top_row,
+        Space::new().height(Length::Fixed(40.0)),
+        container(center_content).center_x(Fill),
+        Space::new().height(Fill),
+        status_bar,
+    ]
+    .width(Fill)
+    .height(Fill);
+
+    let layered = stack![bg_illustrations, foreground];
+
+    container(layered)
+        .width(Fill)
+        .height(Fill)
+        .style(|theme: &AppTheme| container::Style {
+            background: Some(Background::Color(theme.colors.card_bg)),
+            ..Default::default()
+        })
+        .into()
+}
+
+/// The standard card container used on all auth screens.
+pub fn auth_card<'a>(
+    content: Element<'a, LoginMessage, AppTheme>,
+) -> Element<'a, LoginMessage, AppTheme> {
+    container(content)
+        .max_width(450)
+        .padding(32)
+        .style(|theme: &AppTheme| container::Style {
+            background: Some(Background::Color(theme.colors.background)),
+            border: Border {
+                color: theme.colors.border,
+                width: 1.0,
+                radius: 16.0.into(),
+            },
+            ..Default::default()
+        })
+        .into()
+}

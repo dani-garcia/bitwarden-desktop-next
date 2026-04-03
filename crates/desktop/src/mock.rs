@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::state::{CipherCategory, CipherItem, UserId, UserSession};
+use crate::state::{CipherCategory, CipherItem, UnlockMethods, UserId, UserSession};
 
 pub fn mock_users() -> (HashMap<UserId, UserSession>, UserId) {
     let mut users = HashMap::new();
@@ -14,6 +14,11 @@ pub fn mock_users() -> (HashMap<UserId, UserSession>, UserId) {
             server_url: "bitwarden.com".into(),
             locked: true,
             vault_items: mock_vault_items_personal(),
+            unlock_methods: UnlockMethods {
+                master_password: true,
+                pin: false,
+                biometrics: true,
+            },
         },
     );
 
@@ -26,6 +31,11 @@ pub fn mock_users() -> (HashMap<UserId, UserSession>, UserId) {
             server_url: "vault.acmecorp.com".into(),
             locked: true,
             vault_items: mock_vault_items_work(),
+            unlock_methods: UnlockMethods {
+                master_password: true,
+                pin: true,
+                biometrics: false,
+            },
         },
     );
 

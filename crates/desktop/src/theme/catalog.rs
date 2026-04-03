@@ -156,6 +156,48 @@ impl widget::pane_grid::Catalog for AppTheme {
     }
 }
 
+// ── checkbox ───────────────────────────────────────────────────────────────
+
+impl widget::checkbox::Catalog for AppTheme {
+    type Class<'a> = widget::checkbox::StyleFn<'a, Self>;
+
+    fn default<'a>() -> Self::Class<'a> {
+        Box::new(|theme, status| {
+            let is_checked = matches!(
+                status,
+                widget::checkbox::Status::Active { is_checked: true }
+                    | widget::checkbox::Status::Hovered { is_checked: true }
+            );
+            widget::checkbox::Style {
+                background: Background::Color(if is_checked {
+                    theme.colors.accent
+                } else {
+                    Color::TRANSPARENT
+                }),
+                icon_color: Color::WHITE,
+                border: Border {
+                    color: if is_checked {
+                        theme.colors.accent
+                    } else {
+                        theme.colors.border
+                    },
+                    width: 1.5,
+                    radius: 4.0.into(),
+                },
+                text_color: Some(theme.colors.text_primary),
+            }
+        })
+    }
+
+    fn style(
+        &self,
+        class: &Self::Class<'_>,
+        status: widget::checkbox::Status,
+    ) -> widget::checkbox::Style {
+        class(self, status)
+    }
+}
+
 // ── svg ─────────────────────────────────────────────────────────────────────
 
 impl widget::svg::Catalog for AppTheme {

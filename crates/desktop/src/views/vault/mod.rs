@@ -43,6 +43,7 @@ pub enum PaneKind {
 pub enum VaultAction {
     SwitchUser(String),
     FocusSearch,
+    AddAccount,
 }
 
 pub struct VaultView {
@@ -141,6 +142,10 @@ impl VaultView {
                 AccountSwitcherMessage::SwitchUser(uid) => {
                     self.dropdown_open = false;
                     actions.push(VaultAction::SwitchUser(uid));
+                }
+                AccountSwitcherMessage::AddAccount => {
+                    self.dropdown_open = false;
+                    actions.push(VaultAction::AddAccount);
                 }
             },
             VaultMessage::NewItem => {}

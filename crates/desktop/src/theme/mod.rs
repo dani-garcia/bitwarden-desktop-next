@@ -18,6 +18,30 @@ pub struct AppTheme {
     mode: iced::theme::Mode,
 }
 
+/// User preference for which theme to use.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[expect(dead_code)] // Light/Dark used when settings UI is wired
+pub enum ThemePreference {
+    System,
+    Light,
+    Dark,
+}
+
+impl ThemePreference {
+    /// Resolve the preference to a concrete `AppTheme`.
+    /// For `System`, uses the given scheme from the OS (defaults to light if unavailable).
+    pub fn resolve(self, scheme: Result<system_theme::ThemeScheme, system_theme::error::Error>) -> AppTheme {
+        match self {
+            ThemePreference::Light => AppTheme::light(),
+            ThemePreference::Dark => AppTheme::dark(),
+            ThemePreference::System => match scheme {
+                Ok(system_theme::ThemeScheme::Dark) => AppTheme::dark(),
+                _ => AppTheme::light(),
+            },
+        }
+    }
+}
+
 impl AppTheme {
     pub fn dark() -> Self {
         Self {

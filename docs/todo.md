@@ -13,6 +13,13 @@
 - Account switcher dropdown: visual update to match 2025 Figma (Lock/Logout buttons, Options section)
 - SVG logo antialiasing — Iced's resvg rasterizer doesn't match browser quality; consider pre-rasterized PNG
 
+## Auth Flow
+
+- **Registration view** — "Create account" link on login email screen navigates here. Needs email, password, hint fields.
+- **Master password hint request** — "Get master password hint" link on login password screen. Sends hint request to server.
+- **Self-hosted server URL modal** — Server selector "Self-hosted" option should open a modal to input custom server URL.
+- **SSO login flow** — "Use single sign-on" button on login email screen. Needs SSO provider selection + browser redirect.
+
 ## Functionality
 
 - Wire copy buttons in detail pane to clipboard (arboard crate or iced clipboard API)

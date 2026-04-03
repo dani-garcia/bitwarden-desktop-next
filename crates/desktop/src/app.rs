@@ -1,12 +1,14 @@
-use iced::{Element, Subscription, theme::Base, time};
+use std::sync::Arc;
+
+use iced::{Element, Subscription, time};
 
 use crate::{
     components::account_switcher::AccountEntry,
     mock,
-    state::{AppState, CipherItem, Screen, UserSession},
-    theme::AppTheme,
+    state::{AppState, CipherItem, Screen, UnlockMethod, UserSession},
+    theme::{AppTheme, ThemePreference},
     views::{
-        login::{self, LoginMessage},
+        login::{self, AuthPage, LoginMessage},
         title_bar::{self, TitleBarAction},
         vault::{self, VaultMessage},
     },
@@ -21,10 +23,12 @@ pub enum Message {
     KeyPressed(iced::keyboard::Event),
     WindowOpened(iced::window::Id),
     GotRawId(u64),
+    SystemThemeChanged,
 }
 
 pub struct App {
     state: AppState,
+    pub theme_preference: ThemePreference,
     pub current_theme: AppTheme,
     login_view: login::LoginView,
     vault_view: vault::VaultView,
@@ -34,6 +38,8 @@ pub struct App {
     cached_email: String,
     cached_server: String,
     cached_accounts: Vec<AccountEntry>,
+    cached_unlock_alternatives: Vec<UnlockMethod>,
+    system_theme: Arc<system_theme::SystemTheme>,
     native_menu: Option<crate::menu::NativeMenuHandle>,
     menu_attached: bool,
     window_id: Option<iced::window::Id>,
@@ -43,13 +49,20 @@ impl App {
     pub fn new() -> (Self, iced::Task<Message>) {
         let (users, active_user) = mock::mock_users();
 
+        let system_theme = Arc::new(
+            system_theme::SystemTheme::new()
+                .expect("failed to initialize system theme observer"),
+        );
+        let initial_theme = ThemePreference::System.resolve(system_theme.get_scheme());
+
         let mut app = Self {
             state: AppState {
                 users,
                 active_user: Some(active_user),
                 screen: Screen::Login,
             },
-            current_theme: AppTheme::light(),
+            theme_preference: ThemePreference::System,
+            current_theme: initial_theme,
             login_view: login::LoginView::new(),
             vault_view: vault::VaultView::new(),
             title_bar: title_bar::TitleBarState::new(),
@@ -58,10 +71,18 @@ impl App {
             cached_email: String::new(),
             cached_server: String::new(),
             cached_accounts: Vec::new(),
+            cached_unlock_alternatives: Vec::new(),
+            system_theme,
             native_menu: None,
             menu_attached: false,
             window_id: None,
         };
+        // Set initial unlock method based on active user's preferred method
+        let preferred = app
+            .active_session()
+            .map(|s| s.unlock_methods.preferred())
+            .unwrap_or(UnlockMethod::MasterPassword);
+        app.login_view.auth_page = AuthPage::Unlock(preferred);
         app.refresh_cache();
 
         (app, iced::Task::none())
@@ -88,7 +109,13 @@ impl App {
             Subscription::none()
         };
 
-        Subscription::batch([window_sub, keyboard_sub, native_menu_sub])
+        let theme_sub = Subscription::run_with(
+            self.system_theme.clone(),
+            |st| st.subscribe(),
+        )
+        .map(|_| Message::SystemThemeChanged);
+
+        Subscription::batch([window_sub, keyboard_sub, native_menu_sub, theme_sub])
     }
 
     pub fn update(&mut self, message: Message) -> iced::Task<Message> {
@@ -98,7 +125,9 @@ impl App {
                 self.title_bar.dismiss_menu();
                 for action in self.login_view.update(msg) {
                     match action {
-                        login::LoginAction::Unlock => {
+                        login::LoginAction::Unlock
+                        | login::LoginAction::UnlockWithPin
+                        | login::LoginAction::UnlockWithBiometrics => {
                             if let Some(ref uid) = self.state.active_user
                                 && let Some(session) = self.state.users.get_mut(uid)
                             {
@@ -114,6 +143,15 @@ impl App {
                         }
                         login::LoginAction::SwitchUser(uid) => {
                             self.handle_user_switch(uid);
+                        }
+                        login::LoginAction::Login { email, password } => {
+                            // TODO: actual login via SDK
+                            let _ = (email, password);
+                        }
+                        login::LoginAction::NavigateToAddAccount => {
+                            self.login_view.auth_page = AuthPage::LoginEmail;
+                            self.login_view.email_input.clear();
+                            self.login_view.login_password_input.clear();
                         }
                     }
                 }
@@ -131,6 +169,12 @@ impl App {
                                 iced::widget::Id::new("vault-search"),
                             );
                         }
+                        vault::VaultAction::AddAccount => {
+                            self.state.screen = Screen::Login;
+                            self.login_view.auth_page = AuthPage::LoginEmail;
+                            self.login_view.email_input.clear();
+                            self.login_view.login_password_input.clear();
+                        }
                     }
                 }
                 if is_search {
@@ -140,7 +184,10 @@ impl App {
             }
             Message::TitleBar(msg) => {
                 match self.state.screen {
-                    Screen::Login => self.login_view.dropdown_open = false,
+                    Screen::Login => {
+                        self.login_view.dropdown_open = false;
+                        self.login_view.server_selector_open = false;
+                    }
                     Screen::Vault => self.vault_view.dropdown_open = false,
                 }
                 for action in self.title_bar.update(msg) {
@@ -201,6 +248,11 @@ impl App {
                     return self.handle_menu_action(action);
                 }
             }
+            Message::SystemThemeChanged => {
+                if self.theme_preference == ThemePreference::System {
+                    self.current_theme = self.theme_preference.resolve(self.system_theme.get_scheme());
+                }
+            }
         }
         self.refresh_cache();
         extra_task
@@ -211,12 +263,11 @@ impl App {
 
         let page: Element<'_, Message, AppTheme> = match self.state.screen {
             Screen::Login => login::view(
+                &self.login_view,
                 &self.cached_email,
                 &self.cached_server,
-                &self.login_view.password_input,
-                self.login_view.show_password,
                 &self.cached_accounts,
-                self.login_view.dropdown_open,
+                &self.cached_unlock_alternatives,
                 colors,
             )
             .map(Message::Login),
@@ -305,6 +356,17 @@ impl App {
             })
             .collect();
 
+        // Compute unlock alternatives for the current auth page
+        self.cached_unlock_alternatives =
+            if let AuthPage::Unlock(method) = self.login_view.auth_page {
+                active_session
+                    .as_ref()
+                    .map(|s| s.unlock_methods.alternatives(method))
+                    .unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+
         let vault_items = active_session
             .as_ref()
             .map(|s| s.vault_items.as_slice())
@@ -318,10 +380,17 @@ impl App {
 
     fn handle_user_switch(&mut self, uid: String) {
         self.state.active_user = Some(uid.clone());
-        let locked = self.state.users.get(&uid).map(|s| s.locked).unwrap_or(true);
+        let session = self.state.users.get(&uid);
+        let locked = session.map(|s| s.locked).unwrap_or(true);
         if locked {
             self.state.screen = Screen::Login;
+            let preferred = session
+                .map(|s| s.unlock_methods.preferred())
+                .unwrap_or(UnlockMethod::MasterPassword);
+            self.login_view.auth_page = AuthPage::Unlock(preferred);
             self.login_view.password_input.clear();
+            self.login_view.pin_input.clear();
+            self.login_view.show_password = false;
         } else {
             self.state.screen = Screen::Vault;
         }
@@ -339,7 +408,13 @@ impl App {
                     session.locked = true;
                 }
                 self.state.screen = Screen::Login;
+                let preferred = self
+                    .active_session()
+                    .map(|s| s.unlock_methods.preferred())
+                    .unwrap_or(UnlockMethod::MasterPassword);
+                self.login_view.auth_page = AuthPage::Unlock(preferred);
                 self.login_view.password_input.clear();
+                self.login_view.pin_input.clear();
                 self.login_view.show_password = false;
                 self.refresh_cache();
             }
@@ -374,12 +449,7 @@ impl App {
                 self.refresh_cache();
             }
             MenuAction::HideToTray | MenuAction::ToggleAlwaysOnTop => {}
-            MenuAction::About => {
-                self.current_theme = match self.current_theme.mode() {
-                    iced::theme::Mode::Dark => AppTheme::light(),
-                    _ => AppTheme::dark(),
-                };
-            }
+            MenuAction::About => {}
         }
         iced::Task::none()
     }

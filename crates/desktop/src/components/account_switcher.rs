@@ -9,6 +9,7 @@ use crate::{components::buttons, state::UserId, theme::{AppColors, AppTheme}};
 pub enum AccountSwitcherMessage {
     ToggleDropdown,
     SwitchUser(UserId),
+    AddAccount,
 }
 
 pub struct AccountEntry {
@@ -115,6 +116,7 @@ pub fn dropdown<'a>(
             colors.item_hover,
             0.0,
         )
+        .on_press(AccountSwitcherMessage::AddAccount)
         .padding([8, 12])
         .width(Fill)
         .into(),

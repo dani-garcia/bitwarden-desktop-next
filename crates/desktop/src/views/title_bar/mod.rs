@@ -152,10 +152,10 @@ pub fn view<'a>(
                 .padding([4, 10])
                 .style(move |theme: &AppTheme, status| {
                     let bg = if is_open {
-                        theme.colors.card_bg
+                        theme.colors.titlebar_btn_hover
                     } else {
                         match status {
-                            button::Status::Hovered => theme.colors.item_hover,
+                            button::Status::Hovered => theme.colors.titlebar_btn_hover,
                             _ => Color::TRANSPARENT,
                         }
                     };
