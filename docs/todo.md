@@ -4,35 +4,34 @@
 
 - **Tray icon** — Use `tray-icon` crate (sister to `muda`, same raw window handle approach). Should show Bitwarden shield icon, right-click context menu with Lock/Quit. Iced PR https://github.com/iced-rs/iced/pull/3021 adds native tray support but is still **open** (targeting 1.0), so use `tray-icon` crate directly for now.
 - **Executable icon** — Embed `.ico` in the Windows executable via `winresource` build script. Use the Bitwarden shield icon. Also set the window icon via iced's `window::Settings::icon`.
-- **Sidebar expand/collapse animation** — Iced 0.14 has no built-in layout transitions. Would require a `Subscription` tick + interpolated width state (~50 lines). Not trivial but not huge.
-
-## Developer Experience
-
-- **Hot reloading** — Iced PR https://github.com/iced-rs/iced/pull/3000 is **merged** into master (June 2025). Uses `hot` feature flag + `subsecond`/`cargo-hot`. Not in iced 0.14 release yet — requires iced from git or waiting for 0.15/1.0. Worth switching to when available.
+- **Default text size** — Review and update per https://github.com/iced-rs/iced/issues/503 (DPI/scaling). Audit text sizes across all views.
+- **Light theme colors** — Current light palette is a placeholder (naive inversion). Pick real colors from the Bitwarden app's light theme.
 
 ## UI Polish
 
 - Sidebar: indented tree hierarchy (Vault > All vaults > My vault)
+- Sidebar expand/collapse animation (Iced 0.14 has no built-in layout transitions; needs `Subscription` tick + interpolated width)
 - TOTP circular timer in detail pane (currently placeholder text)
 - Account switcher dropdown: visual update to match 2025 Figma (Lock/Logout buttons, Options section)
-- Wire native menu items to actual app actions (lock, quit, etc.)
-- Light mode / theme system (refactor `theme.rs` from constants to a Theme struct)
-- SVG logo antialiasing — Iced's resvg rasterizer doesn't match browser quality; consider pre-rasterized PNG or splitting into SVG shield + text widget
-
-## Refactoring
-
-- **Theme system** — Refactor `theme.rs` from module-level `const` colors to a `Theme` struct with variants (Dark, Light). All widgets should pull colors from the active theme rather than importing constants directly. This is a prerequisite for light mode.
-- **Color tokens** — Define semantic color roles (e.g. `bg_primary`, `bg_surface`, `fg_brand`, `border_default`) rather than using raw hex everywhere. This makes theme switching and consistency easier. Note: several constants already share values (HEADER_BG == BORDER, CARD_BG == SIDEBAR_SELECTED) — semantic tokens would make this clearer.
-
-## SDK Preparation
-
-- **Structured mock layer** — Replace flat `mock.rs` with a mock that mirrors the real SDK's `PasswordManagerClient` structure (e.g. `client.vault().ciphers().list()`, `client.unlock().unlock_with_password()`). This would make the eventual SDK swap a thin adapter change rather than a rewrite of the data flow. The mock should define traits/interfaces matching the SDK surface area so views and state don't depend on concrete types.
+- SVG logo antialiasing — Iced's resvg rasterizer doesn't match browser quality; consider pre-rasterized PNG
 
 ## Functionality
 
 - Wire copy buttons in detail pane to clipboard (arboard crate or iced clipboard API)
 - Wire edit/delete buttons in detail pane (currently stubs)
-- Wire menu "Quit" to actually close the app
-- Wire menu "Lock" / "Lock All" to lock user sessions
 - Handle tray icon click to show/hide window
 - "Unlock with Windows Hello" button (future, needs keyring/biometric integration)
+
+## Testing
+
+- **Unit tests for pure logic** — `VaultView::filtered_items()`, `Shortcut::matches()`, `EnabledWhen::check()`, view `update()` state machines (message in → actions out). Standard `#[test]`, no framework needed.
+- **Integration tests with `iced_test`** — headless simulator for click/type/find workflows. `iced_aw` 0.13 has extensive examples in `tests/` to reference. Add `iced_test = "0.14"` as dev-dependency.
+- **Snapshot tests** — optional, for catching visual regressions in theme/layout changes.
+
+## Developer Experience
+
+- **Hot reloading** — Iced PR https://github.com/iced-rs/iced/pull/3000 is **merged** into master (June 2025). Uses `hot` feature flag + `subsecond`/`cargo-hot`. Not in iced 0.14 release yet — requires iced from git or waiting for 0.15/1.0.
+
+## SDK Preparation
+
+- **Structured mock layer** — Replace flat `mock.rs` with a mock that mirrors the real SDK's `PasswordManagerClient` structure. Define traits/interfaces matching the SDK surface area so views don't depend on concrete types.
