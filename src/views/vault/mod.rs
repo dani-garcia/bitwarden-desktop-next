@@ -170,13 +170,13 @@ fn list_content<'a>(
     let dd_panel = account_switcher::dropdown(active_email, accounts, colors)
         .map(VaultMessage::AccountSwitcher);
     let avatar: Element<'a, VaultMessage, AppTheme> =
-        iced_aw::DropDown::new(avatar_trigger, dd_panel, dropdown_open)
+        crate::components::drop_down::DropDown::new(avatar_trigger, dd_panel, dropdown_open)
             .on_dismiss(VaultMessage::AccountSwitcher(
                 AccountSwitcherMessage::ToggleDropdown,
             ))
-            .alignment(iced_aw::drop_down::Alignment::BottomEnd)
+            .alignment(crate::components::drop_down::Alignment::BelowRight)
             .width(240.0)
-            .offset(0.0)
+            .offset(4.0)
             .into();
 
     let content_header = container(

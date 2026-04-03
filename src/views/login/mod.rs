@@ -204,13 +204,13 @@ pub fn view<'a>(
     let dd_panel =
         account_switcher::dropdown(email, accounts, colors).map(LoginMessage::AccountSwitcher);
     let menu_dot_dropdown: Element<'a, LoginMessage, AppTheme> =
-        iced_aw::DropDown::new(menu_dot_trigger, dd_panel, dropdown_open)
+        crate::components::drop_down::DropDown::new(menu_dot_trigger, dd_panel, dropdown_open)
             .on_dismiss(LoginMessage::AccountSwitcher(
                 AccountSwitcherMessage::ToggleDropdown,
             ))
-            .alignment(iced_aw::drop_down::Alignment::BottomEnd)
+            .alignment(crate::components::drop_down::Alignment::BelowRight)
             .width(240.0)
-            .offset(0.0)
+            .offset(4.0)
             .into();
 
     // Top row: logo left, ... button right

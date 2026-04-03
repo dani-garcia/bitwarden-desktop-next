@@ -85,9 +85,9 @@ pub fn view<'a>(
             let panel =
                 dropdown::menu_panel(entries, i, open_submenu, menu_state, colors);
             let dd: Element<'_, TitleBarMessage, AppTheme> =
-                iced_aw::DropDown::new(btn, panel, is_open)
+                crate::components::drop_down::DropDown::new(btn, panel, is_open)
                     .on_dismiss(TitleBarMessage::DismissMenu)
-                    .alignment(iced_aw::drop_down::Alignment::Bottom)
+                    .alignment(crate::components::drop_down::Alignment::BelowLeft)
                     .width(iced::Length::Shrink)
                     .offset(0.0)
                     .into();

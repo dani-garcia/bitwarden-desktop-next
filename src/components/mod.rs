@@ -1,5 +1,6 @@
 pub mod account_switcher;
 pub mod buttons;
+pub mod drop_down;
 pub mod icons;
 
 use iced::{

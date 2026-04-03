@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-iced = { version = "0.14", features = ["tokio", "svg"] }
-iced_aw = { version = "0.13", features = ["drop_down"] }
+iced = { version = "0.14", features = ["tokio", "svg", "advanced"] }
+iced_aw = { version = "0.13", default-features = false }
 muda = "0.17.1"
 
 [profile.release]
