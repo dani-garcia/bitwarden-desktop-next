@@ -1,7 +1,7 @@
 use iced::{
-    Alignment, Background, Border, Color, Element, Fill, Length, Padding,
+    Alignment, Background, Border, Color, Element, Fill, Length, Padding, Shadow,
     theme::Base,
-    widget::{Space, column, container, row, stack, svg, text, text_input},
+    widget::{Space, button, column, container, row, stack, svg, text, text_input},
 };
 
 use crate::{
@@ -246,21 +246,33 @@ pub fn view<'a>(
     });
 
     // Round "..." menu button with account switcher dropdown
-    let menu_dot_trigger = buttons::ghost(
-        container(icons::THREE_DOTS.render(16.0, colors.accent))
+    let menu_dot_trigger = button(
+        container(icons::THREE_DOTS.render(16.0, Color::WHITE))
             .width(36)
             .height(36)
             .align_x(Alignment::Center)
             .align_y(Alignment::Center),
-        false,
-        Color::TRANSPARENT,
-        colors.item_hover,
-        18.0,
     )
     .on_press(LoginMessage::AccountSwitcher(
         AccountSwitcherMessage::ToggleDropdown,
     ))
-    .padding(0);
+    .padding(0)
+    .style(|theme: &AppTheme, status| {
+        let bg = match status {
+            button::Status::Hovered | button::Status::Pressed => theme.colors.button_primary_hover,
+            _ => theme.colors.button_primary,
+        };
+        button::Style {
+            background: Some(Background::Color(bg)),
+            text_color: Color::WHITE,
+            border: Border {
+                radius: 18.0.into(),
+                ..Default::default()
+            },
+            shadow: Shadow::default(),
+            snap: false,
+        }
+    });
 
     let dd_panel =
         account_switcher::dropdown(email, accounts, colors).map(LoginMessage::AccountSwitcher);
