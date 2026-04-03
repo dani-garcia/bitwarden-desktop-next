@@ -1,5 +1,6 @@
 use iced::{
     Alignment, Background, Border, Color, Element, Fill, Length, Padding,
+    theme::Base,
     widget::{Space, column, container, row, stack, svg, text, text_input},
 };
 
@@ -83,7 +84,14 @@ pub fn view<'a>(
 ) -> Element<'a, LoginMessage, AppTheme> {
     let logo = svg(svg::Handle::from_path("assets/logo-white.svg"))
         .width(209)
-        .height(35);
+        .height(35)
+        .style(|theme: &AppTheme, _status| svg::Style {
+            color: if theme.mode() == iced::theme::Mode::Light {
+                Some(theme.colors.button_primary)
+            } else {
+                None
+            },
+        });
 
     // Lock icon SVG
     let lock_icon = svg(svg::Handle::from_path("assets/lock-icon.svg"))

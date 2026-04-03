@@ -55,14 +55,14 @@ pub fn chrome_button<'a, M: Clone + 'a>(
         .width(WINDOW_BTN_WIDTH)
         .height(TITLE_BAR_HEIGHT)
         .padding(0)
-        .style(move |theme: &AppTheme, status| {
+        .style(move |_theme: &AppTheme, status| {
             let bg = match status {
                 button::Status::Hovered | button::Status::Pressed => hover_color,
                 _ => Color::TRANSPARENT,
             };
             button::Style {
                 background: Some(Background::Color(bg)),
-                text_color: theme.colors.text_primary,
+                text_color: Color::WHITE,
                 border: Border::default(),
                 shadow: Shadow::default(),
                 snap: false,

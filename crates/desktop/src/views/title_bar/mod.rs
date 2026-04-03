@@ -142,14 +142,12 @@ pub fn view<'a>(
     menu_state: &menu::MenuState,
     colors: &AppColors,
 ) -> Element<'a, TitleBarMessage, AppTheme> {
-    let text_primary = colors.text_primary;
-
     let menu_items: Vec<Element<'_, TitleBarMessage, AppTheme>> = menu::MENUS
         .iter()
         .enumerate()
         .map(|(i, (label, entries))| {
             let is_open = open_menu == Some(i);
-            let btn = button(text(*label).size(14).color(text_primary))
+            let btn = button(text(*label).size(14).color(Color::WHITE))
                 .on_press(TitleBarMessage::TopLevelClicked(i))
                 .padding([4, 10])
                 .style(move |theme: &AppTheme, status| {
@@ -163,7 +161,7 @@ pub fn view<'a>(
                     };
                     button::Style {
                         background: Some(Background::Color(bg)),
-                        text_color: theme.colors.text_primary,
+                        text_color: Color::WHITE,
                         border: Border::default(),
                         shadow: Shadow::default(),
                         snap: false,
