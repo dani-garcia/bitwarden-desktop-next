@@ -1,4 +1,4 @@
-use iced::{Element, Subscription, theme::Base};
+use iced::{Element, Subscription, theme::Base, time};
 
 use crate::{
     components::account_switcher::AccountEntry,
@@ -17,6 +17,7 @@ pub enum Message {
     Login(LoginMessage),
     Vault(VaultMessage),
     TitleBar(title_bar::TitleBarMessage),
+    PollNativeMenu,
     KeyPressed(iced::keyboard::Event),
     WindowOpened(iced::window::Id),
     GotRawId(u64),
@@ -33,6 +34,7 @@ pub struct App {
     cached_email: String,
     cached_server: String,
     cached_accounts: Vec<AccountEntry>,
+    native_menu: Option<crate::menu::NativeMenuHandle>,
     menu_attached: bool,
     window_id: Option<iced::window::Id>,
 }
@@ -56,6 +58,7 @@ impl App {
             cached_email: String::new(),
             cached_server: String::new(),
             cached_accounts: Vec::new(),
+            native_menu: None,
             menu_attached: false,
             window_id: None,
         };
@@ -79,7 +82,13 @@ impl App {
 
         let keyboard_sub = iced::keyboard::listen().map(Message::KeyPressed);
 
-        Subscription::batch([window_sub, keyboard_sub])
+        let native_menu_sub = if self.native_menu.is_some() {
+            time::every(std::time::Duration::from_millis(16)).map(|_| Message::PollNativeMenu)
+        } else {
+            Subscription::none()
+        };
+
+        Subscription::batch([window_sub, keyboard_sub, native_menu_sub])
     }
 
     pub fn update(&mut self, message: Message) -> iced::Task<Message> {
@@ -182,8 +191,15 @@ impl App {
                 return iced::window::raw_id::<Message>(id).map(Message::GotRawId);
             }
             Message::GotRawId(raw_id) => {
-                crate::menu::attach_menu(raw_id);
+                self.native_menu = crate::menu::attach_menu(raw_id);
                 return iced::Task::none();
+            }
+            Message::PollNativeMenu => {
+                if let Some(ref handle) = self.native_menu
+                    && let Some(action) = crate::menu::poll_native_event(handle)
+                {
+                    return self.handle_menu_action(action);
+                }
             }
         }
         self.refresh_cache();
@@ -227,7 +243,7 @@ impl App {
             .map(Message::Vault),
         };
 
-        if crate::menu::should_draw_title_bar() {
+        if crate::menu::should_use_native_title_bar() {
             let menu_state = self.menu_state();
             let tb = title_bar::view(
                 self.title_bar.open_menu,
@@ -293,6 +309,10 @@ impl App {
             .map(|s| s.vault_items.as_slice())
             .unwrap_or(&[]);
         self.vault_view.refresh(vault_items);
+
+        if let Some(ref handle) = self.native_menu {
+            crate::menu::sync_native_enabled(handle, &self.menu_state());
+        }
     }
 
     fn handle_user_switch(&mut self, uid: String) {

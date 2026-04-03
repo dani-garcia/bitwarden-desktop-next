@@ -34,7 +34,7 @@ fn main() -> iced::Result {
         .window(window::Settings {
             size: Size::new(1024.0, 800.0),
             min_size: Some(Size::new(800.0, 750.0)),
-            decorations: !menu::should_draw_title_bar(),
+            decorations: menu::should_use_native_title_bar(),
             platform_specific: PlatformSpecific {
                 undecorated_shadow: true,
                 corner_preference: CornerPreference::Round,

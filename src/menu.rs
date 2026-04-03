@@ -74,6 +74,11 @@ impl Shortcut {
         s
     }
 
+    /// Convert to a muda `Accelerator` for native menu display.
+    pub fn to_accelerator(self) -> Option<muda::accelerator::Accelerator> {
+        self.display().parse().ok()
+    }
+
     /// Returns true if an iced keyboard event matches this shortcut.
     pub fn matches(&self, key: &iced::keyboard::Key, modifiers: iced::keyboard::Modifiers) -> bool {
         if modifiers.command() != self.ctrl_cmd {
@@ -433,56 +438,96 @@ fn find_in_entries(
 }
 
 // ---------------------------------------------------------------------------
-// Native menu (macOS only)
+// Native menu
 // ---------------------------------------------------------------------------
 
-pub fn attach_menu(raw_id: u64) {
-    if !should_draw_title_bar() {
-        let menu = build_menu();
-        #[cfg(target_os = "macos")]
-        {
-            menu.init_for_nsapp();
-        }
-        #[cfg(not(target_os = "macos"))]
-        {
-            unsafe { let _ = menu.init_for_hwnd(raw_id as isize); }
-        }
-        std::mem::forget(menu);
+use std::collections::HashMap;
+
+/// Holds the muda menu state: action mapping for event dispatch,
+/// and item handles for enabled-state sync.
+pub struct NativeMenuHandle {
+    pub actions: HashMap<muda::MenuId, MenuAction>,
+    pub items: Vec<(MudaMenuItem, EnabledWhen)>,
+}
+
+/// Try to receive a native menu event and resolve it to a MenuAction.
+pub fn poll_native_event(handle: &NativeMenuHandle) -> Option<MenuAction> {
+    if let Ok(event) = muda::MenuEvent::receiver().try_recv() {
+        handle.actions.get(&event.id).copied()
+    } else {
+        None
     }
 }
 
-pub fn should_draw_title_bar() -> bool {
-    if std::env::var("NATIVE_MENU").is_ok() {
-        return false;
+/// Sync enabled states of native menu items to match current app state.
+pub fn sync_native_enabled(handle: &NativeMenuHandle, state: &MenuState) {
+    for (item, when) in &handle.items {
+        item.set_enabled(when.check(state));
     }
-    !cfg!(target_os = "macos")
 }
 
-fn build_menu() -> Menu {
+/// Build and attach the native menu. Returns a handle for event dispatch
+/// and state sync, or None if native menu is not enabled.
+pub fn attach_menu(raw_id: u64) -> Option<NativeMenuHandle> {
+    if !should_use_native_title_bar() {
+        return None;
+    }
+
+    let mut actions = HashMap::new();
+    let mut items = Vec::new();
+
     let menu = Menu::new();
     for (label, entries) in MENUS {
         let submenu = Submenu::new(format!("&{label}"), true);
-        append_entries_to_submenu(&submenu, entries);
+        append_entries_to_submenu(&submenu, entries, &mut actions, &mut items);
         let _ = menu.append(&submenu);
     }
-    menu
+
+    #[cfg(target_os = "macos")]
+    {
+        menu.init_for_nsapp();
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        unsafe {
+            let _ = menu.init_for_hwnd(raw_id as isize);
+        }
+    }
+    std::mem::forget(menu);
+
+    Some(NativeMenuHandle { actions, items })
 }
 
-fn append_entries_to_submenu(submenu: &Submenu, entries: &[MenuEntry]) {
-    let items: Vec<Box<dyn muda::IsMenuItem>> = entries
+pub fn should_use_native_title_bar() -> bool {
+    cfg!(target_os = "macos") || std::env::var("DEV_BOTH_MENUS").is_ok()
+}
+
+fn append_entries_to_submenu(
+    submenu: &Submenu,
+    entries: &[MenuEntry],
+    actions: &mut HashMap<muda::MenuId, MenuAction>,
+    items: &mut Vec<(MudaMenuItem, EnabledWhen)>,
+) {
+    let menu_items: Vec<Box<dyn muda::IsMenuItem>> = entries
         .iter()
         .map(|entry| -> Box<dyn muda::IsMenuItem> {
             if entry.is_separator() {
                 Box::new(PredefinedMenuItem::separator())
             } else if !entry.children.is_empty() {
                 let sub = Submenu::new(entry.label, true);
-                append_entries_to_submenu(&sub, entry.children);
+                append_entries_to_submenu(&sub, entry.children, actions, items);
                 Box::new(sub)
             } else {
-                Box::new(MudaMenuItem::new(entry.label, true, None))
+                let accel = entry.shortcut.and_then(|s| s.to_accelerator());
+                let item = MudaMenuItem::new(entry.label, true, accel);
+                if let Some(action) = entry.action {
+                    actions.insert(item.id().clone(), action);
+                }
+                items.push((item.clone(), entry.enabled));
+                Box::new(item)
             }
         })
         .collect();
-    let refs: Vec<&dyn muda::IsMenuItem> = items.iter().map(|b| b.as_ref()).collect();
+    let refs: Vec<&dyn muda::IsMenuItem> = menu_items.iter().map(|b| b.as_ref()).collect();
     let _ = submenu.append_items(&refs);
 }
