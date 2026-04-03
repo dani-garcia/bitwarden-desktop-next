@@ -1,14 +1,9 @@
-[package]
-name = "bitwarden-desktop-native"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-iced = { version = "0.14", features = ["tokio", "svg", "advanced"] }
-iced_aw = { version = "0.13", default-features = false }
-muda = "0.17.1"
+[workspace]
+members = ["crates/*", "bitwarden_license/*", "tools/*"]
+default-members = ["crates/*", "bitwarden_license/*"]
+resolver = "3"
 
 [profile.release]
-lto = true
+lto = "thin"
 codegen-units = 1
-strip = true
+# strip = true

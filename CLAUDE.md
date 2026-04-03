@@ -1,4 +1,4 @@
-# bitwarden-desktop-native
+# bitwarden-desktop-next
 
 Lightweight Rust alternative to the Bitwarden desktop app using Iced 0.14 GUI framework.
 

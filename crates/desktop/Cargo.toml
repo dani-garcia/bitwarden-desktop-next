@@ -1,0 +1,11 @@
+[package]
+name = "bitwarden-desktop-next"
+version = "0.1.0"
+edition = "2024"
+license-file = "LICENSE.txt"
+
+[dependencies]
+iced = { version = "0.14", features = ["tokio", "svg", "advanced", "image"] }
+iced_aw = { version = "0.13", default-features = false }
+image = "0.25"
+muda = "0.17.1"

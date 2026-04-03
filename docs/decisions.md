@@ -8,9 +8,9 @@
 
 **Rationale**: Pure Rust, wgpu rendering, no webview, Elm architecture ensures repaints only on state change, ~25k GitHub stars, actively maintained, cross-platform.
 
-## Crate Name: bitwarden-desktop-native
+## Crate Name: bitwarden-desktop-next
 
-**Decision**: Named `bitwarden-desktop-native` to avoid conflict with existing "bitwarden-lite" project.
+**Decision**: Named `bitwarden-desktop-next` to avoid conflict with existing "bitwarden-lite" project.
 
 ## UI Only (No Business Logic)
 

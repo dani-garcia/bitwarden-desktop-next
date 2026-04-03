@@ -2,7 +2,7 @@
 
 ## Overview
 
-**bitwarden-desktop-native** is a lightweight Rust alternative to the official Bitwarden desktop app (Electron/Angular). It uses the **Iced 0.14** GUI framework with an Elm-style architecture.
+**bitwarden-desktop-next** is a lightweight Rust alternative to the official Bitwarden desktop app (Electron/Angular). It uses the **Iced 0.14** GUI framework with an Elm-style architecture.
 
 ## Tech Stack
 
