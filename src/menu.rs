@@ -485,17 +485,27 @@ pub fn attach_menu(raw_id: u64) -> Option<NativeMenuHandle> {
 
     #[cfg(target_os = "macos")]
     {
+        let _ = raw_id;
         menu.init_for_nsapp();
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "windows")]
     {
         unsafe {
             let _ = menu.init_for_hwnd(raw_id as isize);
         }
     }
+    #[cfg(target_os = "linux")]
+    {
+        panic!("Native menu is not supported on Linux");
+    }
     std::mem::forget(menu);
 
     Some(NativeMenuHandle { actions, items })
+}
+
+
+pub fn should_use_custom_menu_bar() -> bool {
+    cfg!(not(target_os = "macos")) || std::env::var("DEV_BOTH_MENUS").is_ok()
 }
 
 pub fn should_use_native_title_bar() -> bool {

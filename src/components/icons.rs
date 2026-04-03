@@ -37,7 +37,7 @@ impl Icon {
     }
 
     /// Raw codepoint — prefer `render()` or `input_icon()` in public APIs.
-    #[expect(dead_code)] // used by window_chrome on non-Windows platforms
+    #[allow(dead_code)] // used by window_chrome on non-Windows platforms
     pub(crate) const fn char(self) -> char {
         self.0
     }

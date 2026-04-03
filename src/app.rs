@@ -243,7 +243,7 @@ impl App {
             .map(Message::Vault),
         };
 
-        if crate::menu::should_use_native_title_bar() {
+        if crate::menu::should_use_custom_menu_bar() {
             let menu_state = self.menu_state();
             let tb = title_bar::view(
                 self.title_bar.open_menu,
@@ -260,7 +260,8 @@ impl App {
                 Message::TitleBar(title_bar::TitleBarMessage::ResizeEdge(dir))
             })
         } else {
-            page
+            let tb = title_bar::view_empty().map(Message::TitleBar);
+            iced::widget::column![tb, page].height(iced::Fill).into()
         }
     }
 

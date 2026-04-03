@@ -121,6 +121,18 @@ impl TitleBarState {
 /// Wrap content with invisible resize handles on all edges.
 pub use self::window_chrome::resize_wrapper;
 
+/// Draw a minimal title bar with no buttons or drag area (used on macOS).
+pub fn view_empty<'a>() -> Element<'a, TitleBarMessage, AppTheme> {
+    container(iced::widget::Space::new())
+        .width(Fill)
+        .height(TITLE_BAR_HEIGHT)
+        .style(|theme: &AppTheme| container::Style {
+            background: Some(Background::Color(theme.colors.header_bg)),
+            ..Default::default()
+        })
+        .into()
+}
+
 /// Draw the title bar: menu labels on the left, window buttons on the right.
 /// Each menu label wraps a `DropDown` that shows its panel via iced's overlay system.
 pub fn view<'a>(
