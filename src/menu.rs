@@ -1,4 +1,3 @@
-#[cfg(target_os = "macos")]
 use muda::{Menu, MenuItem as MudaMenuItem, PredefinedMenuItem, Submenu};
 
 // ---------------------------------------------------------------------------
@@ -437,32 +436,38 @@ fn find_in_entries(
 // Native menu (macOS only)
 // ---------------------------------------------------------------------------
 
-#[cfg(target_os = "macos")]
-pub fn attach_menu(_raw_id: u64) {
-    let menu = build_menu();
-    menu.init_for_nsapp();
-    std::mem::forget(menu);
+pub fn attach_menu(raw_id: u64) {
+    if !should_draw_title_bar() {
+        let menu = build_menu();
+        #[cfg(target_os = "macos")]
+        {
+            menu.init_for_nsapp();
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            unsafe { let _ = menu.init_for_hwnd(raw_id as isize); }
+        }
+        std::mem::forget(menu);
+    }
 }
 
-#[cfg(not(target_os = "macos"))]
-pub fn attach_menu(_raw_id: u64) {}
-
-pub const fn should_draw_title_bar() -> bool {
+pub fn should_draw_title_bar() -> bool {
+    if std::env::var("NATIVE_MENU").is_ok() {
+        return false;
+    }
     !cfg!(target_os = "macos")
 }
 
-#[cfg(target_os = "macos")]
 fn build_menu() -> Menu {
     let menu = Menu::new();
     for (label, entries) in MENUS {
-        let submenu = Submenu::new(&format!("&{label}"), true);
+        let submenu = Submenu::new(format!("&{label}"), true);
         append_entries_to_submenu(&submenu, entries);
         let _ = menu.append(&submenu);
     }
     menu
 }
 
-#[cfg(target_os = "macos")]
 fn append_entries_to_submenu(submenu: &Submenu, entries: &[MenuEntry]) {
     let items: Vec<Box<dyn muda::IsMenuItem>> = entries
         .iter()

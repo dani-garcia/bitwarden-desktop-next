@@ -348,7 +348,7 @@ fn list_content<'a>(
     .padding([16, 24])
     .width(Fill);
 
-    let search = search_bar::view(search_query, colors).map(VaultMessage::Search);
+    let search = search_bar::view(search_query).map(VaultMessage::Search);
     let search_row = container(search)
         .padding(Padding {
             top: 0.0,

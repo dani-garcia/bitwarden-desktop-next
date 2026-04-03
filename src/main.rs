@@ -1,33 +1,43 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app;
-pub mod components;
+mod components;
 mod menu;
 mod mock;
 mod state;
-pub mod theme;
+mod theme;
 mod views;
 
-use app::App;
+use iced::{
+    Font, Size,
+    font::{Family, Weight},
+    window::{
+        self,
+        settings::platform::{CornerPreference, PlatformSpecific},
+    },
+};
+
+use crate::{app::App, components::icons};
 
 fn main() -> iced::Result {
     iced::application(App::new, App::update, App::view)
         .subscription(App::subscription)
         .title("Bitwarden [Next]")
-        .font(include_bytes!("../assets/InterVariable.ttf").as_slice())
-        .font(components::icons::FONT_BYTES)
-        .font(components::icons::BWI_FONT_BYTES)
-        .default_font(iced::Font {
-            family: iced::font::Family::Name("Inter"),
-            weight: iced::font::Weight::Normal,
-            ..iced::Font::DEFAULT
+        .font(include_bytes!("../assets/InterVariable.ttf"))
+        .font(icons::FONT_BYTES)
+        .font(icons::BWI_FONT_BYTES)
+        .default_font(Font {
+            family: Family::Name("Inter"),
+            weight: Weight::Normal,
+            ..Font::DEFAULT
         })
-        .window(iced::window::Settings {
-            size: iced::Size::new(1024.0, 800.0),
-            min_size: Some(iced::Size::new(800.0, 750.0)),
-            decorations: cfg!(target_os = "macos"),
-            platform_specific: iced::window::settings::platform::PlatformSpecific {
+        .window(window::Settings {
+            size: Size::new(1024.0, 800.0),
+            min_size: Some(Size::new(800.0, 750.0)),
+            decorations: !menu::should_draw_title_bar(),
+            platform_specific: PlatformSpecific {
                 undecorated_shadow: true,
+                corner_preference: CornerPreference::Round,
                 ..Default::default()
             },
             ..Default::default()

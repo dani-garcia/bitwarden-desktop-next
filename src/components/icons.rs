@@ -1,4 +1,9 @@
-use iced::{Element, Font, widget::text};
+#![allow(unused)]
+
+use iced::{
+    Element, Font,
+    widget::{text, text_input},
+};
 
 /// Bootstrap Icons font, loaded in main.rs via `.font()`
 pub const FONT: Font = Font::with_name("bootstrap-icons");
@@ -20,8 +25,20 @@ impl Icon {
         text(self.0).font(FONT).size(size).color(color).into()
     }
 
-    /// Get the raw Unicode codepoint character.
-    pub const fn char(self) -> char {
+    /// Build a `text_input::Icon` for use with `TextInput::icon()`.
+    pub fn input_icon(self, size: f32, side: text_input::Side) -> text_input::Icon<Font> {
+        text_input::Icon {
+            font: FONT,
+            code_point: self.0,
+            size: Some(size.into()),
+            spacing: 8.0,
+            side,
+        }
+    }
+
+    /// Raw codepoint — prefer `render()` or `input_icon()` in public APIs.
+    #[expect(dead_code)] // used by window_chrome on non-Windows platforms
+    pub(crate) const fn char(self) -> char {
         self.0
     }
 }
