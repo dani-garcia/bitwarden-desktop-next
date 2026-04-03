@@ -1,20 +1,25 @@
+pub mod widgets;
+
 use iced::{
-    Alignment, Background, Border, Element, Fill, Font, Length, Padding, Shadow,
-    widget::{Space, button, column, container, pane_grid, row, stack, text},
+    Alignment, Background, Border, Element, Fill, Font, Padding,
+    widget::{Space, column, container, pane_grid, row, text},
 };
 
 use crate::{
     app::PaneKind,
-    icons,
-    state::{CipherItem, NavSection, SidebarFilter, SidebarMode},
-    theme,
-    widgets::{
+    components::{
         account_switcher::{self, AccountEntry, AccountSwitcherMessage},
-        detail_pane::{self, DetailPaneMessage},
-        item_list::{self, ItemListMessage},
-        search_bar::{self, SearchMessage},
-        sidebar::{self, SidebarMessage},
+        buttons, icons,
     },
+    state::{CipherItem, NavSection, SidebarFilter, SidebarMode},
+    theme::{AppColors, AppTheme},
+};
+
+use self::widgets::{
+    detail_pane::{self, DetailPaneMessage},
+    item_list::{self, ItemListMessage},
+    search_bar::{self, SearchMessage},
+    sidebar::{self, SidebarMessage},
 };
 
 #[derive(Debug, Clone)]
@@ -49,7 +54,8 @@ pub fn view<'a>(
     pane_state: &'a pane_grid::State<PaneKind>,
     _list_pane: pane_grid::Pane,
     _detail_pane: pane_grid::Pane,
-) -> Element<'a, VaultMessage> {
+    colors: &'a AppColors,
+) -> Element<'a, VaultMessage, AppTheme> {
     // --- Sidebar ---
     let sidebar = sidebar::view(
         sidebar_mode,
@@ -57,21 +63,22 @@ pub fn view<'a>(
         active_filter,
         vault_tree_open,
         send_tree_open,
+        colors,
     )
     .map(VaultMessage::Sidebar);
 
     // --- Content area: PaneGrid when detail open, plain list otherwise ---
     let selected_cipher = selected_id.and_then(|id| all_items.iter().find(|i| i.id == id));
 
-    let content_area_inner: Element<'a, VaultMessage> = if selected_cipher.is_some() {
+    let content_area_inner: Element<'a, VaultMessage, AppTheme> = if selected_cipher.is_some() {
         pane_grid::PaneGrid::new(pane_state, |_pane, kind, _is_maximized| match kind {
             PaneKind::List => {
-                let content = list_content(active_email, items, selected_item, search_query);
+                let content = list_content(active_email, items, selected_item, search_query, accounts, dropdown_open, colors);
                 pane_grid::Content::new(content)
             }
             PaneKind::Detail => {
                 if let Some(item) = selected_cipher {
-                    let detail = detail_pane::view(item).map(|msg| match msg {
+                    let detail = detail_pane::view(item, colors).map(|msg| match msg {
                         DetailPaneMessage::Close => VaultMessage::CloseDetailPane,
                         other => VaultMessage::DetailPane(other),
                     });
@@ -86,14 +93,14 @@ pub fn view<'a>(
         .min_size(250)
         .into()
     } else {
-        list_content(active_email, items, selected_item, search_query)
+        list_content(active_email, items, selected_item, search_query, accounts, dropdown_open, colors)
     };
 
     let content_area = container(content_area_inner)
         .width(Fill)
         .height(Fill)
-        .style(|_theme| container::Style {
-            background: Some(Background::Color(theme::BACKGROUND)),
+        .style(|theme: &AppTheme| container::Style {
+            background: Some(Background::Color(theme.colors.background)),
             border: Border {
                 radius: iced::border::Radius {
                     top_left: 10.0,
@@ -109,32 +116,16 @@ pub fn view<'a>(
     let main_row = container(row![sidebar, content_area].height(Fill))
         .width(Fill)
         .height(Fill)
-        .style(|_theme| container::Style {
-            background: Some(Background::Color(theme::HEADER_BG)),
+        .style(|theme: &AppTheme| container::Style {
+            background: Some(Background::Color(theme.colors.header_bg)),
             ..Default::default()
         });
 
-    // --- Account switcher dropdown overlay ---
-    let dropdown_layer: Element<'a, VaultMessage> = if dropdown_open {
-        let dd =
-            account_switcher::dropdown(active_email, accounts).map(VaultMessage::AccountSwitcher);
-        column![
-            Space::new().height(Length::Fixed(60.0)),
-            container(dd).align_right(Fill).padding([0, 16]),
-        ]
-        .width(Fill)
-        .into()
-    } else {
-        Space::new().width(0).height(0).into()
-    };
-
-    let layered = stack![main_row, dropdown_layer];
-
-    container(layered)
+    container(main_row)
         .width(Fill)
         .height(Fill)
-        .style(|_theme| container::Style {
-            background: Some(Background::Color(theme::BACKGROUND)),
+        .style(|theme: &AppTheme| container::Style {
+            background: Some(Background::Color(theme.colors.background)),
             ..Default::default()
         })
         .into()
@@ -146,19 +137,22 @@ fn list_content<'a>(
     items: &'a [CipherItem],
     selected_item: Option<usize>,
     search_query: &'a str,
-) -> Element<'a, VaultMessage> {
+    accounts: &'a [AccountEntry],
+    dropdown_open: bool,
+    colors: &'a AppColors,
+) -> Element<'a, VaultMessage, AppTheme> {
     let title = text("Vault")
         .size(28)
-        .color(theme::TEXT_PRIMARY)
+        .color(colors.text_primary)
         .font(Font {
             weight: iced::font::Weight::Bold,
             ..Font::DEFAULT
         });
 
-    let new_button = button(
+    let new_button = buttons::primary(
         row![
-            icons::PLUS.render(14.0, theme::CARD_BG),
-            text("New").size(14).color(theme::CARD_BG),
+            icons::PLUS.render(14.0, colors.card_bg),
+            text("New").size(14),
         ]
         .spacing(6)
         .align_y(Alignment::Center),
@@ -169,25 +163,21 @@ fn list_content<'a>(
         right: 16.0,
         bottom: 8.0,
         left: 12.0,
-    })
-    .style(|_theme, status| {
-        let bg = match status {
-            button::Status::Hovered => theme::ACCENT,
-            _ => theme::BUTTON_PRIMARY,
-        };
-        button::Style {
-            background: Some(Background::Color(bg)),
-            text_color: theme::TEXT_PRIMARY,
-            border: Border {
-                radius: 20.0.into(),
-                ..Default::default()
-            },
-            shadow: Shadow::default(),
-            snap: false,
-        }
     });
 
-    let avatar = account_switcher::avatar_trigger(active_email).map(VaultMessage::AccountSwitcher);
+    let avatar_trigger =
+        account_switcher::avatar_trigger(active_email, colors).map(VaultMessage::AccountSwitcher);
+    let dd_panel = account_switcher::dropdown(active_email, accounts, colors)
+        .map(VaultMessage::AccountSwitcher);
+    let avatar: Element<'a, VaultMessage, AppTheme> =
+        iced_aw::DropDown::new(avatar_trigger, dd_panel, dropdown_open)
+            .on_dismiss(VaultMessage::AccountSwitcher(
+                AccountSwitcherMessage::ToggleDropdown,
+            ))
+            .alignment(iced_aw::drop_down::Alignment::BottomEnd)
+            .width(240.0)
+            .offset(0.0)
+            .into();
 
     let content_header = container(
         row![title, Space::new().width(Fill), new_button, avatar]
@@ -197,7 +187,7 @@ fn list_content<'a>(
     .padding([16, 24])
     .width(Fill);
 
-    let search = search_bar::view(search_query).map(VaultMessage::Search);
+    let search = search_bar::view(search_query, colors).map(VaultMessage::Search);
     let search_row = container(search)
         .padding(Padding {
             top: 0.0,
@@ -207,7 +197,7 @@ fn list_content<'a>(
         })
         .width(Fill);
 
-    let item_list = item_list::view(items, selected_item).map(VaultMessage::ItemList);
+    let item_list = item_list::view(items, selected_item, colors).map(VaultMessage::ItemList);
 
     column![content_header, search_row, item_list]
         .width(Fill)

@@ -1,9 +1,9 @@
 use iced::{
-    Alignment, Background, Border, Color, Element, Fill, Font, Padding, Shadow,
-    widget::{Space, button, column, container, row, scrollable, text},
+    Alignment, Background, Element, Fill, Font, Padding,
+    widget::{Space, column, container, row, scrollable, text},
 };
 
-use crate::{icons, state::CipherItem, theme, widgets::common};
+use crate::{components::{self, buttons, icons}, state::CipherItem, theme::{AppColors, AppTheme}};
 
 #[derive(Debug, Clone)]
 pub enum DetailPaneMessage {
@@ -17,40 +17,40 @@ pub enum DetailPaneMessage {
     Delete,
 }
 
-pub fn view<'a>(item: &'a CipherItem) -> Element<'a, DetailPaneMessage> {
-    let header = header_row(item);
+pub fn view<'a>(item: &'a CipherItem, colors: &AppColors) -> Element<'a, DetailPaneMessage, AppTheme> {
+    let header = header_row(item, colors);
 
-    let mut sections: Vec<Element<'a, DetailPaneMessage>> = vec![
-        section_label("Item details"),
-        item_details_card(item),
-        section_label("Login credentials"),
-        credentials_card(item),
+    let mut sections: Vec<Element<'a, DetailPaneMessage, AppTheme>> = vec![
+        section_label("Item details", colors),
+        item_details_card(item, colors),
+        section_label("Login credentials", colors),
+        credentials_card(item, colors),
     ];
 
     if item.url.is_some() {
-        sections.push(section_label("Autofill options"));
-        sections.push(autofill_card(item));
+        sections.push(section_label("Autofill options", colors));
+        sections.push(autofill_card(item, colors));
     }
 
     let body = scrollable(column(sections).spacing(4).padding([12, 20])).height(Fill);
-    let bottom_bar = bottom_bar();
+    let bottom_bar = bottom_bar(colors);
 
     let pane = container(column![header, body, bottom_bar].spacing(0).height(Fill))
         .width(Fill)
         .height(Fill)
-        .style(|_theme| container::Style {
-            background: Some(Background::Color(theme::CARD_BG)),
+        .style(|theme: &AppTheme| container::Style {
+            background: Some(Background::Color(theme.colors.card_bg)),
             ..Default::default()
         });
 
-    row![common::separator_v(), pane].height(Fill).into()
+    row![components::separator_v(), pane].height(Fill).into()
 }
 
 // ---------------------------------------------------------------------------
 // Header
 // ---------------------------------------------------------------------------
 
-fn header_row<'a>(item: &'a CipherItem) -> Element<'a, DetailPaneMessage> {
+fn header_row<'a>(item: &'a CipherItem, colors: &AppColors) -> Element<'a, DetailPaneMessage, AppTheme> {
     let category_label = match item.category {
         crate::state::CipherCategory::Login => "View login",
         crate::state::CipherCategory::Card => "View card",
@@ -61,53 +61,50 @@ fn header_row<'a>(item: &'a CipherItem) -> Element<'a, DetailPaneMessage> {
 
     let title = text(category_label)
         .size(18)
-        .color(theme::TEXT_PRIMARY)
+        .color(colors.text_primary)
         .font(Font {
             weight: iced::font::Weight::Bold,
             ..Font::DEFAULT
         });
 
-    let close_btn = button(icons::BWI_CLOSE.render(32.0, theme::TEXT_SECONDARY))
+    let close_btn = buttons::ghost_icon(icons::BWI_CLOSE.render(32.0, colors.text_secondary))
         .on_press(DetailPaneMessage::Close)
-        .padding([1, 1])
-        .style(|_theme, status| {
-            common::hover_button_style(status, false, Color::TRANSPARENT, theme::RADIUS_SM)
-        });
+        .padding([1, 1]);
 
     let header =
         container(row![title, Space::new().width(Fill), close_btn].align_y(Alignment::Center))
             .padding([8, 20])
-            .style(|_theme| container::Style {
-                background: Some(Background::Color(theme::BACKGROUND)),
+            .style(|theme: &AppTheme| container::Style {
+                background: Some(Background::Color(theme.colors.background)),
                 ..Default::default()
             });
 
-    column![header, common::separator_h()].spacing(0).into()
+    column![header, components::separator_h()].spacing(0).into()
 }
 
 // ---------------------------------------------------------------------------
 // Section label
 // ---------------------------------------------------------------------------
 
-fn section_label<'a>(label: &'a str) -> Element<'a, DetailPaneMessage> {
-    text(label).size(14).color(theme::TEXT_PRIMARY).into()
+fn section_label<'a>(label: &'a str, colors: &AppColors) -> Element<'a, DetailPaneMessage, AppTheme> {
+    text(label).size(14).color(colors.text_primary).into()
 }
 
 // ---------------------------------------------------------------------------
 // Item details card
 // ---------------------------------------------------------------------------
 
-fn item_details_card<'a>(item: &'a CipherItem) -> Element<'a, DetailPaneMessage> {
-    let name_field = field_readonly("Name", &item.name);
-    card_with_margin(common::styled_card(column![name_field].spacing(12).into()))
+fn item_details_card<'a>(item: &'a CipherItem, colors: &AppColors) -> Element<'a, DetailPaneMessage, AppTheme> {
+    let name_field = field_readonly("Name", &item.name, colors);
+    card_with_margin(components::styled_card(column![name_field].spacing(12).into()))
 }
 
 // ---------------------------------------------------------------------------
 // Credentials card
 // ---------------------------------------------------------------------------
 
-fn credentials_card<'a>(item: &'a CipherItem) -> Element<'a, DetailPaneMessage> {
-    let mut fields: Vec<Element<'a, DetailPaneMessage>> = Vec::new();
+fn credentials_card<'a>(item: &'a CipherItem, colors: &AppColors) -> Element<'a, DetailPaneMessage, AppTheme> {
+    let mut fields: Vec<Element<'a, DetailPaneMessage, AppTheme>> = Vec::new();
 
     if let Some(ref username) = item.username {
         fields.push(field_with_action(
@@ -115,6 +112,7 @@ fn credentials_card<'a>(item: &'a CipherItem) -> Element<'a, DetailPaneMessage> 
             username,
             &[icons::BWI_COPY],
             &[DetailPaneMessage::CopyUsername],
+            colors,
         ));
     }
 
@@ -126,32 +124,33 @@ fn credentials_card<'a>(item: &'a CipherItem) -> Element<'a, DetailPaneMessage> 
             DetailPaneMessage::TogglePasswordVisibility,
             DetailPaneMessage::CopyPassword,
         ],
+        colors,
     ));
 
     if fields.is_empty() {
         fields.push(
             text("No credentials")
                 .size(13)
-                .color(theme::TEXT_MUTED)
+                .color(colors.text_muted)
                 .into(),
         );
     }
 
-    card_with_margin(common::styled_card(column(fields).spacing(16).into()))
+    card_with_margin(components::styled_card(column(fields).spacing(16).into()))
 }
 
 // ---------------------------------------------------------------------------
 // Autofill card
 // ---------------------------------------------------------------------------
 
-fn autofill_card<'a>(item: &'a CipherItem) -> Element<'a, DetailPaneMessage> {
+fn autofill_card<'a>(item: &'a CipherItem, colors: &AppColors) -> Element<'a, DetailPaneMessage, AppTheme> {
     let url = item.url.as_deref().unwrap_or("");
 
-    let label = text("Website").size(11).color(theme::TEXT_MUTED);
-    let value = text(url).size(14).color(theme::TEXT_PRIMARY);
+    let label = text("Website").size(11).color(colors.text_muted);
+    let value = text(url).size(14).color(colors.text_primary);
 
-    let copy_btn = icon_button(icons::BWI_COPY, DetailPaneMessage::CopyUrl);
-    let open_btn = icon_button(icons::BWI_EXTERNAL_LINK, DetailPaneMessage::OpenUrl);
+    let copy_btn = icon_button(icons::BWI_COPY, DetailPaneMessage::CopyUrl, colors);
+    let open_btn = icon_button(icons::BWI_EXTERNAL_LINK, DetailPaneMessage::OpenUrl, colors);
 
     let field_row = row![
         column![label, value].spacing(2).width(Fill),
@@ -161,60 +160,41 @@ fn autofill_card<'a>(item: &'a CipherItem) -> Element<'a, DetailPaneMessage> {
     .spacing(4)
     .align_y(Alignment::Center);
 
-    card_with_margin(common::styled_card(field_row.into()))
+    card_with_margin(components::styled_card(field_row.into()))
 }
 
 // ---------------------------------------------------------------------------
 // Bottom bar
 // ---------------------------------------------------------------------------
 
-fn bottom_bar<'a>() -> Element<'a, DetailPaneMessage> {
-    let edit_btn = button(text("Edit").size(14).color(theme::CARD_BG))
+fn bottom_bar<'a>(colors: &AppColors) -> Element<'a, DetailPaneMessage, AppTheme> {
+    let edit_btn = buttons::primary(text("Edit").size(14))
         .on_press(DetailPaneMessage::Edit)
-        .padding([8, 20])
-        .style(|_theme, status| {
-            let bg = match status {
-                button::Status::Hovered => theme::ACCENT,
-                _ => theme::BUTTON_PRIMARY,
-            };
-            button::Style {
-                background: Some(Background::Color(bg)),
-                text_color: theme::TEXT_PRIMARY,
-                border: Border {
-                    radius: theme::RADIUS_PILL.into(),
-                    ..Default::default()
-                },
-                shadow: Shadow::default(),
-                snap: false,
-            }
-        });
+        .padding([8, 20]);
 
-    let delete_btn = button(icons::BWI_TRASH.render(18.0, theme::TITLEBAR_CLOSE_HOVER))
+    let delete_btn = buttons::ghost_icon(icons::BWI_TRASH.render(18.0, colors.titlebar_close_hover))
         .on_press(DetailPaneMessage::Delete)
-        .padding([6, 6])
-        .style(|_theme, status| {
-            common::hover_button_style(status, false, Color::TRANSPARENT, theme::RADIUS_SM)
-        });
+        .padding([6, 6]);
 
     let bar =
         container(row![edit_btn, Space::new().width(Fill), delete_btn].align_y(Alignment::Center))
             .padding([8, 20])
-            .style(|_theme| container::Style {
-                background: Some(Background::Color(theme::BACKGROUND)),
+            .style(|theme: &AppTheme| container::Style {
+                background: Some(Background::Color(theme.colors.background)),
                 ..Default::default()
             });
 
-    column![common::separator_h(), bar].spacing(0).into()
+    column![components::separator_h(), bar].spacing(0).into()
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn field_readonly<'a>(label: &'a str, value: &'a str) -> Element<'a, DetailPaneMessage> {
+fn field_readonly<'a>(label: &'a str, value: &'a str, colors: &AppColors) -> Element<'a, DetailPaneMessage, AppTheme> {
     column![
-        text(label).size(11).color(theme::TEXT_MUTED),
-        text(value).size(14).color(theme::TEXT_PRIMARY),
+        text(label).size(11).color(colors.text_muted),
+        text(value).size(14).color(colors.text_primary),
     ]
     .spacing(2)
     .into()
@@ -225,19 +205,20 @@ fn field_with_action<'a>(
     value: &'a str,
     icons_list: &[icons::BwiIcon],
     msgs: &[DetailPaneMessage],
-) -> Element<'a, DetailPaneMessage> {
-    let buttons: Vec<Element<'a, DetailPaneMessage>> = icons_list
+    colors: &AppColors,
+) -> Element<'a, DetailPaneMessage, AppTheme> {
+    let buttons: Vec<Element<'a, DetailPaneMessage, AppTheme>> = icons_list
         .iter()
         .zip(msgs.iter())
-        .map(|(icon, msg)| icon_button(*icon, msg.clone()))
+        .map(|(icon, msg)| icon_button(*icon, msg.clone(), colors))
         .collect();
 
     let buttons_row = row(buttons).spacing(2).align_y(Alignment::Center);
 
     row![
         column![
-            text(label).size(11).color(theme::TEXT_MUTED),
-            text(value).size(14).color(theme::TEXT_PRIMARY),
+            text(label).size(11).color(colors.text_muted),
+            text(value).size(14).color(colors.text_primary),
         ]
         .spacing(2)
         .width(Fill),
@@ -248,18 +229,15 @@ fn field_with_action<'a>(
     .into()
 }
 
-fn icon_button<'a>(icon: icons::BwiIcon, msg: DetailPaneMessage) -> Element<'a, DetailPaneMessage> {
-    button(icon.render(18.0, theme::TEXT_PRIMARY))
+fn icon_button<'a>(icon: icons::BwiIcon, msg: DetailPaneMessage, colors: &AppColors) -> Element<'a, DetailPaneMessage, AppTheme> {
+    buttons::ghost_icon(icon.render(18.0, colors.text_primary))
         .on_press(msg)
         .padding([6, 6])
-        .style(|_theme, status| {
-            common::hover_button_style(status, false, Color::TRANSPARENT, theme::RADIUS_SM)
-        })
         .into()
 }
 
 /// Wraps a card element with bottom margin for section spacing.
-fn card_with_margin<'a>(card: Element<'a, DetailPaneMessage>) -> Element<'a, DetailPaneMessage> {
+fn card_with_margin<'a>(card: Element<'a, DetailPaneMessage, AppTheme>) -> Element<'a, DetailPaneMessage, AppTheme> {
     container(card)
         .padding(Padding {
             top: 0.0,

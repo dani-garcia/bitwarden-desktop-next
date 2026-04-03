@@ -1,13 +1,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app;
-pub mod icons;
+pub mod components;
 mod menu;
 mod mock;
 mod state;
-mod theme;
+pub mod theme;
 mod views;
-mod widgets;
 
 use app::App;
 
@@ -16,8 +15,8 @@ fn main() -> iced::Result {
         .subscription(App::subscription)
         .title("Bitwarden [Next]")
         .font(include_bytes!("../assets/InterVariable.ttf").as_slice())
-        .font(icons::FONT_BYTES)
-        .font(icons::BWI_FONT_BYTES)
+        .font(components::icons::FONT_BYTES)
+        .font(components::icons::BWI_FONT_BYTES)
         .default_font(iced::Font {
             family: iced::font::Family::Name("Inter"),
             weight: iced::font::Weight::Normal,
@@ -33,6 +32,7 @@ fn main() -> iced::Result {
             },
             ..Default::default()
         })
+        .theme(|app: &App| app.current_theme.clone())
         .antialiasing(true)
         .run()
 }

@@ -1,11 +1,14 @@
 use iced::{
-    Alignment, Background, Border, Color, Element, Fill, Length, Padding, Shadow,
-    widget::{Space, button, column, container, row, stack, svg, text, text_input},
+    Alignment, Background, Border, Color, Element, Fill, Length, Padding,
+    widget::{Space, column, container, row, stack, svg, text, text_input},
 };
 
 use crate::{
-    icons, theme,
-    widgets::account_switcher::{self, AccountEntry, AccountSwitcherMessage},
+    components::{
+        account_switcher::{self, AccountEntry, AccountSwitcherMessage},
+        buttons, icons,
+    },
+    theme::{AppColors, AppTheme},
 };
 
 #[derive(Debug, Clone)]
@@ -24,7 +27,8 @@ pub fn view<'a>(
     show_password: bool,
     accounts: &'a [AccountEntry],
     dropdown_open: bool,
-) -> Element<'a, LoginMessage> {
+    colors: &'a AppColors,
+) -> Element<'a, LoginMessage, AppTheme> {
     let logo = svg(svg::Handle::from_path("assets/logo-white.svg"))
         .width(209)
         .height(35);
@@ -36,9 +40,9 @@ pub fn view<'a>(
 
     let title = text("Your vault is locked")
         .size(26)
-        .color(theme::TEXT_PRIMARY);
+        .color(colors.text_primary);
 
-    let email_label = text(email).size(16).color(theme::TEXT_SECONDARY);
+    let email_label = text(email).size(16).color(colors.text_secondary);
 
     // Password input — the whole row is wrapped in a styled container for a unified border
     let password_input = {
@@ -48,17 +52,17 @@ pub fn view<'a>(
             .size(16)
             .padding([10, 12])
             .width(Fill)
-            .style(|_theme, _status| text_input::Style {
+            .style(|theme: &AppTheme, _status| text_input::Style {
                 background: Background::Color(Color::TRANSPARENT),
                 border: Border {
                     color: Color::TRANSPARENT,
                     width: 0.0,
                     radius: 0.0.into(),
                 },
-                icon: theme::TEXT_MUTED,
-                placeholder: theme::TEXT_SECONDARY,
-                value: theme::TEXT_PRIMARY,
-                selection: theme::ACCENT,
+                icon: theme.colors.text_muted,
+                placeholder: theme.colors.text_secondary,
+                value: theme.colors.text_primary,
+                selection: theme.colors.accent,
             });
         if !show_password {
             input = input.secure(true);
@@ -71,44 +75,31 @@ pub fn view<'a>(
     } else {
         icons::EYE_SLASH
     }
-    .render(16.0, theme::TEXT_SECONDARY);
+    .render(16.0, colors.text_secondary);
 
-    let toggle_button = button(toggle_icon)
+    let toggle_button = buttons::ghost_icon(toggle_icon)
         .on_press(LoginMessage::TogglePasswordVisibility)
-        .padding([10, 12])
-        .style(|_theme, status| {
-            let bg = match status {
-                button::Status::Hovered => theme::BUTTON_HOVER_SUBTLE,
-                _ => Color::TRANSPARENT,
-            };
-            button::Style {
-                background: Some(Background::Color(bg)),
-                text_color: theme::TEXT_SECONDARY,
-                border: Border::default(),
-                shadow: Shadow::default(),
-                snap: false,
-            }
-        });
+        .padding([10, 12]);
 
     // Floating label that sits on the top border of the input
     let floating_label = container(
         text("Master password (required)")
             .size(12)
-            .color(theme::TEXT_SECONDARY),
+            .color(colors.text_secondary),
     )
     .padding([0, 4])
-    .style(|_theme| container::Style {
-        background: Some(Background::Color(theme::BACKGROUND)),
+    .style(|theme: &AppTheme| container::Style {
+        background: Some(Background::Color(theme.colors.background)),
         ..Default::default()
     });
 
     // Input border container
     let input_border = container(row![password_input, toggle_button].align_y(Alignment::Center))
         .width(Fill)
-        .style(|_theme| container::Style {
+        .style(|theme: &AppTheme| container::Style {
             background: Some(Background::Color(Color::TRANSPARENT)),
             border: Border {
-                color: theme::BORDER,
+                color: theme.colors.border,
                 width: 1.0,
                 radius: 4.0.into(),
             },
@@ -121,62 +112,24 @@ pub fn view<'a>(
         container(floating_label).padding([0, 12]),
     ];
 
-    let unlock_button = button(
-        container(text("Unlock").size(16).color(theme::BACKGROUND))
-            .center_x(Fill)
-            .padding([4, 8]),
+    let unlock_button = buttons::primary(
+        container(text("Unlock").size(16)).center_x(Fill).padding([4, 8]),
     )
     .on_press(LoginMessage::Unlock)
-    .width(Fill)
-    .style(|_theme, status| {
-        let bg = match status {
-            button::Status::Hovered => theme::BUTTON_PRIMARY_HOVER,
-            _ => theme::ACCENT,
-        };
-        button::Style {
-            background: Some(Background::Color(bg)),
-            text_color: theme::BACKGROUND,
-            border: Border {
-                color: bg,
-                width: 1.0,
-                radius: 20.0.into(),
-            },
-            shadow: Shadow::default(),
-            snap: false,
-        }
-    });
+    .width(Fill);
 
-    let logout_button = button(
-        container(text("Log out").size(16).color(theme::ACCENT))
-            .center_x(Fill)
-            .padding([4, 8]),
+    let logout_button = buttons::secondary(
+        container(text("Log out").size(16)).center_x(Fill).padding([4, 8]),
     )
     .on_press(LoginMessage::LogOut)
-    .width(Fill)
-    .style(|_theme, status| {
-        let bg = match status {
-            button::Status::Hovered => theme::BUTTON_HOVER_SUBTLE,
-            _ => Color::TRANSPARENT,
-        };
-        button::Style {
-            background: Some(Background::Color(bg)),
-            text_color: theme::ACCENT,
-            border: Border {
-                color: theme::ACCENT,
-                width: 1.0,
-                radius: 20.0.into(),
-            },
-            shadow: Shadow::default(),
-            snap: false,
-        }
-    });
+    .width(Fill);
 
     // Card only contains the form elements
     let card = container(
         column![
             password_field,
             unlock_button,
-            text("or").size(14).color(theme::TEXT_PRIMARY),
+            text("or").size(14).color(colors.text_primary),
             logout_button,
         ]
         .spacing(12)
@@ -184,10 +137,10 @@ pub fn view<'a>(
     )
     .max_width(450)
     .padding(32)
-    .style(|_theme| container::Style {
-        background: Some(Background::Color(theme::BACKGROUND)),
+    .style(|theme: &AppTheme| container::Style {
+        background: Some(Background::Color(theme.colors.background)),
         border: Border {
-            color: theme::BORDER,
+            color: theme.colors.border,
             width: 1.0,
             radius: 16.0.into(),
         },
@@ -222,7 +175,7 @@ pub fn view<'a>(
     let status_bar = container(
         text(format!("Accessing {}", server))
             .size(14)
-            .color(theme::TEXT_SECONDARY),
+            .color(colors.text_secondary),
     )
     .center_x(Fill)
     .padding(Padding {
@@ -232,41 +185,39 @@ pub fn view<'a>(
         left: 0.0,
     });
 
-    // Round "..." menu button (top-right)
-    let menu_dot_button: Element<'a, LoginMessage> = button(
-        container(icons::THREE_DOTS.render(16.0, theme::ACCENT))
+    // Round "..." menu button with account switcher dropdown
+    let menu_dot_trigger = buttons::ghost(
+        container(icons::THREE_DOTS.render(16.0, colors.accent))
             .width(36)
             .height(36)
             .align_x(Alignment::Center)
             .align_y(Alignment::Center),
+        false,
+        Color::TRANSPARENT,
+        18.0,
     )
     .on_press(LoginMessage::AccountSwitcher(
         AccountSwitcherMessage::ToggleDropdown,
     ))
-    .padding(0)
-    .style(|_theme, status| {
-        let bg = match status {
-            button::Status::Hovered => theme::ITEM_HOVER,
-            _ => theme::HEADER_BG,
-        };
-        button::Style {
-            background: Some(Background::Color(bg)),
-            text_color: theme::ACCENT,
-            border: Border {
-                radius: 18.0.into(),
-                ..Default::default()
-            },
-            shadow: Shadow::default(),
-            snap: false,
-        }
-    })
-    .into();
+    .padding(0);
+
+    let dd_panel =
+        account_switcher::dropdown(email, accounts, colors).map(LoginMessage::AccountSwitcher);
+    let menu_dot_dropdown: Element<'a, LoginMessage, AppTheme> =
+        iced_aw::DropDown::new(menu_dot_trigger, dd_panel, dropdown_open)
+            .on_dismiss(LoginMessage::AccountSwitcher(
+                AccountSwitcherMessage::ToggleDropdown,
+            ))
+            .alignment(iced_aw::drop_down::Alignment::BottomEnd)
+            .width(240.0)
+            .offset(0.0)
+            .into();
 
     // Top row: logo left, ... button right
     let top_row = row![
         logo_row,
         Space::new().width(Fill),
-        container(menu_dot_button).padding([16, 24]),
+        container(menu_dot_dropdown).padding([16, 24]),
     ]
     .align_y(Alignment::Center);
 
@@ -281,31 +232,14 @@ pub fn view<'a>(
     .width(Fill)
     .height(Fill);
 
-    // Account switcher dropdown overlay (top-right, below the ... button)
-    let dropdown_layer: Element<'a, LoginMessage> = if dropdown_open {
-        let dd = account_switcher::dropdown(email, accounts).map(LoginMessage::AccountSwitcher);
-        container(
-            column![
-                Space::new().height(Length::Fixed(56.0)),
-                container(dd).align_right(Fill).padding([0, 16]),
-            ]
-            .width(Fill),
-        )
-        .width(Fill)
-        .height(Fill)
-        .into()
-    } else {
-        Space::new().width(0).height(0).into()
-    };
-
-    // Stack: background illustrations, foreground content, dropdown overlay
-    let layered = stack![bg_illustrations, foreground, dropdown_layer];
+    // Stack: background illustrations, foreground content
+    let layered = stack![bg_illustrations, foreground];
 
     container(layered)
         .width(Fill)
         .height(Fill)
-        .style(|_theme| container::Style {
-            background: Some(Background::Color(theme::CARD_BG)),
+        .style(|theme: &AppTheme| container::Style {
+            background: Some(Background::Color(theme.colors.card_bg)),
             ..Default::default()
         })
         .into()

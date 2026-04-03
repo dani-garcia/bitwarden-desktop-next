@@ -9,7 +9,14 @@ pub struct Icon(char);
 
 impl Icon {
     /// Render this icon as an iced Element at the given size and color.
-    pub fn render<'a, M: 'a>(&self, size: f32, color: iced::Color) -> Element<'a, M> {
+    pub fn render<'a, M: 'a, Theme: text::Catalog + 'a>(
+        &self,
+        size: f32,
+        color: iced::Color,
+    ) -> Element<'a, M, Theme>
+    where
+        Theme::Class<'a>: From<text::StyleFn<'a, Theme>>,
+    {
         text(self.0).font(FONT).size(size).color(color).into()
     }
 
@@ -28,13 +35,20 @@ include!(concat!(env!("OUT_DIR"), "/bootstrap_icons_generated.rs"));
 // ---------------------------------------------------------------------------
 
 pub const BWI_FONT: Font = Font::with_name("bwi-font");
-pub const BWI_FONT_BYTES: &[u8] = include_bytes!("../assets/bwi-font.ttf");
+pub const BWI_FONT_BYTES: &[u8] = include_bytes!("../../assets/bwi-font.ttf");
 
 #[derive(Copy, Clone)]
 pub struct BwiIcon(char);
 
 impl BwiIcon {
-    pub fn render<'a, M: 'a>(&self, size: f32, color: iced::Color) -> Element<'a, M> {
+    pub fn render<'a, M: 'a, Theme: text::Catalog + 'a>(
+        &self,
+        size: f32,
+        color: iced::Color,
+    ) -> Element<'a, M, Theme>
+    where
+        Theme::Class<'a>: From<text::StyleFn<'a, Theme>>,
+    {
         text(self.0).font(BWI_FONT).size(size).color(color).into()
     }
 }

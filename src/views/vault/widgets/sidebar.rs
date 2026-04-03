@@ -1,13 +1,12 @@
 use iced::{
-    Alignment, Background, Border, Color, Element, Fill, Length, Padding,
-    widget::{Space, button, column, container, row, svg, text},
+    Alignment, Background, Border, Element, Fill, Length, Padding,
+    widget::{Space, column, container, row, svg, text},
 };
 
 use crate::{
-    icons,
+    components::{self, buttons, icons},
     state::{CipherCategory, NavSection, SidebarFilter, SidebarMode},
-    theme,
-    widgets::common,
+    theme::{AppColors, AppTheme},
 };
 
 const RAIL_WIDTH: f32 = 50.0;
@@ -32,16 +31,12 @@ pub fn view<'a>(
     active_filter: SidebarFilter,
     vault_tree_open: bool,
     send_tree_open: bool,
-) -> Element<'a, SidebarMessage> {
+    colors: &AppColors,
+) -> Element<'a, SidebarMessage, AppTheme> {
     if mode == SidebarMode::Expanded {
-        expanded_panel(
-            active_section,
-            active_filter,
-            vault_tree_open,
-            send_tree_open,
-        )
+        expanded_panel(active_section, active_filter, vault_tree_open, send_tree_open, colors)
     } else {
-        icon_rail(mode, active_section)
+        icon_rail(mode, active_section, colors)
     }
 }
 
@@ -49,7 +44,11 @@ pub fn view<'a>(
 // Icon Rail
 // ---------------------------------------------------------------------------
 
-fn icon_rail<'a>(_mode: SidebarMode, active_section: NavSection) -> Element<'a, SidebarMessage> {
+fn icon_rail<'a>(
+    _mode: SidebarMode,
+    active_section: NavSection,
+    colors: &AppColors,
+) -> Element<'a, SidebarMessage, AppTheme> {
     let shield = container(
         svg(svg::Handle::from_path("assets/bitwarden-shield.svg"))
             .width(28)
@@ -59,35 +58,36 @@ fn icon_rail<'a>(_mode: SidebarMode, active_section: NavSection) -> Element<'a, 
     .width(RAIL_WIDTH)
     .align_x(Alignment::Center);
 
-    let rail_btn = |icon: icons::BwiIcon, section: NavSection| -> Element<'a, SidebarMessage> {
+    let text_primary = colors.text_primary;
+    let text_secondary = colors.text_secondary;
+    let sidebar_selected = colors.sidebar_selected;
+
+    let rail_btn = move |icon: icons::BwiIcon, section: NavSection| -> Element<'a, SidebarMessage, AppTheme> {
         let is_active = active_section == section;
-        button(
-            container(icon.render(RAIL_ICON_SIZE, theme::TEXT_PRIMARY))
+        buttons::ghost(
+            container(icon.render(RAIL_ICON_SIZE, text_primary))
                 .width(RAIL_BTN_SIZE)
                 .height(RAIL_BTN_SIZE)
                 .align_x(Alignment::Center)
                 .align_y(Alignment::Center),
+            is_active,
+            sidebar_selected,
+            ITEM_RADIUS,
         )
         .on_press(SidebarMessage::SectionSelected(section))
         .padding(0)
         .width(RAIL_WIDTH)
-        .style(move |_theme, status| {
-            common::hover_button_style(status, is_active, theme::SIDEBAR_SELECTED, ITEM_RADIUS)
-        })
         .into()
     };
 
-    let toggle_btn: Element<'a, SidebarMessage> = button(
-        container(icons::BWI_ANGLE_RIGHT.render(32.0, theme::TEXT_SECONDARY))
+    let toggle_btn: Element<'a, SidebarMessage, AppTheme> = buttons::ghost_icon(
+        container(icons::BWI_ANGLE_RIGHT.render(32.0, text_secondary))
             .align_x(Alignment::Center)
             .width(Fill),
     )
     .on_press(SidebarMessage::ToggleSidebarMode)
     .padding([6, 0])
     .width(Fill)
-    .style(|_theme, status| {
-        common::hover_button_style(status, false, Color::TRANSPARENT, ITEM_RADIUS)
-    })
     .into();
 
     container(
@@ -112,8 +112,8 @@ fn icon_rail<'a>(_mode: SidebarMode, active_section: NavSection) -> Element<'a, 
     )
     .width(Length::Fixed(RAIL_WIDTH))
     .height(Fill)
-    .style(|_theme| container::Style {
-        background: Some(Background::Color(theme::HEADER_BG)),
+    .style(|theme: &AppTheme| container::Style {
+        background: Some(Background::Color(theme.colors.header_bg)),
         border: Border {
             radius: 0.0.into(),
             ..Default::default()
@@ -132,8 +132,9 @@ fn expanded_panel<'a>(
     active_filter: SidebarFilter,
     vault_tree_open: bool,
     send_tree_open: bool,
-) -> Element<'a, SidebarMessage> {
-    let mut items: Vec<Element<'a, SidebarMessage>> = Vec::new();
+    colors: &AppColors,
+) -> Element<'a, SidebarMessage, AppTheme> {
+    let mut items: Vec<Element<'a, SidebarMessage, AppTheme>> = Vec::new();
 
     // Logo header
     let logo = container(
@@ -156,63 +157,19 @@ fn expanded_panel<'a>(
         vault_tree_open,
         SidebarMessage::ToggleVaultTree,
         active_section == NavSection::Vault,
+        colors,
     ));
 
     if vault_tree_open {
-        items.push(nav_button(
-            "My Vault",
-            icons::BWI_USER,
-            SidebarFilter::AllItems,
-            active_filter,
-        ));
-        items.push(nav_button(
-            "Favorites",
-            icons::BWI_STAR,
-            SidebarFilter::Favorites,
-            active_filter,
-        ));
-        items.push(nav_button(
-            "Logins",
-            icons::BWI_LOGIN,
-            SidebarFilter::Category(CipherCategory::Login),
-            active_filter,
-        ));
-        items.push(nav_button(
-            "Cards",
-            icons::BWI_CREDIT_CARD,
-            SidebarFilter::Category(CipherCategory::Card),
-            active_filter,
-        ));
-        items.push(nav_button(
-            "Identities",
-            icons::BWI_IDENTITY,
-            SidebarFilter::Category(CipherCategory::Identity),
-            active_filter,
-        ));
-        items.push(nav_button(
-            "Notes",
-            icons::BWI_NOTE,
-            SidebarFilter::Category(CipherCategory::SecureNote),
-            active_filter,
-        ));
-        items.push(nav_button(
-            "SSH keys",
-            icons::BWI_KEY,
-            SidebarFilter::Category(CipherCategory::SshKey),
-            active_filter,
-        ));
-        items.push(nav_button(
-            "Archive",
-            icons::BWI_ARCHIVE,
-            SidebarFilter::Archive,
-            active_filter,
-        ));
-        items.push(nav_button(
-            "Trash",
-            icons::BWI_TRASH,
-            SidebarFilter::Trash,
-            active_filter,
-        ));
+        items.push(nav_button("My Vault", icons::BWI_USER, SidebarFilter::AllItems, active_filter, colors));
+        items.push(nav_button("Favorites", icons::BWI_STAR, SidebarFilter::Favorites, active_filter, colors));
+        items.push(nav_button("Logins", icons::BWI_LOGIN, SidebarFilter::Category(CipherCategory::Login), active_filter, colors));
+        items.push(nav_button("Cards", icons::BWI_CREDIT_CARD, SidebarFilter::Category(CipherCategory::Card), active_filter, colors));
+        items.push(nav_button("Identities", icons::BWI_IDENTITY, SidebarFilter::Category(CipherCategory::Identity), active_filter, colors));
+        items.push(nav_button("Notes", icons::BWI_NOTE, SidebarFilter::Category(CipherCategory::SecureNote), active_filter, colors));
+        items.push(nav_button("SSH keys", icons::BWI_KEY, SidebarFilter::Category(CipherCategory::SshKey), active_filter, colors));
+        items.push(nav_button("Archive", icons::BWI_ARCHIVE, SidebarFilter::Archive, active_filter, colors));
+        items.push(nav_button("Trash", icons::BWI_TRASH, SidebarFilter::Trash, active_filter, colors));
     }
 
     // Send section (collapsible)
@@ -222,40 +179,23 @@ fn expanded_panel<'a>(
         send_tree_open,
         SidebarMessage::ToggleSendTree,
         active_section == NavSection::Send,
+        colors,
     ));
 
     // Standalone nav items
-    items.push(standalone_item(
-        "Generator",
-        icons::BWI_GENERATE,
-        NavSection::Generator,
-        active_section,
-    ));
-    items.push(standalone_item(
-        "Import",
-        icons::BWI_IMPORT,
-        NavSection::Import,
-        active_section,
-    ));
-    items.push(standalone_item(
-        "Export",
-        icons::BWI_DOWNLOAD,
-        NavSection::Export,
-        active_section,
-    ));
+    items.push(standalone_item("Generator", icons::BWI_GENERATE, NavSection::Generator, active_section, colors));
+    items.push(standalone_item("Import", icons::BWI_IMPORT, NavSection::Import, active_section, colors));
+    items.push(standalone_item("Export", icons::BWI_DOWNLOAD, NavSection::Export, active_section, colors));
 
     // Collapse chevron at bottom
-    let separator = container(common::separator_h()).padding([4.0, SIDEBAR_H_PAD]);
+    let separator = container(components::separator_h()).padding([4.0, SIDEBAR_H_PAD]);
 
-    let collapse_btn: Element<'a, SidebarMessage> = button(
-        row![icons::BWI_ANGLE_LEFT.render(32.0, theme::TEXT_SECONDARY),].align_y(Alignment::Center),
+    let collapse_btn: Element<'a, SidebarMessage, AppTheme> = buttons::ghost_icon(
+        row![icons::BWI_ANGLE_LEFT.render(32.0, colors.text_secondary),].align_y(Alignment::Center),
     )
     .on_press(SidebarMessage::ToggleSidebarMode)
     .padding([8, 16])
     .width(Fill)
-    .style(|_theme, status| {
-        common::hover_button_style(status, false, Color::TRANSPARENT, ITEM_RADIUS)
-    })
     .into();
 
     container(
@@ -269,8 +209,8 @@ fn expanded_panel<'a>(
     )
     .width(Length::Fixed(PANEL_WIDTH))
     .height(Fill)
-    .style(|_theme| container::Style {
-        background: Some(Background::Color(theme::HEADER_BG)),
+    .style(|theme: &AppTheme| container::Style {
+        background: Some(Background::Color(theme.colors.header_bg)),
         border: Border {
             radius: 0.0.into(),
             ..Default::default()
@@ -286,18 +226,19 @@ fn section_header<'a>(
     is_open: bool,
     toggle_msg: SidebarMessage,
     _is_active_section: bool,
-) -> Element<'a, SidebarMessage> {
+    colors: &AppColors,
+) -> Element<'a, SidebarMessage, AppTheme> {
     let chevron = if is_open {
         icons::BWI_ANGLE_UP
     } else {
         icons::BWI_ANGLE_DOWN
     };
-    button(
+    buttons::ghost_icon(
         row![
-            icon.render(18.0, theme::TEXT_PRIMARY),
-            text(label).size(16).color(theme::TEXT_PRIMARY),
+            icon.render(18.0, colors.text_primary),
+            text(label).size(16).color(colors.text_primary),
             Space::new().width(Fill),
-            chevron.render(21.0, theme::TEXT_SECONDARY),
+            chevron.render(21.0, colors.text_secondary),
         ]
         .spacing(8)
         .align_y(Alignment::Center),
@@ -305,9 +246,6 @@ fn section_header<'a>(
     .on_press(toggle_msg)
     .padding([8, 12])
     .width(Fill)
-    .style(|_theme, status| {
-        common::hover_button_style(status, false, Color::TRANSPARENT, ITEM_RADIUS)
-    })
     .into()
 }
 
@@ -316,16 +254,20 @@ fn nav_button<'a>(
     icon: icons::BwiIcon,
     filter: SidebarFilter,
     active_filter: SidebarFilter,
-) -> Element<'a, SidebarMessage> {
+    colors: &AppColors,
+) -> Element<'a, SidebarMessage, AppTheme> {
     let is_selected = active_filter == filter;
 
-    button(
+    buttons::ghost(
         row![
-            icon.render(17.0, theme::TEXT_PRIMARY),
-            text(label).size(15).color(theme::TEXT_PRIMARY)
+            icon.render(17.0, colors.text_primary),
+            text(label).size(15).color(colors.text_primary)
         ]
         .spacing(8)
         .align_y(Alignment::Center),
+        is_selected,
+        colors.sidebar_selected,
+        ITEM_RADIUS,
     )
     .on_press(SidebarMessage::FilterSelected(filter))
     .padding(Padding {
@@ -335,9 +277,6 @@ fn nav_button<'a>(
         left: 28.0,
     })
     .width(Fill)
-    .style(move |_theme, status| {
-        common::hover_button_style(status, is_selected, theme::SIDEBAR_SELECTED, ITEM_RADIUS)
-    })
     .into()
 }
 
@@ -346,20 +285,21 @@ fn standalone_item<'a>(
     icon: icons::BwiIcon,
     section: NavSection,
     active_section: NavSection,
-) -> Element<'a, SidebarMessage> {
+    colors: &AppColors,
+) -> Element<'a, SidebarMessage, AppTheme> {
     let is_active = active_section == section;
-    let color = theme::TEXT_PRIMARY;
+    let color = colors.text_primary;
 
-    button(
+    buttons::ghost(
         row![icon.render(17.0, color), text(label).size(15).color(color)]
             .spacing(8)
             .align_y(Alignment::Center),
+        is_active,
+        colors.sidebar_selected,
+        ITEM_RADIUS,
     )
     .on_press(SidebarMessage::SectionSelected(section))
     .padding([6, 12])
     .width(Fill)
-    .style(move |_theme, status| {
-        common::hover_button_style(status, is_active, theme::SIDEBAR_SELECTED, ITEM_RADIUS)
-    })
     .into()
 }

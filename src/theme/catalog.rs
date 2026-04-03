@@ -1,0 +1,189 @@
+//! Widget `Catalog` trait implementations for `AppTheme`.
+//!
+//! These allow iced widgets to resolve styles through our custom theme type.
+//! Most widgets use explicit `.style()` closures, so these defaults are rarely
+//! invoked directly — they exist to satisfy trait bounds.
+
+use iced::{Background, Border, Color, Shadow, border, widget};
+
+use super::AppTheme;
+
+// ── button ──────────────────────────────────────────────────────────────────
+
+impl widget::button::Catalog for AppTheme {
+    type Class<'a> = widget::button::StyleFn<'a, Self>;
+
+    fn default<'a>() -> Self::Class<'a> {
+        Box::new(|theme, _status| widget::button::Style {
+            background: Some(Background::Color(Color::TRANSPARENT)),
+            text_color: theme.colors.text_primary,
+            border: Border::default(),
+            shadow: Shadow::default(),
+            snap: false,
+        })
+    }
+
+    fn style(&self, class: &Self::Class<'_>, status: widget::button::Status) -> widget::button::Style {
+        class(self, status)
+    }
+}
+
+// ── container ───────────────────────────────────────────────────────────────
+
+impl widget::container::Catalog for AppTheme {
+    type Class<'a> = widget::container::StyleFn<'a, Self>;
+
+    fn default<'a>() -> Self::Class<'a> {
+        Box::new(|_theme| widget::container::Style::default())
+    }
+
+    fn style(&self, class: &Self::Class<'_>) -> widget::container::Style {
+        class(self)
+    }
+}
+
+// ── text_input ──────────────────────────────────────────────────────────────
+
+impl widget::text_input::Catalog for AppTheme {
+    type Class<'a> = widget::text_input::StyleFn<'a, Self>;
+
+    fn default<'a>() -> Self::Class<'a> {
+        Box::new(|theme, _status| widget::text_input::Style {
+            background: Background::Color(Color::TRANSPARENT),
+            border: Border::default(),
+            icon: theme.colors.text_muted,
+            placeholder: theme.colors.text_secondary,
+            value: theme.colors.text_primary,
+            selection: theme.colors.accent,
+        })
+    }
+
+    fn style(
+        &self,
+        class: &Self::Class<'_>,
+        status: widget::text_input::Status,
+    ) -> widget::text_input::Style {
+        class(self, status)
+    }
+}
+
+// ── rule ────────────────────────────────────────────────────────────────────
+
+impl widget::rule::Catalog for AppTheme {
+    type Class<'a> = widget::rule::StyleFn<'a, Self>;
+
+    fn default<'a>() -> Self::Class<'a> {
+        Box::new(|theme| widget::rule::Style {
+            color: theme.colors.border,
+            radius: border::Radius::default(),
+            fill_mode: widget::rule::FillMode::Full,
+            snap: false,
+        })
+    }
+
+    fn style(&self, class: &Self::Class<'_>) -> widget::rule::Style {
+        class(self)
+    }
+}
+
+// ── scrollable ──────────────────────────────────────────────────────────────
+
+impl widget::scrollable::Catalog for AppTheme {
+    type Class<'a> = widget::scrollable::StyleFn<'a, Self>;
+
+    fn default<'a>() -> Self::Class<'a> {
+        Box::new(|_theme, _status| widget::scrollable::Style {
+            container: widget::container::Style::default(),
+            vertical_rail: widget::scrollable::Rail {
+                background: None,
+                border: Border::default(),
+                scroller: widget::scrollable::Scroller {
+                    background: Background::Color(Color::from_rgb(0.5, 0.5, 0.5)),
+                    border: Border::default(),
+                },
+            },
+            horizontal_rail: widget::scrollable::Rail {
+                background: None,
+                border: Border::default(),
+                scroller: widget::scrollable::Scroller {
+                    background: Background::Color(Color::from_rgb(0.5, 0.5, 0.5)),
+                    border: Border::default(),
+                },
+            },
+            gap: None,
+            auto_scroll: widget::scrollable::AutoScroll {
+                background: Background::Color(Color::TRANSPARENT),
+                border: Border::default(),
+                shadow: Shadow::default(),
+                icon: Color::TRANSPARENT,
+            },
+        })
+    }
+
+    fn style(
+        &self,
+        class: &Self::Class<'_>,
+        status: widget::scrollable::Status,
+    ) -> widget::scrollable::Style {
+        class(self, status)
+    }
+}
+
+// ── pane_grid (extends container::Catalog) ──────────────────────────────────
+
+impl widget::pane_grid::Catalog for AppTheme {
+    type Class<'a> = widget::pane_grid::StyleFn<'a, Self>;
+
+    fn default<'a>() -> <Self as widget::pane_grid::Catalog>::Class<'a> {
+        Box::new(|_theme| widget::pane_grid::Style {
+            hovered_region: widget::pane_grid::Highlight {
+                background: Background::Color(Color::TRANSPARENT),
+                border: Border::default(),
+            },
+            picked_split: widget::pane_grid::Line {
+                color: Color::TRANSPARENT,
+                width: 1.0,
+            },
+            hovered_split: widget::pane_grid::Line {
+                color: Color::from_rgb(0.5, 0.5, 0.5),
+                width: 2.0,
+            },
+        })
+    }
+
+    fn style(&self, class: &<Self as widget::pane_grid::Catalog>::Class<'_>) -> widget::pane_grid::Style {
+        class(self)
+    }
+}
+
+// ── svg ─────────────────────────────────────────────────────────────────────
+
+impl widget::svg::Catalog for AppTheme {
+    type Class<'a> = widget::svg::StyleFn<'a, Self>;
+
+    fn default<'a>() -> Self::Class<'a> {
+        Box::new(|_theme, _status| widget::svg::Style::default())
+    }
+
+    fn style(
+        &self,
+        class: &Self::Class<'_>,
+        status: widget::svg::Status,
+    ) -> widget::svg::Style {
+        class(self, status)
+    }
+}
+
+// ── text ────────────────────────────────────────────────────────────────────
+
+impl iced::widget::text::Catalog for AppTheme {
+    type Class<'a> = widget::text::StyleFn<'a, Self>;
+
+    fn default<'a>() -> Self::Class<'a> {
+        Box::new(|_theme| widget::text::Style::default())
+    }
+
+    fn style(&self, class: &Self::Class<'_>) -> widget::text::Style {
+        class(self)
+    }
+}

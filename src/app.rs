@@ -1,17 +1,20 @@
-use iced::{Element, Subscription, widget::pane_grid};
+use iced::{Element, Subscription, theme::Base, widget::pane_grid};
 
 use crate::{
+    components::account_switcher::{AccountEntry, AccountSwitcherMessage},
     mock,
     state::{AppState, CipherItem, NavSection, Screen, SidebarFilter, SidebarMode},
+    theme::AppTheme,
     views::{
         login::{self, LoginMessage},
-        vault::{self, VaultMessage},
-    },
-    widgets::{
-        account_switcher::{AccountEntry, AccountSwitcherMessage},
-        item_list::ItemListMessage,
-        search_bar::SearchMessage,
-        sidebar::SidebarMessage,
+        vault::{
+            self, VaultMessage,
+            widgets::{
+                item_list::ItemListMessage,
+                search_bar::SearchMessage,
+                sidebar::SidebarMessage,
+            },
+        },
     },
 };
 
@@ -19,15 +22,17 @@ use crate::{
 pub enum Message {
     Login(LoginMessage),
     Vault(VaultMessage),
-    TitleBar(crate::widgets::title_bar::TitleBarMessage),
+    TitleBar(crate::views::title_bar::TitleBarMessage),
+    #[allow(dead_code)]
+    ToggleTheme,
     KeyPressed(iced::keyboard::Event),
     WindowOpened(iced::window::Id),
     GotRawId(u64),
-    ScreenshotTaken(iced::window::Screenshot),
 }
 
 pub struct App {
     state: AppState,
+    pub current_theme: AppTheme,
     password_input: String,
     show_password: bool,
     search_query: String,
@@ -65,18 +70,7 @@ pub enum PaneKind {
 
 impl App {
     pub fn new() -> (Self, iced::Task<Message>) {
-        let (mut users, active_user) = mock::mock_users();
-
-        // DEV_SCREEN=vault skips straight to vault view (avoids recompilation for screenshots)
-        let dev_screen = std::env::var("DEV_SCREEN").unwrap_or_default();
-        let start_screen = if dev_screen.eq_ignore_ascii_case("vault") {
-            if let Some(session) = users.get_mut(&active_user) {
-                session.locked = false;
-            }
-            Screen::Vault
-        } else {
-            Screen::Login
-        };
+        let (users, active_user) = mock::mock_users();
 
         let (mut pane_state, list_pane) = pane_grid::State::new(PaneKind::List);
         let (detail_pane, split_id) = pane_state
@@ -88,8 +82,9 @@ impl App {
             state: AppState {
                 users,
                 active_user: Some(active_user),
-                screen: start_screen,
+                screen: Screen::Login,
             },
+            current_theme: AppTheme::dark(),
             password_input: String::new(),
             show_password: false,
             search_query: String::new(),
@@ -142,16 +137,29 @@ impl App {
     pub fn update(&mut self, message: Message) -> iced::Task<Message> {
         let mut extra_task = iced::Task::none();
         match message {
-            Message::Login(msg) => self.handle_login(msg),
+            Message::Login(msg) => {
+                self.open_menu = None;
+                self.open_submenu = None;
+                self.handle_login(msg);
+            }
             Message::Vault(msg) => {
+                self.open_menu = None;
+                self.open_submenu = None;
                 if matches!(msg, VaultMessage::Search(_)) {
                     extra_task =
                         iced::widget::operation::focus(iced::widget::Id::new("vault-search"));
                 }
                 self.handle_vault(msg);
             }
+            Message::ToggleTheme => {
+                self.current_theme = match self.current_theme.mode() {
+                    iced::theme::Mode::Dark => AppTheme::light(),
+                    _ => AppTheme::dark(),
+                };
+            }
             Message::TitleBar(msg) => {
-                use crate::widgets::title_bar::TitleBarMessage;
+                self.dropdown_open = false;
+                use crate::views::title_bar::TitleBarMessage;
                 match msg {
                     TitleBarMessage::TopLevelClicked(i) => {
                         self.open_menu = if self.open_menu == Some(i) {
@@ -159,6 +167,10 @@ impl App {
                         } else {
                             Some(i)
                         };
+                        self.open_submenu = None;
+                    }
+                    TitleBarMessage::DismissMenu => {
+                        self.open_menu = None;
                         self.open_submenu = None;
                     }
                     TitleBarMessage::TopLevelHovered(i) => {
@@ -231,24 +243,10 @@ impl App {
             Message::WindowOpened(id) => {
                 self.menu_attached = true;
                 self.window_id = Some(id);
-
-                let attach_menu = iced::window::raw_id::<Message>(id).map(Message::GotRawId);
-
-                // Auto-screenshot on startup if DEV_SCREENSHOT is set
-                let screenshot_task = if std::env::var("DEV_SCREENSHOT").is_ok() {
-                    iced::window::screenshot(id).map(Message::ScreenshotTaken)
-                } else {
-                    iced::Task::none()
-                };
-
-                return attach_menu.chain(screenshot_task);
+                return iced::window::raw_id::<Message>(id).map(Message::GotRawId);
             }
             Message::GotRawId(raw_id) => {
                 crate::menu::attach_menu(raw_id);
-                return iced::Task::none();
-            }
-            Message::ScreenshotTaken(screenshot) => {
-                save_screenshot(&screenshot);
                 return iced::Task::none();
             }
         }
@@ -256,8 +254,10 @@ impl App {
         extra_task
     }
 
-    pub fn view(&self) -> Element<'_, Message> {
-        let page: Element<'_, Message> = match self.state.screen {
+    pub fn view(&self) -> Element<'_, Message, AppTheme> {
+        let colors = &self.current_theme.colors;
+
+        let page: Element<'_, Message, AppTheme> = match self.state.screen {
             Screen::Login => login::view(
                 &self.cached_email,
                 &self.cached_server,
@@ -265,6 +265,7 @@ impl App {
                 self.show_password,
                 &self.cached_accounts,
                 self.dropdown_open,
+                colors,
             )
             .map(Message::Login),
             Screen::Vault => vault::view(
@@ -285,33 +286,26 @@ impl App {
                 &self.pane_state,
                 self.list_pane,
                 self.detail_pane,
+                colors,
             )
             .map(Message::Vault),
         };
 
         if crate::menu::should_draw_title_bar() {
-            let title_bar = crate::widgets::title_bar::view(self.open_menu, self.maximized)
-                .map(Message::TitleBar);
-            let content = iced::widget::column![title_bar, page].height(iced::Fill);
-
             let menu_state = self.menu_state();
-            let with_dropdown: Element<'_, Message> = if let Some(dropdown) =
-                crate::widgets::title_bar::dropdown(self.open_menu, self.open_submenu, &menu_state)
-            {
-                let dropdown = dropdown.map(Message::TitleBar);
-                let overlay = iced::widget::column![
-                    iced::widget::Space::new()
-                        .height(iced::Length::Fixed(crate::widgets::title_bar::height())),
-                    dropdown,
-                ];
-                iced::widget::stack![content, overlay].into()
-            } else {
-                content.into()
-            };
+            let title_bar = crate::views::title_bar::view(
+                self.open_menu,
+                self.open_submenu,
+                self.maximized,
+                &menu_state,
+                colors,
+            )
+            .map(Message::TitleBar);
+            let content: Element<'_, Message, AppTheme> =
+                iced::widget::column![title_bar, page].height(iced::Fill).into();
 
-            // Wrap with resize handles for custom window chrome
-            crate::widgets::title_bar::resize_wrapper(with_dropdown, |dir| {
-                Message::TitleBar(crate::widgets::title_bar::TitleBarMessage::ResizeEdge(dir))
+            crate::views::title_bar::resize_wrapper(content, |dir| {
+                Message::TitleBar(crate::views::title_bar::TitleBarMessage::ResizeEdge(dir))
             })
         } else {
             page
@@ -569,25 +563,4 @@ impl App {
             has_authenticated_accounts: has_accounts,
         }
     }
-}
-
-fn save_screenshot(screenshot: &iced::window::Screenshot) {
-    let path = std::env::var("DEV_SCREENSHOT").unwrap_or_else(|_| "screenshot.png".into());
-    let dir = std::path::Path::new(&path).parent();
-    if let Some(dir) = dir {
-        let _ = std::fs::create_dir_all(dir);
-    }
-
-    let file = std::fs::File::create(&path).expect("Failed to create screenshot file");
-    let w = std::io::BufWriter::new(file);
-    let mut encoder = png::Encoder::new(w, screenshot.size.width, screenshot.size.height);
-    encoder.set_color(png::ColorType::Rgba);
-    encoder.set_depth(png::BitDepth::Eight);
-    let mut writer = encoder.write_header().expect("Failed to write PNG header");
-    writer
-        .write_image_data(&screenshot.rgba)
-        .expect("Failed to write PNG data");
-
-    eprintln!("Screenshot saved to {path}");
-    std::process::exit(0);
 }
