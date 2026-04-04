@@ -5,8 +5,14 @@ edition = "2024"
 license-file = "LICENSE.txt"
 
 [dependencies]
+async-trait = "0.1.89"
 iced = { version = "0.14", features = ["tokio", "svg", "advanced", "image"] }
 iced_aw = { version = "0.13", default-features = false }
 image = "0.25"
 muda = "0.17.1"
 system-theme = "0.3.0"
+
+bitwarden-core = { git = "https://github.com/bitwarden/sdk-internal", rev = "6c25425d1c1e81bb9a9fea6b50a5cb7827d57476" }
+bitwarden-pm = { git = "https://github.com/bitwarden/sdk-internal", rev = "6c25425d1c1e81bb9a9fea6b50a5cb7827d57476" }
+bitwarden-state = { git = "https://github.com/bitwarden/sdk-internal", rev = "6c25425d1c1e81bb9a9fea6b50a5cb7827d57476" }
+bitwarden-vault = { git = "https://github.com/bitwarden/sdk-internal", rev = "6c25425d1c1e81bb9a9fea6b50a5cb7827d57476" }

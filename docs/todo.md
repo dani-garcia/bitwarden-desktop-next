@@ -37,6 +37,16 @@
 
 - **Hot reloading** — Iced PR https://github.com/iced-rs/iced/pull/3000 is **merged** into master (June 2025). Uses `hot` feature flag + `subsecond`/`cargo-hot`. Not in iced 0.14 release yet — requires iced from git or waiting for 0.15/1.0.
 
-## SDK Preparation
+## SDK Integration
 
-- **Structured mock layer** — Replace flat `mock.rs` with a mock that mirrors the real SDK's `PasswordManagerClient` structure. Define traits/interfaces matching the SDK surface area so views don't depend on concrete types.
+- **Fill mock clients with fake data** — `sdk.rs` has `mock_personal_client()` and `mock_work_client()` with empty `MemoryRepo`s. Populate them with realistic `Cipher` and `Folder` data (matching what `mock.rs` currently provides) so the vault view can read from the SDK instead of flat structs.
+- **Wire SDK to application logic** — Replace `mock::mock_users()` and the flat `UserSession.vault_items` with data sourced from `ClientManager`. The vault view should read cipher/folder data through `PasswordManagerClient.vault()` rather than the current `CipherItem` structs. This involves updating `App`, `refresh_cache()`, and the vault view to use SDK types.
+
+## Toast Notifications
+
+- **Research existing toast/notification widgets** — Before building a custom implementation, evaluate:
+  - Iced's own toast example: https://github.com/iced-rs/iced/blob/master/examples/toast/src/main.rs
+  - `iced-toasts` crate: https://github.com/Gomango999/iced-toasts/tree/main
+  - Check if `iced_aw` has any notification/toast widget
+  - Determine which approach fits best (overlay-based, stacked, timed auto-dismiss, action buttons)
+- **Implement toast system** — Needed for user feedback on actions like copy-to-clipboard, unlock success/failure, network errors, sync status. Should support multiple concurrent toasts, auto-dismiss with timeout, and different severity levels (info, success, error).

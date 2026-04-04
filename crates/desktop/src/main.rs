@@ -5,6 +5,7 @@ mod assets;
 mod components;
 mod menu;
 mod mock;
+mod sdk;
 mod state;
 mod theme;
 mod views;
