@@ -1,5 +1,8 @@
 pub mod widgets;
 
+use std::sync::Arc;
+
+use bitwarden_vault::{CipherId, CipherListView, CipherListViewType, CipherView};
 use iced::{
     Alignment, Background, Border, Element, Fill, Padding,
     widget::{Space, column, container, pane_grid, row, text},
@@ -10,7 +13,7 @@ use crate::{
         account_switcher::{self, AccountEntry, AccountSwitcherMessage},
         buttons, icons,
     },
-    state::{CipherItem, NavSection, SidebarFilter, SidebarMode},
+    state::{NavSection, SidebarFilter, SidebarMode},
     theme::{AppColors, AppTheme},
 };
 
@@ -44,13 +47,16 @@ pub enum VaultAction {
     SwitchUser(String),
     FocusSearch,
     AddAccount,
+    LoadDetail(CipherId),
+    ClearDetail,
 }
 
 pub struct VaultView {
     pub search_query: String,
     pub active_filter: SidebarFilter,
     pub selected_item: Option<usize>,
-    pub selected_id: Option<String>,
+    pub selected_id: Option<CipherId>,
+    pub selected_detail: Option<CipherView>,
     pub dropdown_open: bool,
     pub sidebar_mode: SidebarMode,
     pub active_section: NavSection,
@@ -59,9 +65,11 @@ pub struct VaultView {
     pub pane_state: pane_grid::State<PaneKind>,
     pub list_pane: pane_grid::Pane,
     pub detail_pane: pane_grid::Pane,
-    // Cached data for view() — recomputed via refresh()
-    pub cached_items: Vec<CipherItem>,
-    pub all_items: Vec<CipherItem>,
+    // Cached data for view() — recomputed via set_items() / filtering on update.
+    // Items are wrapped in `Arc` because `CipherListView` doesn't derive `Clone`,
+    // and both Message dispatch and filter recomputation need cheap clones.
+    pub cached_items: Vec<Arc<CipherListView>>,
+    pub all_items: Vec<Arc<CipherListView>>,
 }
 
 impl VaultView {
@@ -77,6 +85,7 @@ impl VaultView {
             active_filter: SidebarFilter::AllItems,
             selected_item: None,
             selected_id: None,
+            selected_detail: None,
             dropdown_open: false,
             sidebar_mode: SidebarMode::Expanded,
             active_section: NavSection::Vault,
@@ -117,7 +126,11 @@ impl VaultView {
             VaultMessage::ItemList(item_msg) => match item_msg {
                 ItemListMessage::ItemSelected(idx) => {
                     self.selected_item = Some(idx);
-                    self.selected_id = self.cached_items.get(idx).map(|i| i.id.clone());
+                    self.selected_id = self.cached_items.get(idx).and_then(|i| i.id);
+                    self.selected_detail = None;
+                    if let Some(id) = self.selected_id {
+                        actions.push(VaultAction::LoadDetail(id));
+                    }
                 }
                 ItemListMessage::OpenExternal(_)
                 | ItemListMessage::CopyUsername(_)
@@ -130,6 +143,8 @@ impl VaultView {
             VaultMessage::CloseDetailPane => {
                 self.selected_item = None;
                 self.selected_id = None;
+                self.selected_detail = None;
+                actions.push(VaultAction::ClearDetail);
             }
             VaultMessage::PaneResized(event) => {
                 self.pane_state.resize(event.split, event.ratio);
@@ -153,12 +168,34 @@ impl VaultView {
         actions
     }
 
-    /// Recompute cached items from the active session's vault data.
-    pub fn refresh(&mut self, vault_items: &[CipherItem]) {
-        self.all_items = vault_items.to_vec();
+    /// Replace the vault list with newly-decrypted items (called after `list_ciphers` finishes).
+    pub fn set_items(&mut self, items: Vec<Arc<CipherListView>>) {
+        self.all_items = items;
+        self.recompute_filtered();
+    }
+
+    /// Apply a freshly-loaded `CipherView` if it still matches the user's current selection.
+    /// Stale loads (the user clicked a different item before this one decrypted) are dropped.
+    pub fn set_selected_detail(&mut self, view: CipherView) {
+        if self.selected_id == view.id {
+            self.selected_detail = Some(view);
+        }
+    }
+
+    /// Refresh the filtered list (e.g. after a search query change).
+    pub fn refresh_filter(&mut self) {
+        self.recompute_filtered();
+    }
+
+    fn recompute_filtered(&mut self) {
         self.cached_items = self.filtered_items();
-        if let Some(ref id) = self.selected_id {
-            self.selected_item = self.cached_items.iter().position(|i| i.id == *id);
+        if let Some(id) = self.selected_id {
+            self.selected_item = self
+                .cached_items
+                .iter()
+                .position(|i| i.id == Some(id));
+        } else {
+            self.selected_item = None;
         }
     }
 
@@ -167,19 +204,22 @@ impl VaultView {
         self.search_query.clear();
         self.selected_item = None;
         self.selected_id = None;
+        self.selected_detail = None;
         self.active_filter = SidebarFilter::AllItems;
+        self.all_items.clear();
+        self.cached_items.clear();
     }
 
-    fn filtered_items(&self) -> Vec<CipherItem> {
+    fn filtered_items(&self) -> Vec<Arc<CipherListView>> {
         let items = self
             .all_items
             .iter()
             .filter(|item| match self.active_filter {
                 SidebarFilter::AllItems => true,
-                SidebarFilter::Favorites => false,
-                SidebarFilter::Category(cat) => item.category == cat,
-                SidebarFilter::Archive => false,
-                SidebarFilter::Trash => false,
+                SidebarFilter::Favorites => item.favorite,
+                SidebarFilter::Category(cat) => cat == cipher_list_view_type_to_type(&item.r#type),
+                SidebarFilter::Archive => item.archived_date.is_some(),
+                SidebarFilter::Trash => item.deleted_date.is_some(),
             });
 
         let query = self.search_query.to_lowercase();
@@ -188,15 +228,22 @@ impl VaultView {
         } else {
             items
                 .filter(|item| {
-                    item.name.to_lowercase().contains(&query)
-                        || item
-                            .username
+                    if item.name.to_lowercase().contains(&query)
+                        || item.subtitle.to_lowercase().contains(&query)
+                    {
+                        return true;
+                    }
+                    if let CipherListViewType::Login(login) = &item.r#type
+                        && let Some(uri) = login
+                            .uris
                             .as_ref()
-                            .is_some_and(|u| u.to_lowercase().contains(&query))
-                        || item
-                            .url
-                            .as_ref()
-                            .is_some_and(|u| u.to_lowercase().contains(&query))
+                            .and_then(|u| u.first())
+                            .and_then(|u| u.uri.as_deref())
+                        && uri.to_lowercase().contains(&query)
+                    {
+                        return true;
+                    }
+                    false
                 })
                 .cloned()
                 .collect()
@@ -204,14 +251,25 @@ impl VaultView {
     }
 }
 
+/// Project a `CipherListViewType` down to its discriminant `CipherType`.
+fn cipher_list_view_type_to_type(t: &CipherListViewType) -> bitwarden_vault::CipherType {
+    use bitwarden_vault::CipherType;
+    match t {
+        CipherListViewType::Login(_) => CipherType::Login,
+        CipherListViewType::SecureNote => CipherType::SecureNote,
+        CipherListViewType::Card(_) => CipherType::Card,
+        CipherListViewType::Identity => CipherType::Identity,
+        CipherListViewType::SshKey => CipherType::SshKey,
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn view<'a>(
     active_email: &'a str,
     _active_server: &'a str,
-    items: &'a [CipherItem],
-    all_items: &'a [CipherItem],
+    items: &'a [Arc<CipherListView>],
     selected_item: Option<usize>,
-    selected_id: Option<&'a str>,
+    selected_detail: Option<&'a CipherView>,
     active_filter: SidebarFilter,
     search_query: &'a str,
     accounts: &'a [AccountEntry],
@@ -237,9 +295,7 @@ pub fn view<'a>(
     .map(VaultMessage::Sidebar);
 
     // --- Content area: PaneGrid when detail open, plain list otherwise ---
-    let selected_cipher = selected_id.and_then(|id| all_items.iter().find(|i| i.id == id));
-
-    let content_area_inner: Element<'a, VaultMessage, AppTheme> = if selected_cipher.is_some() {
+    let content_area_inner: Element<'a, VaultMessage, AppTheme> = if selected_detail.is_some() {
         pane_grid::PaneGrid::new(pane_state, |_pane, kind, _is_maximized| match kind {
             PaneKind::List => {
                 let content = list_content(
@@ -254,7 +310,7 @@ pub fn view<'a>(
                 pane_grid::Content::new(content)
             }
             PaneKind::Detail => {
-                if let Some(item) = selected_cipher {
+                if let Some(item) = selected_detail {
                     let detail = detail_pane::view(item, colors).map(|msg| match msg {
                         DetailPaneMessage::Close => VaultMessage::CloseDetailPane,
                         other => VaultMessage::DetailPane(other),
@@ -319,7 +375,7 @@ pub fn view<'a>(
 /// Builds the list pane content (header + search + item list).
 fn list_content<'a>(
     active_email: &'a str,
-    items: &'a [CipherItem],
+    items: &'a [Arc<CipherListView>],
     selected_item: Option<usize>,
     search_query: &'a str,
     accounts: &'a [AccountEntry],

@@ -67,6 +67,11 @@ impl BwiIcon {
     {
         text(self.0).font(BWI_FONT).size(size).color(color).into()
     }
+
+    /// Raw codepoint — prefer `render()` in public APIs.
+    pub(crate) const fn char(self) -> char {
+        self.0
+    }
 }
 
 // Codepoints from clients/libs/angular/src/scss/bwicons/styles/style.scss

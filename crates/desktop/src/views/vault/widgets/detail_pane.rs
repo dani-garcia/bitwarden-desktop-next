@@ -1,3 +1,4 @@
+use bitwarden_vault::{CardView, CipherType, CipherView, IdentityView, LoginView, SshKeyView};
 use iced::{
     Alignment, Background, Element, Fill, Padding,
     widget::{Space, column, container, row, scrollable, text},
@@ -5,7 +6,6 @@ use iced::{
 
 use crate::{
     components::{self, buttons, icons},
-    state::CipherItem,
     theme::{AppColors, AppTheme},
 };
 
@@ -22,7 +22,7 @@ pub enum DetailPaneMessage {
 }
 
 pub fn view<'a>(
-    item: &'a CipherItem,
+    item: &'a CipherView,
     colors: &AppColors,
 ) -> Element<'a, DetailPaneMessage, AppTheme> {
     let header = header_row(item, colors);
@@ -30,13 +30,46 @@ pub fn view<'a>(
     let mut sections: Vec<Element<'a, DetailPaneMessage, AppTheme>> = vec![
         section_label("Item details", colors),
         item_details_card(item, colors),
-        section_label("Login credentials", colors),
-        credentials_card(item, colors),
     ];
 
-    if item.url.is_some() {
-        sections.push(section_label("Autofill options", colors));
-        sections.push(autofill_card(item, colors));
+    match item.r#type {
+        CipherType::Login => {
+            if let Some(login) = item.login.as_ref() {
+                sections.push(section_label("Login credentials", colors));
+                sections.push(login_card(login, colors));
+
+                if let Some(uri) = first_login_uri(login) {
+                    sections.push(section_label("Autofill options", colors));
+                    sections.push(autofill_card(uri, colors));
+                }
+            }
+        }
+        CipherType::Card => {
+            if let Some(card) = item.card.as_ref() {
+                sections.push(section_label("Card details", colors));
+                sections.push(card_details_card(card, colors));
+            }
+        }
+        CipherType::Identity => {
+            if let Some(identity) = item.identity.as_ref() {
+                sections.push(section_label("Personal details", colors));
+                sections.push(identity_card(identity, colors));
+            }
+        }
+        CipherType::SecureNote => {
+            if let Some(notes) = item.notes.as_deref() {
+                sections.push(section_label("Note", colors));
+                sections.push(card_with_margin(components::styled_card(
+                    text(notes).size(14).color(colors.text_primary).into(),
+                )));
+            }
+        }
+        CipherType::SshKey => {
+            if let Some(key) = item.ssh_key.as_ref() {
+                sections.push(section_label("SSH key", colors));
+                sections.push(ssh_key_card(key, colors));
+            }
+        }
     }
 
     let body = scrollable(column(sections).spacing(4).padding([12, 20])).height(Fill);
@@ -58,15 +91,15 @@ pub fn view<'a>(
 // ---------------------------------------------------------------------------
 
 fn header_row<'a>(
-    item: &'a CipherItem,
+    item: &'a CipherView,
     colors: &AppColors,
 ) -> Element<'a, DetailPaneMessage, AppTheme> {
-    let category_label = match item.category {
-        crate::state::CipherCategory::Login => "View login",
-        crate::state::CipherCategory::Card => "View card",
-        crate::state::CipherCategory::Identity => "View identity",
-        crate::state::CipherCategory::SecureNote => "View note",
-        crate::state::CipherCategory::SshKey => "View SSH key",
+    let category_label = match item.r#type {
+        CipherType::Login => "View login",
+        CipherType::Card => "View card",
+        CipherType::Identity => "View identity",
+        CipherType::SecureNote => "View note",
+        CipherType::SshKey => "View SSH key",
     };
 
     let title = text(category_label).size(18).color(colors.text_primary);
@@ -101,30 +134,34 @@ fn section_label<'a>(
 }
 
 // ---------------------------------------------------------------------------
-// Item details card
+// Item details (universal)
 // ---------------------------------------------------------------------------
 
 fn item_details_card<'a>(
-    item: &'a CipherItem,
+    item: &'a CipherView,
     colors: &AppColors,
 ) -> Element<'a, DetailPaneMessage, AppTheme> {
-    let name_field = field_readonly("Name", &item.name, colors);
-    card_with_margin(components::styled_card(
-        column![name_field].spacing(12).into(),
-    ))
+    let mut fields: Vec<Element<'a, DetailPaneMessage, AppTheme>> =
+        vec![field_readonly("Name", &item.name, colors)];
+    if let Some(notes) = item.notes.as_deref()
+        && !matches!(item.r#type, CipherType::SecureNote)
+    {
+        fields.push(field_readonly("Notes", notes, colors));
+    }
+    card_with_margin(components::styled_card(column(fields).spacing(12).into()))
 }
 
 // ---------------------------------------------------------------------------
-// Credentials card
+// Login card
 // ---------------------------------------------------------------------------
 
-fn credentials_card<'a>(
-    item: &'a CipherItem,
+fn login_card<'a>(
+    login: &'a LoginView,
     colors: &AppColors,
 ) -> Element<'a, DetailPaneMessage, AppTheme> {
     let mut fields: Vec<Element<'a, DetailPaneMessage, AppTheme>> = Vec::new();
 
-    if let Some(ref username) = item.username {
+    if let Some(username) = login.username.as_deref() {
         fields.push(field_with_action(
             "Username",
             username,
@@ -134,16 +171,18 @@ fn credentials_card<'a>(
         ));
     }
 
-    fields.push(field_with_action(
-        "Password",
-        "\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}",
-        &[icons::BWI_EYE, icons::BWI_COPY],
-        &[
-            DetailPaneMessage::TogglePasswordVisibility,
-            DetailPaneMessage::CopyPassword,
-        ],
-        colors,
-    ));
+    if login.password.is_some() {
+        fields.push(field_with_action(
+            "Password",
+            "\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}",
+            &[icons::BWI_EYE, icons::BWI_COPY],
+            &[
+                DetailPaneMessage::TogglePasswordVisibility,
+                DetailPaneMessage::CopyPassword,
+            ],
+            colors,
+        ));
+    }
 
     if fields.is_empty() {
         fields.push(
@@ -157,18 +196,132 @@ fn credentials_card<'a>(
     card_with_margin(components::styled_card(column(fields).spacing(16).into()))
 }
 
+fn first_login_uri(login: &LoginView) -> Option<&str> {
+    login
+        .uris
+        .as_ref()
+        .and_then(|uris| uris.first())
+        .and_then(|u| u.uri.as_deref())
+}
+
+// ---------------------------------------------------------------------------
+// Card card
+// ---------------------------------------------------------------------------
+
+fn card_details_card<'a>(
+    card: &'a CardView,
+    colors: &AppColors,
+) -> Element<'a, DetailPaneMessage, AppTheme> {
+    let mut fields: Vec<Element<'a, DetailPaneMessage, AppTheme>> = Vec::new();
+    push_optional_field(&mut fields, "Cardholder name", card.cardholder_name.as_deref(), colors);
+    push_optional_field(&mut fields, "Brand", card.brand.as_deref(), colors);
+    push_optional_field(&mut fields, "Number", card.number.as_deref(), colors);
+
+    let expiration = match (card.exp_month.as_deref(), card.exp_year.as_deref()) {
+        (Some(m), Some(y)) => Some(format!("{m}/{y}")),
+        (Some(m), None) => Some(m.to_string()),
+        (None, Some(y)) => Some(y.to_string()),
+        (None, None) => None,
+    };
+    if let Some(exp) = expiration {
+        fields.push(field_readonly_owned("Expiration", exp, colors));
+    }
+
+    push_optional_field(&mut fields, "Security code", card.code.as_deref(), colors);
+
+    if fields.is_empty() {
+        fields.push(text("No card details").size(14).color(colors.text_muted).into());
+    }
+    card_with_margin(components::styled_card(column(fields).spacing(12).into()))
+}
+
+// ---------------------------------------------------------------------------
+// Identity card
+// ---------------------------------------------------------------------------
+
+fn identity_card<'a>(
+    identity: &'a IdentityView,
+    colors: &AppColors,
+) -> Element<'a, DetailPaneMessage, AppTheme> {
+    let mut fields: Vec<Element<'a, DetailPaneMessage, AppTheme>> = Vec::new();
+
+    let full_name = [
+        identity.title.as_deref(),
+        identity.first_name.as_deref(),
+        identity.middle_name.as_deref(),
+        identity.last_name.as_deref(),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>()
+    .join(" ");
+    if !full_name.is_empty() {
+        fields.push(field_readonly_owned("Name", full_name, colors));
+    }
+
+    push_optional_field(&mut fields, "Email", identity.email.as_deref(), colors);
+    push_optional_field(&mut fields, "Phone", identity.phone.as_deref(), colors);
+    push_optional_field(&mut fields, "Company", identity.company.as_deref(), colors);
+
+    let address_lines = [
+        identity.address1.as_deref(),
+        identity.address2.as_deref(),
+        identity.address3.as_deref(),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>()
+    .join(", ");
+    if !address_lines.is_empty() {
+        fields.push(field_readonly_owned("Address", address_lines, colors));
+    }
+
+    let locality = [
+        identity.city.as_deref(),
+        identity.state.as_deref(),
+        identity.postal_code.as_deref(),
+        identity.country.as_deref(),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>()
+    .join(", ");
+    if !locality.is_empty() {
+        fields.push(field_readonly_owned("City / region", locality, colors));
+    }
+
+    if fields.is_empty() {
+        fields.push(text("No identity details").size(14).color(colors.text_muted).into());
+    }
+    card_with_margin(components::styled_card(column(fields).spacing(12).into()))
+}
+
+// ---------------------------------------------------------------------------
+// SSH key card
+// ---------------------------------------------------------------------------
+
+fn ssh_key_card<'a>(
+    key: &'a SshKeyView,
+    colors: &AppColors,
+) -> Element<'a, DetailPaneMessage, AppTheme> {
+    let fields = vec![
+        field_readonly("Public key", &key.public_key, colors),
+        field_readonly("Private key", &key.private_key, colors),
+        field_readonly("Fingerprint", &key.fingerprint, colors),
+    ];
+    card_with_margin(components::styled_card(column(fields).spacing(12).into()))
+}
+
 // ---------------------------------------------------------------------------
 // Autofill card
 // ---------------------------------------------------------------------------
 
 fn autofill_card<'a>(
-    item: &'a CipherItem,
+    uri: &'a str,
     colors: &AppColors,
 ) -> Element<'a, DetailPaneMessage, AppTheme> {
-    let url = item.url.as_deref().unwrap_or("");
-
     let label = text("Website").size(12).color(colors.text_muted);
-    let value = text(url).size(14).color(colors.text_primary);
+    let value = text(uri).size(14).color(colors.text_primary);
 
     let copy_btn = icon_button(icons::BWI_COPY, DetailPaneMessage::CopyUrl, colors);
     let open_btn = icon_button(icons::BWI_EXTERNAL_LINK, DetailPaneMessage::OpenUrl, colors);
@@ -226,6 +379,32 @@ fn field_readonly<'a>(
     ]
     .spacing(2)
     .into()
+}
+
+/// Like `field_readonly` but takes an owned `String`, for synthesized values
+/// (joined names, formatted dates, etc.) that don't have a borrowable backing.
+fn field_readonly_owned<'a>(
+    label: &'a str,
+    value: String,
+    colors: &AppColors,
+) -> Element<'a, DetailPaneMessage, AppTheme> {
+    column![
+        text(label).size(12).color(colors.text_muted),
+        text(value).size(14).color(colors.text_primary),
+    ]
+    .spacing(2)
+    .into()
+}
+
+fn push_optional_field<'a>(
+    fields: &mut Vec<Element<'a, DetailPaneMessage, AppTheme>>,
+    label: &'a str,
+    value: Option<&'a str>,
+    colors: &AppColors,
+) {
+    if let Some(v) = value {
+        fields.push(field_readonly(label, v, colors));
+    }
 }
 
 fn field_with_action<'a>(

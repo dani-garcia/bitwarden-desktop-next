@@ -32,6 +32,10 @@ impl AppColors {
             titlebar_btn_hover: hex!(0x2d, 0x37, 0x48),
             nav_text: Color::WHITE,
             nav_item_hover: hex!(0x3c, 0x42, 0x4e),
+            toast_info_bg: hex!(0x17, 0x5d, 0xdc),
+            toast_success_bg: hex!(0x3b, 0xb3, 0x60),
+            toast_warning_bg: hex!(0xbf, 0x8b, 0x00),
+            toast_error_bg: hex!(0xc8, 0x3c, 0x3c),
         }
     }
 }

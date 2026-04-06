@@ -3,7 +3,32 @@ members = ["crates/*", "bitwarden_license/*", "tools/*"]
 default-members = ["crates/*", "bitwarden_license/*"]
 resolver = "3"
 
+[workspace.dependencies]
+async-trait = "0.1.89"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = "1"
+
+bitwarden-core = { git = "https://github.com/bitwarden/sdk-internal", rev = "6c25425d1c1e81bb9a9fea6b50a5cb7827d57476" }
+bitwarden-crypto = { git = "https://github.com/bitwarden/sdk-internal", rev = "6c25425d1c1e81bb9a9fea6b50a5cb7827d57476" }
+bitwarden-pm = { git = "https://github.com/bitwarden/sdk-internal", rev = "6c25425d1c1e81bb9a9fea6b50a5cb7827d57476" }
+bitwarden-state = { git = "https://github.com/bitwarden/sdk-internal", rev = "6c25425d1c1e81bb9a9fea6b50a5cb7827d57476" }
+bitwarden-vault = { git = "https://github.com/bitwarden/sdk-internal", rev = "6c25425d1c1e81bb9a9fea6b50a5cb7827d57476" }
+
+# Compile all dependencies with some optimizations when building this crate on debug
+# This slows down clean builds by about 50%, but the resulting binaries can be orders of magnitude faster
+# As clean builds won't occur very often, this won't slow down the development process
+[profile.dev.package."*"]
+opt-level = 3
+
 [profile.release]
-lto = "thin"
 codegen-units = 1
+lto = "thin"
 # strip = true
+# opt-level = "z"
+
+# Enable optimization for the bitwarden-crypto crate. This will increase the binary size slightly (~0.1MB),
+# but it will more aggressively inline functions. This will help us avoid extra stack copies of keys and
+# other sensitive values being left behind without cleanup.
+[profile.release.package.bitwarden-crypto]
+opt-level = 3

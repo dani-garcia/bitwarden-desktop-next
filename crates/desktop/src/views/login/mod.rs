@@ -82,7 +82,7 @@ pub enum LoginMessage {
 
 #[derive(Debug, Clone)]
 pub enum LoginAction {
-    Unlock,
+    Unlock(String),
     UnlockWithPin,
     UnlockWithBiometrics,
     LogOut,
@@ -140,9 +140,9 @@ impl LoginView {
                 self.show_password = !self.show_password;
             }
             LoginMessage::Unlock => {
-                self.password_input.clear();
+                let password = std::mem::take(&mut self.password_input);
                 self.show_password = false;
-                actions.push(LoginAction::Unlock);
+                actions.push(LoginAction::Unlock(password));
             }
 
             // ── Unlock: PIN ────────────────────────────────────────────────

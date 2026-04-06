@@ -3,9 +3,11 @@ use iced::{
     widget::{Space, column, container, row, svg, text},
 };
 
+use bitwarden_vault::CipherType;
+
 use crate::{
     components::{self, buttons, icons},
-    state::{CipherCategory, NavSection, SidebarFilter, SidebarMode},
+    state::{NavSection, SidebarFilter, SidebarMode},
     theme::{AppColors, AppTheme},
 };
 
@@ -165,11 +167,11 @@ fn expanded_panel<'a>(
     if vault_tree_open {
         items.push(nav_button("My Vault", icons::BWI_USER, SidebarFilter::AllItems, active_filter, colors));
         items.push(nav_button("Favorites", icons::BWI_STAR, SidebarFilter::Favorites, active_filter, colors));
-        items.push(nav_button("Logins", icons::BWI_LOGIN, SidebarFilter::Category(CipherCategory::Login), active_filter, colors));
-        items.push(nav_button("Cards", icons::BWI_CREDIT_CARD, SidebarFilter::Category(CipherCategory::Card), active_filter, colors));
-        items.push(nav_button("Identities", icons::BWI_IDENTITY, SidebarFilter::Category(CipherCategory::Identity), active_filter, colors));
-        items.push(nav_button("Notes", icons::BWI_NOTE, SidebarFilter::Category(CipherCategory::SecureNote), active_filter, colors));
-        items.push(nav_button("SSH keys", icons::BWI_KEY, SidebarFilter::Category(CipherCategory::SshKey), active_filter, colors));
+        items.push(nav_button("Logins", icons::BWI_LOGIN, SidebarFilter::Category(CipherType::Login), active_filter, colors));
+        items.push(nav_button("Cards", icons::BWI_CREDIT_CARD, SidebarFilter::Category(CipherType::Card), active_filter, colors));
+        items.push(nav_button("Identities", icons::BWI_IDENTITY, SidebarFilter::Category(CipherType::Identity), active_filter, colors));
+        items.push(nav_button("Notes", icons::BWI_NOTE, SidebarFilter::Category(CipherType::SecureNote), active_filter, colors));
+        items.push(nav_button("SSH keys", icons::BWI_KEY, SidebarFilter::Category(CipherType::SshKey), active_filter, colors));
         items.push(nav_button("Archive", icons::BWI_ARCHIVE, SidebarFilter::Archive, active_filter, colors));
         items.push(nav_button("Trash", icons::BWI_TRASH, SidebarFilter::Trash, active_filter, colors));
     }

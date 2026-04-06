@@ -1,9 +1,12 @@
+use std::sync::Arc;
+
+use bitwarden_vault::{CipherListView, CipherListViewType};
 use iced::{
     Alignment, Background, Border, Color, Element, Fill, Shadow,
     widget::{Column, Space, column, container, row, scrollable, text},
 };
 
-use crate::{components::{self, buttons, icons}, state::CipherItem, theme::{AppColors, AppTheme, RADIUS_MD}};
+use crate::{components::{self, buttons, icons}, theme::{AppColors, AppTheme, RADIUS_MD}};
 
 #[derive(Debug, Clone)]
 pub enum ItemListMessage {
@@ -36,7 +39,7 @@ fn initial_color(name: &str) -> iced::Color {
 }
 
 pub fn view<'a>(
-    items: &'a [CipherItem],
+    items: &'a [Arc<CipherListView>],
     selected_index: Option<usize>,
     colors: &AppColors,
 ) -> Element<'a, ItemListMessage, AppTheme> {
@@ -62,11 +65,19 @@ pub fn view<'a>(
         .enumerate()
         .map(|(i, item)| {
             let is_selected = selected_index == Some(i);
-            let subtitle = item
-                .username
-                .as_deref()
-                .or(item.url.as_deref())
-                .unwrap_or("");
+            let subtitle = item.subtitle.as_str();
+            let (has_username, has_uri) = match &item.r#type {
+                CipherListViewType::Login(login) => (
+                    login.username.is_some(),
+                    login
+                        .uris
+                        .as_ref()
+                        .and_then(|u| u.first())
+                        .and_then(|u| u.uri.as_deref())
+                        .is_some(),
+                ),
+                _ => (false, false),
+            };
 
             let initial = item
                 .name
@@ -99,14 +110,14 @@ pub fn view<'a>(
 
             // Action icons
             let mut actions: Vec<Element<'a, ItemListMessage, AppTheme>> = Vec::new();
-            if item.url.is_some() {
+            if has_uri {
                 actions.push(action_icon(
                     icons::BOX_ARROW_UP_RIGHT,
                     ItemListMessage::OpenExternal(i),
                     colors,
                 ));
             }
-            if item.username.is_some() {
+            if has_username {
                 actions.push(action_icon(icons::COPY, ItemListMessage::CopyUsername(i), colors));
             }
             actions.push(action_icon(

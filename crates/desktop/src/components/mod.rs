@@ -2,6 +2,7 @@ pub mod account_switcher;
 pub mod buttons;
 pub mod drop_down;
 pub mod icons;
+pub mod toast;
 
 use iced::{
     Background, Border, Color, Element, Fill, Shadow,

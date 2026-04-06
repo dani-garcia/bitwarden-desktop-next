@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use bitwarden_vault::CipherType;
+
 pub type UserId = String;
 
 #[derive(Debug, Clone)]
@@ -56,26 +58,7 @@ pub struct UserSession {
     pub display_name: String,
     pub server_url: String,
     pub locked: bool,
-    pub vault_items: Vec<CipherItem>,
     pub unlock_methods: UnlockMethods,
-}
-
-#[derive(Debug, Clone)]
-pub struct CipherItem {
-    pub id: String,
-    pub name: String,
-    pub username: Option<String>,
-    pub url: Option<String>,
-    pub category: CipherCategory,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum CipherCategory {
-    Login,
-    Card,
-    Identity,
-    SecureNote,
-    SshKey,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -84,11 +67,11 @@ pub enum Screen {
     Vault,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SidebarFilter {
     AllItems,
     Favorites,
-    Category(CipherCategory),
+    Category(CipherType),
     Archive,
     Trash,
 }

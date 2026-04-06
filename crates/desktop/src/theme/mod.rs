@@ -129,4 +129,12 @@ pub struct AppColors {
     pub nav_text: Color,
     /// Navigation sidebar item hover background
     pub nav_item_hover: Color,
+    /// Toast background — informational severity
+    pub toast_info_bg: Color,
+    /// Toast background — success severity
+    pub toast_success_bg: Color,
+    /// Toast background — warning severity
+    pub toast_warning_bg: Color,
+    /// Toast background — error severity
+    pub toast_error_bg: Color,
 }

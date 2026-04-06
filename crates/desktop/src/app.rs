@@ -1,11 +1,15 @@
 use std::sync::Arc;
 
+use bitwarden_vault::{CipherId, CipherListView, CipherView};
 use iced::{Element, Subscription, time};
 
 use crate::{
-    components::account_switcher::AccountEntry,
-    mock,
-    state::{AppState, CipherItem, Screen, UnlockMethod, UserSession},
+    components::{
+        account_switcher::AccountEntry,
+        toast::{self, Toast},
+    },
+    sdk::ClientManager,
+    state::{AppState, Screen, UnlockMethod, UserSession},
     theme::{AppTheme, ThemePreference},
     views::{
         login::{self, AuthPage, LoginMessage},
@@ -24,6 +28,13 @@ pub enum Message {
     WindowOpened(iced::window::Id),
     GotRawId(u64),
     SystemThemeChanged,
+    UnlockCompleted(crate::state::UserId, Result<(), String>),
+    VaultListLoaded(
+        crate::state::UserId,
+        Result<Vec<Arc<CipherListView>>, String>,
+    ),
+    CipherDetailLoaded(CipherId, Result<Box<CipherView>, String>),
+    CloseToast(usize),
 }
 
 pub struct App {
@@ -43,11 +54,30 @@ pub struct App {
     native_menu: Option<crate::menu::NativeMenuHandle>,
     menu_attached: bool,
     window_id: Option<iced::window::Id>,
+    client_manager: Arc<ClientManager>,
+    toasts: Vec<Toast>,
 }
 
 impl App {
     pub fn new() -> (Self, iced::Task<Message>) {
-        let (users, active_user) = mock::mock_users();
+        let client_manager = Arc::new(ClientManager::load());
+
+        // Build the per-user `UserSession` map from `ClientManager` metadata. Vault items
+        // are loaded lazily after unlock via `client_manager.list_ciphers(uid)`.
+        let mut users = std::collections::HashMap::new();
+        for (uid, meta) in client_manager.users() {
+            users.insert(
+                uid.clone(),
+                UserSession {
+                    email: meta.email.clone(),
+                    display_name: meta.display_name.clone(),
+                    server_url: meta.server_url.clone(),
+                    locked: true,
+                    unlock_methods: meta.unlock_methods.clone(),
+                },
+            );
+        }
+        let active_user = users.keys().next().cloned();
 
         let system_theme = Arc::new(
             system_theme::SystemTheme::new()
@@ -58,7 +88,7 @@ impl App {
         let mut app = Self {
             state: AppState {
                 users,
-                active_user: Some(active_user),
+                active_user,
                 screen: Screen::Login,
             },
             theme_preference: ThemePreference::System,
@@ -76,6 +106,8 @@ impl App {
             native_menu: None,
             menu_attached: false,
             window_id: None,
+            client_manager,
+            toasts: Vec::new(),
         };
         // Set initial unlock method based on active user's preferred method
         let preferred = app
@@ -125,15 +157,27 @@ impl App {
                 self.title_bar.dismiss_menu();
                 for action in self.login_view.update(msg) {
                     match action {
-                        login::LoginAction::Unlock
-                        | login::LoginAction::UnlockWithPin
-                        | login::LoginAction::UnlockWithBiometrics => {
-                            if let Some(ref uid) = self.state.active_user
-                                && let Some(session) = self.state.users.get_mut(uid)
-                            {
-                                session.locked = false;
+                        login::LoginAction::Unlock(password) => {
+                            if let Some(uid) = self.state.active_user.clone() {
+                                let mgr = self.client_manager.clone();
+                                let uid_for_msg = uid.clone();
+                                return iced::Task::perform(
+                                    async move { mgr.unlock(&uid, password).await },
+                                    move |result| {
+                                        Message::UnlockCompleted(uid_for_msg.clone(), result)
+                                    },
+                                );
                             }
-                            self.state.screen = Screen::Vault;
+                        }
+                        login::LoginAction::UnlockWithPin => {
+                            self.push_toast(Toast::warning(
+                                "PIN unlock is not yet supported",
+                            ));
+                        }
+                        login::LoginAction::UnlockWithBiometrics => {
+                            self.push_toast(Toast::warning(
+                                "Biometric unlock is not yet supported",
+                            ));
                         }
                         login::LoginAction::LogOut => {
                             if let Some(ref uid) = self.state.active_user {
@@ -142,7 +186,9 @@ impl App {
                             self.state.active_user = self.state.users.keys().next().cloned();
                         }
                         login::LoginAction::SwitchUser(uid) => {
-                            self.handle_user_switch(uid);
+                            if let Some(task) = self.handle_user_switch(uid) {
+                                return task;
+                            }
                         }
                         login::LoginAction::Login { email, password } => {
                             // TODO: actual login via SDK
@@ -162,7 +208,9 @@ impl App {
                 for action in self.vault_view.update(msg) {
                     match action {
                         vault::VaultAction::SwitchUser(uid) => {
-                            self.handle_user_switch(uid);
+                            if let Some(task) = self.handle_user_switch(uid) {
+                                return task;
+                            }
                         }
                         vault::VaultAction::FocusSearch => {
                             extra_task = iced::widget::operation::focus(
@@ -175,11 +223,27 @@ impl App {
                             self.login_view.email_input.clear();
                             self.login_view.login_password_input.clear();
                         }
+                        vault::VaultAction::LoadDetail(cipher_id) => {
+                            if let Some(uid) = self.state.active_user.clone() {
+                                let mgr = self.client_manager.clone();
+                                return iced::Task::perform(
+                                    async move { mgr.full_cipher(&uid, cipher_id).await },
+                                    move |result| {
+                                        Message::CipherDetailLoaded(
+                                            cipher_id,
+                                            result.map(Box::new),
+                                        )
+                                    },
+                                );
+                            }
+                        }
+                        vault::VaultAction::ClearDetail => {
+                            // Already cleared inside the view's own update.
+                        }
                     }
                 }
                 if is_search {
-                    let items: Vec<CipherItem> = self.all_vault_items().to_vec();
-                    self.vault_view.refresh(&items);
+                    self.vault_view.refresh_filter();
                 }
             }
             Message::TitleBar(msg) => {
@@ -253,9 +317,61 @@ impl App {
                     self.current_theme = self.theme_preference.resolve(self.system_theme.get_scheme());
                 }
             }
+            Message::UnlockCompleted(uid, result) => match result {
+                Ok(()) => {
+                    if let Some(session) = self.state.users.get_mut(&uid) {
+                        session.locked = false;
+                    }
+                    if self.state.active_user.as_deref() == Some(&uid) {
+                        self.state.screen = Screen::Vault;
+                        self.refresh_cache();
+                        return self.load_vault_list_task(uid);
+                    }
+                    eprintln!("[unlock] {uid}: SDK initialize_user_crypto succeeded");
+                }
+                Err(err) => {
+                    eprintln!("[unlock] {uid}: SDK initialize_user_crypto failed: {err}");
+                    // TODO: surface as toast notification.
+                }
+            },
+            Message::VaultListLoaded(uid, result) => {
+                if self.state.active_user.as_deref() != Some(&uid) {
+                    // Stale: user switched while the decrypt was in flight.
+                } else {
+                    match result {
+                        Ok(items) => {
+                            eprintln!(
+                                "[vault] {uid}: loaded {} decrypted ciphers",
+                                items.len()
+                            );
+                            self.vault_view.set_items(items);
+                        }
+                        Err(err) => {
+                            eprintln!("[vault] {uid}: list_ciphers failed: {err}");
+                        }
+                    }
+                }
+            }
+            Message::CipherDetailLoaded(_id, result) => match result {
+                Ok(view) => {
+                    self.vault_view.set_selected_detail(*view);
+                }
+                Err(err) => {
+                    eprintln!("[vault] full_cipher failed: {err}");
+                }
+            },
+            Message::CloseToast(idx) => {
+                if idx < self.toasts.len() {
+                    self.toasts.remove(idx);
+                }
+            }
         }
         self.refresh_cache();
         extra_task
+    }
+
+    fn push_toast(&mut self, toast: Toast) {
+        self.toasts.push(toast);
     }
 
     pub fn view(&self) -> Element<'_, Message, AppTheme> {
@@ -275,9 +391,8 @@ impl App {
                 &self.cached_email,
                 &self.cached_server,
                 &self.vault_view.cached_items,
-                &self.vault_view.all_items,
                 self.vault_view.selected_item,
-                self.vault_view.selected_id.as_deref(),
+                self.vault_view.selected_detail.as_ref(),
                 self.vault_view.active_filter,
                 &self.vault_view.search_query,
                 &self.cached_accounts,
@@ -306,13 +421,17 @@ impl App {
             .map(Message::TitleBar);
             let content: Element<'_, Message, AppTheme> =
                 iced::widget::column![tb, page].height(iced::Fill).into();
+            let with_toasts: Element<'_, Message, AppTheme> =
+                toast::Manager::new(content, &self.toasts, Message::CloseToast).into();
 
-            title_bar::resize_wrapper(content, |dir| {
+            title_bar::resize_wrapper(with_toasts, |dir| {
                 Message::TitleBar(title_bar::TitleBarMessage::ResizeEdge(dir))
             })
         } else {
             let tb = title_bar::view_empty().map(Message::TitleBar);
-            iced::widget::column![tb, page].height(iced::Fill).into()
+            let content: Element<'_, Message, AppTheme> =
+                iced::widget::column![tb, page].height(iced::Fill).into();
+            toast::Manager::new(content, &self.toasts, Message::CloseToast).into()
         }
     }
 
@@ -323,12 +442,6 @@ impl App {
             .active_user
             .as_ref()
             .and_then(|uid| self.state.users.get(uid))
-    }
-
-    fn all_vault_items(&self) -> &[CipherItem] {
-        self.active_session()
-            .map(|s| s.vault_items.as_slice())
-            .unwrap_or(&[])
     }
 
     fn refresh_cache(&mut self) {
@@ -367,21 +480,19 @@ impl App {
                 Vec::new()
             };
 
-        let vault_items = active_session
-            .as_ref()
-            .map(|s| s.vault_items.as_slice())
-            .unwrap_or(&[]);
-        self.vault_view.refresh(vault_items);
-
         if let Some(ref handle) = self.native_menu {
             crate::menu::sync_native_enabled(handle, &self.menu_state());
         }
     }
 
-    fn handle_user_switch(&mut self, uid: String) {
+    /// Switch the active user. Clears the previous user's cached vault list and, if the
+    /// new user is unlocked, returns a `Task` that will populate the vault list. Returns
+    /// `None` when no async work is needed (e.g. switching to a locked user).
+    fn handle_user_switch(&mut self, uid: String) -> Option<iced::Task<Message>> {
         self.state.active_user = Some(uid.clone());
         let session = self.state.users.get(&uid);
         let locked = session.map(|s| s.locked).unwrap_or(true);
+        self.vault_view.reset();
         if locked {
             self.state.screen = Screen::Login;
             let preferred = session
@@ -391,10 +502,27 @@ impl App {
             self.login_view.password_input.clear();
             self.login_view.pin_input.clear();
             self.login_view.show_password = false;
+            None
         } else {
             self.state.screen = Screen::Vault;
+            Some(self.load_vault_list_task(uid))
         }
-        self.vault_view.reset();
+    }
+
+    /// Build the `Task` that decrypts the user's vault list and lands as `VaultListLoaded`.
+    /// Wraps each `CipherListView` in `Arc` because the SDK type doesn't derive `Clone`,
+    /// and `Message` needs to be `Clone` for iced dispatch.
+    fn load_vault_list_task(&self, uid: String) -> iced::Task<Message> {
+        let mgr = self.client_manager.clone();
+        let uid_for_msg = uid.clone();
+        iced::Task::perform(
+            async move {
+                mgr.list_ciphers(&uid)
+                    .await
+                    .map(|items| items.into_iter().map(Arc::new).collect::<Vec<_>>())
+            },
+            move |result| Message::VaultListLoaded(uid_for_msg.clone(), result),
+        )
     }
 
     fn handle_menu_action(&mut self, action: crate::menu::MenuAction) -> iced::Task<Message> {
