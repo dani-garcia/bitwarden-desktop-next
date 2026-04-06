@@ -172,11 +172,13 @@ impl App {
                         login::LoginAction::UnlockWithPin => {
                             self.push_toast(Toast::warning(
                                 "PIN unlock is not yet supported",
+                                None,
                             ));
                         }
                         login::LoginAction::UnlockWithBiometrics => {
                             self.push_toast(Toast::warning(
                                 "Biometric unlock is not yet supported",
+                                None,
                             ));
                         }
                         login::LoginAction::LogOut => {

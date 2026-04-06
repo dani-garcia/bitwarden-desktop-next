@@ -3,33 +3,37 @@
 //! Adapted from iced's official `examples/toast` example
 //! (https://github.com/iced-rs/iced/blob/master/examples/toast/src/main.rs)
 //! and extended with per-toast opacity that fades in on appearance and out
-//! when the timer expires.
+//! when the timer expires, plus a countdown progress bar at the bottom and
+//! hover-to-pause behavior.
 //!
 //! `Manager` wraps the app's content `Element` and overlays a vertical stack of
-//! toasts in the lower-right corner. All animation timing and opacity state
+//! toasts in the lower-right corner. All animation timing and visuals state
 //! lives inside this module — call sites only push `Toast` values onto a `Vec`
 //! and let the manager handle the rest.
 //!
-//! ## How the fade works
+//! ## How the animation pipeline works
 //!
-//! - Animation state lives in two places:
-//!   1. The widget tree state (`Vec<Option<ToastTimer>>`) holds creation +
-//!      dismissal timestamps. This persists across frames because iced's
-//!      tree state outlives `Manager` instances (which are rebuilt every
-//!      `view()` call).
-//!   2. A per-row `Rc<Cell<f32>>` opacity cell, captured by the style closures
-//!      that build the toast's container/text. The cell is rebuilt every
-//!      frame; the overlay refreshes it from tree state on every
-//!      `RedrawRequested` tick before the children draw themselves.
-//! - On every redraw the overlay computes
-//!   `alpha = fade_in_factor * fade_out_factor`
-//!   from the timer struct and writes it into the cell. The style closures
-//!   pick it up via `Color::scale_alpha`.
-//! - Auto-dismiss is two-phase: first the timer expires and a `dismissing`
+//! - **Persistent state** lives in the widget tree as `Vec<Option<ToastTimer>>`.
+//!   `ToastTimer` carries a creation timestamp, an optional dismissal start
+//!   timestamp, and a `hovered` flag. This vec survives across `view()` rebuilds
+//!   because iced's tree state outlives `Manager` instances.
+//! - **Per-frame animation values** live in a parallel `Vec<Rc<Cell<ToastVisuals>>>`
+//!   on `Manager`. Each cell holds an `alpha` and a `progress` (both f32, both
+//!   `Copy`). The cells are rebuilt every frame; the overlay refreshes them
+//!   from `ToastTimer` state on every `RedrawRequested` tick before the
+//!   children draw themselves.
+//! - **The bridge** is the cell: style closures capture an `Rc<Cell<ToastVisuals>>`
+//!   at construction time and read its current value at draw time. Updating the
+//!   cell from inside the overlay's `update` is enough to drive a re-render
+//!   without any layout invalidation.
+//! - **Auto-dismiss is two-phase**: first the timer expires and a `dismissing`
 //!   instant is recorded; once the fade-out completes, the manager publishes
-//!   `on_close(idx)` so `App` can drop the toast from its `Vec`.
-//! - Manual close (clicking the × button) is instant — the button publishes
-//!   `on_close(idx)` directly, and the next frame the toast is gone.
+//!   `on_close(idx)` so `App` can drop the toast from its `Vec`. Manual close
+//!   (clicking the × button) bypasses the fade and publishes immediately.
+//! - **Hover pinning**: while the cursor is inside a toast's bounds, `compute_*`
+//!   short-circuit to "fully visible / full progress" and any in-flight
+//!   dismissal is cancelled. When the cursor leaves, the timer resumes counting
+//!   down from full.
 
 use std::{
     cell::Cell,
@@ -57,7 +61,10 @@ use crate::{
     theme::{AppColors, AppTheme, RADIUS_MD},
 };
 
-const DEFAULT_TIMEOUT_SECS: u64 = 5;
+// ── Tunables ───────────────────────────────────────────────────────────────
+
+/// How long each toast stays visible after fade-in completes.
+const TIMEOUT: Duration = Duration::from_secs(5);
 const TOAST_MAX_WIDTH: f32 = 320.0;
 const FADE_IN_MS: u64 = 150;
 const FADE_OUT_MS: u64 = 150;
@@ -73,6 +80,8 @@ const MAX_ALPHA: f32 = 0.95;
 const OVERLAY_TOP_PAD: f32 = 48.0;
 const OVERLAY_SIDE_PAD: f32 = 16.0;
 
+// ── State types ────────────────────────────────────────────────────────────
+
 /// Per-toast animation timestamps. Stored in the widget tree state so they
 /// survive across `view()` rebuilds.
 #[derive(Debug, Clone, Copy)]
@@ -86,10 +95,26 @@ struct ToastTimer {
     hovered: bool,
 }
 
+/// Per-frame animation values shared between the overlay (which writes) and
+/// the toast row's style closures (which read). One cell per toast row,
+/// refreshed on every `RedrawRequested` tick from the persisted `ToastTimer`.
+#[derive(Debug, Clone, Copy)]
+struct ToastVisuals {
+    alpha: f32,
+    progress: f32,
+}
+
+impl ToastVisuals {
+    const HIDDEN: Self = Self {
+        alpha: 0.0,
+        progress: 0.0,
+    };
+}
+
 /// Compute the current display alpha for a toast in `[0.0, MAX_ALPHA]`. The
 /// fade-in/out animation factors are always scaled by `MAX_ALPHA` so the peak
-/// opacity is 90%, keeping the toast a bit translucent even when "fully
-/// visible".
+/// opacity is `MAX_ALPHA`, keeping the toast a bit translucent even when
+/// "fully visible".
 fn compute_alpha(timer: &ToastTimer, now: Instant) -> f32 {
     // While hovered, the toast is pinned at the peak opacity.
     if timer.hovered && timer.dismissing.is_none() {
@@ -110,21 +135,26 @@ fn compute_alpha(timer: &ToastTimer, now: Instant) -> f32 {
     fade_in * fade_out * MAX_ALPHA
 }
 
-/// Fraction of the visible-time budget remaining: 1.0 at creation, 0.0 once the
-/// auto-dismiss fires. Used to drive the bottom progress bar. While hovered the
-/// progress is pinned to 1.0.
-fn compute_progress(timer: &ToastTimer, now: Instant, timeout: Duration) -> f32 {
+/// Fraction of the visible-time budget remaining: 1.0 at creation, 0.0 once
+/// the auto-dismiss fires. While hovered the progress is pinned to 1.0.
+fn compute_progress(timer: &ToastTimer, now: Instant) -> f32 {
     if timer.hovered && timer.dismissing.is_none() {
         return 1.0;
     }
     let elapsed = now.saturating_duration_since(timer.created).as_secs_f32();
-    let total = timeout.as_secs_f32();
-    if total <= 0.0 {
-        0.0
-    } else {
-        (1.0 - elapsed / total).clamp(0.0, 1.0)
+    let total = TIMEOUT.as_secs_f32();
+    (1.0 - elapsed / total).clamp(0.0, 1.0)
+}
+
+/// Bundle alpha + progress in one go so callers can write the cell once.
+fn refresh_visuals(timer: &ToastTimer, now: Instant) -> ToastVisuals {
+    ToastVisuals {
+        alpha: compute_alpha(timer, now),
+        progress: compute_progress(timer, now),
     }
 }
+
+// ── Public API ─────────────────────────────────────────────────────────────
 
 /// A user-facing notification.
 #[derive(Debug, Clone)]
@@ -143,36 +173,28 @@ pub enum ToastStatus {
 }
 
 impl Toast {
-    pub fn info(body: impl Into<String>) -> Self {
+    fn new(status: ToastStatus, body: impl Into<String>, title: Option<&str>) -> Self {
         Self {
-            title: "Info".to_string(),
+            title: title.unwrap_or(status.title()).to_string(),
             body: body.into(),
-            status: ToastStatus::Info,
+            status,
         }
     }
 
-    pub fn success(body: impl Into<String>) -> Self {
-        Self {
-            title: "Success".to_string(),
-            body: body.into(),
-            status: ToastStatus::Success,
-        }
+    pub fn info(body: impl Into<String>, title: Option<&str>) -> Self {
+        Self::new(ToastStatus::Info, body, title)
     }
 
-    pub fn warning(body: impl Into<String>) -> Self {
-        Self {
-            title: "Warning".to_string(),
-            body: body.into(),
-            status: ToastStatus::Warning,
-        }
+    pub fn success(body: impl Into<String>, title: Option<&str>) -> Self {
+        Self::new(ToastStatus::Success, body, title)
     }
 
-    pub fn error(body: impl Into<String>) -> Self {
-        Self {
-            title: "Error".to_string(),
-            body: body.into(),
-            status: ToastStatus::Error,
-        }
+    pub fn warning(body: impl Into<String>, title: Option<&str>) -> Self {
+        Self::new(ToastStatus::Warning, body, title)
+    }
+
+    pub fn error(body: impl Into<String>, title: Option<&str>) -> Self {
+        Self::new(ToastStatus::Error, body, title)
     }
 }
 
@@ -200,6 +222,26 @@ impl ToastStatus {
             a: 1.0,
         }
     }
+
+    /// Bootstrap-icons codepoint for the filled severity glyph.
+    fn icon(self) -> char {
+        match self {
+            ToastStatus::Info => icons::INFO_CIRCLE_FILL.char(),
+            ToastStatus::Success => icons::CHECK_CIRCLE_FILL.char(),
+            ToastStatus::Warning => icons::EXCLAMATION_TRIANGLE_FILL.char(),
+            ToastStatus::Error => icons::X_CIRCLE_FILL.char(),
+        }
+    }
+
+    /// Default title used when the caller passes `None` for the title slot.
+    fn title(self) -> &'static str {
+        match self {
+            ToastStatus::Info => "Info",
+            ToastStatus::Success => "Success",
+            ToastStatus::Warning => "Warning",
+            ToastStatus::Error => "Error",
+        }
+    }
 }
 
 // ── Manager widget ─────────────────────────────────────────────────────────
@@ -208,14 +250,11 @@ impl ToastStatus {
 pub struct Manager<'a, Message> {
     content: Element<'a, Message, AppTheme>,
     toasts: Vec<Element<'a, Message, AppTheme>>,
-    /// Per-toast opacity, shared between the overlay (which writes) and the
-    /// style closures (which read). Rebuilt every frame; current values are
-    /// re-derived from tree state on each `RedrawRequested`.
-    opacities: Vec<Rc<Cell<f32>>>,
-    /// Per-toast progress bar value (1.0 → 0.0 over the visible lifetime),
-    /// updated alongside `opacities` from the overlay tick.
-    progresses: Vec<Rc<Cell<f32>>>,
-    timeout_secs: u64,
+    /// Per-toast animation cells aligned 1:1 with `toasts`. Shared between the
+    /// overlay (writes on each tick) and the row's style closures (read at
+    /// draw time). Rebuilt every frame; values are re-derived from the
+    /// persisted `ToastTimer` state.
+    cells: Vec<Rc<Cell<ToastVisuals>>>,
     on_close: Box<dyn Fn(usize) -> Message + 'a>,
 }
 
@@ -228,95 +267,67 @@ where
         toasts: &'a [Toast],
         on_close: impl Fn(usize) -> Message + 'a,
     ) -> Self {
-        // Cells start at "fully transparent / fully empty"; `diff()` immediately
-        // reseeds them from the persisted timer state for the first draw.
-        let opacities: Vec<Rc<Cell<f32>>> =
-            toasts.iter().map(|_| Rc::new(Cell::new(0.0))).collect();
-        let progresses: Vec<Rc<Cell<f32>>> =
-            toasts.iter().map(|_| Rc::new(Cell::new(1.0))).collect();
+        // Cells start hidden; `diff()` immediately reseeds them from the
+        // persisted timer state for the first draw.
+        let cells: Vec<Rc<Cell<ToastVisuals>>> = toasts
+            .iter()
+            .map(|_| Rc::new(Cell::new(ToastVisuals::HIDDEN)))
+            .collect();
 
         let toast_elements = toasts
             .iter()
             .enumerate()
-            .map(|(index, toast)| {
-                toast_view(
-                    index,
-                    toast,
-                    opacities[index].clone(),
-                    progresses[index].clone(),
-                    &on_close,
-                )
-            })
+            .map(|(index, toast)| toast_view(index, toast, cells[index].clone(), &on_close))
             .collect();
 
         Self {
             content: content.into(),
             toasts: toast_elements,
-            opacities,
-            progresses,
-            timeout_secs: DEFAULT_TIMEOUT_SECS,
+            cells,
             on_close: Box::new(on_close),
         }
     }
+}
 
-    pub fn timeout(mut self, secs: u64) -> Self {
-        self.timeout_secs = secs;
-        self
+/// Build a `text::Style` closure that paints `Color::WHITE` scaled by the
+/// shared visuals cell's `alpha` (optionally further dimmed by `factor` for
+/// secondary copy like the body line).
+fn white_alpha_style(
+    cell: Rc<Cell<ToastVisuals>>,
+    factor: f32,
+) -> impl Fn(&AppTheme) -> iced::widget::text::Style {
+    move |_theme: &AppTheme| iced::widget::text::Style {
+        color: Some(Color::WHITE.scale_alpha(cell.get().alpha * factor)),
     }
 }
 
 fn toast_view<'a, Message: 'a + Clone>(
     index: usize,
     toast: &Toast,
-    opacity: Rc<Cell<f32>>,
-    progress: Rc<Cell<f32>>,
+    cell: Rc<Cell<ToastVisuals>>,
     on_close: &(impl Fn(usize) -> Message + 'a),
 ) -> Element<'a, Message, AppTheme> {
     let status = toast.status;
 
-    // Pick the severity icon (white-on-color filled glyph from Bootstrap Icons).
-    let severity_icon: char = match status {
-        ToastStatus::Info => icons::INFO_CIRCLE_FILL.char(),
-        ToastStatus::Success => icons::CHECK_CIRCLE_FILL.char(),
-        ToastStatus::Warning => icons::EXCLAMATION_TRIANGLE_FILL.char(),
-        ToastStatus::Error => icons::X_CIRCLE_FILL.char(),
-    };
-
-    // Each style closure captures its own clone of the opacity Rc so it can
-    // read the current alpha at draw time. Rc::clone is cheap (refcount bump).
-    let icon_opacity = opacity.clone();
-    let title_opacity = opacity.clone();
-    let body_opacity = opacity.clone();
-    let close_opacity = opacity.clone();
-    let outer_opacity = opacity.clone();
-
-    let icon_elem = text(severity_icon.to_string())
+    let icon_elem = text(status.icon().to_string())
         .font(icons::FONT)
         .size(22.0)
-        .style(move |_theme: &AppTheme| iced::widget::text::Style {
-            color: Some(Color::WHITE.scale_alpha(icon_opacity.get())),
-        });
+        .style(white_alpha_style(cell.clone(), 1.0));
 
     let title_elem = text(toast.title.clone())
         .font(crate::APP_FONT_BOLD)
         .size(14)
-        .style(move |_theme: &AppTheme| iced::widget::text::Style {
-            color: Some(Color::WHITE.scale_alpha(title_opacity.get())),
-        });
+        .style(white_alpha_style(cell.clone(), 1.0));
 
+    // Body text slightly dimmer than the title for hierarchy.
     let body_elem = text(toast.body.clone())
         .size(13)
-        .style(move |_theme: &AppTheme| iced::widget::text::Style {
-            // Body text slightly dimmer than the title for hierarchy.
-            color: Some(Color::WHITE.scale_alpha(body_opacity.get() * 0.92)),
-        });
+        .style(white_alpha_style(cell.clone(), 0.92));
 
     let close_icon = text(icons::BWI_CLOSE.char().to_string())
         .font(icons::BWI_FONT)
         .size(18.0)
-        .style(move |_theme: &AppTheme| iced::widget::text::Style {
-            color: Some(Color::WHITE.scale_alpha(close_opacity.get())),
-        });
+        .style(white_alpha_style(cell.clone(), 1.0));
 
     let close_btn = button(close_icon)
         .on_press((on_close)(index))
@@ -342,18 +353,18 @@ fn toast_view<'a, Message: 'a + Clone>(
     .width(Fill);
 
     let progress_bar: Element<'a, Message, AppTheme> = Element::new(ToastProgressBar {
-        progress: progress.clone(),
-        opacity: opacity.clone(),
+        cell: cell.clone(),
         height: PROGRESS_BAR_HEIGHT,
         status,
     });
 
     let inner = column![body_row, progress_bar].width(Fill);
 
+    let outer_cell = cell;
     container(inner)
         .max_width(TOAST_MAX_WIDTH)
         .style(move |theme: &AppTheme| {
-            let alpha = outer_opacity.get();
+            let alpha = outer_cell.get().alpha;
             container::Style {
                 background: Some(Background::Color(
                     status.background(&theme.colors).scale_alpha(alpha),
@@ -376,14 +387,13 @@ fn toast_view<'a, Message: 'a + Clone>(
 // ── Progress bar widget ───────────────────────────────────────────────────
 //
 // Tiny custom widget that paints a horizontal fill rectangle whose width is
-// proportional to the shared `progress` cell. Implementing this as a widget
-// (rather than using `container.width(Length::Fixed(...))`) lets us update the
-// fill ratio every frame WITHOUT triggering a re-layout — the closure inside
-// `draw` reads the current cell value at paint time.
+// proportional to the shared visuals cell's `progress`. Implementing this as
+// a widget (rather than using `container.width(Length::Fixed(...))`) lets us
+// update the fill ratio every frame WITHOUT triggering a re-layout — `draw`
+// reads the current cell value at paint time.
 
 struct ToastProgressBar {
-    progress: Rc<Cell<f32>>,
-    opacity: Rc<Cell<f32>>,
+    cell: Rc<Cell<ToastVisuals>>,
     height: f32,
     status: ToastStatus,
 }
@@ -410,9 +420,10 @@ impl<Message> Widget<Message, AppTheme, iced::Renderer> for ToastProgressBar {
     ) {
         use iced::advanced::Renderer as _;
 
+        let visuals = self.cell.get();
         let bounds = layout.bounds();
-        let progress = self.progress.get().clamp(0.0, 1.0);
-        let alpha = self.opacity.get();
+        let progress = visuals.progress.clamp(0.0, 1.0);
+        let alpha = visuals.alpha;
         let filled_width = bounds.width * progress;
         if filled_width <= 0.0 || alpha <= 0.0 {
             return;
@@ -434,6 +445,8 @@ impl<Message> Widget<Message, AppTheme, iced::Renderer> for ToastProgressBar {
         );
     }
 }
+
+// ── Manager: Widget impl ───────────────────────────────────────────────────
 
 impl<Message> Widget<Message, AppTheme, iced::Renderer> for Manager<'_, Message>
 where
@@ -487,26 +500,17 @@ where
             _ => {}
         }
 
-        // Seed each opacity + progress cell from the persisted timer state so
-        // the first draw of a frame has the correct values even if the
-        // overlay's update hasn't run yet (e.g. when the rebuild was triggered
-        // by a mouse event rather than a `RedrawRequested`).
+        // Seed each visuals cell from the persisted timer state so the first
+        // draw of a frame has the correct values even if the overlay's update
+        // hasn't run yet (e.g. when the rebuild was triggered by a mouse event
+        // rather than a `RedrawRequested`).
         let now = Instant::now();
-        let timeout = Duration::from_secs(self.timeout_secs);
-        for (idx, slot) in timers.iter().enumerate() {
-            let (alpha, progress) = match slot {
-                Some(timer) => (
-                    compute_alpha(timer, now),
-                    compute_progress(timer, now, timeout),
-                ),
-                None => (0.0, 0.0),
+        for (cell, slot) in self.cells.iter().zip(timers.iter()) {
+            let visuals = match slot {
+                Some(timer) => refresh_visuals(timer, now),
+                None => ToastVisuals::HIDDEN,
             };
-            if let Some(opacity) = self.opacities.get(idx) {
-                opacity.set(alpha);
-            }
-            if let Some(prog) = self.progresses.get(idx) {
-                prog.set(progress);
-            }
+            cell.set(visuals);
         }
 
         let children: Vec<&Element<'_, Message, AppTheme>> = std::iter::once(&self.content)
@@ -614,10 +618,8 @@ where
                 toasts: &mut self.toasts,
                 trees: toasts_state,
                 timers,
-                opacities: &self.opacities,
-                progresses: &self.progresses,
+                cells: &self.cells,
                 on_close: &self.on_close,
-                timeout_secs: self.timeout_secs,
             }))
         });
 
@@ -642,10 +644,8 @@ struct ToastOverlay<'a, 'b, Message> {
     toasts: &'b mut [Element<'a, Message, AppTheme>],
     trees: &'b mut [Tree],
     timers: &'b mut [Option<ToastTimer>],
-    opacities: &'b [Rc<Cell<f32>>],
-    progresses: &'b [Rc<Cell<f32>>],
+    cells: &'b [Rc<Cell<ToastVisuals>>],
     on_close: &'b dyn Fn(usize) -> Message,
-    timeout_secs: u64,
 }
 
 impl<Message> overlay::Overlay<Message, AppTheme, iced::Renderer> for ToastOverlay<'_, '_, Message>
@@ -691,17 +691,18 @@ where
         if let Event::Window(window::Event::RedrawRequested(now)) = event {
             // Drive the per-toast animation state machine. The timer for each
             // toast walks: appearing → visible → dismissing → dropped. Both
-            // the opacity and progress cells are refreshed every tick so the
-            // next draw picks them up. We schedule another frame at ~60fps for
-            // the entire visible lifetime — the progress bar shrinks smoothly
-            // and fades stay continuous.
-            let timeout = Duration::from_secs(self.timeout_secs);
+            // the alpha and progress fields of the visuals cell are refreshed
+            // every tick so the next draw picks them up. We schedule another
+            // frame at ~30fps for the entire visible lifetime — the progress
+            // bar shrinks smoothly and fades stay continuous.
             let fade_out_d = Duration::from_millis(FADE_OUT_MS);
             let cursor_pos = cursor.position();
             let mut child_layouts = layout.children();
 
-            for (index, slot) in self.timers.iter_mut().enumerate() {
-                let child_layout = child_layouts.next();
+            for ((index, slot), cell) in self.timers.iter_mut().enumerate().zip(self.cells.iter()) {
+                let child_layout = child_layouts
+                    .next()
+                    .expect("child layout exists for every timer");
                 let Some(timer) = slot.as_mut() else {
                     continue;
                 };
@@ -712,7 +713,7 @@ where
                 // in-flight dismissal and slide `created` forward so when the
                 // cursor leaves, the timer naturally resumes from full.
                 let cursor_over = cursor_pos
-                    .and_then(|p| child_layout.map(|cl| cl.bounds().contains(p)))
+                    .map(|p| child_layout.bounds().contains(p))
                     .unwrap_or(false);
                 timer.hovered = cursor_over;
                 if cursor_over {
@@ -722,34 +723,24 @@ where
                 }
 
                 // Phase 1: kick off auto-dismiss once the visible timer expires.
-                if timer.dismissing.is_none() && timer.created.elapsed() >= timeout {
+                if timer.dismissing.is_none() && timer.created.elapsed() >= TIMEOUT {
                     timer.dismissing = Some(*now);
                 }
 
-                // Phase 2: publish on_close once the fade-out completes.
+                // Phase 2: publish on_close once the fade-out completes. The
+                // toast is dropped from `App.toasts` next frame, so there's no
+                // need to write the cell here — its `Element` won't be drawn
+                // again before the rebuild.
                 if let Some(start) = timer.dismissing
                     && now.saturating_duration_since(start) >= fade_out_d
                 {
                     *slot = None;
-                    if let Some(opacity) = self.opacities.get(index) {
-                        opacity.set(0.0);
-                    }
-                    if let Some(progress) = self.progresses.get(index) {
-                        progress.set(0.0);
-                    }
                     shell.publish((self.on_close)(index));
                     continue;
                 }
 
-                // Refresh the shared cells for the upcoming draw call.
-                let alpha = compute_alpha(timer, *now);
-                let progress = compute_progress(timer, *now, timeout);
-                if let Some(opacity) = self.opacities.get(index) {
-                    opacity.set(alpha);
-                }
-                if let Some(prog) = self.progresses.get(index) {
-                    prog.set(progress);
-                }
+                // Refresh the shared cell for the upcoming draw call.
+                cell.set(refresh_visuals(timer, *now));
 
                 shell.request_redraw_at(*now + Duration::from_millis(ANIMATION_TICK_MS));
             }
