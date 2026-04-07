@@ -1,9 +1,76 @@
 # TODO
 
+## Contents
+
+- [Top Priority: Investigate View Encapsulation](#top-priority-investigate-view-encapsulation)
+- [Next Up](#next-up)
+- [UI Polish](#ui-polish)
+- [Auth Flow](#auth-flow)
+- [Secure Text Input](#secure-text-input)
+- [Functionality](#functionality)
+- [Virtual List / Lazy Scrolling](#virtual-list--lazy-scrolling)
+- [Testing](#testing)
+- [Developer Experience](#developer-experience)
+- [Multi-Window Support](#multi-window-support)
+- [Toast API Review](#toast-api-review)
+
+---
+
+## Top Priority: Investigate View Encapsulation
+
+**Current pain.** `crates/desktop/src/app.rs` has:
+
+- a **13-variant `Message` enum** where every async callback, every child message category, and every cross-cutting concern is centralized in one place (`Login(LoginMessage)`, `Vault(VaultMessage)`, `TitleBar(TitleBarMessage)`, `UnlockCompleted`, `VaultListLoaded`, `CipherDetailLoaded`, `CloseToast`, `PollNativeMenu`, `KeyPressed`, `WindowOpened`, `GotRawId`, `SystemThemeChanged`);
+- a **~220-line `update()` function** that's one giant `match` over those variants, mixing screen routing, async task dispatch, toast pushing, menu handling, theme sync, and window chrome;
+- **29 `Message::` touch-sites** across `app.rs` just to wire up existing views.
+
+Every new feature today means: (1) add a `Message` variant, (2) add a match arm in `update()`, (3) often add a field on `App`, (4) thread the call through from the view. That's a lot of shared-file churn and it's the main thing that worries us about scaling to multiple views / multiple teams.
+
+### What we already know
+
+- **`iced::Component` is dead.** It was deprecated in iced 0.13 with this rationale: *"components introduce encapsulated state and hamper the use of a single source of truth. Instead, leverage the Elm Architecture directly, or implement a custom widget"*. So the "wrap each view in a Component" escape hatch isn't on the table — the iced maintainers explicitly decided against it.
+- **Custom widgets are still fine.** That's the path we already used for `components::toast::Manager` and `components::drop_down::DropDown`. Custom widgets are appropriate when the encapsulation boundary is *visual + behavioral* (a reusable thing with its own private state like fade timers), not *organizational* (one team owns the settings screen).
+- **Rust + Elm has an inherent tension.** [héctor on Zulip](https://iced.zulipchat.com/#narrow/channel/213316-discussions/topic/Async.20component.20updates/with/216384680) is explicit that the borrow checker can't let views mutate shared state concurrently, so forcing continuations through `Message` variants is unavoidable. The centralized message dispatch isn't a flaw of iced — it's a property of doing Elm in Rust.
+- **Our partial decentralization is already on-pattern.** `LoginView`/`VaultView`/`TitleBarState` each own their local state and return `Vec<Action>` from `update()`. App is a thin dispatcher that translates actions to cross-cutting effects (screen switch, async tasks, toast pushes). This *is* the Elm Architecture's canonical "helper functions on sub-models" approach. We didn't invent it accidentally — but we may not be applying it optimally.
+
+### Reframed investigation: how does the Elm Architecture *correctly* apply at scale?
+
+The question is no longer "how do we escape centralized state?" — it's "**what's the canonical Elm Architecture pattern that scales to large apps, and where are we deviating from it without realizing?**"
+
+Concrete things to learn:
+
+- **Read the Elm guide carefully**, especially [The Elm Architecture](https://guide.elm-lang.org/architecture/) (the canonical Model/View/Update primer), [the structure chapter](https://guide.elm-lang.org/webapps/structure.html), and [larger applications](https://guide.elm-lang.org/webapps/structure.html#larger-applications). The official position is that "modules" + "helper functions on sub-models" scale fine and that anyone reaching for components is using the wrong frame. Verify what their concrete recommendation is for our class of problem (multiple full screens, async task results, cross-cutting concerns like toasts).
+- **Read the unofficial iced guide** at <https://jl710.github.io/iced-guide/>. Much more detailed than the official iced docs, covers structuring patterns, custom widgets, async/Task usage, and multi-screen apps. Likely the best single resource for "how to actually build a non-trivial iced app".
+- **Real-world iced apps at scale.** Clone these as git submodules (mirroring how `clients/` already pulls in the official Bitwarden app for reference) so we can grep through them and see how they organize state:
+  - **Halloy** — IRC client, multi-pane, multi-server. Biggest iced app in the wild we know of. <https://github.com/squidowl/halloy>
+  - **Gauntlet** — cross-platform launcher with a plugin system, full app with settings, lists, detail views. <https://github.com/project-gauntlet/gauntlet>
+  - **Cosmic Files / Cosmic Settings / Cosmic Edit** (System76) — full desktop apps in iced, with settings panels, file pickers, etc.
+  - **Sniffnet** (network monitor) — has multiple "pages"
+
+  For each: count their top-level message variants, see how their `update()` is structured, look at how they wire async results back into sub-screens, and how they handle cross-cutting concerns (theming, notifications, modals). Document one or two patterns that look promising in `docs/decisions.md`.
+- **Real-world Elm apps at scale** ([elm-spa](https://www.elm-spa.dev/), [RealWorld example](https://github.com/rtfeldman/elm-spa-example), [Lamdera](https://lamdera.com/)). They handle multi-team ownership with "pages" that own their `Model`/`Msg`/`update`/`view`, glued by a top-level router. This is what we already do — but their routing layer may have idioms we're missing (e.g. how they handle messages targeted at a page that isn't currently mounted).
+- **The async-callback problem specifically.** `UnlockCompleted`/`VaultListLoaded`/`CipherDetailLoaded` are top-level only because `Task::perform` returns `Task<Message>`, not a scoped sub-message. Is there a `Task::map` / `Message::Vault(VaultMessage::ListLoaded(...))` wrapper pattern that would let us push these inside `VaultMessage` instead of having them at the App level? If so, the App-level enum collapses to roughly just `Login(_)`, `Vault(_)`, `TitleBar(_)`, `Window(_)`, `System(_)` plus a couple of orchestration variants — which is a *lot* less daunting to look at.
+- **Helper functions on the App model.** Even if we keep one big `Message` enum, the 220-line `update()` body could be split into `fn handle_login_action(&mut self, action) -> Task`, `fn handle_vault_action(...)`, `fn handle_unlock_completed(...)` etc. — each taking `&mut self`. The match arms become one-liners that delegate. This is the Elm-recommended fix and it's purely mechanical. Worth doing as the *first* concrete step regardless of what the bigger investigation concludes.
+- **Sub-enum pattern taken further.** Today the `Login`/`Vault`/`TitleBar` wrapper variants already isolate their child messages. Apply the same trick to the orphan callbacks: `Message::SdkResponse(SdkResponse)` containing `Unlock(...)`, `VaultListLoaded(...)`, `CipherDetailLoaded(...)`. Same trick for window/system stuff: `Message::Window(WindowMessage)` containing `Opened`, `GotRawId`, `KeyPressed`, `PollNativeMenu`, `SystemThemeChanged`. The total information stays the same but the top-level enum shrinks from 13 to ~6, and grouping by ownership makes the match readable.
+
+### Concrete deliverables
+
+1. **A short writeup** (in `docs/decisions.md`, "View Architecture" section) summarizing the canonical Elm-in-iced pattern and why we picked it. Killing the temptation to re-investigate this every six months.
+2. **Refactored `app.rs`** that reflects whatever the investigation concludes. At minimum: split `update()` into `handle_*` helper methods so the match body is one-liners. At most: re-group the `Message` enum into sub-enums and move the SDK callbacks into `VaultMessage`/`LoginMessage`.
+3. **A "how to add a new view" page** in `docs/architecture.md`: the canonical recipe for adding (say) a Settings or Generator screen, end-to-end, with no shared-file churn surprises. Future contributors should be able to follow it without reading any other doc.
+
+---
+
 ## Next Up
 
 - **Tray icon** — Use `tray-icon` crate (sister to `muda`, same raw window handle approach). Should show Bitwarden shield icon, right-click context menu with Lock/Quit. Iced PR https://github.com/iced-rs/iced/pull/3021 adds native tray support but is still **open** (targeting 1.0), so use `tray-icon` crate directly for now.
 - **Avatar color auto-generation** — Generate avatar background color from username/email hash (like the official app does) instead of using a fixed color.
+- **Unlock loading indicator** — While `ClientManager::unlock(...)` is decrypting the user key and the subsequent `list_ciphers(...)` decrypts the vault, the UI sits frozen on the unlock screen with no feedback. Replace the "Unlock" button with a greyed-out spinner (or disable + show a spinner next to it) from the moment `LoginAction::Unlock(...)` fires until either `Message::VaultListLoaded` arrives with `Ok` or `Message::UnlockCompleted` arrives with `Err`. Needs a small `unlock_in_progress: bool` on `LoginView` (or on App) and a spinner widget — probably `iced::widget::progress_bar` in indeterminate mode or a custom rotating icon. While in-progress: disable the input, hide the close-other-method links, show the spinner where the button was.
+- **Load-test account** — Add a third mock user to `tools/fake-data/src/main.rs` with ~20k ciphers (mix of logins, cards, notes; random names from a small word bank). Regenerated JSON will be much bigger but still embeddable via `include_bytes!`. This unblocks real testing of the Virtual List / Lazy Scrolling work below — right now we only have ~20 items per user so layout/render perf looks fine.
+- **`tracing` + `tracing_subscriber` for logging** — Replace the handful of `eprintln!` calls in `app.rs` (unlock failures, vault list loading, cipher decrypt errors) with structured `tracing::info!` / `warn!` / `error!` calls. Add `tracing` and `tracing_subscriber` as workspace deps, initialize a subscriber in `main.rs` (env-filter by default, e.g. `RUST_LOG=bitwarden_desktop_next=debug`). The SDK itself already emits `tracing` spans (`#[tracing::instrument]` on `initialize_user_crypto` and others) — once a subscriber is installed, those become visible for free, which will be valuable when debugging the unlock flow and the load-test scenario.
+- **Collapse `Vec<Arc<CipherListView>>` to `Arc<[CipherListView]>` (or `Rc<[CipherListView]>`)** — Today `VaultView::all_items` and `cached_items` each hold `Vec<Arc<CipherListView>>`, paying a refcount bump per item on every clone/filter pass. Since the full vault list is always cloned/filtered together (we never hand out individual `Arc<CipherListView>`s to different owners), the whole vec could be shared as one allocation: `Arc<[CipherListView]>`. Filter and search would then operate on indices into the shared slice, or return a fresh `Arc<[CipherListView]>` built from the filtered subset. The `Message::VaultListLoaded` variant simplifies to `Result<Arc<[CipherListView]>, String>`. Need to verify `CipherListView: !Clone` doesn't block the slice construction (we'd build a `Vec<CipherListView>` first and call `.into()` — should work since `Vec<T> -> Arc<[T]>` doesn't require `T: Clone`). Measure before/after with the 20k-cipher load-test account.
+
+---
 
 ## UI Polish
 
@@ -13,12 +80,16 @@
 - Account switcher dropdown: visual update to match 2025 Figma (Lock/Logout buttons, Options section)
 - SVG logo antialiasing — Iced's resvg rasterizer doesn't match browser quality; consider pre-rasterized PNG
 
+---
+
 ## Auth Flow
 
 - **Registration view** — "Create account" link on login email screen navigates here. Needs email, password, hint fields.
 - **Master password hint request** — "Get master password hint" link on login password screen. Sends hint request to server.
 - **Self-hosted server URL modal** — Server selector "Self-hosted" option should open a modal to input custom server URL.
 - **SSO login flow** — "Use single sign-on" button on login email screen. Needs SSO provider selection + browser redirect.
+
+---
 
 ## Secure Text Input
 
@@ -28,12 +99,16 @@
 - **Possible approaches**: (1) Fork `text_input`/`value.rs` to use `secrecy::SecretString` or `zeroize::Zeroizing<String>` as the backing store — most thorough but maintenance burden on iced upgrades. (2) Minimize exposure window — copy the password out of the text input into a zeroizing type immediately on submit, then clear the input field (already done for UX reasons). (3) Accept the gap as low-risk given the SDK's allocator and focus security effort elsewhere.
 - **Decision**: low priority. Approach (2) is essentially free and we should verify we're doing it. Approach (1) only if compliance requires it.
 
+---
+
 ## Functionality
 
 - Wire copy buttons in detail pane to clipboard (arboard crate or iced clipboard API)
 - Wire edit/delete buttons in detail pane (currently stubs)
 - Handle tray icon click to show/hide window
 - "Unlock with Windows Hello" button (future, needs keyring/biometric integration)
+
+---
 
 ## Virtual List / Lazy Scrolling
 
@@ -72,37 +147,21 @@ The recommended approach from iced contributors ([discourse thread](https://disc
 - Modify `item_list.rs` to accept a slice + spacer heights instead of the full item list.
 - Wrap the item list `Column` in `lazy((visible_range, data_version), ...)` for frame-to-frame caching.
 
+---
+
 ## Testing
 
 - **Unit tests for pure logic** — `VaultView::filtered_items()`, `Shortcut::matches()`, `EnabledWhen::check()`, view `update()` state machines (message in → actions out). Standard `#[test]`, no framework needed.
 - **Integration tests with `iced_test`** — headless simulator for click/type/find workflows. `iced_aw` 0.13 has extensive examples in `tests/` to reference. Add `iced_test = "0.14"` as dev-dependency.
 - **Snapshot tests** — optional, for catching visual regressions in theme/layout changes.
 
-## Architecture: View Encapsulation & Team Ownership
-
-The Elm architecture (which iced follows) has no concept of "components" — the entire app is one `update()` + one `view()`, with state and messages defined at the top level. This conflicts with our goal of **each view being owned by a separate team**, where a team can modify their view without touching other teams' files or the root `App` struct.
-
-### The tension
-
-- **Elm's position** ([guide](https://guide.elm-lang.org/webapps/structure.html#components)): thinking in components is discouraged. Instead, scale by splitting `update` and `view` into helper functions that operate on subsets of the model. Messages stay flat, state stays centralized.
-- **héctor (iced maintainer)** in [Zulip](https://iced.zulipchat.com/#narrow/channel/213316-discussions/topic/Async.20component.20updates/with/216384680): the scaling problem (needing to break `a(); modify self; b()` into separate message variants for each continuation) is inherent to concurrent programming in Rust, not a flaw of Elm. Rust won't let you mutably reference part of your state in the background while using it in the foreground.
-- **Our current approach**: already partially decentralized — `LoginView`, `VaultView`, `TitleBarState` each own their state and return `Vec<Action>` from `update()`. App is a thin dispatcher. This is the "helper functions on sub-models" approach Elm recommends, not true components.
-
-### What we need to research
-
-- **How far can the current pattern scale?** — Right now views return action enums (`LoginAction`, `VaultAction`) that App processes. Adding a new view means: (1) new view struct + message enum + action enum, (2) new `Message` variant in App, (3) new arm in App's `update()` and `view()`. Steps 2-3 touch shared files. Can we reduce that coupling?
-- **iced `component` / `Component` trait** — iced had an experimental `Component` trait (see `iced_lazy::Component` in older versions). It allowed self-contained widgets with their own internal state and messages, only emitting output messages to the parent. Research whether this still exists in 0.14, whether it was removed/replaced, and whether it's suitable for full views (not just small widgets).
-- **Message routing via trait objects or registry** — Could views register themselves so App doesn't need to know about each one? e.g. `Box<dyn View>` with `update(&mut self, msg) -> Vec<Box<dyn Action>>`. Evaluate ergonomics vs type safety trade-off.
-- **Elm community patterns for large apps** — Look at how large Elm apps (e.g. elm-spa, RealWorld) handle multi-team ownership. The usual answer is "pages" with their own `Model`/`Msg`/`update`/`view`, glued together by a top-level router. This is close to what we have.
-- **Other iced apps at scale** — Find open-source iced apps with many views/screens and see how they structure state and messages. Halloy (IRC client), Cosmic desktop apps (System76), Sniffnet.
-
-### Goal
-
-A pattern where adding a new view (e.g. "Settings", "Generator") requires: (1) creating files in a new `views/settings/` directory, (2) a minimal one-line registration or import in a shared file — NOT modifying App's `update()` match arms, `Message` enum variants, or `view()` branches by hand. Each view team should be able to work independently.
+---
 
 ## Developer Experience
 
 - **Hot reloading** — Iced PR https://github.com/iced-rs/iced/pull/3000 is **merged** into master (June 2025). Uses `hot` feature flag + `subsecond`/`cargo-hot`. Not in iced 0.14 release yet — requires iced from git or waiting for 0.15/1.0.
+
+---
 
 ## Multi-Window Support
 
@@ -136,16 +195,16 @@ For many use cases (item editor, password generator, settings forms, confirmatio
 - **Modal**: item editor, password generator, settings forms, confirmations, "about" dialog — anything where the user acts and returns to the main view.
 - **Popup window**: use cases where the user needs to see/interact with both windows simultaneously (e.g. comparing two vault items side by side). Requires daemon migration.
 
-## SDK Integration
+---
 
-- **Fill mock clients with fake data** — `sdk.rs` has `mock_personal_client()` and `mock_work_client()` with empty `MemoryRepo`s. Populate them with realistic `Cipher` and `Folder` data (matching what `mock.rs` currently provides) so the vault view can read from the SDK instead of flat structs.
-- **Wire SDK to application logic** — Replace `mock::mock_users()` and the flat `UserSession.vault_items` with data sourced from `ClientManager`. The vault view should read cipher/folder data through `PasswordManagerClient.vault()` rather than the current `CipherItem` structs. This involves updating `App`, `refresh_cache()`, and the vault view to use SDK types.
+## Toast API Review
 
-## Toast Notifications
+The toast system is live in [components/toast.rs](../crates/desktop/src/components/toast.rs): `Manager` widget wrapping the app content, overlay with fade in/out, progress bar, hover-pause, severity-specific icon + color. Call sites today only use `Toast::warning(body, title)` from the PIN/biometrics stubs in `app.rs`.
 
-- **Research existing toast/notification widgets** — Before building a custom implementation, evaluate:
-  - Iced's own toast example: https://github.com/iced-rs/iced/blob/master/examples/toast/src/main.rs
-  - `iced-toasts` crate: https://github.com/Gomango999/iced-toasts/tree/main
-  - Check if `iced_aw` has any notification/toast widget
-  - Determine which approach fits best (overlay-based, stacked, timed auto-dismiss, action buttons)
-- **Implement toast system** — Needed for user feedback on actions like copy-to-clipboard, unlock success/failure, network errors, sync status. Should support multiple concurrent toasts, auto-dismiss with timeout, and different severity levels (info, success, error).
+Before we grow more call sites (unlock failure, copy-to-clipboard, sync errors, etc.) we should validate the API:
+
+- **Is the `Toast::info/success/warning/error(body, title)` surface the right shape?** The `title: Option<&str>` slot is a common pain point — callers have to pass `None` in the default case, which is a tiny wart on every call. Alternatives: a builder (`Toast::warning("body").with_title("Title")`), default + overloaded methods (`Toast::warning(body)` defaults, `Toast::warning_titled(body, title)` overrides), or drop the title entirely and only expose `body`. Pick whichever reads cleanest at call sites.
+- **Ergonomics from anywhere in the app.** Right now `App::push_toast(Toast)` is the only entry point, and it's a private method on `App`. Any view that wants to emit a toast has to return an action enum variant that App handles. Consider: should toasts be part of the `Vec<Action>` returned by views (cleanest), a shared `Arc<Mutex<ToastQueue>>` passed down, or a dedicated `ToastSink` trait? Validate with at least two hypothetical call sites outside `app.rs`.
+- **Is `Manager` the right wrapper level?** It currently wraps the entire `column![title_bar, page]`. Does that cover all the cases we'll need, or do we want per-view toast managers?
+- **What should the `Toast` struct even carry?** Today it's `{ title, body, status }`. Future callers may want an action button ("Undo"), an icon override, a sticky flag (no auto-dismiss), or a custom timeout. Plan the schema before we have ten call sites to migrate.
+- **Document the final design** in `docs/decisions.md` once the shape is locked in.

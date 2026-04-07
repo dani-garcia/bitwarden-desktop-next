@@ -126,6 +126,51 @@
 
 **Rationale**: Avoids duplicating menu structure. `Shortcut::to_accelerator()` reuses existing `display()` for muda compatibility. `DEV_BOTH_MENUS=1` shows both simultaneously for comparison.
 
+## SDK Integration: Generator Binary + Embedded JSON
+
+**Decision**: Build a standalone `tools/fake-data` binary that drives the real Bitwarden SDK (`make_register_keys`, `initialize_user_crypto`, `vault().ciphers().encrypt`, `vault().folders().encrypt`) to produce `assets/mock-vault.json`, then embed that JSON in the desktop crate via `include_bytes!`. The desktop app parses it at startup into `ClientManager`, which owns one `PasswordManagerClient` per user and pre-populates each client's `MemoryRepo<Cipher>` / `MemoryRepo<Folder>` with the encrypted data.
+
+**Alternatives considered**: (1) Hand-roll fake `Cipher` structs in Rust and skip the SDK entirely — rejected because it means the app never exercises real encrypt/decrypt code paths. (2) Generate a `.rs` file with `pub fn users() -> Vec<MockUser>` instead of JSON — rejected because `Cipher`/`EncString`/`CipherId`/`DateTime` aren't `const`-constructible, so the generated file would just be `parse::<EncString>().unwrap()` and `vec![...]` calls (i.e. serde deserialization in disguise), with the extra burden of emitting valid Rust and tracking SDK field churn. (3) Load the JSON at runtime from disk — rejected because `include_bytes!` is simpler and we don't need live reload (regeneration is a `cargo run -p fake-data` away).
+
+**Rationale**: `make_register_keys` + `initialize_user_crypto` + `vault().ciphers().encrypt(...)` exercises the exact code paths that a real client would hit during sign-up. The embedded JSON means the desktop app has a guaranteed-consistent mock vault for every build — no external service required, no network calls, no fixture sync problems. Unlock in the app is a real `crypto().initialize_user_crypto(...)` call against real encrypted data; `list_ciphers` is a real `decrypt_list` round-trip. Tests in `sdk.rs` cover the unlock → list → decrypt chain end-to-end with no mocking.
+
+**Dev passwords** (documented in `sdk.rs`): `alice@example.com` / `password`, `alice@acmecorp.com` / `123456`.
+
+## Cipher UI Types: SDK Directly, No Intermediate DTO
+
+**Decision**: The vault view, item list, and detail pane consume `bitwarden_vault::CipherListView` and `CipherView` directly. There's no intermediate `state::CipherItem` struct. `VaultView::cached_items` is `Vec<Arc<CipherListView>>`; the detail pane branches on `CipherView.r#type` and renders per-type field cards.
+
+**Previous approach**: Had a flat `state::CipherItem { id, name, username, url, category }` that mirrored the SDK shape loosely, with a hand-written `mock::mock_vault_items_for(uid)` as the data source. Made it easier to iterate on the UI without wiring the SDK, but meant two sources of truth and a translation layer.
+
+**Why changed**: Once the SDK pipeline was in place (see above), keeping `CipherItem` was pure overhead. Every new field on `CipherListView` would need to be duplicated in `CipherItem`, and the detail pane couldn't render Card/Identity/SshKey details without making up new mirror types. Going straight to SDK types removed the entire `mock.rs` module.
+
+**`Arc<CipherListView>` wrapping**: `CipherListView` doesn't derive `Clone`, and iced `Message`s must be `Clone`. Wrapping in `Arc` gives cheap clones for both message dispatch and filter recomputation. `CipherView` is smaller and does derive `Clone`, so it's passed as `Box<CipherView>` in messages (keeps the enum size down) and stored as `Option<CipherView>` on `VaultView`.
+
+**Stale-load guard**: When the user clicks item A, then item B before A's decrypt completes, both `CipherDetailLoaded` messages arrive but only B should apply. The guard is two lines in `VaultView::set_selected_detail`: `if self.selected_id == view.id`. Otherwise a fast A → B click could clobber B's view with A's.
+
+## Toast Notifications: Custom Widget + Unified Cells
+
+**Decision**: `components::toast::Manager` is a custom `Widget` that wraps the app's main content and overlays a vertical toast stack via iced's native `Overlay` trait. Animation state (fade in/out, countdown progress, hover-pause) lives in two places:
+
+1. **Persistent timer state** in the widget tree (`Vec<Option<ToastTimer>>`): creation timestamp, optional dismissal-start timestamp, hovered bool. Survives across `view()` rebuilds because iced's tree state outlives `Manager` instances.
+2. **Per-frame animation values** in `Vec<Rc<Cell<ToastVisuals>>>` on `Manager`, paired 1:1 with the toast list. `ToastVisuals { alpha, progress }` is `Copy`. Refreshed on every `window::Event::RedrawRequested` tick from the timer state.
+
+Style closures on the row widgets capture an `Rc<Cell<ToastVisuals>>` at construction time and read it at draw time. Updating the cell from inside the overlay's `update()` drives a re-render without any layout invalidation.
+
+**Alternatives considered**: (1) Iced's official toast example verbatim — the starting point, but it uses `container::primary/success/...` theme functions that don't map to our custom `AppTheme`. (2) `iced-toasts` crate — small, pulls in no meaningful abstraction, simpler to own the ~600 lines in-crate. (3) Spawning a separate window for each toast — rejected, toasts are ephemeral and window lifecycle is overkill.
+
+**Why custom cells instead of rebuilding Elements per frame**: Toast row `Element`s are built once per `view()` call inside `Manager::new`. The overlay's `update()` runs per-frame but can't reassign `self.toasts` because of the borrow graph (`&'b mut self.toasts` is held by the overlay::Element it returns). Cells are the simplest bridge: one `Rc<Cell<_>>` per toast, shared between the overlay (writer) and the style closures (readers).
+
+**Auto-dismiss is two-phase**: timer expires → `dismissing = Some(now)` → fade-out runs over 150ms → once complete, `on_close(idx)` is published and App removes the toast from its `Vec`. Manual close (clicking ×) bypasses the fade. Hovering pins `alpha = MAX_ALPHA` and `progress = 1.0` and clears any in-flight dismissal; moving the cursor out resumes countdown from full.
+
+## Workspace-Level Shared Dependencies
+
+**Decision**: Dependencies used by more than one workspace member (`async-trait`, `serde`, `serde_json`, `tokio`, and all five `bitwarden-*` git-pinned crates) are declared once under `[workspace.dependencies]` in the root `Cargo.toml` and consumed as `{ workspace = true }` from the member `Cargo.toml` files.
+
+**Rationale**: The `bitwarden-*` git revision is especially important to keep in lockstep — if `tools/fake-data` encrypts with one revision and `crates/desktop` decrypts with another, the JSON won't round-trip. Shared declaration guarantees both sides compile against the exact same SDK. Same logic for `serde_json` — if the generator serializes with one version and the desktop app deserializes with another, we'd be one breaking change away from a silent mismatch.
+
+**Crate-local deps stay local**: iced, iced_aw, image, muda, system-theme (desktop only), chrono, uuid (fake-data only), cargo-packager (packager only). No point promoting them to the workspace level.
+
 ## Packaging: cargo-packager
 
 **Decision**: Use `cargo-packager` for distribution packaging (.app, .dmg, .msi). Configuration in `Packager.toml` at workspace root. A thin wrapper crate at `tools/packager/` invokes `cargo_packager::cli::run`.
