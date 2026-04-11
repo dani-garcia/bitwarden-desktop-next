@@ -32,6 +32,8 @@ pub const APP_FONT_BOLD: Font = Font {
 };
 
 fn main() -> iced::Result {
+    init_tracing();
+
     iced::application(App::new, App::update, App::view)
         .subscription(App::subscription)
         .title("Bitwarden [Next]")
@@ -49,9 +51,28 @@ fn main() -> iced::Result {
                 .ok(),
             ..Default::default()
         })
-        .theme(|app: &App| app.current_theme.clone())
+        .theme(|app: &App| app.theme.current.clone())
         .antialiasing(true)
         .run()
+}
+
+/// Install a `tracing` subscriber driven by the `RUST_LOG` env var. The default
+/// filter (`bitwarden_desktop_next=debug,warn`) gives our crate verbose output
+/// while keeping dependency noise quiet. The SDK crates already emit
+/// `#[tracing::instrument]` spans (unlock, crypto init, vault decrypt) so once
+/// this runs they become visible for free under e.g.
+/// `RUST_LOG=bitwarden_desktop_next=debug,bitwarden_core=debug cargo run`.
+fn init_tracing() {
+    use tracing_subscriber::{EnvFilter, fmt};
+
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("bitwarden_desktop_next=debug,warn"));
+
+    fmt()
+        .with_env_filter(filter)
+        .with_target(false)
+        .with_writer(std::io::stderr)
+        .init();
 }
 
 fn get_platform_specific() -> PlatformSpecific {

@@ -8,8 +8,9 @@
 //!
 //! ## Dev passwords
 //!
-//! - `alice@example.com` → `password`
-//! - `alice@acmecorp.com` → `123456`
+//! - `alice@example.com` → `password` (Personal, ~20 ciphers)
+//! - `alice@acmecorp.com` → `123456` (Work, ~10 ciphers)
+//! - `loadtest@example.com` → `loadtest` (Load Test, ~20k ciphers)
 //!
 //! Regenerate the JSON via `cargo run -p fake-data`.
 
@@ -82,12 +83,18 @@ pub struct UserMetadata {
 struct UserEntry {
     client: PasswordManagerClient,
     metadata: UserMetadata,
+    /// Stable SDK-side UUID for this user. Parsed from the mock-vault JSON at
+    /// load time and reused on every `unlock()`. The SDK binds a `UserId` to a
+    /// `Client` on first `initialize_user_crypto`, so lock/unlock cycles MUST
+    /// pass the same ID — passing a fresh `UserId::new_v4()` each time would
+    /// make the Client think it's serving a different user.
+    sdk_user_id: UserId,
     // Crypto inputs needed by `unlock()`. Stored once at load time so the unlock path
-    // doesn't need to re-parse JSON.
+    // doesn't need to re-parse JSON. The `email` used as the master-password salt
+    // lives on `metadata.email` (single source of truth — no duplication).
     kdf: Kdf,
     encrypted_user_key: EncString,
     private_key: EncString,
-    email: String,
 }
 
 pub struct ClientManager {
@@ -102,9 +109,17 @@ impl ClientManager {
 
         let mut users = HashMap::with_capacity(parsed.users.len());
         for mu in parsed.users {
+            tracing::debug!(
+                user_id = %mu.user_id,
+                email = %mu.email,
+                ciphers = mu.ciphers.len(),
+                folders = mu.folders.len(),
+                "loaded mock user"
+            );
             users.insert(mu.user_id.clone(), build_user_entry(mu));
         }
 
+        tracing::info!(users = users.len(), "ClientManager loaded");
         Self { users }
     }
 
@@ -123,9 +138,11 @@ impl ClientManager {
             .ok_or_else(|| format!("unknown user {user_id}"))?;
 
         let req = InitUserCryptoRequest {
-            user_id: Some(UserId::new_v4()),
+            // Stable: reuse the Client's bound UserId on every unlock. See the
+            // comment on `UserEntry::sdk_user_id` for the invariant.
+            user_id: Some(entry.sdk_user_id),
             kdf_params: entry.kdf.clone(),
-            email: entry.email.clone(),
+            email: entry.metadata.email.clone(),
             account_cryptographic_state: WrappedAccountCryptographicState::V1 {
                 private_key: entry.private_key.clone(),
             },
@@ -134,7 +151,7 @@ impl ClientManager {
                 master_password_unlock: MasterPasswordUnlockData {
                     kdf: entry.kdf.clone(),
                     master_key_wrapped_user_key: entry.encrypted_user_key.clone(),
-                    salt: entry.email.clone(),
+                    salt: entry.metadata.email.clone(),
                 },
             },
             upgrade_token: None,
@@ -214,6 +231,14 @@ fn build_user_entry(mu: MockUser) -> UserEntry {
         ..Default::default()
     }));
 
+    // Stable SDK-side UUID: the mock JSON's `user_id` field is itself a valid
+    // UUID (fake-data hardcodes stable v4 UUIDs per spec). Parsing fails loud
+    // if that invariant is ever broken.
+    let sdk_user_id = UserId::new(
+        uuid::Uuid::parse_str(&mu.user_id)
+            .expect("mock-vault user_id must be a valid UUID; regenerate via `cargo run -p fake-data`"),
+    );
+
     // `initialize_user_crypto` writes to UserKeyState + LocalUserDataKeyState; cipher/folder
     // repos hold the encrypted vault data. All four must be registered before unlock.
     register_empty_repo::<UserKeyState>(&client);
@@ -254,7 +279,7 @@ fn build_user_entry(mu: MockUser) -> UserEntry {
     UserEntry {
         client,
         metadata: UserMetadata {
-            email: mu.email.clone(),
+            email: mu.email,
             display_name: mu.display_name,
             server_url: mu.server_url,
             unlock_methods: UnlockMethods {
@@ -263,10 +288,10 @@ fn build_user_entry(mu: MockUser) -> UserEntry {
                 biometrics: mu.unlock_methods.biometrics,
             },
         },
+        sdk_user_id,
         kdf: mu.kdf,
         encrypted_user_key: mu.encrypted_user_key,
         private_key: mu.private_key,
-        email: mu.email,
     }
 }
 

@@ -5,11 +5,17 @@ mod login_password;
 mod server_selector;
 mod unlock;
 
-use iced::Element;
+use std::sync::Arc;
+
+use iced::{Element, Task};
 
 use crate::{
-    components::account_switcher::{AccountEntry, AccountSwitcherMessage},
-    state::UnlockMethod,
+    components::{
+        account_switcher::{AccountEntry, AccountSwitcherMessage},
+        toast::Toast,
+    },
+    sdk::ClientManager,
+    state::{UnlockMethod, UserId},
     theme::{AppColors, AppTheme},
 };
 
@@ -48,6 +54,8 @@ pub enum LoginMessage {
     PasswordChanged(String),
     TogglePasswordVisibility,
     Unlock,
+    /// Fires when the async `ClientManager::unlock` task completes.
+    UnlockCompleted(UserId, Result<(), String>),
     // Unlock — PIN
     PinChanged(String),
     UnlockWithPin,
@@ -67,6 +75,10 @@ pub enum LoginMessage {
     LoginPasswordChanged(String),
     ToggleLoginPasswordVisibility,
     LoginWithPassword,
+    /// Fires when the async `ClientManager::login` task completes.
+    /// TODO: wire up once SDK login support lands.
+    #[expect(dead_code)]
+    LoginCompleted(UserId, Result<(), String>),
     BackToEmail,
     GetPasswordHint,
 
@@ -78,17 +90,30 @@ pub enum LoginMessage {
     AccountSwitcher(AccountSwitcherMessage),
 }
 
-// ── Actions ────────────────────────────────────────────────────────────────
+// ── Events ─────────────────────────────────────────────────────────────────
+//
+// Events are declarative domain facts the view bubbles up for cross-cutting
+// effects App needs to coordinate — screen switches, user swaps, toast
+// pushes. Compare with the older `Action` pattern which was imperative
+// ("App please do X"); the event form lets the view own its async lifecycle
+// and only surface the *completed* state transitions.
 
 #[derive(Debug, Clone)]
-pub enum LoginAction {
-    Unlock(String),
-    UnlockWithPin,
-    UnlockWithBiometrics,
-    LogOut,
-    SwitchUser(String),
-    Login { email: String, password: String },
-    NavigateToAddAccount,
+pub enum LoginEvent {
+    /// Unlock attempt completed successfully — App should flip to the vault
+    /// screen and kick off the vault list load for this user.
+    Unlocked { uid: UserId },
+    /// Fresh login via email + password completed successfully. Same routing
+    /// as `Unlocked` but distinguishes the flow for future analytics / error
+    /// messaging differences. Constructed only by `LoginMessage::LoginCompleted`
+    /// which is itself a stub until SDK login support lands.
+    LoggedIn { uid: UserId },
+    /// User clicked Sign Out — App should drop the active session.
+    SignOutRequested,
+    /// User picked a different account from the switcher.
+    UserSelected { uid: UserId },
+    /// LoginView wants to show a cross-cutting toast notification.
+    ToastRequested(Toast),
 }
 
 // ── View State ─────────────────────────────────────────────────────────────
@@ -131,31 +156,92 @@ impl LoginView {
         }
     }
 
-    pub fn update(&mut self, msg: LoginMessage) -> Vec<LoginAction> {
-        let mut actions = Vec::new();
+    /// Compositional MVU update. Returns a task (for async work the view
+    /// owns) and an optional event (cross-cutting fact for App to route).
+    ///
+    /// `client_manager` and `active_user` are injected at call-time so the
+    /// view can construct `Task::perform` calls without owning shared state.
+    /// This matches Halloy's pattern — see
+    /// [investigation/halloy/src/buffer.rs:247](../../../../investigation/halloy/src/buffer.rs).
+    pub fn update(
+        &mut self,
+        msg: LoginMessage,
+        client_manager: &Arc<ClientManager>,
+        active_user: Option<&UserId>,
+    ) -> (Task<LoginMessage>, Option<LoginEvent>) {
         match msg {
             // ── Unlock: master password ────────────────────────────────────
-            LoginMessage::PasswordChanged(pw) => self.password_input = pw,
+            LoginMessage::PasswordChanged(pw) => {
+                self.password_input = pw;
+                (Task::none(), None)
+            }
             LoginMessage::TogglePasswordVisibility => {
                 self.show_password = !self.show_password;
+                (Task::none(), None)
             }
             LoginMessage::Unlock => {
                 let password = std::mem::take(&mut self.password_input);
                 self.show_password = false;
-                actions.push(LoginAction::Unlock(password));
+                let Some(uid) = active_user.cloned() else {
+                    return (Task::none(), None);
+                };
+                let mgr = client_manager.clone();
+                let uid_for_task = uid.clone();
+                let task = Task::perform(
+                    async move { mgr.unlock(&uid_for_task, password).await },
+                    move |res| LoginMessage::UnlockCompleted(uid.clone(), res),
+                );
+                (task, None)
+            }
+            LoginMessage::UnlockCompleted(msg_uid, result) => {
+                // Stale-check: the user may have switched accounts while the
+                // unlock was in flight. Drop stale results so they don't
+                // clobber a new active session.
+                if active_user != Some(&msg_uid) {
+                    tracing::debug!(
+                        uid = %msg_uid,
+                        "unlock result dropped: active user changed while in flight"
+                    );
+                    return (Task::none(), None);
+                }
+                match result {
+                    Ok(()) => (Task::none(), Some(LoginEvent::Unlocked { uid: msg_uid })),
+                    Err(err) => {
+                        tracing::warn!(
+                            uid = %msg_uid,
+                            %err,
+                            "SDK initialize_user_crypto failed"
+                        );
+                        // TODO: surface the error inline in the login view.
+                        (Task::none(), None)
+                    }
+                }
             }
 
             // ── Unlock: PIN ────────────────────────────────────────────────
-            LoginMessage::PinChanged(pin) => self.pin_input = pin,
+            LoginMessage::PinChanged(pin) => {
+                self.pin_input = pin;
+                (Task::none(), None)
+            }
             LoginMessage::UnlockWithPin => {
                 self.pin_input.clear();
-                actions.push(LoginAction::UnlockWithPin);
+                (
+                    Task::none(),
+                    Some(LoginEvent::ToastRequested(Toast::warning(
+                        "PIN unlock is not yet supported",
+                        None,
+                    ))),
+                )
             }
 
             // ── Unlock: biometrics ─────────────────────────────────────────
-            LoginMessage::UnlockWithBiometrics => {
-                actions.push(LoginAction::UnlockWithBiometrics);
-            }
+            LoginMessage::UnlockWithBiometrics => (
+                Task::none(),
+                Some(LoginEvent::ToastRequested(Toast::warning(
+                    "Biometric unlock is not yet supported",
+                    None,
+                ))),
+            ),
 
             // ── Switch unlock method ───────────────────────────────────────
             LoginMessage::SwitchUnlockMethod(method) => {
@@ -163,130 +249,183 @@ impl LoginView {
                 self.password_input.clear();
                 self.pin_input.clear();
                 self.show_password = false;
+                (Task::none(), None)
             }
 
-            LoginMessage::LogOut => {
-                actions.push(LoginAction::LogOut);
-            }
+            LoginMessage::LogOut => (Task::none(), Some(LoginEvent::SignOutRequested)),
 
             // ── Login: email entry ─────────────────────────────────────────
-            LoginMessage::EmailChanged(email) => self.email_input = email,
-            LoginMessage::ToggleRememberEmail(checked) => self.remember_email = checked,
+            LoginMessage::EmailChanged(email) => {
+                self.email_input = email;
+                (Task::none(), None)
+            }
+            LoginMessage::ToggleRememberEmail(checked) => {
+                self.remember_email = checked;
+                (Task::none(), None)
+            }
             LoginMessage::ContinueWithEmail => {
                 self.login_email = self.email_input.clone();
                 self.auth_page = AuthPage::LoginPassword;
                 self.login_password_input.clear();
                 self.show_login_password = false;
+                (Task::none(), None)
             }
             LoginMessage::UseSingleSignOn => {
                 // TODO: SSO login flow
+                (Task::none(), None)
             }
 
             // ── Login: password entry ──────────────────────────────────────
-            LoginMessage::LoginPasswordChanged(pw) => self.login_password_input = pw,
+            LoginMessage::LoginPasswordChanged(pw) => {
+                self.login_password_input = pw;
+                (Task::none(), None)
+            }
             LoginMessage::ToggleLoginPasswordVisibility => {
                 self.show_login_password = !self.show_login_password;
+                (Task::none(), None)
             }
             LoginMessage::LoginWithPassword => {
-                let email = self.login_email.clone();
-                let password = self.login_password_input.clone();
-                self.login_password_input.clear();
-                actions.push(LoginAction::Login { email, password });
+                // TODO: call `client_manager.login(email, password).await`
+                // once SDK login support lands. For now this is a stub — we
+                // clear the input and emit nothing so the button press is
+                // visibly consumed.
+                let _email = self.login_email.clone();
+                let _password = std::mem::take(&mut self.login_password_input);
+                self.show_login_password = false;
+                (Task::none(), None)
+            }
+            LoginMessage::LoginCompleted(msg_uid, result) => {
+                if active_user != Some(&msg_uid) {
+                    tracing::debug!(
+                        uid = %msg_uid,
+                        "login result dropped: active user changed while in flight"
+                    );
+                    return (Task::none(), None);
+                }
+                match result {
+                    Ok(()) => (Task::none(), Some(LoginEvent::LoggedIn { uid: msg_uid })),
+                    Err(err) => {
+                        tracing::warn!(uid = %msg_uid, %err, "SDK login failed");
+                        (Task::none(), None)
+                    }
+                }
             }
             LoginMessage::BackToEmail => {
                 self.auth_page = AuthPage::LoginEmail;
                 self.login_password_input.clear();
+                (Task::none(), None)
             }
             LoginMessage::GetPasswordHint => {
                 // TODO: password hint request flow
+                (Task::none(), None)
             }
 
             // ── Server selector ────────────────────────────────────────────
             LoginMessage::ToggleServerSelector => {
                 self.server_selector_open = !self.server_selector_open;
+                (Task::none(), None)
             }
             LoginMessage::SelectServer(server) => {
                 self.selected_server = server;
                 self.server_selector_open = false;
+                (Task::none(), None)
             }
 
             // ── Account switcher ───────────────────────────────────────────
             LoginMessage::AccountSwitcher(asm) => match asm {
                 AccountSwitcherMessage::ToggleDropdown => {
                     self.dropdown_open = !self.dropdown_open;
+                    (Task::none(), None)
                 }
                 AccountSwitcherMessage::SwitchUser(uid) => {
                     self.dropdown_open = false;
-                    actions.push(LoginAction::SwitchUser(uid));
+                    (Task::none(), Some(LoginEvent::UserSelected { uid }))
                 }
                 AccountSwitcherMessage::AddAccount => {
                     self.dropdown_open = false;
-                    actions.push(LoginAction::NavigateToAddAccount);
+                    self.reset_to_email_entry();
+                    (Task::none(), None)
                 }
             },
         }
-        actions
     }
-}
 
-// ── Top-level view dispatcher ──────────────────────────────────────────────
+    /// LOAD-BEARING: called from the App router before it dispatches a
+    /// `Message::TitleBar(_)` to close any open login-side overlays so
+    /// menu clicks don't leave them hanging. See the cross-view dismissal
+    /// block in `App::update`.
+    pub fn dismiss_dropdowns(&mut self) {
+        self.dropdown_open = false;
+        self.server_selector_open = false;
+    }
 
-pub fn view<'a>(
-    login_view: &'a LoginView,
-    email: &'a str,
-    server: &'a str,
-    accounts: &'a [AccountEntry],
-    unlock_alternatives: &'a [UnlockMethod],
-    colors: &'a AppColors,
-) -> Element<'a, LoginMessage, AppTheme> {
-    let (center_content, status_bar) = match &login_view.auth_page {
-        AuthPage::Unlock(method) => {
-            let center = unlock::view(
-                *method,
-                unlock_alternatives,
-                email,
-                &login_view.password_input,
-                &login_view.pin_input,
-                login_view.show_password,
-                colors,
-            );
-            let status = server_selector::simple_status(server, colors);
-            (center, status)
-        }
-        AuthPage::LoginEmail => {
-            let center = login_email::view(
-                &login_view.email_input,
-                login_view.remember_email,
-                colors,
-            );
-            let status = server_selector::view(
-                &login_view.selected_server,
-                login_view.server_selector_open,
-                colors,
-            );
-            (center, status)
-        }
-        AuthPage::LoginPassword => {
-            let center = login_password::view(
-                &login_view.login_email,
-                &login_view.login_password_input,
-                login_view.show_login_password,
-                colors,
-            );
-            let status = server_selector::simple_status(
-                login_view.selected_server.display_name(),
-                colors,
-            );
-            (center, status)
-        }
-    };
+    /// Reset the login flow to the email-entry page with empty inputs.
+    /// Called when the user picks "Add account" from either the login
+    /// screen (locally, via `AccountSwitcherMessage::AddAccount`) or the
+    /// vault screen (via `VaultEvent::AddAccountRequested` → handler).
+    pub fn reset_to_email_entry(&mut self) {
+        self.auth_page = AuthPage::LoginEmail;
+        self.email_input.clear();
+        self.login_password_input.clear();
+    }
 
-    layout::auth_page_shell(
-        center_content,
-        status_bar,
-        email,
-        accounts,
-        login_view.dropdown_open,
-        colors,
-    )
+    pub fn view<'a>(
+        &'a self,
+        email: &'a str,
+        server: &'a str,
+        accounts: &'a [AccountEntry],
+        unlock_alternatives: &'a [UnlockMethod],
+        colors: &'a AppColors,
+    ) -> Element<'a, LoginMessage, AppTheme> {
+        let (center_content, status_bar) = match &self.auth_page {
+            AuthPage::Unlock(method) => {
+                let center = unlock::view(
+                    *method,
+                    unlock_alternatives,
+                    email,
+                    &self.password_input,
+                    &self.pin_input,
+                    self.show_password,
+                    colors,
+                );
+                let status = server_selector::simple_status(server, colors);
+                (center, status)
+            }
+            AuthPage::LoginEmail => {
+                let center = login_email::view(
+                    &self.email_input,
+                    self.remember_email,
+                    colors,
+                );
+                let status = server_selector::view(
+                    &self.selected_server,
+                    self.server_selector_open,
+                    colors,
+                );
+                (center, status)
+            }
+            AuthPage::LoginPassword => {
+                let center = login_password::view(
+                    &self.login_email,
+                    &self.login_password_input,
+                    self.show_login_password,
+                    colors,
+                );
+                let status = server_selector::simple_status(
+                    self.selected_server.display_name(),
+                    colors,
+                );
+                (center, status)
+            }
+        };
+
+        layout::auth_page_shell(
+            center_content,
+            status_bar,
+            email,
+            accounts,
+            self.dropdown_open,
+            colors,
+        )
+    }
 }

@@ -55,16 +55,16 @@ crates/desktop/                 — Main desktop application crate
 
     views/
       login/
-        mod.rs                  — LoginView struct + LoginAction + view()
+        mod.rs                  — LoginView struct + LoginEvent + view()
       vault/
-        mod.rs                  — VaultView struct + VaultAction + PaneKind + view()
+        mod.rs                  — VaultView struct + VaultEvent + PaneKind + view()
         widgets/
           sidebar.rs            — Icon rail + expanded nav panel
           item_list.rs          — Vault item table with action icons
           detail_pane.rs        — Item detail view (readonly fields, cards)
           search_bar.rs         — Search input with native text_input icon
       title_bar/
-        mod.rs                  — TitleBarState + TitleBarAction + view() + view_empty()
+        mod.rs                  — TitleBarState + TitleBarEvent + WindowCommand + view() + view_empty()
         window_chrome.rs        — Platform chrome icons, resize wrapper
         dropdown.rs             — Menu dropdown panels + submenu rendering
 
@@ -80,17 +80,28 @@ bitwarden_license/              — Licensed workspace members (future)
 - **Local `DropDown` fork instead of `iced_aw`**: We needed `BelowLeft`/`BelowRight` alignments that upstream doesn't have. The fork is ~500 lines, identical logic except the added alignment variants.
 - **Custom title bar on Windows instead of native menus**: Native Win32 menus via `muda::init_for_hwnd()` create a 1px transparent gap (DWM compositor border). Drawing ourselves eliminates it.
 - **`refresh_cache()` still exists**: `view()` returns `Element<'_, ...>` borrowing from `&self`. Locally computed `Vec`s in `view()` would be dropped before the Element. Cached fields on the struct survive the borrow. This is an iced lifetime constraint, not a design choice.
-- **View structs return `Vec<Action>` not `Task`**: Views don't know about window IDs, global state, or other views. They express intent ("switch user", "focus search") and App translates to concrete operations.
+- **Sub-views return `(Task<SubMessage>, Option<Event>)`**: copies Halloy's compositional MVU pattern. Sub-views own their async lifecycle (they call `Task::perform` directly, with `&Arc<ClientManager>` injected at call time) so `app.rs` stops being a shared-write bottleneck when new async operations are added. Events are declarative domain facts ("Unlocked", "UserSelected") that App routes into side effects. See [docs/decisions.md](docs/decisions.md) → "View Architecture: Compositional MVU" for the full rationale.
 - **`NativeMenuHandle` on App, not static**: Avoids global mutable state. Supports potential multi-window future.
 
-## Architecture: State Decentralization
+## Architecture: Compositional MVU
 
-Each view owns its state and handles its own messages. Cross-cutting effects propagate upward via action enums:
+Each sub-view owns its local state AND its async work, exposing:
 
-- **`LoginView`** — owns `password_input`, `show_password`, `dropdown_open`. Returns `Vec<LoginAction>` (Unlock, LogOut, SwitchUser).
-- **`VaultView`** — owns search, filter, selection, sidebar, pane state, item cache. Returns `Vec<VaultAction>` (SwitchUser, FocusSearch).
-- **`TitleBarState`** — owns `open_menu`, `open_submenu`. Returns `Vec<TitleBarAction>` (MenuAction, window ops).
-- **`App`** (11 fields) — thin dispatcher. Delegates to views, processes returned actions, handles cross-cutting concerns (screen switch, user switch, menu actions).
+```rust
+pub fn update(
+    &mut self,
+    msg: SubMessage,
+    client_manager: &Arc<ClientManager>,
+    active_user: Option<&UserId>,
+) -> (Task<SubMessage>, Option<SubEvent>);
+```
+
+- **`LoginView`** — owns `password_input`, `show_password`, `dropdown_open`, `auth_page`. Runs `Task::perform(mgr.unlock(...))` directly; emits `LoginEvent::Unlocked { uid }` on completion. Events: `Unlocked` / `LoggedIn` / `SignOutRequested` / `UserSelected` / `AddAccountRequested` / `ToastRequested`.
+- **`VaultView`** — owns search, filter, selection, sidebar, pane state, item cache. Runs `Task::perform(mgr.list_ciphers(...))` and `full_cipher(...)` directly; handles `VaultMessage::ListLoaded` / `DetailLoaded` internally with stale-checks. Events: `UserSelected` / `AddAccountRequested` / `SearchFocusRequested` / `ToastRequested`.
+- **`TitleBarState`** — owns `open_menu`, `open_submenu`. No async work. Events: `MenuInvoked(MenuAction)` / `Window(WindowCommand)`.
+- **`App`** — thin router. Dispatches messages to sub-views via the compositional signature, lifts returned tasks with `.map(Message::Sub)`, translates events into side effects via `handle_*_event` methods.
+
+The top-level `Message` enum is 5 variants: `Login(LoginMessage)`, `Vault(VaultMessage)`, `TitleBar(TitleBarMessage)`, `Window(WindowMessage)` (per-window OS events, daemon-ready), `System(SystemMessage)` (global signals). **No orphan async callback variants** — they live inside sub-enums (e.g. `LoginMessage::UnlockCompleted`, `VaultMessage::ListLoaded`).
 
 ### Message Flow Example
 
@@ -98,18 +109,32 @@ Each view owns its state and handles its own messages. Cross-cutting effects pro
 User clicks "Unlock" button
   → login view emits LoginMessage::Unlock
   → iced delivers Message::Login(LoginMessage::Unlock) to App::update()
-  → App calls self.login_view.update(msg)
-  → LoginView clears password_input, returns vec![LoginAction::Unlock]
-  → App processes action: unlocks active session, sets Screen::Vault
-  → App calls self.refresh_cache() (recomputes email, accounts, vault items)
-  → iced calls App::view() → renders vault screen
+  → App router calls self.login_view.update(msg, &client_manager, active_user)
+  → LoginView drains password, runs Task::perform(mgr.unlock(uid, pw))
+     and returns (Task<LoginMessage>, None)
+  → App lifts the task with .map(Message::Login) and runs it
+  → task resolves; Message::Login(LoginMessage::UnlockCompleted(uid, Ok(()))) re-enters
+  → App router calls self.login_view.update(completion, ...)
+  → LoginView stale-checks active_user, returns (Task::none(), Some(LoginEvent::Unlocked { uid }))
+  → App's handle_login_event flips Screen::Vault and returns load_vault_list_task
+  → task resolves; Message::Vault(VaultMessage::ListLoaded(uid, Ok(items))) re-enters
+  → VaultView handles it internally (stale-check, self.set_items(items))
+  → App calls post_update() → refresh_cache() → iced calls App::view() → vault screen renders
 ```
+
+Every async step re-enters through the owning view, keeping the async lifecycle local.
 
 ### Cross-Cutting Dismissal
 
-When any view message arrives, App also dismisses the other view's overlays:
+LOAD-BEARING: the first `match &message` block at the top of `App::update` dismisses the other view's overlays on every sub-view message:
 - `Message::Login(_)` / `Message::Vault(_)` → `self.title_bar.dismiss_menu()`
-- `Message::TitleBar(_)` → closes active view's `dropdown_open`
+- `Message::TitleBar(_)` → `self.login_view.dismiss_dropdowns()` + `self.vault_view.dismiss_dropdowns()`
+
+Without this block, a menu click from the vault would leave the account-switcher dropdown hanging. Sub-views provide `dismiss_dropdowns()` helpers; the policy itself stays at the router level so sub-views don't need to know about each other.
+
+### How to add a new view
+
+See [docs/architecture.md](docs/architecture.md) → "How to Add a New View" for the canonical 7-step recipe. Summary: create `views/<name>/mod.rs` with a `<Name>View` struct, `<Name>Message` enum, `<Name>Event` enum, and the `(Task, Option<Event>)` update signature; then in `app.rs` add a `Message::<Name>` variant, a view field on `App`, a router arm, and a `handle_<name>_event` method. Four mechanical adds in `app.rs`; everything else stays inside the view directory. That's the full multi-team story.
 
 ## Coding Conventions
 

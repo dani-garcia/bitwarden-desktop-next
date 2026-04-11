@@ -76,30 +76,34 @@ tools/
 ## State Model
 
 ```rust
-// Root app — thin dispatcher (~18 fields)
+// Root app — thin router (10 fields, grouped by concern)
 struct App {
     state: AppState,                         // users HashMap + active_user + screen
-    theme_preference: ThemePreference,
-    current_theme: AppTheme,
     login_view: LoginView,
     vault_view: VaultView,
     title_bar: TitleBarState,
     client_manager: Arc<ClientManager>,      // per-user PasswordManagerClient + crypto inputs
-    toasts: Vec<Toast>,                      // overlay queue, pushed via App::push_toast
-    system_theme: Arc<SystemTheme>,
-    native_menu: Option<NativeMenuHandle>,
-    // + cached_email/server/accounts/unlock_alternatives, fullscreen, maximized,
-    //   menu_attached, window_id
+    cache: ViewCache,                        // derived cache for the iced view() borrow
+    theme: ThemeState,                       // preference + current AppTheme + OS observer
+    window: WindowState,                     // window::Id + fullscreen + maximized
+    native_menu: Option<NativeMenuHandle>,   // macOS muda bridge
+    toasts: Vec<Toast>,                      // cross-cutting overlay queue
 }
 
-// Each view owns its state and handles its own messages
-struct LoginView { password_input, pin_input, show_password, dropdown_open, auth_page, ... }
+// Sub-structs on App (private helpers inside app.rs)
+struct ViewCache   { email, server, accounts, unlock_alternatives }
+struct ThemeState  { preference, current: AppTheme, system: Arc<SystemTheme> }
+struct WindowState { id: Option<window::Id>, fullscreen, maximized }
+
+// Each view owns its local state AND its async work.
+struct LoginView { auth_page, password_input, pin_input, show_password, ... }
 struct VaultView {
-    search_query, active_filter, selected_item, selected_id: Option<CipherId>,
-    selected_detail: Option<CipherView>,     // lazily fetched via full_cipher()
-    all_items: Vec<Arc<CipherListView>>,     // SDK types; Arc because CipherListView is not Clone
-    cached_items: Vec<Arc<CipherListView>>,  // filter + search applied
-    sidebar_*, pane_state, ...
+    // singletons
+    search_query, dropdown_open, pane_state,
+    // sub-struct groups (each is a cohesive cluster)
+    sidebar:   SidebarState,   // mode, active_section, active_filter, vault_tree_open, send_tree_open
+    selection: Selection,       // item: Option<usize>, id: Option<CipherId>, detail: Option<CipherView>
+    items:     ItemCache,       // all: Vec<Arc<CipherListView>>, cached: Vec<Arc<CipherListView>>
 }
 struct TitleBarState { open_menu, open_submenu }
 
@@ -111,17 +115,245 @@ struct UserSession { email, display_name, server_url, locked, unlock_methods }
 
 - `sdk.rs::ClientManager::load()` parses `assets/mock-vault.json` (committed by `tools/fake-data`) at startup, builds one `PasswordManagerClient` per user, and pre-populates each client's `MemoryRepo<Cipher>` and `MemoryRepo<Folder>` with the encrypted ciphers from the JSON.
 - `ClientManager::unlock(uid, password)` awaits `crypto().initialize_user_crypto(...)` — real master-password KDF, real user-key unwrap, real keystore populated.
-- `ClientManager::list_ciphers(uid)` → `decrypt_list` over the repo. `full_cipher(uid, id)` → `decrypt` on a single `Cipher`. Both are async and wrapped in `iced::Task::perform` from `App::update`.
+- `ClientManager::list_ciphers(uid)` → `decrypt_list` over the repo. `full_cipher(uid, id)` → `decrypt` on a single `Cipher`.
 - Vault data flows as SDK types end-to-end: `item_list.rs` reads `CipherListView.subtitle`, `detail_pane.rs` branches on `CipherView.r#type` and renders per-type cards (Login/Card/Identity/SecureNote/SshKey).
+- **`Task::perform` calls live inside the view's `update()`** — `LoginView` owns the unlock task, `VaultView` owns the list/detail tasks. `ClientManager` is injected call-time via `&Arc<ClientManager>` so views don't need to store it.
 
-### Action Pattern
+### Compositional MVU Pattern
 
-Views return action enums from `update()` for cross-cutting effects:
-- `LoginAction::Unlock(password)` / `UnlockWithPin` / `UnlockWithBiometrics` / `LogOut` / `SwitchUser(uid)` / `Login { email, password }` / `NavigateToAddAccount`
-- `VaultAction::SwitchUser(uid)` / `FocusSearch` / `AddAccount` / `LoadDetail(CipherId)` / `ClearDetail`
-- `TitleBarAction::MenuAction(action)` / `Minimize` / `Maximize` / `Close` / `Drag` / `ResizeEdge`
+Each sub-view implements:
 
-App processes these actions and often translates them to async `Task::perform` work (unlock, list, full_cipher) that lands back as `Message::UnlockCompleted` / `VaultListLoaded` / `CipherDetailLoaded`.
+```rust
+pub fn update(
+    &mut self,
+    msg: SubMessage,
+    client_manager: &Arc<ClientManager>,       // injected call-time
+    active_user: Option<&UserId>,              // injected call-time
+) -> (Task<SubMessage>, Option<SubEvent>);
+```
+
+- The **`Task<SubMessage>`** carries any async work the view kicked off. The App router lifts it to `Task<Message>` via `.map(Message::Sub)`.
+- The **`Option<SubEvent>`** carries a declarative fact (what just happened) for App to route. `None` means the view handled everything locally.
+
+Events describe completed state transitions, not imperative commands:
+
+- `LoginEvent::Unlocked { uid }` / `LoggedIn { uid }` / `SignOutRequested` / `UserSelected { uid }` / `AddAccountRequested` / `ToastRequested(Toast)`
+- `VaultEvent::UserSelected { uid }` / `AddAccountRequested` / `SearchFocusRequested` / `ToastRequested(Toast)`
+- `TitleBarEvent::MenuInvoked(MenuAction)` / `Window(WindowCommand)`
+
+App's `handle_*_event` methods translate each event to concrete side effects: screen switches, user swaps, toast pushes, menu actions, follow-on tasks.
+
+**Async callbacks live inside sub-messages**, not at the top level:
+
+- `LoginMessage::UnlockCompleted(uid, Result)` — the completion handler for `Task::perform(mgr.unlock(...))`, handled by `LoginView` (stale-check, then emit `LoginEvent::Unlocked`).
+- `VaultMessage::ListLoaded(uid, Result)` — for `Task::perform(mgr.list_ciphers(...))`, handled by `VaultView` (stale-check, then `set_items`).
+- `VaultMessage::DetailLoaded(id, Result)` — for `Task::perform(mgr.full_cipher(...))`, handled by `VaultView` (stale-check against `selected_id`, then populate detail pane).
+
+This keeps the async lifecycle with the view that owns the state it mutates. Top-level `Message` stays small and stable.
+
+### Top-level Message Enum
+
+```rust
+pub enum Message {
+    Login(LoginMessage),      // wraps all login-screen interaction + async callbacks
+    Vault(VaultMessage),      // wraps all vault-screen interaction + async callbacks
+    TitleBar(TitleBarMessage),// wraps menu + window chrome
+    Window(WindowMessage),    // per-window OS events (Opened, GotRawId, KeyPressed);
+                              //   every variant carries window::Id for daemon-readiness
+    System(SystemMessage),    // global signals (PollNativeMenu, ThemeChanged, CloseToast)
+}
+```
+
+Five variants. `Window` / `System` are split even though we're single-window today — when multi-window lands via `iced::daemon`, `Window` variants already carry their `window::Id` and the routing stays identical.
+
+### Router + Cross-View Dismissal
+
+`App::update` is ~60 lines: a pre-match cross-view dismissal block followed by a five-arm router. Every sub-view dispatch follows the same shape:
+
+```rust
+Message::Vault(m) => {
+    let (task, ev) = self.vault_view.update(m, &self.client_manager, self.state.active_user.as_ref());
+    let task = task.map(Message::Vault);
+    let ev_task = ev.map(|e| self.handle_vault_event(e)).unwrap_or_else(Task::none);
+    Task::batch([task, ev_task])
+}
+```
+
+The pre-match block is LOAD-BEARING: any login/vault message dismisses the title-bar menu, and any title-bar message dismisses the login/vault dropdowns. Without it, an accidental menu click from the vault would leave the account-switcher dropdown open.
+
+## How to Add a New View
+
+This is the canonical recipe for adding a new screen (e.g., Settings, Generator, Password History). Follow it end-to-end and you'll touch only your own view directory plus ~4 mechanical lines in `app.rs`.
+
+### 1. Create the view module
+
+```
+crates/desktop/src/views/settings/
+├── mod.rs              # SettingsView struct, SettingsMessage, SettingsEvent, update(), view()
+└── widgets/            # optional: any custom widgets specific to this screen
+```
+
+The `mod.rs` skeleton:
+
+```rust
+use std::sync::Arc;
+use iced::{Element, Task};
+
+use crate::{
+    sdk::ClientManager,
+    state::UserId,
+    theme::{AppColors, AppTheme},
+};
+
+#[derive(Debug, Clone)]
+pub enum SettingsMessage {
+    // Local interaction
+    ThemeChanged(ThemePreference),
+    // Async callbacks (if you need them)
+    SaveCompleted(Result<(), String>),
+}
+
+#[derive(Debug, Clone)]
+pub enum SettingsEvent {
+    /// Theme preference changed — App should update the current theme.
+    ThemePreferenceChanged(ThemePreference),
+}
+
+pub struct SettingsView {
+    // local state only
+}
+
+impl SettingsView {
+    pub fn new() -> Self { Self { /* ... */ } }
+
+    pub fn update(
+        &mut self,
+        msg: SettingsMessage,
+        _client_manager: &Arc<ClientManager>,
+        _active_user: Option<&UserId>,
+    ) -> (Task<SettingsMessage>, Option<SettingsEvent>) {
+        match msg {
+            SettingsMessage::ThemeChanged(pref) => {
+                (Task::none(), Some(SettingsEvent::ThemePreferenceChanged(pref)))
+            }
+            SettingsMessage::SaveCompleted(_) => (Task::none(), None),
+        }
+    }
+
+    /// LOAD-BEARING: called from the App router to close any local overlays
+    /// when a title-bar message arrives. Leave empty if your view has none.
+    pub fn dismiss_dropdowns(&mut self) {}
+}
+
+pub fn view<'a>(
+    _state: &'a SettingsView,
+    _colors: &'a AppColors,
+) -> Element<'a, SettingsMessage, AppTheme> {
+    // ... build the element tree ...
+    iced::widget::text("Settings").into()
+}
+```
+
+Register the module in `crates/desktop/src/views/mod.rs` (add `pub mod settings;`).
+
+### 2. Add the Message variant in `app.rs`
+
+```rust
+pub enum Message {
+    Login(LoginMessage),
+    Vault(VaultMessage),
+    TitleBar(TitleBarMessage),
+    Window(WindowMessage),
+    System(SystemMessage),
+    Settings(SettingsMessage),  // ← new
+}
+```
+
+### 3. Add the view struct field on `App`
+
+```rust
+pub struct App {
+    // ... existing fields ...
+    settings_view: settings::SettingsView,
+}
+```
+
+Initialize it in `App::new()`: `settings_view: settings::SettingsView::new(),`.
+
+### 4. Add the router arm in `App::update`
+
+```rust
+Message::Settings(m) => {
+    let (task, ev) = self.settings_view.update(
+        m,
+        &self.client_manager,
+        self.state.active_user.as_ref(),
+    );
+    let task = task.map(Message::Settings);
+    let ev_task = ev
+        .map(|e| self.handle_settings_event(e))
+        .unwrap_or_else(Task::none);
+    Task::batch([task, ev_task])
+}
+```
+
+Also add `Message::Settings(_)` to the cross-view dismissal pre-match block (it's the first `match &message` at the top of `update`) alongside `Login` and `Vault` so title-bar menus dismiss correctly.
+
+### 5. Add the event handler
+
+```rust
+fn handle_settings_event(&mut self, event: SettingsEvent) -> Task<Message> {
+    match event {
+        SettingsEvent::ThemePreferenceChanged(pref) => {
+            self.theme.preference = pref;
+            self.theme.current = pref.resolve(self.theme.system.get_scheme());
+            Task::none()
+        }
+    }
+}
+```
+
+### 6. Wire the screen switch
+
+If the view needs its own screen (not just a panel), add a `Screen::Settings` variant in `crates/desktop/src/state.rs`, branch on it in `App::view()` the same way `Screen::Login` and `Screen::Vault` are handled, and flip to it from whichever existing view fires the switch (usually via a menu action, so in `handle_menu_action`).
+
+If the view is a panel/modal within an existing screen, don't add a `Screen` variant — just render it conditionally inside that screen's `view()`.
+
+### 7. Wire async work (if needed)
+
+Inside `SettingsView::update`, any async SDK call gets a `Task::perform`:
+
+```rust
+SettingsMessage::Save(data) => {
+    let mgr = client_manager.clone();
+    let task = Task::perform(
+        async move { mgr.save_settings(data).await },
+        SettingsMessage::SaveCompleted,
+    );
+    (task, None)
+}
+SettingsMessage::SaveCompleted(result) => {
+    match result {
+        Ok(()) => (Task::none(), Some(SettingsEvent::SaveSucceeded)),
+        Err(err) => (Task::none(), Some(SettingsEvent::ToastRequested(
+            Toast::error(err, None)
+        ))),
+    }
+}
+```
+
+### What this recipe costs you in `app.rs`
+
+Exactly four mechanical adds:
+
+1. One `Message::Settings(SettingsMessage)` variant.
+2. One `settings_view: SettingsView` field on `App` (plus its init).
+3. One router arm (delegates to `settings_view.update` and `handle_settings_event`).
+4. One `handle_settings_event` method.
+
+Plus (if the view needs its own screen): one `Screen::Settings` variant and one `App::view` branch. Plus (if the view has overlays): add it to the cross-view dismissal pre-match.
+
+**No shared-file churn beyond this.** All the actual view logic lives in `views/settings/mod.rs`. Multiple teams can own different view directories without stepping on each other in `app.rs`.
 
 ## Menu System
 

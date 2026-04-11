@@ -3,6 +3,7 @@ pub mod buttons;
 pub mod drop_down;
 pub mod icons;
 pub mod toast;
+pub mod virtual_list;
 
 use iced::{
     Background, Border, Color, Element, Fill, Shadow,

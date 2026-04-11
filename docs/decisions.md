@@ -106,13 +106,43 @@
 
 **Why changed**: Stack-based overlays couldn't cover the title bar (they're inside the page layout). DropDown uses iced's native overlay system which renders at the window level, handles click-outside automatically, and positions relative to the trigger widget.
 
-## State Decentralization (Implemented)
+## View Architecture: Compositional MVU
 
-**Decision**: Each view (LoginView, VaultView, TitleBarState) owns its state and has its own `update()` method returning action enums.
+**Decision**: Each view (`LoginView`, `VaultView`, `TitleBarState`) owns its local state and async work, and returns `(Task<SubMessage>, Option<Event>)` from its `update()` method. The parent `App` is a thin router that lifts sub-tasks via `Task::map(Message::Sub)` and translates events into cross-cutting side effects.
 
-**Status**: Complete. App struct down from 30 to 11 fields.
+**Status**: Implemented. Replaces the previous `Vec<Action>` pattern.
 
-**Rationale**: Different views will be owned by different teams. Event handling should be close to the components that initiate events. Action enums handle cross-cutting effects cleanly.
+**Previous approach**: Sub-views returned `Vec<LoginAction>` / `Vec<VaultAction>` / `Vec<TitleBarAction>` from `update(msg) -> Vec<_>`. Actions were imperative ("App please call `mgr.unlock(pw)` now") and App owned every `Task::perform` call. Async completions lived as top-level `Message::UnlockCompleted` / `Message::VaultListLoaded` / `Message::CipherDetailLoaded` variants because `Task::perform` returns `Task<Message>` and nothing forced those callbacks to re-enter the view that cared about them.
+
+**Why changed**: the top-level `Message` enum had grown to 13 variants — three sub-view wrappers plus 10 orphans — and `App::update()` had grown to 220 lines mixing screen routing, async dispatch, toast pushing, menu handling, theme sync, and window chrome. Every new feature required touching `Message`, `update()`, and usually a new App field. `app.rs` was the single shared-write bottleneck and would have blocked multi-team development of the upcoming production rewrite this project is a testbed for.
+
+**New pattern**:
+
+1. **Sub-views own their async work.** `LoginView::update(LoginMessage::Unlock, &client_manager, active_user)` calls `Task::perform(mgr.unlock(...))` directly, returning `Task<LoginMessage>`. The parent router lifts it with `.map(Message::Login)`.
+2. **Async callbacks re-enter the owning view.** `LoginMessage::UnlockCompleted(uid, result)` is a variant of `LoginMessage`, not the top-level `Message`. The view handles the completion, performs a stale-check against `active_user`, and emits a completed-state event (`LoginEvent::Unlocked { uid }`) for App to route.
+3. **Events are declarative.** `LoginEvent::Unlocked { uid }` means "the user has unlocked" — a domain fact. `handle_login_event` in App translates that fact into a screen switch and kicks the follow-on `load_vault_list_task`.
+4. **`ClientManager` is injected call-time**, passed as `&Arc<ClientManager>` to each view's `update()`. Views remain cheaply constructible in tests without a real SDK instance.
+5. **Cross-cutting dismissal stays at the router level.** The pre-match block at the top of `App::update` closes the other view's overlays on every sub-view message, so sub-views don't need to know about each other.
+
+**Prior art**:
+- **Halloy** — [investigation/halloy/src/buffer.rs:247](../investigation/halloy/src/buffer.rs) — `buffer.update()` signature is `(Task<Message>, Option<Event>)`, lifted at call sites via `command.map(Message::Dashboard)`.
+- **cosmic-settings** — [investigation/cosmic-settings/cosmic-settings/src/pages/mod.rs:113](../investigation/cosmic-settings/cosmic-settings/src/pages/mod.rs) — `impl From<pages::Message> for crate::Message` so pages construct local messages and the lift is transparent.
+- **iced-guide** — [investigation/iced-guide/src/app_structure/composition.md](../investigation/iced-guide/src/app_structure/composition.md) — canonical "composition pattern" matching Halloy's shape exactly.
+
+**Result**: Top-level `Message` enum shrinks from 13 → 5 (`Login`, `Vault`, `TitleBar`, `Window`, `System`). `App::update()` body drops from 220 → ~60 lines (pure router, plus a pre-match cross-view dismissal block and a `post_update()` call). Adding a new async operation inside a view now touches only that view's file; adding a whole new screen touches the view directory plus ~4 mechanical lines in `app.rs` (enum variant, struct field, router arm, event handler). See [docs/architecture.md](architecture.md) "How to Add a New View" for the recipe.
+
+**Daemon-ready shapes**: `WindowMessage` (per-window OS events) and `SystemMessage` (global signals) are split even though single-window today. Every `WindowMessage` variant carries `window::Id`. When we migrate to `iced::daemon` for multi-window support, the message routing doesn't change — `main.rs` swaps `iced::application(...)` for `iced::daemon(...)` and the sub-view dispatch stays exactly as it is.
+
+**Action → Event semantic rename**: Imperative Actions became declarative Events during the refactor. `LoginAction::Unlock(pw)` (request) → the view running `Task::perform` directly + `LoginEvent::Unlocked { uid }` (completed fact). `LoginAction::LoadDetail(id)` → view owns `Task::perform(mgr.full_cipher(...))` and emits no event (detail cache updates internally). This shift is load-bearing: it's what lets async lifecycles live with the view that cares about them.
+
+**Consequences**:
+- Can't easily go back — the `Vec<Action>` pattern is gone from all three views at once. Reverting requires undoing the entire PR.
+- New contributors learn the pattern once per sub-view they work on. The "How to Add a New View" recipe in `docs/architecture.md` is the on-ramp.
+- `app.rs` should drift toward being the smallest, most stable file in the crate. Commits that grow `app.rs` for feature work are a smell; they should grow view files instead.
+- Toast emission from sub-views routes through events (`LoginEvent::ToastRequested(Toast)`), keeping the toast queue on App.
+- Stale-checks (for in-flight tasks when the user switches accounts or clicks a different item) co-locate with the view that owns the state they protect, not with App.
+
+**Kill-switch criteria**: revisit this pattern if (a) sub-views need to nest multiple levels deep (a sub-view containing another sub-view with its own async work) — the `Task::map` chain becomes awkward past two levels, or (b) we end up needing a message router that runs before the sub-view update (e.g. undo/redo middleware) — the one-match router would need to grow into something bigger.
 
 ## Component Library
 
@@ -138,7 +168,7 @@
 
 ## Cipher UI Types: SDK Directly, No Intermediate DTO
 
-**Decision**: The vault view, item list, and detail pane consume `bitwarden_vault::CipherListView` and `CipherView` directly. There's no intermediate `state::CipherItem` struct. `VaultView::cached_items` is `Vec<Arc<CipherListView>>`; the detail pane branches on `CipherView.r#type` and renders per-type field cards.
+**Decision**: The vault view, item list, and detail pane consume `bitwarden_vault::CipherListView` and `CipherView` directly. There's no intermediate `state::CipherItem` struct. `VaultView.items.cached` is `Vec<Arc<CipherListView>>`; the detail pane branches on `CipherView.r#type` and renders per-type field cards.
 
 **Previous approach**: Had a flat `state::CipherItem { id, name, username, url, category }` that mirrored the SDK shape loosely, with a hand-written `mock::mock_vault_items_for(uid)` as the data source. Made it easier to iterate on the UI without wiring the SDK, but meant two sources of truth and a translation layer.
 

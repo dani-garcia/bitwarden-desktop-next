@@ -9,6 +9,7 @@ use crate::{
     components::{self, buttons, icons},
     state::{NavSection, SidebarFilter, SidebarMode},
     theme::{AppColors, AppTheme},
+    views::vault::SidebarState,
 };
 
 const RAIL_WIDTH: f32 = 50.0;
@@ -28,17 +29,13 @@ pub enum SidebarMessage {
 }
 
 pub fn view<'a>(
-    mode: SidebarMode,
-    active_section: NavSection,
-    active_filter: SidebarFilter,
-    vault_tree_open: bool,
-    send_tree_open: bool,
+    state: &SidebarState,
     colors: &AppColors,
 ) -> Element<'a, SidebarMessage, AppTheme> {
-    if mode == SidebarMode::Expanded {
-        expanded_panel(active_section, active_filter, vault_tree_open, send_tree_open, colors)
+    if state.mode == SidebarMode::Expanded {
+        expanded_panel(state, colors)
     } else {
-        icon_rail(mode, active_section, colors)
+        icon_rail(state.active_section, colors)
     }
 }
 
@@ -47,7 +44,6 @@ pub fn view<'a>(
 // ---------------------------------------------------------------------------
 
 fn icon_rail<'a>(
-    _mode: SidebarMode,
     active_section: NavSection,
     colors: &AppColors,
 ) -> Element<'a, SidebarMessage, AppTheme> {
@@ -132,12 +128,12 @@ fn icon_rail<'a>(
 // ---------------------------------------------------------------------------
 
 fn expanded_panel<'a>(
-    active_section: NavSection,
-    active_filter: SidebarFilter,
-    vault_tree_open: bool,
-    send_tree_open: bool,
+    state: &SidebarState,
     colors: &AppColors,
 ) -> Element<'a, SidebarMessage, AppTheme> {
+    let active_section = state.active_section;
+    let active_filter = state.active_filter;
+
     let mut items: Vec<Element<'a, SidebarMessage, AppTheme>> = Vec::new();
 
     // Logo header
@@ -158,13 +154,13 @@ fn expanded_panel<'a>(
     items.push(section_header(
         "Vault",
         icons::BWI_VAULT,
-        vault_tree_open,
+        state.vault_tree_open,
         SidebarMessage::ToggleVaultTree,
         active_section == NavSection::Vault,
         colors,
     ));
 
-    if vault_tree_open {
+    if state.vault_tree_open {
         items.push(nav_button("My Vault", icons::BWI_USER, SidebarFilter::AllItems, active_filter, colors));
         items.push(nav_button("Favorites", icons::BWI_STAR, SidebarFilter::Favorites, active_filter, colors));
         items.push(nav_button("Logins", icons::BWI_LOGIN, SidebarFilter::Category(CipherType::Login), active_filter, colors));
@@ -180,7 +176,7 @@ fn expanded_panel<'a>(
     items.push(section_header(
         "Send",
         icons::BWI_SEND,
-        send_tree_open,
+        state.send_tree_open,
         SidebarMessage::ToggleSendTree,
         active_section == NavSection::Send,
         colors,
