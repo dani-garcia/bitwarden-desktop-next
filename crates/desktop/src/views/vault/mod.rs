@@ -215,10 +215,10 @@ impl VaultView {
                     let Some(uid) = active_user.cloned() else {
                         return (Task::none(), None);
                     };
-                    let task = Task::perform(
-                        async move { mgr.full_cipher(&uid, id).await },
-                        move |res| VaultMessage::DetailLoaded(id, res.map(Box::new)),
-                    );
+                    let task =
+                        Task::perform(async move { mgr.full_cipher(&uid, id).await }, move |res| {
+                            VaultMessage::DetailLoaded(id, res.map(Box::new))
+                        });
                     (task, None)
                 }
                 ItemListMessage::OpenExternal(_)
@@ -321,11 +321,7 @@ impl VaultView {
     fn recompute_filtered(&mut self) {
         self.items.cached = self.filtered_items();
         if let Some(id) = self.selection.id {
-            self.selection.item = self
-                .items
-                .cached
-                .iter()
-                .position(|i| i.id == Some(id));
+            self.selection.item = self.items.cached.iter().position(|i| i.id == Some(id));
         } else {
             self.selection.item = None;
         }
@@ -411,34 +407,35 @@ impl VaultView {
         let sidebar = sidebar::view(&self.sidebar, colors).map(VaultMessage::Sidebar);
 
         // --- Content area: PaneGrid when detail open, plain list otherwise ---
-        let content_area_inner: Element<'a, VaultMessage, AppTheme> = if self
-            .selection
-            .detail
-            .is_some()
-        {
-            pane_grid::PaneGrid::new(&self.pane_state, move |_pane, kind, _is_maximized| match kind {
-                PaneKind::List => {
-                    pane_grid::Content::new(self.list_content(active_email, accounts, colors))
-                }
-                PaneKind::Detail => {
-                    if let Some(item) = self.selection.detail.as_ref() {
-                        let detail = detail_pane::view(item, colors).map(|msg| match msg {
-                            DetailPaneMessage::Close => VaultMessage::CloseDetailPane,
-                            other => VaultMessage::DetailPane(other),
-                        });
-                        pane_grid::Content::new(detail)
-                    } else {
-                        pane_grid::Content::new(Space::new())
+        let content_area_inner: Element<'a, VaultMessage, AppTheme> =
+            if self.selection.detail.is_some() {
+                pane_grid::PaneGrid::new(&self.pane_state, move |_pane, kind, _is_maximized| {
+                    match kind {
+                        PaneKind::List => pane_grid::Content::new(self.list_content(
+                            active_email,
+                            accounts,
+                            colors,
+                        )),
+                        PaneKind::Detail => {
+                            if let Some(item) = self.selection.detail.as_ref() {
+                                let detail = detail_pane::view(item, colors).map(|msg| match msg {
+                                    DetailPaneMessage::Close => VaultMessage::CloseDetailPane,
+                                    other => VaultMessage::DetailPane(other),
+                                });
+                                pane_grid::Content::new(detail)
+                            } else {
+                                pane_grid::Content::new(Space::new())
+                            }
+                        }
                     }
-                }
-            })
-            .on_resize(6, VaultMessage::PaneResized)
-            .spacing(1)
-            .min_size(250)
-            .into()
-        } else {
-            self.list_content(active_email, accounts, colors)
-        };
+                })
+                .on_resize(6, VaultMessage::PaneResized)
+                .spacing(1)
+                .min_size(250)
+                .into()
+            } else {
+                self.list_content(active_email, accounts, colors)
+            };
 
         let content_area = container(content_area_inner)
             .width(Fill)
@@ -508,14 +505,18 @@ impl VaultView {
         let dd_panel = account_switcher::dropdown(active_email, accounts, colors)
             .map(VaultMessage::AccountSwitcher);
         let avatar: Element<'a, VaultMessage, AppTheme> =
-            crate::components::drop_down::DropDown::new(avatar_trigger, dd_panel, self.dropdown_open)
-                .on_dismiss(VaultMessage::AccountSwitcher(
-                    AccountSwitcherMessage::ToggleDropdown,
-                ))
-                .alignment(crate::components::drop_down::Alignment::BelowRight)
-                .width(240.0)
-                .offset(4.0)
-                .into();
+            crate::components::drop_down::DropDown::new(
+                avatar_trigger,
+                dd_panel,
+                self.dropdown_open,
+            )
+            .on_dismiss(VaultMessage::AccountSwitcher(
+                AccountSwitcherMessage::ToggleDropdown,
+            ))
+            .alignment(crate::components::drop_down::Alignment::BelowRight)
+            .width(240.0)
+            .offset(4.0)
+            .into();
 
         let content_header = container(
             row![title, Space::new().width(Fill), new_button, avatar]

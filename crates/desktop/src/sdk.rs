@@ -234,10 +234,9 @@ fn build_user_entry(mu: MockUser) -> UserEntry {
     // Stable SDK-side UUID: the mock JSON's `user_id` field is itself a valid
     // UUID (fake-data hardcodes stable v4 UUIDs per spec). Parsing fails loud
     // if that invariant is ever broken.
-    let sdk_user_id = UserId::new(
-        uuid::Uuid::parse_str(&mu.user_id)
-            .expect("mock-vault user_id must be a valid UUID; regenerate via `cargo run -p fake-data`"),
-    );
+    let sdk_user_id = UserId::new(uuid::Uuid::parse_str(&mu.user_id).expect(
+        "mock-vault user_id must be a valid UUID; regenerate via `cargo run -p fake-data`",
+    ));
 
     // `initialize_user_crypto` writes to UserKeyState + LocalUserDataKeyState; cipher/folder
     // repos hold the encrypted vault data. All four must be registered before unlock.
@@ -248,10 +247,9 @@ fn build_user_entry(mu: MockUser) -> UserEntry {
         .ciphers
         .into_iter()
         .map(|c| {
-            let key = c
-                .id
-                .map(|id| id.to_string())
-                .expect("generated ciphers always have an id");
+            let key =
+                c.id.map(|id| id.to_string())
+                    .expect("generated ciphers always have an id");
             (key, c)
         })
         .collect();
@@ -259,10 +257,9 @@ fn build_user_entry(mu: MockUser) -> UserEntry {
         .folders
         .into_iter()
         .map(|f| {
-            let key = f
-                .id
-                .map(|id| id.to_string())
-                .expect("generated folders always have an id");
+            let key =
+                f.id.map(|id| id.to_string())
+                    .expect("generated folders always have an id");
             (key, f)
         })
         .collect();
@@ -273,8 +270,14 @@ fn build_user_entry(mu: MockUser) -> UserEntry {
     let folder_repo = Arc::new(MemoryRepo::<Folder> {
         data: Mutex::new(folder_map),
     });
-    client.platform().state().register_client_managed(cipher_repo);
-    client.platform().state().register_client_managed(folder_repo);
+    client
+        .platform()
+        .state()
+        .register_client_managed(cipher_repo);
+    client
+        .platform()
+        .state()
+        .register_client_managed(folder_repo);
 
     UserEntry {
         client,
@@ -406,5 +409,4 @@ mod tests {
         assert_eq!(login.username.as_deref(), Some("alice@example.com"));
         assert_eq!(login.password.as_deref(), Some("fake-password-123"));
     }
-
 }

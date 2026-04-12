@@ -84,9 +84,7 @@ fn render_entries<'a>(
     entries
         .iter()
         .enumerate()
-        .map(|(item_i, entry)| {
-            render_entry(entry, menu_index, item_i, open_submenu, state, colors)
-        })
+        .map(|(item_i, entry)| render_entry(entry, menu_index, item_i, open_submenu, state, colors))
         .collect()
 }
 
@@ -141,28 +139,29 @@ fn render_entry<'a>(
         label_text.into()
     };
 
-    let mut btn = button(content)
-        .padding(ITEM_PADDING)
-        .width(Fill)
-        .style(move |theme: &AppTheme, status| {
-            let bg = if sub_is_open {
-                theme.colors.item_hover
-            } else if enabled {
-                match status {
-                    button::Status::Hovered => theme.colors.item_hover,
-                    _ => Color::TRANSPARENT,
+    let mut btn =
+        button(content)
+            .padding(ITEM_PADDING)
+            .width(Fill)
+            .style(move |theme: &AppTheme, status| {
+                let bg = if sub_is_open {
+                    theme.colors.item_hover
+                } else if enabled {
+                    match status {
+                        button::Status::Hovered => theme.colors.item_hover,
+                        _ => Color::TRANSPARENT,
+                    }
+                } else {
+                    Color::TRANSPARENT
+                };
+                button::Style {
+                    background: Some(Background::Color(bg)),
+                    text_color: label_color,
+                    border: Border::default(),
+                    shadow: Shadow::default(),
+                    snap: false,
                 }
-            } else {
-                Color::TRANSPARENT
-            };
-            button::Style {
-                background: Some(Background::Color(bg)),
-                text_color: label_color,
-                border: Border::default(),
-                shadow: Shadow::default(),
-                snap: false,
-            }
-        });
+            });
 
     if enabled {
         btn = btn.on_press(TitleBarMessage::ItemClicked(menu_index, item_index));
@@ -220,26 +219,27 @@ fn render_submenu_item<'a>(
             label_text.into()
         };
 
-    let mut btn = button(content)
-        .padding(ITEM_PADDING)
-        .width(Fill)
-        .style(move |theme: &AppTheme, status| {
-            let bg = if enabled {
-                match status {
-                    button::Status::Hovered => theme.colors.item_hover,
-                    _ => Color::TRANSPARENT,
+    let mut btn =
+        button(content)
+            .padding(ITEM_PADDING)
+            .width(Fill)
+            .style(move |theme: &AppTheme, status| {
+                let bg = if enabled {
+                    match status {
+                        button::Status::Hovered => theme.colors.item_hover,
+                        _ => Color::TRANSPARENT,
+                    }
+                } else {
+                    Color::TRANSPARENT
+                };
+                button::Style {
+                    background: Some(Background::Color(bg)),
+                    text_color: label_color,
+                    border: Border::default(),
+                    shadow: Shadow::default(),
+                    snap: false,
                 }
-            } else {
-                Color::TRANSPARENT
-            };
-            button::Style {
-                background: Some(Background::Color(bg)),
-                text_color: label_color,
-                border: Border::default(),
-                shadow: Shadow::default(),
-                snap: false,
-            }
-        });
+            });
 
     if enabled {
         btn = btn.on_press(TitleBarMessage::SubMenuItemClicked(

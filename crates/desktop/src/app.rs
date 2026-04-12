@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use iced::{Element, Subscription, Task, time};
 
@@ -11,6 +11,7 @@ use crate::{
     state::{AppState, Screen, UnlockMethod, UserId, UserSession},
     theme::{AppTheme, ThemePreference},
     views::{
+        about::AboutMessage,
         login::{self, AuthPage, LoginEvent, LoginMessage},
         title_bar::{self, TitleBarEvent, TitleBarMessage, WindowCommand},
         vault::{self, VaultEvent, VaultMessage},
@@ -19,10 +20,10 @@ use crate::{
 
 // ── Top-level Message ──────────────────────────────────────────────────────
 //
-// Five variants. The three sub-view wrappers route user interaction + async
-// completions into the view that owns the underlying state. `Window` carries
-// per-window OS events (daemon-ready: every variant takes a `window::Id` so
-// the future `iced::daemon` migration is a mechanical change). `System`
+// Six variants. The three sub-view wrappers route user interaction + async
+// completions into the view that owns the underlying state. `About` handles
+// the About child window (stateless). `Window` carries per-window OS events
+// (every variant takes a `window::Id` for multi-window dispatch). `System`
 // carries global signals that aren't tied to a specific window.
 
 #[derive(Debug, Clone)]
@@ -30,17 +31,18 @@ pub enum Message {
     Login(LoginMessage),
     Vault(VaultMessage),
     TitleBar(TitleBarMessage),
+    About(AboutMessage),
     Window(WindowMessage),
     System(SystemMessage),
 }
 
-/// Per-window OS events. Every variant carries the `window::Id` so the
-/// router can dispatch to the right window once we migrate to
-/// `iced::daemon` and support multiple simultaneous windows.
+/// Per-window OS events. Every variant carries `window::Id` so the router
+/// can dispatch to the correct window in daemon (multi-window) mode.
 #[derive(Debug, Clone)]
 pub enum WindowMessage {
     Opened(iced::window::Id),
     GotRawId(iced::window::Id, u64),
+    Closed(iced::window::Id),
     KeyPressed(iced::window::Id, iced::keyboard::Event),
 }
 
@@ -79,8 +81,8 @@ pub struct App {
     // ── Theme (preference + resolved instance + OS observer) ───────────────
     pub theme: ThemeState,
 
-    // ── Window chrome (id, fullscreen, maximized) ──────────────────────────
-    window: WindowState,
+    // ── Per-window state (keyed by iced window::Id) ─────────────────────────
+    windows: HashMap<iced::window::Id, WindowInfo>,
 
     // ── Native menu bridge (macOS muda on attach, polled each tick) ────────
     native_menu: Option<crate::menu::NativeMenuHandle>,
@@ -109,14 +111,29 @@ pub struct ThemeState {
     system: Arc<system_theme::SystemTheme>,
 }
 
-/// Window chrome state. `id` is set once `WindowMessage::Opened` arrives;
-/// `fullscreen` / `maximized` are toggled by menu actions and title-bar
-/// window-command events.
-#[derive(Default)]
-struct WindowState {
-    id: Option<iced::window::Id>,
+/// Per-window metadata. Keyed by `iced::window::Id` in a `HashMap` on `App`.
+#[derive(Debug)]
+struct WindowInfo {
+    kind: WindowKind,
     fullscreen: bool,
     maximized: bool,
+}
+
+impl WindowInfo {
+    fn new(kind: WindowKind) -> Self {
+        Self {
+            kind,
+            fullscreen: false,
+            maximized: false,
+        }
+    }
+}
+
+/// Discriminant for each kind of window the app can have open.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WindowKind {
+    Main,
+    About,
 }
 
 impl App {
@@ -141,10 +158,27 @@ impl App {
         let active_user = users.keys().next().cloned();
 
         let system_theme = Arc::new(
-            system_theme::SystemTheme::new()
-                .expect("failed to initialize system theme observer"),
+            system_theme::SystemTheme::new().expect("failed to initialize system theme observer"),
         );
         let initial_theme = ThemePreference::System.resolve(system_theme.get_scheme());
+
+        // Open the main window via `window::open` — daemon mode doesn't
+        // create a window automatically (unlike `iced::application`).
+        let (main_id, open_task) = iced::window::open(iced::window::Settings {
+            size: iced::Size::new(1024.0, 800.0),
+            min_size: Some(iced::Size::new(800.0, 750.0)),
+            decorations: crate::menu::should_use_native_title_bar(),
+            platform_specific: main_window_platform_specific(),
+            icon: iced::window::icon::from_file_data(
+                crate::assets::ICON_PNG,
+                Some(image::ImageFormat::Png),
+            )
+            .ok(),
+            ..Default::default()
+        });
+
+        let mut windows = HashMap::new();
+        windows.insert(main_id, WindowInfo::new(WindowKind::Main));
 
         let mut app = Self {
             state: AppState {
@@ -162,7 +196,7 @@ impl App {
                 current: initial_theme,
                 system: system_theme,
             },
-            window: WindowState::default(),
+            windows,
             native_menu: None,
             toasts: Vec::new(),
         };
@@ -174,25 +208,18 @@ impl App {
         app.login_view.auth_page = AuthPage::Unlock(preferred);
         app.refresh_cache();
 
-        (app, Task::none())
+        (
+            app,
+            open_task.map(|id| Message::Window(WindowMessage::Opened(id))),
+        )
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        // Listen for the initial WindowOpened event until we've captured
-        // a window id. After that we stop — the single-window app has no
-        // further openings to care about (multi-window will revisit this
-        // when we migrate to `iced::daemon`).
-        let window_sub = if self.window.id.is_none() {
-            iced::event::listen_with(|event, _status, id| {
-                if let iced::Event::Window(iced::window::Event::Opened { .. }) = event {
-                    Some(Message::Window(WindowMessage::Opened(id)))
-                } else {
-                    None
-                }
-            })
-        } else {
-            Subscription::none()
-        };
+        // Window close events — needed for daemon mode lifecycle. When the
+        // main window closes we call `iced::exit()` to terminate the daemon;
+        // closing a child window (About) just removes it from the map.
+        let close_sub =
+            iced::window::close_events().map(|id| Message::Window(WindowMessage::Closed(id)));
 
         // Keyboard events are routed through `event::listen_with` (not
         // `keyboard::listen`) so the `window::Id` is provided natively by
@@ -214,13 +241,10 @@ impl App {
             Subscription::none()
         };
 
-        let theme_sub = Subscription::run_with(
-            self.theme.system.clone(),
-            |st| st.subscribe(),
-        )
-        .map(|_| Message::System(SystemMessage::ThemeChanged));
+        let theme_sub = Subscription::run_with(self.theme.system.clone(), |st| st.subscribe())
+            .map(|_| Message::System(SystemMessage::ThemeChanged));
 
-        Subscription::batch([window_sub, keyboard_sub, native_menu_sub, theme_sub])
+        Subscription::batch([close_sub, keyboard_sub, native_menu_sub, theme_sub])
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -236,7 +260,7 @@ impl App {
                 self.login_view.dismiss_dropdowns();
                 self.vault_view.dismiss_dropdowns();
             }
-            Message::Window(_) | Message::System(_) => {}
+            Message::About(_) | Message::Window(_) | Message::System(_) => {}
         }
 
         let task = match message {
@@ -272,6 +296,7 @@ impl App {
                     .unwrap_or_else(Task::none);
                 Task::batch([task, ev_task])
             }
+            Message::About(m) => self.handle_about_message(m),
             Message::Window(m) => self.handle_window_message(m),
             Message::System(m) => self.handle_system_message(m),
         };
@@ -280,7 +305,31 @@ impl App {
         task
     }
 
-    pub fn view(&self) -> Element<'_, Message, AppTheme> {
+    pub fn view(&self, window_id: iced::window::Id) -> Element<'_, Message, AppTheme> {
+        match self.windows.get(&window_id).map(|w| w.kind) {
+            Some(WindowKind::Main) => self.view_main(),
+            Some(WindowKind::About) => {
+                crate::views::about::view(&self.theme.current.colors).map(Message::About)
+            }
+            // Defensive: all windows are eagerly inserted at creation time,
+            // but if iced calls view for an id we somehow don't know about,
+            // an empty space is a safe no-op.
+            None => iced::widget::Space::new().into(),
+        }
+    }
+
+    pub fn title(&self, window_id: iced::window::Id) -> String {
+        match self.windows.get(&window_id).map(|w| w.kind) {
+            Some(WindowKind::About) => "About Bitwarden".to_string(),
+            _ => "Bitwarden [Next]".to_string(),
+        }
+    }
+
+    pub fn theme(&self, _window_id: iced::window::Id) -> AppTheme {
+        self.theme.current.clone()
+    }
+
+    fn view_main(&self) -> Element<'_, Message, AppTheme> {
         let colors = &self.theme.current.colors;
 
         let page: Element<'_, Message, AppTheme> = match self.state.screen {
@@ -306,7 +355,7 @@ impl App {
             let menu_state = self.menu_state();
             let tb = self
                 .title_bar
-                .view(self.window.maximized, &menu_state, colors)
+                .view(self.main_window_maximized(), &menu_state, colors)
                 .map(Message::TitleBar);
             let content: Element<'_, Message, AppTheme> =
                 iced::widget::column![tb, page].height(iced::Fill).into();
@@ -390,14 +439,29 @@ impl App {
         }
     }
 
+    fn handle_about_message(&mut self, msg: AboutMessage) -> Task<Message> {
+        match msg {
+            AboutMessage::CopyInfo => iced::clipboard::write(crate::views::about::info_string()),
+            AboutMessage::Close => {
+                if let Some(id) = self.about_window_id() {
+                    iced::window::close(id)
+                } else {
+                    Task::none()
+                }
+            }
+        }
+    }
+
     fn handle_window_command(&mut self, cmd: WindowCommand) -> Task<Message> {
-        let Some(id) = self.window.id else {
+        let Some(id) = self.main_window_id() else {
             return Task::none();
         };
         match cmd {
             WindowCommand::Minimize => iced::window::minimize(id, true),
             WindowCommand::Maximize => {
-                self.window.maximized = !self.window.maximized;
+                if let Some(info) = self.windows.get_mut(&id) {
+                    info.maximized = !info.maximized;
+                }
                 iced::window::toggle_maximize(id)
             }
             WindowCommand::Close => iced::window::close(id),
@@ -409,15 +473,29 @@ impl App {
     fn handle_window_message(&mut self, msg: WindowMessage) -> Task<Message> {
         match msg {
             WindowMessage::Opened(id) => {
-                self.window.id = Some(id);
-                iced::window::raw_id::<Message>(id)
-                    .map(move |raw| Message::Window(WindowMessage::GotRawId(id, raw)))
+                // Native menu only attaches to the main window.
+                if Some(id) == self.main_window_id() {
+                    iced::window::raw_id::<Message>(id)
+                        .map(move |raw| Message::Window(WindowMessage::GotRawId(id, raw)))
+                } else {
+                    Task::none()
+                }
             }
             WindowMessage::GotRawId(_id, raw_id) => {
                 self.native_menu = crate::menu::attach_menu(raw_id);
                 Task::none()
             }
-            WindowMessage::KeyPressed(_id, ev) => {
+            WindowMessage::Closed(id) => {
+                let was_main = Some(id) == self.main_window_id();
+                self.windows.remove(&id);
+                if was_main { iced::exit() } else { Task::none() }
+            }
+            WindowMessage::KeyPressed(id, ev) => {
+                // Keyboard shortcuts only affect the main window — Ctrl+F
+                // in the About window must not trigger vault search.
+                if Some(id) != self.main_window_id() {
+                    return Task::none();
+                }
                 let iced::keyboard::Event::KeyPressed { key, modifiers, .. } = ev else {
                     return Task::none();
                 };
@@ -444,8 +522,10 @@ impl App {
             }
             SystemMessage::ThemeChanged => {
                 if self.theme.preference == ThemePreference::System {
-                    self.theme.current =
-                        self.theme.preference.resolve(self.theme.system.get_scheme());
+                    self.theme.current = self
+                        .theme
+                        .preference
+                        .resolve(self.theme.system.get_scheme());
                 }
                 Task::none()
             }
@@ -462,7 +542,7 @@ impl App {
         use crate::menu::MenuAction;
         match action {
             MenuAction::Quit => {
-                std::process::exit(0);
+                return iced::exit();
             }
             MenuAction::LockAllVaults => {
                 for session in self.state.users.values_mut() {
@@ -480,9 +560,11 @@ impl App {
                 self.refresh_cache();
             }
             MenuAction::ToggleFullScreen => {
-                if let Some(id) = self.window.id {
-                    self.window.fullscreen = !self.window.fullscreen;
-                    let mode = if self.window.fullscreen {
+                if let Some(id) = self.main_window_id()
+                    && let Some(info) = self.windows.get_mut(&id)
+                {
+                    info.fullscreen = !info.fullscreen;
+                    let mode = if info.fullscreen {
                         iced::window::Mode::Fullscreen
                     } else {
                         iced::window::Mode::Windowed
@@ -491,12 +573,12 @@ impl App {
                 }
             }
             MenuAction::Minimize => {
-                if let Some(id) = self.window.id {
+                if let Some(id) = self.main_window_id() {
                     return iced::window::minimize(id, true);
                 }
             }
             MenuAction::Close => {
-                if let Some(id) = self.window.id {
+                if let Some(id) = self.main_window_id() {
                     return iced::window::close(id);
                 }
             }
@@ -511,12 +593,56 @@ impl App {
                 self.refresh_cache();
             }
             MenuAction::HideToTray | MenuAction::ToggleAlwaysOnTop => {}
-            MenuAction::About => {}
+            MenuAction::About => {
+                // Re-focus existing About window if already open.
+                if let Some(id) = self.about_window_id() {
+                    return iced::window::gain_focus(id);
+                }
+
+                let (about_id, open_task) = iced::window::open(iced::window::Settings {
+                    size: iced::Size::new(400.0, 280.0),
+                    min_size: Some(iced::Size::new(360.0, 260.0)),
+                    position: iced::window::Position::Centered,
+                    resizable: false,
+                    decorations: true,
+                    icon: iced::window::icon::from_file_data(
+                        crate::assets::ICON_PNG,
+                        Some(image::ImageFormat::Png),
+                    )
+                    .ok(),
+                    ..Default::default()
+                });
+
+                self.windows
+                    .insert(about_id, WindowInfo::new(WindowKind::About));
+
+                return open_task.map(|id| Message::Window(WindowMessage::Opened(id)));
+            }
         }
         Task::none()
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────
+
+    fn main_window_id(&self) -> Option<iced::window::Id> {
+        self.windows
+            .iter()
+            .find(|(_, w)| w.kind == WindowKind::Main)
+            .map(|(id, _)| *id)
+    }
+
+    fn about_window_id(&self) -> Option<iced::window::Id> {
+        self.windows
+            .iter()
+            .find(|(_, w)| w.kind == WindowKind::About)
+            .map(|(id, _)| *id)
+    }
+
+    fn main_window_maximized(&self) -> bool {
+        self.main_window_id()
+            .and_then(|id| self.windows.get(&id))
+            .is_some_and(|w| w.maximized)
+    }
 
     fn post_update(&mut self) {
         self.refresh_cache();
@@ -559,15 +685,15 @@ impl App {
             .collect();
 
         // Compute unlock alternatives for the current auth page
-        self.cache.unlock_alternatives =
-            if let AuthPage::Unlock(method) = self.login_view.auth_page {
-                active_session
-                    .as_ref()
-                    .map(|s| s.unlock_methods.alternatives(method))
-                    .unwrap_or_default()
-            } else {
-                Vec::new()
-            };
+        self.cache.unlock_alternatives = if let AuthPage::Unlock(method) = self.login_view.auth_page
+        {
+            active_session
+                .as_ref()
+                .map(|s| s.unlock_methods.alternatives(method))
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
 
         if let Some(ref handle) = self.native_menu {
             crate::menu::sync_native_enabled(handle, &self.menu_state());
@@ -633,5 +759,37 @@ impl App {
             has_lockable_accounts: has_lockable,
             has_authenticated_accounts: has_accounts,
         }
+    }
+}
+
+// ── Platform-specific window settings ─────────────────────────────────────
+//
+// Moved from main.rs on the daemon migration: `iced::daemon` doesn't take
+// a `.window(Settings)` — boot creates the window via `window::open`.
+
+fn main_window_platform_specific() -> iced::window::settings::PlatformSpecific {
+    #[cfg(target_os = "windows")]
+    {
+        use iced::window::settings::PlatformSpecific;
+        PlatformSpecific {
+            undecorated_shadow: true,
+            corner_preference: iced::window::settings::platform::CornerPreference::Round,
+            ..Default::default()
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        use iced::window::settings::PlatformSpecific;
+        PlatformSpecific {
+            title_hidden: true,
+            titlebar_transparent: true,
+            fullsize_content_view: true,
+        }
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    {
+        iced::window::settings::PlatformSpecific::default()
     }
 }

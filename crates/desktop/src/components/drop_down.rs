@@ -315,13 +315,8 @@ where
 
 // ── Overlay ────────────────────────────────────────────────────────────────
 
-struct DropDownOverlay<
-    'a,
-    'b,
-    Message,
-    Theme = iced::Theme,
-    Renderer = iced::Renderer,
-> where
+struct DropDownOverlay<'a, 'b, Message, Theme = iced::Theme, Renderer = iced::Renderer>
+where
     Message: Clone,
 {
     state: &'b mut Tree,
@@ -456,11 +451,13 @@ where
                 previous_position.y + self.underlay_bounds.height + self.offset.y,
             ),
             Alignment::BelowRight => Point::new(
-                previous_position.x + self.underlay_bounds.width - node.bounds().width + self.offset.x,
+                previous_position.x + self.underlay_bounds.width - node.bounds().width
+                    + self.offset.x,
                 previous_position.y + self.underlay_bounds.height + self.offset.y,
             ),
             Alignment::AboveRight => Point::new(
-                previous_position.x + self.underlay_bounds.width - node.bounds().width + self.offset.x,
+                previous_position.x + self.underlay_bounds.width - node.bounds().width
+                    + self.offset.x,
                 previous_position.y - node.bounds().height - self.offset.y,
             ),
         };

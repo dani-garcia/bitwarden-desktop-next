@@ -503,7 +503,6 @@ pub fn attach_menu(raw_id: u64) -> Option<NativeMenuHandle> {
     Some(NativeMenuHandle { actions, items })
 }
 
-
 pub fn should_use_custom_menu_bar() -> bool {
     cfg!(not(target_os = "macos")) || std::env::var("DEV_BOTH_MENUS").is_ok()
 }

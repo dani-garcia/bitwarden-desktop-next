@@ -32,7 +32,14 @@ pub fn view<'a>(
 
     let email_label = text(email).size(16).color(colors.text_secondary);
 
-    let card = layout::auth_card(card_content(method, alternatives, password, pin, show_password, colors));
+    let card = layout::auth_card(card_content(
+        method,
+        alternatives,
+        password,
+        pin,
+        show_password,
+        colors,
+    ));
 
     column![lock_icon, title, email_label, Space::new().height(12), card]
         .spacing(8)
@@ -165,8 +172,5 @@ fn card_content<'a>(
         .into(),
     );
 
-    column(items)
-        .spacing(12)
-        .align_x(Alignment::Center)
-        .into()
+    column(items).spacing(12).align_x(Alignment::Center).into()
 }

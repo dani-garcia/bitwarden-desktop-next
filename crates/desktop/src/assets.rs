@@ -1,10 +1,8 @@
 //! Compile-time embedded assets. All binary resources in one place.
 
 // Fonts
-pub const FONT_MEDIUM: &[u8] =
-    include_bytes!("../../../assets/inter/static/Inter_18pt-Medium.ttf");
-pub const FONT_BOLD: &[u8] =
-    include_bytes!("../../../assets/inter/static/Inter_18pt-Bold.ttf");
+pub const FONT_MEDIUM: &[u8] = include_bytes!("../../../assets/inter/static/Inter_18pt-Medium.ttf");
+pub const FONT_BOLD: &[u8] = include_bytes!("../../../assets/inter/static/Inter_18pt-Bold.ttf");
 pub const BWI_FONT: &[u8] = include_bytes!("../../../assets/bwi-font.ttf");
 
 // App icon

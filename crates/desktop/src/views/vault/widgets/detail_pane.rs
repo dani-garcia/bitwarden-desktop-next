@@ -213,7 +213,12 @@ fn card_details_card<'a>(
     colors: &AppColors,
 ) -> Element<'a, DetailPaneMessage, AppTheme> {
     let mut fields: Vec<Element<'a, DetailPaneMessage, AppTheme>> = Vec::new();
-    push_optional_field(&mut fields, "Cardholder name", card.cardholder_name.as_deref(), colors);
+    push_optional_field(
+        &mut fields,
+        "Cardholder name",
+        card.cardholder_name.as_deref(),
+        colors,
+    );
     push_optional_field(&mut fields, "Brand", card.brand.as_deref(), colors);
     push_optional_field(&mut fields, "Number", card.number.as_deref(), colors);
 
@@ -230,7 +235,12 @@ fn card_details_card<'a>(
     push_optional_field(&mut fields, "Security code", card.code.as_deref(), colors);
 
     if fields.is_empty() {
-        fields.push(text("No card details").size(14).color(colors.text_muted).into());
+        fields.push(
+            text("No card details")
+                .size(14)
+                .color(colors.text_muted)
+                .into(),
+        );
     }
     card_with_margin(components::styled_card(column(fields).spacing(12).into()))
 }
@@ -291,7 +301,12 @@ fn identity_card<'a>(
     }
 
     if fields.is_empty() {
-        fields.push(text("No identity details").size(14).color(colors.text_muted).into());
+        fields.push(
+            text("No identity details")
+                .size(14)
+                .color(colors.text_muted)
+                .into(),
+        );
     }
     card_with_margin(components::styled_card(column(fields).spacing(12).into()))
 }
@@ -316,10 +331,7 @@ fn ssh_key_card<'a>(
 // Autofill card
 // ---------------------------------------------------------------------------
 
-fn autofill_card<'a>(
-    uri: &'a str,
-    colors: &AppColors,
-) -> Element<'a, DetailPaneMessage, AppTheme> {
+fn autofill_card<'a>(uri: &'a str, colors: &AppColors) -> Element<'a, DetailPaneMessage, AppTheme> {
     let label = text("Website").size(12).color(colors.text_muted);
     let value = text(uri).size(14).color(colors.text_primary);
 

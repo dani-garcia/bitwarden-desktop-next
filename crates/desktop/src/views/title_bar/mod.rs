@@ -90,7 +90,11 @@ impl TitleBarState {
     ) -> (Task<TitleBarMessage>, Option<TitleBarEvent>) {
         match msg {
             TitleBarMessage::TopLevelClicked(i) => {
-                self.open_menu = if self.open_menu == Some(i) { None } else { Some(i) };
+                self.open_menu = if self.open_menu == Some(i) {
+                    None
+                } else {
+                    Some(i)
+                };
                 self.open_submenu = None;
                 (Task::none(), None)
             }
@@ -207,8 +211,7 @@ impl TitleBarState {
                         }
                     });
 
-                let panel =
-                    dropdown::menu_panel(entries, i, open_submenu, menu_state, colors);
+                let panel = dropdown::menu_panel(entries, i, open_submenu, menu_state, colors);
                 let dd: Element<'_, TitleBarMessage, AppTheme> =
                     crate::components::drop_down::DropDown::new(btn, panel, is_open)
                         .on_dismiss(TitleBarMessage::DismissMenu)

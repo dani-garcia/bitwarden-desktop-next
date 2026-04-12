@@ -30,7 +30,10 @@ pub enum ThemePreference {
 impl ThemePreference {
     /// Resolve the preference to a concrete `AppTheme`.
     /// For `System`, uses the given scheme from the OS (defaults to light if unavailable).
-    pub fn resolve(self, scheme: Result<system_theme::ThemeScheme, system_theme::error::Error>) -> AppTheme {
+    pub fn resolve(
+        self,
+        scheme: Result<system_theme::ThemeScheme, system_theme::error::Error>,
+    ) -> AppTheme {
         match self {
             ThemePreference::Light => AppTheme::light(),
             ThemePreference::Dark => AppTheme::dark(),

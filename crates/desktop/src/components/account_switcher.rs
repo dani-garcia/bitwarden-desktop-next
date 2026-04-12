@@ -3,7 +3,11 @@ use iced::{
     widget::{column, container, row, text},
 };
 
-use crate::{components::buttons, state::UserId, theme::{AppColors, AppTheme}};
+use crate::{
+    components::buttons,
+    state::UserId,
+    theme::{AppColors, AppTheme},
+};
 
 #[derive(Debug, Clone)]
 pub enum AccountSwitcherMessage {
@@ -108,9 +112,7 @@ pub fn dropdown<'a>(
 
     items.push(
         buttons::ghost(
-            text("+ Add account")
-                .size(14)
-                .color(colors.text_secondary),
+            text("+ Add account").size(14).color(colors.text_secondary),
             false,
             iced::Color::TRANSPARENT,
             colors.item_hover,

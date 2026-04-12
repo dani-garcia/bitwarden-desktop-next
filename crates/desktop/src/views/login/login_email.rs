@@ -31,15 +31,24 @@ pub fn view<'a>(
     // "New to Bitwarden? Create account" link below card
     // TODO: Create account navigates to registration view (not yet implemented)
     let create_account_link = row![
-        text("New to Bitwarden? ").size(14).color(colors.text_secondary),
+        text("New to Bitwarden? ")
+            .size(14)
+            .color(colors.text_secondary),
         text("Create account").size(14).color(colors.accent),
     ]
     .align_y(Alignment::Center);
 
-    column![vault_icon, title, Space::new().height(12), card, Space::new().height(8), create_account_link]
-        .spacing(8)
-        .align_x(Alignment::Center)
-        .into()
+    column![
+        vault_icon,
+        title,
+        Space::new().height(12),
+        card,
+        Space::new().height(8),
+        create_account_link
+    ]
+    .spacing(8)
+    .align_x(Alignment::Center)
+    .into()
 }
 
 fn card_content<'a>(
@@ -71,10 +80,7 @@ fn card_content<'a>(
     .on_press(LoginMessage::ContinueWithEmail)
     .width(Fill);
 
-    let or_text = text("Or")
-        .size(14)
-        .color(colors.text_primary)
-        .center();
+    let or_text = text("Or").size(14).color(colors.text_primary).center();
 
     let sso_button = buttons::secondary(
         container(

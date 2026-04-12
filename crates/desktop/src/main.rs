@@ -10,9 +10,8 @@ mod theme;
 mod views;
 
 use iced::{
-    Font, Size,
+    Font,
     font::{Family, Weight},
-    window::{self, settings::PlatformSpecific},
 };
 
 use crate::{app::App, components::icons};
@@ -34,24 +33,15 @@ pub const APP_FONT_BOLD: Font = Font {
 fn main() -> iced::Result {
     init_tracing();
 
-    iced::application(App::new, App::update, App::view)
+    iced::daemon(App::new, App::update, App::view)
         .subscription(App::subscription)
-        .title("Bitwarden [Next]")
+        .title(App::title)
+        .theme(App::theme)
         .font(assets::FONT_MEDIUM)
         .font(assets::FONT_BOLD)
         .font(assets::BWI_FONT)
         .font(icons::FONT_BYTES)
         .default_font(APP_FONT)
-        .window(window::Settings {
-            size: Size::new(1024.0, 800.0),
-            min_size: Some(Size::new(800.0, 750.0)),
-            decorations: menu::should_use_native_title_bar(),
-            platform_specific: get_platform_specific(),
-            icon: window::icon::from_file_data(assets::ICON_PNG, Some(image::ImageFormat::Png))
-                .ok(),
-            ..Default::default()
-        })
-        .theme(|app: &App| app.theme.current.clone())
         .antialiasing(true)
         .run()
 }
@@ -73,29 +63,4 @@ fn init_tracing() {
         .with_target(false)
         .with_writer(std::io::stderr)
         .init();
-}
-
-fn get_platform_specific() -> PlatformSpecific {
-    #[cfg(target_os = "windows")]
-    {
-        PlatformSpecific {
-            undecorated_shadow: true,
-            corner_preference: window::settings::platform::CornerPreference::Round,
-            ..Default::default()
-        }
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        PlatformSpecific {
-            title_hidden: true,
-            titlebar_transparent: true,
-            fullsize_content_view: true,
-        }
-    }
-
-    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-    {
-        PlatformSpecific::default()
-    }
 }

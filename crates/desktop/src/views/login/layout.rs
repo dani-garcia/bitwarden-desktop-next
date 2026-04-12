@@ -71,9 +71,7 @@ pub fn auth_page_shell<'a>(
     .padding(0)
     .style(|theme: &AppTheme, status| {
         let bg = match status {
-            button::Status::Hovered | button::Status::Pressed => {
-                theme.colors.button_primary_hover
-            }
+            button::Status::Hovered | button::Status::Pressed => theme.colors.button_primary_hover,
             _ => theme.colors.button_primary,
         };
         button::Style {

@@ -22,9 +22,7 @@ pub fn view<'a>(
         .width(64)
         .height(60);
 
-    let title = text("Welcome back")
-        .size(28)
-        .color(colors.text_primary);
+    let title = text("Welcome back").size(28).color(colors.text_primary);
 
     let email_label = text(email).size(16).color(colors.text_secondary);
 

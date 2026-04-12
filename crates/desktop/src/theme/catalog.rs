@@ -23,7 +23,11 @@ impl widget::button::Catalog for AppTheme {
         })
     }
 
-    fn style(&self, class: &Self::Class<'_>, status: widget::button::Status) -> widget::button::Style {
+    fn style(
+        &self,
+        class: &Self::Class<'_>,
+        status: widget::button::Status,
+    ) -> widget::button::Style {
         class(self, status)
     }
 }
@@ -151,7 +155,10 @@ impl widget::pane_grid::Catalog for AppTheme {
         })
     }
 
-    fn style(&self, class: &<Self as widget::pane_grid::Catalog>::Class<'_>) -> widget::pane_grid::Style {
+    fn style(
+        &self,
+        class: &<Self as widget::pane_grid::Catalog>::Class<'_>,
+    ) -> widget::pane_grid::Style {
         class(self)
     }
 }
@@ -207,11 +214,7 @@ impl widget::svg::Catalog for AppTheme {
         Box::new(|_theme, _status| widget::svg::Style::default())
     }
 
-    fn style(
-        &self,
-        class: &Self::Class<'_>,
-        status: widget::svg::Status,
-    ) -> widget::svg::Style {
+    fn style(&self, class: &Self::Class<'_>, status: widget::svg::Status) -> widget::svg::Style {
         class(self, status)
     }
 }

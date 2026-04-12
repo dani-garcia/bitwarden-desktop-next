@@ -28,10 +28,7 @@ pub enum SidebarMessage {
     ToggleSendTree,
 }
 
-pub fn view<'a>(
-    state: &SidebarState,
-    colors: &AppColors,
-) -> Element<'a, SidebarMessage, AppTheme> {
+pub fn view<'a>(state: &SidebarState, colors: &AppColors) -> Element<'a, SidebarMessage, AppTheme> {
     if state.mode == SidebarMode::Expanded {
         expanded_panel(state, colors)
     } else {
@@ -60,24 +57,25 @@ fn icon_rail<'a>(
     let sidebar_selected = colors.sidebar_selected;
     let nav_item_hover = colors.nav_item_hover;
 
-    let rail_btn = move |icon: icons::BwiIcon, section: NavSection| -> Element<'a, SidebarMessage, AppTheme> {
-        let is_active = active_section == section;
-        buttons::ghost(
-            container(icon.render(RAIL_ICON_SIZE, nav_text))
-                .width(RAIL_BTN_SIZE)
-                .height(RAIL_BTN_SIZE)
-                .align_x(Alignment::Center)
-                .align_y(Alignment::Center),
-            is_active,
-            sidebar_selected,
-            nav_item_hover,
-            ITEM_RADIUS,
-        )
-        .on_press(SidebarMessage::SectionSelected(section))
-        .padding(0)
-        .width(RAIL_WIDTH)
-        .into()
-    };
+    let rail_btn =
+        move |icon: icons::BwiIcon, section: NavSection| -> Element<'a, SidebarMessage, AppTheme> {
+            let is_active = active_section == section;
+            buttons::ghost(
+                container(icon.render(RAIL_ICON_SIZE, nav_text))
+                    .width(RAIL_BTN_SIZE)
+                    .height(RAIL_BTN_SIZE)
+                    .align_x(Alignment::Center)
+                    .align_y(Alignment::Center),
+                is_active,
+                sidebar_selected,
+                nav_item_hover,
+                ITEM_RADIUS,
+            )
+            .on_press(SidebarMessage::SectionSelected(section))
+            .padding(0)
+            .width(RAIL_WIDTH)
+            .into()
+        };
 
     let toggle_btn: Element<'a, SidebarMessage, AppTheme> = buttons::ghost_icon(
         container(icons::BWI_ANGLE_RIGHT.render(32.0, nav_text))
@@ -138,9 +136,11 @@ fn expanded_panel<'a>(
 
     // Logo header
     let logo = container(
-        svg(svg::Handle::from_memory(crate::assets::PASSWORD_MANAGER_LOGO))
-            .width(Fill)
-            .height(Length::Shrink),
+        svg(svg::Handle::from_memory(
+            crate::assets::PASSWORD_MANAGER_LOGO,
+        ))
+        .width(Fill)
+        .height(Length::Shrink),
     )
     .padding(Padding {
         top: 4.0,
@@ -161,15 +161,69 @@ fn expanded_panel<'a>(
     ));
 
     if state.vault_tree_open {
-        items.push(nav_button("My Vault", icons::BWI_USER, SidebarFilter::AllItems, active_filter, colors));
-        items.push(nav_button("Favorites", icons::BWI_STAR, SidebarFilter::Favorites, active_filter, colors));
-        items.push(nav_button("Logins", icons::BWI_LOGIN, SidebarFilter::Category(CipherType::Login), active_filter, colors));
-        items.push(nav_button("Cards", icons::BWI_CREDIT_CARD, SidebarFilter::Category(CipherType::Card), active_filter, colors));
-        items.push(nav_button("Identities", icons::BWI_IDENTITY, SidebarFilter::Category(CipherType::Identity), active_filter, colors));
-        items.push(nav_button("Notes", icons::BWI_NOTE, SidebarFilter::Category(CipherType::SecureNote), active_filter, colors));
-        items.push(nav_button("SSH keys", icons::BWI_KEY, SidebarFilter::Category(CipherType::SshKey), active_filter, colors));
-        items.push(nav_button("Archive", icons::BWI_ARCHIVE, SidebarFilter::Archive, active_filter, colors));
-        items.push(nav_button("Trash", icons::BWI_TRASH, SidebarFilter::Trash, active_filter, colors));
+        items.push(nav_button(
+            "My Vault",
+            icons::BWI_USER,
+            SidebarFilter::AllItems,
+            active_filter,
+            colors,
+        ));
+        items.push(nav_button(
+            "Favorites",
+            icons::BWI_STAR,
+            SidebarFilter::Favorites,
+            active_filter,
+            colors,
+        ));
+        items.push(nav_button(
+            "Logins",
+            icons::BWI_LOGIN,
+            SidebarFilter::Category(CipherType::Login),
+            active_filter,
+            colors,
+        ));
+        items.push(nav_button(
+            "Cards",
+            icons::BWI_CREDIT_CARD,
+            SidebarFilter::Category(CipherType::Card),
+            active_filter,
+            colors,
+        ));
+        items.push(nav_button(
+            "Identities",
+            icons::BWI_IDENTITY,
+            SidebarFilter::Category(CipherType::Identity),
+            active_filter,
+            colors,
+        ));
+        items.push(nav_button(
+            "Notes",
+            icons::BWI_NOTE,
+            SidebarFilter::Category(CipherType::SecureNote),
+            active_filter,
+            colors,
+        ));
+        items.push(nav_button(
+            "SSH keys",
+            icons::BWI_KEY,
+            SidebarFilter::Category(CipherType::SshKey),
+            active_filter,
+            colors,
+        ));
+        items.push(nav_button(
+            "Archive",
+            icons::BWI_ARCHIVE,
+            SidebarFilter::Archive,
+            active_filter,
+            colors,
+        ));
+        items.push(nav_button(
+            "Trash",
+            icons::BWI_TRASH,
+            SidebarFilter::Trash,
+            active_filter,
+            colors,
+        ));
     }
 
     // Send section (collapsible)
@@ -183,9 +237,27 @@ fn expanded_panel<'a>(
     ));
 
     // Standalone nav items
-    items.push(standalone_item("Generator", icons::BWI_GENERATE, NavSection::Generator, active_section, colors));
-    items.push(standalone_item("Import", icons::BWI_IMPORT, NavSection::Import, active_section, colors));
-    items.push(standalone_item("Export", icons::BWI_DOWNLOAD, NavSection::Export, active_section, colors));
+    items.push(standalone_item(
+        "Generator",
+        icons::BWI_GENERATE,
+        NavSection::Generator,
+        active_section,
+        colors,
+    ));
+    items.push(standalone_item(
+        "Import",
+        icons::BWI_IMPORT,
+        NavSection::Import,
+        active_section,
+        colors,
+    ));
+    items.push(standalone_item(
+        "Export",
+        icons::BWI_DOWNLOAD,
+        NavSection::Export,
+        active_section,
+        colors,
+    ));
 
     // Collapse chevron at bottom
     let separator = container(components::separator_h()).padding([4.0, SIDEBAR_H_PAD]);

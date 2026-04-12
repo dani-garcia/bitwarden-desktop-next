@@ -61,9 +61,7 @@ pub fn floating_label_input<'a>(
                 .on_press(toggle_msg)
                 .padding([10, 12]);
 
-            row![input, toggle_button]
-                .align_y(Alignment::Center)
-                .into()
+            row![input, toggle_button].align_y(Alignment::Center).into()
         } else {
             input.into()
         };
@@ -75,17 +73,18 @@ pub fn floating_label_input<'a>(
             ..Default::default()
         });
 
-    let input_border = container(input_row)
-        .width(Fill)
-        .style(|theme: &AppTheme| container::Style {
-            background: Some(Background::Color(Color::TRANSPARENT)),
-            border: Border {
-                color: theme.colors.border,
-                width: 1.0,
-                radius: 4.0.into(),
-            },
-            ..Default::default()
-        });
+    let input_border =
+        container(input_row)
+            .width(Fill)
+            .style(|theme: &AppTheme| container::Style {
+                background: Some(Background::Color(Color::TRANSPARENT)),
+                border: Border {
+                    color: theme.colors.border,
+                    width: 1.0,
+                    radius: 4.0.into(),
+                },
+                ..Default::default()
+            });
 
     stack![
         column![Space::new().height(Length::Fixed(8.0)), input_border],

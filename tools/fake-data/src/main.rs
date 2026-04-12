@@ -22,8 +22,8 @@ use bitwarden_core::{
 use bitwarden_pm::PasswordManagerClient;
 use bitwarden_state::repository::{Repository, RepositoryError, RepositoryItem};
 use bitwarden_vault::{
-    CardView, Cipher, CipherRepromptType, CipherType, CipherView, Folder, FolderView,
-    IdentityView, LoginUriView, LoginView, SshKeyView, UriMatchType,
+    CardView, Cipher, CipherRepromptType, CipherType, CipherView, Folder, FolderView, IdentityView,
+    LoginUriView, LoginView, SshKeyView, UriMatchType,
 };
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
@@ -341,7 +341,11 @@ enum CipherKind {
 }
 
 fn note(name: &str) -> CipherView {
-    cipher_with(name, Some(format!("Notes for {name}")), CipherKind::SecureNote)
+    cipher_with(
+        name,
+        Some(format!("Notes for {name}")),
+        CipherKind::SecureNote,
+    )
 }
 
 fn card(
@@ -560,10 +564,36 @@ impl Prng {
 }
 
 const LOAD_TEST_COMPANIES: &[&str] = &[
-    "Acme", "Globex", "Initech", "Umbrella", "Wayne", "Stark", "Wonka", "Tyrell", "Cyberdyne",
-    "Hooli", "Pied Piper", "Soylent", "Dunder Mifflin", "Vandelay", "Massive Dynamic", "Oscorp",
-    "LexCorp", "Aperture", "Black Mesa", "Rekall", "Weyland", "Nakatomi", "InGen", "Parabellum",
-    "Genco", "Virtucon", "Buy n Large", "Omni Consumer", "Prestige Worldwide", "Scruffy",
+    "Acme",
+    "Globex",
+    "Initech",
+    "Umbrella",
+    "Wayne",
+    "Stark",
+    "Wonka",
+    "Tyrell",
+    "Cyberdyne",
+    "Hooli",
+    "Pied Piper",
+    "Soylent",
+    "Dunder Mifflin",
+    "Vandelay",
+    "Massive Dynamic",
+    "Oscorp",
+    "LexCorp",
+    "Aperture",
+    "Black Mesa",
+    "Rekall",
+    "Weyland",
+    "Nakatomi",
+    "InGen",
+    "Parabellum",
+    "Genco",
+    "Virtucon",
+    "Buy n Large",
+    "Omni Consumer",
+    "Prestige Worldwide",
+    "Scruffy",
 ];
 
 const LOAD_TEST_KINDS: &[&str] = &[
@@ -623,18 +653,8 @@ const LOAD_TEST_FIRST_NAMES: &[&str] = &[
 ];
 
 const LOAD_TEST_LAST_NAMES: &[&str] = &[
-    "Smith",
-    "Jones",
-    "Brown",
-    "Taylor",
-    "Wilson",
-    "Davies",
-    "Evans",
-    "Thomas",
-    "Roberts",
-    "Walker",
-    "Wright",
-    "Robinson",
+    "Smith", "Jones", "Brown", "Taylor", "Wilson", "Davies", "Evans", "Thomas", "Roberts",
+    "Walker", "Wright", "Robinson",
 ];
 
 fn load_test_ciphers() -> Vec<CipherView> {
@@ -693,10 +713,7 @@ fn load_test_ciphers() -> Vec<CipherView> {
             let last_lower = last.to_ascii_lowercase();
             let name = format!("{first} {last} #{i}");
             let email = format!("{first_lower}.{last_lower}@example.com");
-            let phone = format!(
-                "+1 555 {:04}",
-                prng.range(10000)
-            );
+            let phone = format!("+1 555 {:04}", prng.range(10000));
             identity(&name, "Ms", first, last, &email, &phone)
         } else {
             // SSH key
