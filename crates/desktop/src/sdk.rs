@@ -22,7 +22,7 @@ use std::{
 use bitwarden_core::{
     ClientSettings, UserId,
     key_management::{
-        LocalUserDataKeyState, MasterPasswordUnlockData, UserKeyState,
+        LocalUserDataKeyState, MasterPasswordUnlockData, SymmetricKeyId, UserKeyState,
         account_cryptographic_state::WrappedAccountCryptographicState,
         crypto::{InitUserCryptoMethod, InitUserCryptoRequest},
     },
@@ -71,18 +71,16 @@ struct UnlockMethodsCfg {
 
 // ── Public client manager ──────────────────────────────────────────────────
 
-/// Per-user metadata exposed to the rest of the app. The encrypted vault data lives
-/// inside the per-user `PasswordManagerClient`'s repos and is fetched on demand.
-pub struct UserMetadata {
-    pub email: String,
-    pub display_name: String,
-    pub server_url: String,
-    pub unlock_methods: UnlockMethods,
-}
-
 struct UserEntry {
     client: PasswordManagerClient,
-    metadata: UserMetadata,
+    // User profile data. These fields are the app-side stand-in for SDK
+    // profile methods that don't exist yet. When the real SDK exposes
+    // profile info on the client, the corresponding `ClientManager`
+    // accessors can just delegate instead of reading these fields.
+    email: String,
+    display_name: String,
+    server_url: String,
+    unlock_methods: UnlockMethods,
     /// Stable SDK-side UUID for this user. Parsed from the mock-vault JSON at
     /// load time and reused on every `unlock()`. The SDK binds a `UserId` to a
     /// `Client` on first `initialize_user_crypto`, so lock/unlock cycles MUST
@@ -90,8 +88,7 @@ struct UserEntry {
     /// make the Client think it's serving a different user.
     sdk_user_id: UserId,
     // Crypto inputs needed by `unlock()`. Stored once at load time so the unlock path
-    // doesn't need to re-parse JSON. The `email` used as the master-password salt
-    // lives on `metadata.email` (single source of truth — no duplication).
+    // doesn't need to re-parse JSON.
     kdf: Kdf,
     encrypted_user_key: EncString,
     private_key: EncString,
@@ -99,6 +96,25 @@ struct UserEntry {
 
 pub struct ClientManager {
     users: HashMap<DesktopUserId, UserEntry>,
+}
+
+pub trait ClientExt {
+    fn is_unlocked(&self) -> bool;
+    fn lock(&self);
+}
+
+impl ClientExt for PasswordManagerClient {
+    fn is_unlocked(&self) -> bool {
+        self.0
+            .internal
+            .get_key_store()
+            .context()
+            .has_symmetric_key(SymmetricKeyId::User)
+    }
+
+    fn lock(&self) {
+        self.0.internal.get_key_store().clear();
+    }
 }
 
 impl ClientManager {
@@ -123,9 +139,45 @@ impl ClientManager {
         Self { users }
     }
 
-    /// Iterate users in arbitrary order.
-    pub fn users(&self) -> impl Iterator<Item = (&DesktopUserId, &UserMetadata)> {
-        self.users.iter().map(|(id, entry)| (id, &entry.metadata))
+    pub fn user_ids(&self) -> impl Iterator<Item = &DesktopUserId> {
+        self.users.keys()
+    }
+
+    pub fn email(&self, uid: &str) -> Option<&str> {
+        self.users.get(uid).map(|e| e.email.as_str())
+    }
+
+    pub fn display_name(&self, uid: &str) -> Option<&str> {
+        self.users.get(uid).map(|e| e.display_name.as_str())
+    }
+
+    pub fn server_url(&self, uid: &str) -> Option<&str> {
+        self.users.get(uid).map(|e| e.server_url.as_str())
+    }
+
+    pub fn unlock_methods(&self, uid: &str) -> Option<&UnlockMethods> {
+        self.users.get(uid).map(|e| &e.unlock_methods)
+    }
+
+    pub fn is_unlocked(&self, uid: &str) -> bool {
+        self.users
+            .get(uid)
+            .is_some_and(|e| e.client.is_unlocked())
+    }
+
+    pub fn has_users(&self) -> bool {
+        !self.users.is_empty()
+    }
+
+    pub fn has_unlocked_users(&self) -> bool {
+        self.users.values().any(|e| e.client.is_unlocked())
+    }
+
+    /// Lock all users by clearing their crypto keystores.
+    pub fn lock_all(&self) {
+        for entry in self.users.values() {
+            entry.client.lock();
+        }
     }
 
     /// Initialize the SDK crypto state for the given user with their master password.
@@ -142,7 +194,7 @@ impl ClientManager {
             // comment on `UserEntry::sdk_user_id` for the invariant.
             user_id: Some(entry.sdk_user_id),
             kdf_params: entry.kdf.clone(),
-            email: entry.metadata.email.clone(),
+            email: entry.email.clone(),
             account_cryptographic_state: WrappedAccountCryptographicState::V1 {
                 private_key: entry.private_key.clone(),
             },
@@ -151,7 +203,7 @@ impl ClientManager {
                 master_password_unlock: MasterPasswordUnlockData {
                     kdf: entry.kdf.clone(),
                     master_key_wrapped_user_key: entry.encrypted_user_key.clone(),
-                    salt: entry.metadata.email.clone(),
+                    salt: entry.email.clone(),
                 },
             },
             upgrade_token: None,
@@ -281,15 +333,13 @@ fn build_user_entry(mu: MockUser) -> UserEntry {
 
     UserEntry {
         client,
-        metadata: UserMetadata {
-            email: mu.email,
-            display_name: mu.display_name,
-            server_url: mu.server_url,
-            unlock_methods: UnlockMethods {
-                master_password: mu.unlock_methods.master_password,
-                pin: mu.unlock_methods.pin,
-                biometrics: mu.unlock_methods.biometrics,
-            },
+        email: mu.email,
+        display_name: mu.display_name,
+        server_url: mu.server_url,
+        unlock_methods: UnlockMethods {
+            master_password: mu.unlock_methods.master_password,
+            pin: mu.unlock_methods.pin,
+            biometrics: mu.unlock_methods.biometrics,
         },
         sdk_user_id,
         kdf: mu.kdf,
@@ -354,7 +404,7 @@ mod tests {
     #[tokio::test]
     async fn unlock_user_1_with_correct_password() {
         let mgr = ClientManager::load();
-        mgr.unlock("user-1", "password".to_string())
+        mgr.unlock("11111111-1111-4111-a111-111111111111", "password".to_string())
             .await
             .expect("personal account should unlock with the dev password");
     }
@@ -362,7 +412,7 @@ mod tests {
     #[tokio::test]
     async fn unlock_user_2_with_correct_password() {
         let mgr = ClientManager::load();
-        mgr.unlock("user-2", "123456".to_string())
+        mgr.unlock("22222222-2222-4222-a222-222222222222", "123456".to_string())
             .await
             .expect("work account should unlock with the dev password");
     }
@@ -370,16 +420,16 @@ mod tests {
     #[tokio::test]
     async fn unlock_with_wrong_password_fails() {
         let mgr = ClientManager::load();
-        let result = mgr.unlock("user-1", "hunter2".to_string()).await;
+        let result = mgr.unlock("11111111-1111-4111-a111-111111111111", "hunter2".to_string()).await;
         assert!(result.is_err(), "wrong password should fail unlock");
     }
 
     #[tokio::test]
     async fn list_ciphers_after_unlock_returns_decrypted_items() {
         let mgr = ClientManager::load();
-        mgr.unlock("user-1", "password".to_string()).await.unwrap();
+        mgr.unlock("11111111-1111-4111-a111-111111111111", "password".to_string()).await.unwrap();
         let items = mgr
-            .list_ciphers("user-1")
+            .list_ciphers("11111111-1111-4111-a111-111111111111")
             .await
             .expect("decrypt_list should succeed after unlock");
         assert!(!items.is_empty(), "personal vault should have items");
@@ -393,8 +443,8 @@ mod tests {
     #[tokio::test]
     async fn full_cipher_after_unlock_returns_login_view() {
         let mgr = ClientManager::load();
-        mgr.unlock("user-1", "password".to_string()).await.unwrap();
-        let list = mgr.list_ciphers("user-1").await.unwrap();
+        mgr.unlock("11111111-1111-4111-a111-111111111111", "password".to_string()).await.unwrap();
+        let list = mgr.list_ciphers("11111111-1111-4111-a111-111111111111").await.unwrap();
         let gmail_id = list
             .iter()
             .find(|i| i.name == "Gmail")
@@ -402,7 +452,7 @@ mod tests {
             .expect("Gmail item should exist with an id");
 
         let view = mgr
-            .full_cipher("user-1", gmail_id)
+            .full_cipher("11111111-1111-4111-a111-111111111111", gmail_id)
             .await
             .expect("decrypt should succeed for a known cipher");
         let login = view.login.expect("Gmail is a login cipher");

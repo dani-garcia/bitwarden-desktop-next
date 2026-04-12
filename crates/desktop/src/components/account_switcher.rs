@@ -19,6 +19,8 @@ pub enum AccountSwitcherMessage {
 pub struct AccountEntry {
     pub user_id: UserId,
     pub email: String,
+    #[expect(dead_code)] // Not displayed yet; reserved for future avatar / profile views.
+    pub display_name: String,
     pub server_url: String,
     pub locked: bool,
 }

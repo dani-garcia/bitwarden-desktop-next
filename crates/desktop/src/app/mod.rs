@@ -15,7 +15,7 @@ use crate::{
         toast::{self, Toast},
     },
     sdk::ClientManager,
-    state::{AppState, Screen, UnlockMethod, UserSession},
+    state::{Screen, UnlockMethod, UserId},
     theme::{AppTheme, ThemePreference},
     views::{
         login::{self, AuthPage},
@@ -28,7 +28,7 @@ use helpers::main_window_platform_specific;
 
 pub struct App {
     // ── Domain state ───────────────────────────────────────────────────────
-    pub(super) state: AppState,
+    pub(super) active_user: Option<UserId>,
 
     // ── Sub-views (each owns its own state + async lifecycle) ──────────────
     pub(super) login_view: login::LoginView,
@@ -45,13 +45,10 @@ pub struct App {
     // `docs/architecture.md` → "Why Things Are the Way They Are".
     pub(super) cache: ViewCache,
 
-    // ── Theme (preference + resolved instance + OS observer) ───────────────
+    // ── Window chrome ─────────────────────────────────────────────────────
+    pub(super) screen: Screen,
     pub(super) theme: ThemeState,
-
-    // ── Per-window state (keyed by iced window::Id) ─────────────────────────
     pub(super) windows: HashMap<iced::window::Id, WindowInfo>,
-
-    // ── Native menu bridge (macOS muda on attach, polled each tick) ────────
     pub(super) native_menu: Option<crate::menu::NativeMenuHandle>,
 
     // ── Cross-cutting UI overlay queue ─────────────────────────────────────
@@ -59,13 +56,11 @@ pub struct App {
 }
 
 /// Derived data cached across `view()` rebuilds. Recomputed by
-/// `refresh_cache()` after every `update()`. Fields are reads of
-/// `AppState` / `LoginView::auth_page` and don't represent independent
-/// state — they exist only to survive the iced view borrow.
+/// `refresh_cache()` after every `update()`. All fields are derived
+/// from `ClientManager` (the SDK) — they exist only to survive the
+/// iced view borrow, not as independent state.
 #[derive(Default)]
 pub(super) struct ViewCache {
-    pub email: String,
-    pub server: String,
     pub accounts: Vec<AccountEntry>,
     pub unlock_alternatives: Vec<UnlockMethod>,
 }
@@ -83,23 +78,7 @@ pub struct ThemeState {
 impl App {
     pub fn new() -> (Self, Task<Message>) {
         let client_manager = Arc::new(ClientManager::load());
-
-        // Build the per-user `UserSession` map from `ClientManager` metadata. Vault items
-        // are loaded lazily after unlock via `client_manager.list_ciphers(uid)`.
-        let mut users = std::collections::HashMap::new();
-        for (uid, meta) in client_manager.users() {
-            users.insert(
-                uid.clone(),
-                UserSession {
-                    email: meta.email.clone(),
-                    display_name: meta.display_name.clone(),
-                    server_url: meta.server_url.clone(),
-                    locked: true,
-                    unlock_methods: meta.unlock_methods.clone(),
-                },
-            );
-        }
-        let active_user = users.keys().next().cloned();
+        let active_user = client_manager.user_ids().next().cloned();
 
         let system_theme = Arc::new(
             system_theme::SystemTheme::new().expect("failed to initialize system theme observer"),
@@ -125,11 +104,8 @@ impl App {
         windows.insert(main_id, WindowInfo::new(WindowKind::Main));
 
         let mut app = Self {
-            state: AppState {
-                users,
-                active_user,
-                screen: Screen::Login,
-            },
+            active_user,
+            screen: Screen::Login,
             login_view: login::LoginView::new(),
             vault_view: vault::VaultView::new(),
             title_bar: title_bar::TitleBarState::new(),
@@ -146,10 +122,12 @@ impl App {
         };
         // Set initial unlock method based on active user's preferred method
         let preferred = app
-            .active_session()
-            .map(|s| s.unlock_methods.preferred())
+            .active_user
+            .as_ref()
+            .and_then(|uid| app.client_manager.unlock_methods(uid))
+            .map(|m| m.preferred())
             .unwrap_or(UnlockMethod::MasterPassword);
-        app.login_view.auth_page = AuthPage::Unlock(preferred);
+        app.login_view.auth_page = AuthPage::new_unlock(preferred);
         app.refresh_cache();
 
         (
@@ -212,7 +190,7 @@ impl App {
                 let (task, ev) = self.login_view.update(
                     m,
                     &self.client_manager,
-                    self.state.active_user.as_ref(),
+                    self.active_user.as_ref(),
                 );
                 let task = task.map(Message::Login);
                 let ev_task = ev
@@ -224,7 +202,7 @@ impl App {
                 let (task, ev) = self.vault_view.update(
                     m,
                     &self.client_manager,
-                    self.state.active_user.as_ref(),
+                    self.active_user.as_ref(),
                 );
                 let task = task.map(Message::Vault);
                 let ev_task = ev
@@ -276,12 +254,16 @@ impl App {
     fn view_main(&self) -> Element<'_, Message, AppTheme> {
         let colors = &self.theme.current.colors;
 
-        let page: Element<'_, Message, AppTheme> = match self.state.screen {
+        let active = self.active_account_entry();
+        let email = active.map(|a| a.email.as_str()).unwrap_or("No account");
+        let server = active.map(|a| a.server_url.as_str()).unwrap_or("");
+
+        let page: Element<'_, Message, AppTheme> = match self.screen {
             Screen::Login => self
                 .login_view
                 .view(
-                    &self.cache.email,
-                    &self.cache.server,
+                    email,
+                    server,
                     &self.cache.accounts,
                     &self.cache.unlock_alternatives,
                     colors,
@@ -289,7 +271,12 @@ impl App {
                 .map(Message::Login),
             Screen::Vault => self
                 .vault_view
-                .view(&self.cache.email, &self.cache.accounts, colors)
+                .view(
+                    self.active_user.as_ref(),
+                    email,
+                    &self.cache.accounts,
+                    colors,
+                )
                 .map(Message::Vault),
         };
 

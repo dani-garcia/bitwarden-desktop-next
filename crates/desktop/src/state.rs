@@ -1,15 +1,6 @@
-use std::collections::HashMap;
-
 use bitwarden_vault::CipherType;
 
 pub type UserId = String;
-
-#[derive(Debug, Clone)]
-pub struct AppState {
-    pub users: HashMap<UserId, UserSession>,
-    pub active_user: Option<UserId>,
-    pub screen: Screen,
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnlockMethod {
@@ -49,16 +40,6 @@ impl UnlockMethods {
         }
         alts
     }
-}
-
-#[derive(Debug, Clone)]
-#[expect(dead_code)] // Fields mirror the SDK's PasswordManagerClient; not all used in stub UI yet
-pub struct UserSession {
-    pub email: String,
-    pub display_name: String,
-    pub server_url: String,
-    pub locked: bool,
-    pub unlock_methods: UnlockMethods,
 }
 
 #[derive(Debug, Clone, PartialEq)]

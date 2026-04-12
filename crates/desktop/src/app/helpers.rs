@@ -4,7 +4,7 @@ use iced::Task;
 
 use crate::{
     components::account_switcher::AccountEntry,
-    state::{Screen, UnlockMethod, UserId, UserSession},
+    state::{Screen, UnlockMethod, UserId},
     views::{login::AuthPage, vault::VaultMessage},
 };
 
@@ -39,44 +39,40 @@ impl App {
         self.toasts.push(toast);
     }
 
-    pub(super) fn active_session(&self) -> Option<&UserSession> {
-        self.state
-            .active_user
+    pub(super) fn active_account_entry(&self) -> Option<&AccountEntry> {
+        self.active_user
             .as_ref()
-            .and_then(|uid| self.state.users.get(uid))
+            .and_then(|uid| self.cache.accounts.iter().find(|a| &a.user_id == uid))
     }
 
     pub(super) fn refresh_cache(&mut self) {
-        let active_session = self.active_session().cloned();
-
-        self.cache.email = active_session
-            .as_ref()
-            .map(|s| s.email.clone())
-            .unwrap_or_else(|| "No account".into());
-
-        self.cache.server = active_session
-            .as_ref()
-            .map(|s| s.server_url.clone())
-            .unwrap_or_default();
-
         self.cache.accounts = self
-            .state
-            .users
-            .iter()
-            .map(|(uid, session)| AccountEntry {
+            .client_manager
+            .user_ids()
+            .map(|uid| AccountEntry {
                 user_id: uid.clone(),
-                email: session.email.clone(),
-                server_url: session.server_url.clone(),
-                locked: session.locked,
+                email: self.client_manager.email(uid).unwrap_or("").to_string(),
+                display_name: self
+                    .client_manager
+                    .display_name(uid)
+                    .unwrap_or("")
+                    .to_string(),
+                server_url: self
+                    .client_manager
+                    .server_url(uid)
+                    .unwrap_or("")
+                    .to_string(),
+                locked: !self.client_manager.is_unlocked(uid),
             })
             .collect();
 
         // Compute unlock alternatives for the current auth page
-        self.cache.unlock_alternatives = if let AuthPage::Unlock(method) = self.login_view.auth_page
+        self.cache.unlock_alternatives = if let AuthPage::Unlock { method, .. } = self.login_view.auth_page
         {
-            active_session
+            self.active_user
                 .as_ref()
-                .map(|s| s.unlock_methods.alternatives(method))
+                .and_then(|uid| self.client_manager.unlock_methods(uid))
+                .map(|m| m.alternatives(method))
                 .unwrap_or_default()
         } else {
             Vec::new()
@@ -91,22 +87,19 @@ impl App {
     /// if the new user is unlocked, returns the task that repopulates the
     /// vault list.
     pub(super) fn handle_user_switch(&mut self, uid: UserId) -> Task<Message> {
-        self.state.active_user = Some(uid.clone());
-        let session = self.state.users.get(&uid);
-        let locked = session.map(|s| s.locked).unwrap_or(true);
-        self.vault_view.reset();
-        if locked {
-            self.state.screen = Screen::Login;
-            let preferred = session
-                .map(|s| s.unlock_methods.preferred())
+        self.active_user = Some(uid.clone());
+        self.vault_view.reset(&uid);
+        if !self.client_manager.is_unlocked(&uid) {
+            self.screen = Screen::Login;
+            let preferred = self
+                .client_manager
+                .unlock_methods(&uid)
+                .map(|m| m.preferred())
                 .unwrap_or(UnlockMethod::MasterPassword);
-            self.login_view.auth_page = AuthPage::Unlock(preferred);
-            self.login_view.password_input.clear();
-            self.login_view.pin_input.clear();
-            self.login_view.show_password = false;
+            self.login_view.auth_page = AuthPage::new_unlock(preferred);
             Task::none()
         } else {
-            self.state.screen = Screen::Vault;
+            self.screen = Screen::Vault;
             self.load_vault_list_task(uid)
         }
     }
@@ -130,15 +123,13 @@ impl App {
     }
 
     pub(super) fn menu_state(&self) -> crate::menu::MenuState {
-        let has_accounts = !self.state.users.is_empty();
+        let has_accounts = self.client_manager.has_users();
         let is_locked = self
-            .state
             .active_user
             .as_ref()
-            .and_then(|uid| self.state.users.get(uid))
-            .map(|s| s.locked)
+            .map(|uid| !self.client_manager.is_unlocked(uid))
             .unwrap_or(true);
-        let has_lockable = self.state.users.values().any(|s| !s.locked);
+        let has_lockable = self.client_manager.has_unlocked_users();
 
         crate::menu::MenuState {
             is_locked,

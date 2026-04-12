@@ -23,25 +23,28 @@ impl App {
     pub(super) fn handle_login_event(&mut self, event: LoginEvent) -> Task<Message> {
         match event {
             LoginEvent::Unlocked { uid } | LoginEvent::LoggedIn { uid } => {
-                if let Some(session) = self.state.users.get_mut(&uid) {
-                    session.locked = false;
-                }
-                if self.state.active_user.as_deref() != Some(&uid) {
+                if self.active_user.as_deref() != Some(&uid) {
                     tracing::debug!(
                         %uid,
                         "unlock event dropped: active user changed while in flight"
                     );
                     return Task::none();
                 }
-                self.state.screen = Screen::Vault;
+                self.screen = Screen::Vault;
                 tracing::info!(%uid, "unlock succeeded; loading vault list");
                 self.load_vault_list_task(uid)
             }
             LoginEvent::SignOutRequested => {
-                if let Some(ref uid) = self.state.active_user {
-                    self.state.users.remove(uid);
+                if let Some(ref uid) = self.active_user {
+                    self.vault_view.remove_user_items(uid);
+                    // TODO: remove user from ClientManager (requires interior mutability)
                 }
-                self.state.active_user = self.state.users.keys().next().cloned();
+                // Pick next available user
+                self.active_user = self
+                    .client_manager
+                    .user_ids()
+                    .find(|id| self.active_user.as_ref() != Some(id))
+                    .cloned();
                 Task::none()
             }
             LoginEvent::UserSelected { uid } => self.handle_user_switch(uid),
@@ -56,7 +59,7 @@ impl App {
         match event {
             VaultEvent::UserSelected { uid } => self.handle_user_switch(uid),
             VaultEvent::AddAccountRequested => {
-                self.state.screen = Screen::Login;
+                self.screen = Screen::Login;
                 self.login_view.reset_to_email_entry();
                 Task::none()
             }
@@ -190,18 +193,15 @@ impl App {
                 return iced::exit();
             }
             MenuAction::LockAllVaults => {
-                for session in self.state.users.values_mut() {
-                    session.locked = true;
-                }
-                self.state.screen = Screen::Login;
+                self.client_manager.lock_all();
+                self.screen = Screen::Login;
                 let preferred = self
-                    .active_session()
-                    .map(|s| s.unlock_methods.preferred())
+                    .active_user
+                    .as_ref()
+                    .and_then(|uid| self.client_manager.unlock_methods(uid))
+                    .map(|m| m.preferred())
                     .unwrap_or(UnlockMethod::MasterPassword);
-                self.login_view.auth_page = AuthPage::Unlock(preferred);
-                self.login_view.password_input.clear();
-                self.login_view.pin_input.clear();
-                self.login_view.show_password = false;
+                self.login_view.auth_page = AuthPage::new_unlock(preferred);
                 self.refresh_cache();
             }
             MenuAction::ToggleFullScreen => {
@@ -228,7 +228,7 @@ impl App {
                 }
             }
             MenuAction::SearchVault => {
-                if self.state.screen == Screen::Vault {
+                if self.screen == Screen::Vault {
                     self.vault_view.search_query.clear();
                     self.refresh_cache();
                     return iced::widget::operation::focus(iced::widget::Id::new("vault-search"));

@@ -1,6 +1,6 @@
 pub mod widgets;
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use bitwarden_vault::{CipherId, CipherListView, CipherListViewType, CipherView};
 use iced::{
@@ -40,7 +40,7 @@ pub enum VaultMessage {
     /// Fires when the async `ClientManager::list_ciphers` task completes.
     ListLoaded(UserId, Result<Vec<Arc<CipherListView>>, String>),
     /// Fires when the async `ClientManager::full_cipher` task completes.
-    DetailLoaded(CipherId, Result<Box<CipherView>, String>),
+    DetailLoaded(UserId, CipherId, Result<Box<CipherView>, String>),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -128,14 +128,17 @@ pub enum VaultEvent {
 
 pub struct VaultView {
     pub search_query: String,
-    pub dropdown_open: bool,
+    pub account_switcher_open: bool,
     pub pane_state: pane_grid::State<PaneKind>,
 
     pub sidebar: SidebarState,
     pub selection: Selection,
-    // Item storage. `Arc` wrap because `CipherListView` isn't `Clone` and
-    // both Message dispatch and filter recomputation need cheap clones.
-    pub items: ItemCache,
+    // Item storage keyed by user. Decrypted vault data is structurally
+    // isolated per-user so it's impossible to accidentally show one user's
+    // ciphers while another is active. `Arc` wrap because `CipherListView`
+    // isn't `Clone` and both Message dispatch and filter recomputation
+    // need cheap clones.
+    pub items: HashMap<UserId, ItemCache>,
     /// Scroll state for the windowed item list. Updated by the
     /// `ItemListMessage::Scrolled` handler on every scroll event so
     /// `view()` can build only the visible row widgets.
@@ -157,11 +160,11 @@ impl VaultView {
 
         Self {
             search_query: String::new(),
-            dropdown_open: false,
+            account_switcher_open: false,
             pane_state,
             sidebar: SidebarState::default(),
             selection: Selection::default(),
-            items: ItemCache::default(),
+            items: HashMap::new(),
             list_scroll: virtual_list::ScrollState::default(),
         }
     }
@@ -183,7 +186,9 @@ impl VaultView {
                     SidebarMessage::FilterSelected(filter) => {
                         self.sidebar.active_filter = filter;
                         self.selection.clear();
-                        self.recompute_filtered();
+                        if let Some(uid) = active_user {
+                            self.recompute_filtered(uid);
+                        }
                     }
                     SidebarMessage::ToggleSidebarMode => {
                         self.sidebar.mode = match self.sidebar.mode {
@@ -206,7 +211,10 @@ impl VaultView {
             VaultMessage::ItemList(item_msg) => match item_msg {
                 ItemListMessage::ItemSelected(idx) => {
                     self.selection.item = Some(idx);
-                    self.selection.id = self.items.cached.get(idx).and_then(|i| i.id);
+                    self.selection.id = active_user
+                        .and_then(|uid| self.items.get(uid))
+                        .and_then(|ic| ic.cached.get(idx))
+                        .and_then(|i| i.id);
                     self.selection.detail = None;
                     let Some(id) = self.selection.id else {
                         return (Task::none(), None);
@@ -215,10 +223,11 @@ impl VaultView {
                     let Some(uid) = active_user.cloned() else {
                         return (Task::none(), None);
                     };
-                    let task =
-                        Task::perform(async move { mgr.full_cipher(&uid, id).await }, move |res| {
-                            VaultMessage::DetailLoaded(id, res.map(Box::new))
-                        });
+                    let uid_for_msg = uid.clone();
+                    let task = Task::perform(
+                        async move { mgr.full_cipher(&uid, id).await },
+                        move |res| VaultMessage::DetailLoaded(uid_for_msg, id, res.map(Box::new)),
+                    );
                     (task, None)
                 }
                 ItemListMessage::OpenExternal(_)
@@ -231,7 +240,9 @@ impl VaultView {
             },
             VaultMessage::Search(SearchMessage::QueryChanged(query)) => {
                 self.search_query = query;
-                self.recompute_filtered();
+                if let Some(uid) = active_user {
+                    self.recompute_filtered(uid);
+                }
                 (Task::none(), Some(VaultEvent::SearchFocusRequested))
             }
             VaultMessage::CloseDetailPane => {
@@ -245,28 +256,20 @@ impl VaultView {
             VaultMessage::DetailPane(_) => (Task::none(), None),
             VaultMessage::AccountSwitcher(asm) => match asm {
                 AccountSwitcherMessage::ToggleDropdown => {
-                    self.dropdown_open = !self.dropdown_open;
+                    self.account_switcher_open = !self.account_switcher_open;
                     (Task::none(), None)
                 }
                 AccountSwitcherMessage::SwitchUser(uid) => {
-                    self.dropdown_open = false;
+                    self.account_switcher_open = false;
                     (Task::none(), Some(VaultEvent::UserSelected { uid }))
                 }
                 AccountSwitcherMessage::AddAccount => {
-                    self.dropdown_open = false;
+                    self.account_switcher_open = false;
                     (Task::none(), Some(VaultEvent::AddAccountRequested))
                 }
             },
             VaultMessage::NewItem => (Task::none(), None),
             VaultMessage::ListLoaded(msg_uid, result) => {
-                // Stale-check: user switched while list_ciphers was in flight.
-                if active_user != Some(&msg_uid) {
-                    tracing::debug!(
-                        uid = %msg_uid,
-                        "list_ciphers result dropped: active user changed while in flight"
-                    );
-                    return (Task::none(), None);
-                }
                 match result {
                     Ok(items) => {
                         tracing::info!(
@@ -274,7 +277,15 @@ impl VaultView {
                             count = items.len(),
                             "vault list loaded"
                         );
-                        self.set_items(items);
+                        let cache = self.items.entry(msg_uid.clone()).or_default();
+                        cache.all = items;
+                        // Only recompute the filtered view if this is the
+                        // active user — search_query / active_filter are
+                        // view-global state that may not match a background
+                        // user's context.
+                        if active_user == Some(&msg_uid) {
+                            self.recompute_filtered(&msg_uid);
+                        }
                     }
                     Err(err) => {
                         tracing::error!(uid = %msg_uid, %err, "list_ciphers failed");
@@ -282,26 +293,37 @@ impl VaultView {
                 }
                 (Task::none(), None)
             }
-            VaultMessage::DetailLoaded(id, result) => match result {
-                Ok(view) => {
-                    // Stale-check on the cipher id itself: if the user
-                    // clicked a different item between the perform and the
-                    // callback, drop the stale detail.
-                    if self.selection.id == view.id {
-                        self.selection.detail = Some(*view);
-                    } else {
-                        tracing::debug!(
-                            cipher_id = %id,
-                            "full_cipher result dropped: selection changed while in flight"
-                        );
+            VaultMessage::DetailLoaded(msg_uid, id, result) => {
+                // Stale-check: user switched while full_cipher was in flight.
+                if active_user != Some(&msg_uid) {
+                    tracing::debug!(
+                        uid = %msg_uid,
+                        cipher_id = %id,
+                        "full_cipher result dropped: active user changed while in flight"
+                    );
+                    return (Task::none(), None);
+                }
+                match result {
+                    Ok(view) => {
+                        // Stale-check on the cipher id itself: if the user
+                        // clicked a different item between the perform and the
+                        // callback, drop the stale detail.
+                        if self.selection.id == view.id {
+                            self.selection.detail = Some(*view);
+                        } else {
+                            tracing::debug!(
+                                cipher_id = %id,
+                                "full_cipher result dropped: selection changed while in flight"
+                            );
+                        }
+                        (Task::none(), None)
                     }
-                    (Task::none(), None)
+                    Err(err) => {
+                        tracing::error!(cipher_id = %id, %err, "full_cipher failed");
+                        (Task::none(), None)
+                    }
                 }
-                Err(err) => {
-                    tracing::error!(cipher_id = %id, %err, "full_cipher failed");
-                    (Task::none(), None)
-                }
-            },
+            }
         }
     }
 
@@ -309,19 +331,26 @@ impl VaultView {
     /// arrives so the account-switcher dropdown closes. See the cross-view
     /// dismissal block in `App::update`.
     pub fn dismiss_dropdowns(&mut self) {
-        self.dropdown_open = false;
+        self.account_switcher_open = false;
     }
 
-    /// Replace the vault list with newly-decrypted items.
-    fn set_items(&mut self, items: Vec<Arc<CipherListView>>) {
-        self.items.all = items;
-        self.recompute_filtered();
-    }
+    /// Recompute the filtered item list for a specific user. Uses the
+    /// view-global `search_query` and `sidebar.active_filter` to derive
+    /// `cached` from `all`. Also reconciles the selection index against
+    /// the new filtered list.
+    fn recompute_filtered(&mut self, uid: &UserId) {
+        let query = self.search_query.to_lowercase();
+        let filter = self.sidebar.active_filter;
 
-    fn recompute_filtered(&mut self) {
-        self.items.cached = self.filtered_items();
+        if let Some(cache) = self.items.get_mut(uid) {
+            cache.cached = Self::filter_items(&cache.all, filter, &query);
+        }
+
         if let Some(id) = self.selection.id {
-            self.selection.item = self.items.cached.iter().position(|i| i.id == Some(id));
+            self.selection.item = self
+                .items
+                .get(uid)
+                .and_then(|c| c.cached.iter().position(|i| i.id == Some(id)));
         } else {
             self.selection.item = None;
         }
@@ -331,36 +360,41 @@ impl VaultView {
         self.list_scroll.offset_y = 0.0;
     }
 
-    /// Reset transient state when switching users.
-    pub fn reset(&mut self) {
+    /// Reset transient view state when switching users. Item caches are
+    /// preserved in the map — keyed by user so they can't mix.
+    pub fn reset(&mut self, uid: &UserId) {
         self.search_query.clear();
         self.selection.clear();
         self.sidebar.active_filter = SidebarFilter::AllItems;
-        self.items = ItemCache::default();
         self.list_scroll = virtual_list::ScrollState::default();
+        self.recompute_filtered(uid);
     }
 
-    fn filtered_items(&self) -> Vec<Arc<CipherListView>> {
-        let items = self
-            .items
-            .all
-            .iter()
-            .filter(|item| match self.sidebar.active_filter {
-                SidebarFilter::AllItems => true,
-                SidebarFilter::Favorites => item.favorite,
-                SidebarFilter::Category(cat) => cat == cipher_list_view_type_to_type(&item.r#type),
-                SidebarFilter::Archive => item.archived_date.is_some(),
-                SidebarFilter::Trash => item.deleted_date.is_some(),
-            });
+    /// Remove a signed-out user's cached vault data.
+    pub fn remove_user_items(&mut self, uid: &UserId) {
+        self.items.remove(uid);
+    }
 
-        let query = self.search_query.to_lowercase();
+    fn filter_items(
+        all: &[Arc<CipherListView>],
+        filter: SidebarFilter,
+        query: &str,
+    ) -> Vec<Arc<CipherListView>> {
+        let items = all.iter().filter(|item| match filter {
+            SidebarFilter::AllItems => true,
+            SidebarFilter::Favorites => item.favorite,
+            SidebarFilter::Category(cat) => cat == cipher_list_view_type_to_type(&item.r#type),
+            SidebarFilter::Archive => item.archived_date.is_some(),
+            SidebarFilter::Trash => item.deleted_date.is_some(),
+        });
+
         if query.is_empty() {
             items.cloned().collect()
         } else {
             items
                 .filter(|item| {
-                    if item.name.to_lowercase().contains(&query)
-                        || item.subtitle.to_lowercase().contains(&query)
+                    if item.name.to_lowercase().contains(query)
+                        || item.subtitle.to_lowercase().contains(query)
                     {
                         return true;
                     }
@@ -370,7 +404,7 @@ impl VaultView {
                             .as_ref()
                             .and_then(|u| u.first())
                             .and_then(|u| u.uri.as_deref())
-                        && uri.to_lowercase().contains(&query)
+                        && uri.to_lowercase().contains(query)
                     {
                         return true;
                     }
@@ -399,10 +433,16 @@ fn cipher_list_view_type_to_type(t: &CipherListViewType) -> bitwarden_vault::Cip
 impl VaultView {
     pub fn view<'a>(
         &'a self,
+        active_user: Option<&UserId>,
         active_email: &'a str,
         accounts: &'a [AccountEntry],
         colors: &'a AppColors,
     ) -> Element<'a, VaultMessage, AppTheme> {
+        let cached_items: &[Arc<CipherListView>] = active_user
+            .and_then(|uid| self.items.get(uid))
+            .map(|ic| ic.cached.as_slice())
+            .unwrap_or(&[]);
+
         // --- Sidebar ---
         let sidebar = sidebar::view(&self.sidebar, colors).map(VaultMessage::Sidebar);
 
@@ -412,6 +452,7 @@ impl VaultView {
                 pane_grid::PaneGrid::new(&self.pane_state, move |_pane, kind, _is_maximized| {
                     match kind {
                         PaneKind::List => pane_grid::Content::new(self.list_content(
+                            cached_items,
                             active_email,
                             accounts,
                             colors,
@@ -434,7 +475,7 @@ impl VaultView {
                 .min_size(250)
                 .into()
             } else {
-                self.list_content(active_email, accounts, colors)
+                self.list_content(cached_items, active_email, accounts, colors)
             };
 
         let content_area = container(content_area_inner)
@@ -475,6 +516,7 @@ impl VaultView {
     /// Builds the list pane content (header + search + item list).
     fn list_content<'a>(
         &'a self,
+        cached_items: &'a [Arc<CipherListView>],
         active_email: &'a str,
         accounts: &'a [AccountEntry],
         colors: &'a AppColors,
@@ -508,7 +550,7 @@ impl VaultView {
             crate::components::drop_down::DropDown::new(
                 avatar_trigger,
                 dd_panel,
-                self.dropdown_open,
+                self.account_switcher_open,
             )
             .on_dismiss(VaultMessage::AccountSwitcher(
                 AccountSwitcherMessage::ToggleDropdown,
@@ -536,13 +578,8 @@ impl VaultView {
             })
             .width(Fill);
 
-        let item_list = item_list::view(
-            &self.items.cached,
-            self.selection.item,
-            self.list_scroll,
-            colors,
-        )
-        .map(VaultMessage::ItemList);
+        let item_list = item_list::view(cached_items, self.selection.item, self.list_scroll, colors)
+            .map(VaultMessage::ItemList);
 
         column![content_header, search_row, item_list]
             .width(Fill)
