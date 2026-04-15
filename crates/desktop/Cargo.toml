@@ -4,15 +4,36 @@ version = "0.1.0"
 edition = "2024"
 license-file = "LICENSE.txt"
 
+[features]
+default = []
+# Debug overlay with layout bounds, render time, widget IDs. Toggle with F12.
+# Usage: cargo run --features dev
+dev = ["iced/debug"]
+# Interactive test recorder/player for UI automation. Opens automatically on launch.
+# Usage: cargo run --features test
+test = ["iced/tester"]
+
 [dependencies]
 async-trait = { workspace = true }
-iced = { version = "0.14", features = ["tokio", "svg", "advanced", "image"] }
-iced_aw = { version = "0.13", default-features = false }
+iced = { git = "https://github.com/iced-rs/iced", rev = "6d5eb869c209e559900a1576277b0901d876b73b", default-features = false, features = [
+    "tokio",
+    "tiny-skia",
+    "advanced",   # custom widgets (DropDown, toast)
+    "svg",
+    "image",
+    "crisp",      # pixel-snapping for sharp edges on form UI
+    "hinting",    # text metric hinting for clearer glyphs
+    "web-colors", # sRGB blending to match Bitwarden web app colors
+    "x11",        # Linux X11 display backend
+    "wayland",    # Linux Wayland display backend
+    # "wgpu",         # GPU backend — adds ~9MB + ~500ms startup. Enable with --gpu flag.
+    # "lazy",         # lazy/responsive widgets — enable if scroll perf needs it
+] }
 image = "0.25"
-muda = "0.17.1"
+muda = "0.18"
 serde = { workspace = true }
 serde_json = { workspace = true }
-system-theme = "0.3.0"
+system-theme = "0.3"
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 uuid = { workspace = true }

@@ -85,7 +85,9 @@ impl App {
 
     pub(super) fn handle_about_message(&mut self, msg: AboutMessage) -> Task<Message> {
         match msg {
-            AboutMessage::CopyInfo => iced::clipboard::write(crate::views::about::info_string()),
+            AboutMessage::CopyInfo => {
+                iced::clipboard::write(crate::views::about::info_string()).discard()
+            }
             AboutMessage::Close => {
                 if let Some(id) = self.about_window_id() {
                     iced::window::close(id)

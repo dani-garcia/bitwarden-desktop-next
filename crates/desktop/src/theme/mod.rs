@@ -82,7 +82,7 @@ impl iced::theme::Base for AppTheme {
         }
     }
 
-    fn palette(&self) -> Option<iced::theme::palette::Palette> {
+    fn seed(&self) -> Option<iced::theme::palette::Seed> {
         None
     }
 

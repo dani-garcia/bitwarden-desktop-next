@@ -6,7 +6,7 @@ use iced::{
 };
 
 /// Bootstrap Icons font, loaded in main.rs via `.font()`
-pub const FONT: Font = Font::with_name("bootstrap-icons");
+pub const FONT: Font = Font::new("bootstrap-icons");
 
 /// A typed icon identifier wrapping a Bootstrap Icons codepoint.
 #[derive(Copy, Clone)]
@@ -51,7 +51,7 @@ include!(concat!(env!("OUT_DIR"), "/bootstrap_icons_generated.rs"));
 // Bitwarden Icons (bwi) font
 // ---------------------------------------------------------------------------
 
-pub const BWI_FONT: Font = Font::with_name("bwi-font");
+pub const BWI_FONT: Font = Font::new("bwi-font");
 
 #[derive(Copy, Clone)]
 pub struct BwiIcon(char);

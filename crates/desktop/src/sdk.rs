@@ -16,7 +16,7 @@
 
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::{Arc, LazyLock, Mutex},
 };
 
 use bitwarden_core::{
@@ -35,7 +35,12 @@ use serde::Deserialize;
 
 use crate::state::{UnlockMethods, UserId as DesktopUserId};
 
-const MOCK_VAULT_JSON: &[u8] = include_bytes!("../../../assets/mock-vault.json");
+static MOCK_VAULT_JSON: LazyLock<Vec<u8>> = LazyLock::new(|| {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/mock-vault.json");
+    std::fs::read(path).unwrap_or_else(|e| {
+        panic!("failed to read {path}: {e}; regenerate via `cargo run -p fake-data`")
+    })
+});
 
 // ── Mock vault file schema ─────────────────────────────────────────────────
 //
@@ -120,7 +125,7 @@ impl ClientExt for PasswordManagerClient {
 impl ClientManager {
     /// Load all users from the embedded mock vault JSON.
     pub fn load() -> Self {
-        let parsed: MockVaultFile = serde_json::from_slice(MOCK_VAULT_JSON)
+        let parsed: MockVaultFile = serde_json::from_slice(&MOCK_VAULT_JSON)
             .expect("mock-vault.json is malformed; regenerate via `cargo run -p fake-data`");
 
         let mut users = HashMap::with_capacity(parsed.users.len());

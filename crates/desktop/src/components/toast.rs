@@ -45,7 +45,7 @@ use iced::{
     Alignment, Background, Border, Color, Element, Event, Fill, Length, Point, Rectangle, Size,
     Vector,
     advanced::{
-        Clipboard, Layout, Shell, Widget,
+        Layout, Shell, Widget,
         layout::{self, Limits, Node},
         mouse::{self, Cursor},
         overlay,
@@ -559,7 +559,6 @@ where
         layout: Layout<'_>,
         cursor: Cursor,
         renderer: &iced::Renderer,
-        clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
@@ -569,7 +568,6 @@ where
             layout,
             cursor,
             renderer,
-            clipboard,
             shell,
             viewport,
         );
@@ -685,7 +683,6 @@ where
         layout: Layout<'_>,
         cursor: Cursor,
         renderer: &iced::Renderer,
-        clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
     ) {
         if let Event::Window(window::Event::RedrawRequested(now)) = event {
@@ -764,7 +761,6 @@ where
                 child_layout,
                 cursor,
                 renderer,
-                clipboard,
                 &mut local_shell,
                 &viewport,
             );

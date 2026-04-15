@@ -5,7 +5,7 @@
 use iced::{
     Element, Event, Length, Point, Rectangle, Size, Vector,
     advanced::{
-        Clipboard, Layout, Shell, Widget,
+        Layout, Shell, Widget,
         layout::{Limits, Node},
         mouse::{self, Cursor},
         overlay, renderer,
@@ -236,7 +236,6 @@ where
         layout: Layout<'_>,
         cursor: Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
@@ -246,7 +245,6 @@ where
             layout,
             cursor,
             renderer,
-            clipboard,
             shell,
             viewport,
         );
@@ -500,7 +498,6 @@ where
         layout: Layout<'_>,
         cursor: Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
         shell: &mut Shell<Message>,
     ) {
         self.underlay_bounds = Rectangle {
@@ -537,7 +534,6 @@ where
             layout,
             cursor,
             renderer,
-            clipboard,
             shell,
             &layout.bounds(),
         );
