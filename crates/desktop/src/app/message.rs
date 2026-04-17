@@ -33,6 +33,7 @@ pub enum WindowMessage {
     GotRawId(iced::window::Id, u64),
     Closed(iced::window::Id),
     KeyPressed(iced::window::Id, iced::keyboard::Event),
+    Resized(iced::window::Id, iced::Size),
 }
 
 /// Global signals that aren't tied to a specific window.
@@ -58,14 +59,18 @@ pub struct WindowInfo {
     pub kind: WindowKind,
     pub fullscreen: bool,
     pub maximized: bool,
+    /// Last reported logical size. Initialized from `window::Settings.size`
+    /// at creation; updated on `window::Event::Resized`.
+    pub size: iced::Size,
 }
 
 impl WindowInfo {
-    pub fn new(kind: WindowKind) -> Self {
+    pub fn new(kind: WindowKind, size: iced::Size) -> Self {
         Self {
             kind,
             fullscreen: false,
             maximized: false,
+            size,
         }
     }
 }

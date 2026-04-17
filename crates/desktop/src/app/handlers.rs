@@ -138,6 +138,12 @@ impl App {
                 self.windows.remove(&id);
                 if was_main { iced::exit() } else { Task::none() }
             }
+            WindowMessage::Resized(id, size) => {
+                if let Some(info) = self.windows.get_mut(&id) {
+                    info.size = size;
+                }
+                Task::none()
+            }
             WindowMessage::KeyPressed(id, ev) => {
                 // Keyboard shortcuts only affect the main window — Ctrl+F
                 // in the About window must not trigger vault search.
@@ -244,8 +250,9 @@ impl App {
                     return iced::window::gain_focus(id);
                 }
 
+                let about_size = iced::Size::new(400.0, 280.0);
                 let (about_id, open_task) = iced::window::open(iced::window::Settings {
-                    size: iced::Size::new(400.0, 280.0),
+                    size: about_size,
                     min_size: Some(iced::Size::new(360.0, 260.0)),
                     position: iced::window::Position::Centered,
                     resizable: false,
@@ -259,7 +266,7 @@ impl App {
                 });
 
                 self.windows
-                    .insert(about_id, WindowInfo::new(WindowKind::About));
+                    .insert(about_id, WindowInfo::new(WindowKind::About, about_size));
 
                 return open_task.map(|id| Message::Window(WindowMessage::Opened(id)));
             }

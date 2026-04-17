@@ -11,7 +11,7 @@ use iced::{
 use crate::{
     components::{
         account_switcher::{self, AccountEntry, AccountSwitcherMessage},
-        buttons, icons,
+        bottom_sheet, buttons, icons, separator_v,
         toast::Toast,
         virtual_list,
     },
@@ -19,6 +19,17 @@ use crate::{
     state::{NavSection, SidebarFilter, SidebarMode, UserId},
     theme::{AppColors, AppTheme},
 };
+
+/// Below this window width (logical px) the detail pane renders as a
+/// bottom sheet instead of a side-by-side `pane_grid` split.
+pub const SHEET_BREAKPOINT_PX: f32 = 1000.0;
+
+/// Visible strip at the top of the vault content above the bottom sheet
+/// (≈2× `TITLE_BAR_HEIGHT`).
+pub const SHEET_TOP_INSET_PX: f32 = 64.0;
+
+/// Top-corner radius of the bottom sheet.
+pub const SHEET_TOP_RADIUS_PX: f32 = 16.0;
 
 use self::widgets::{
     detail_pane::{self, DetailPaneMessage},
@@ -451,6 +462,7 @@ impl VaultView {
         active_email: &'a str,
         accounts: &'a [AccountEntry],
         colors: &'a AppColors,
+        window_width: f32,
     ) -> Element<'a, VaultMessage, AppTheme> {
         let cached_items: &[Arc<CipherListView>] = active_user
             .and_then(|uid| self.items.get(uid))
@@ -460,33 +472,45 @@ impl VaultView {
         // --- Sidebar ---
         let sidebar = sidebar::view(&self.sidebar, colors).map(VaultMessage::Sidebar);
 
-        // --- Content area: PaneGrid when detail open, plain list otherwise ---
-        let content_area_inner: Element<'a, VaultMessage, AppTheme> =
-            if let Some(item) = self.selection.detail.as_ref() {
-                pane_grid::PaneGrid::new(&self.pane_state, move |_pane, kind, _is_maximized| {
-                    match kind {
-                        PaneKind::List => pane_grid::Content::new(self.list_content(
-                            cached_items,
-                            active_email,
-                            accounts,
-                            colors,
-                        )),
-                        PaneKind::Detail => {
-                            let detail = detail_pane::view(item, colors).map(|msg| match msg {
-                                DetailPaneMessage::Close => VaultMessage::CloseDetailPane,
-                                other => VaultMessage::DetailPane(other),
-                            });
-                            pane_grid::Content::new(detail)
-                        }
+        // --- Content area ---
+        // Wide window with detail open  → side-by-side `pane_grid` split.
+        // No detail / narrow window     → list fills the area. (For the
+        //   narrow case, `App::view_main` overlays the bottom sheet on top
+        //   of the entire window — including sidebar and title bar — via
+        //   `sheet_view()` below.)
+        let show_pane_grid = self.selection.detail.is_some() && window_width >= SHEET_BREAKPOINT_PX;
+        let content_area_inner: Element<'a, VaultMessage, AppTheme> = if show_pane_grid {
+            let item = self
+                .selection
+                .detail
+                .as_ref()
+                .expect("guarded by show_pane_grid");
+            pane_grid::PaneGrid::new(&self.pane_state, move |_pane, kind, _is_maximized| {
+                match kind {
+                    PaneKind::List => pane_grid::Content::new(self.list_content(
+                        cached_items,
+                        active_email,
+                        accounts,
+                        colors,
+                    )),
+                    PaneKind::Detail => {
+                        let detail = detail_pane::view(item, colors, 0.0).map(|msg| match msg {
+                            DetailPaneMessage::Close => VaultMessage::CloseDetailPane,
+                            other => VaultMessage::DetailPane(other),
+                        });
+                        let detail_with_separator =
+                            row![separator_v(), detail].height(Fill);
+                        pane_grid::Content::new(detail_with_separator)
                     }
-                })
-                .on_resize(6, VaultMessage::PaneResized)
-                .spacing(1)
-                .min_size(250)
-                .into()
-            } else {
-                self.list_content(cached_items, active_email, accounts, colors)
-            };
+                }
+            })
+            .on_resize(6, VaultMessage::PaneResized)
+            .spacing(1)
+            .min_size(250)
+            .into()
+        } else {
+            self.list_content(cached_items, active_email, accounts, colors)
+        };
 
         let content_area = container(content_area_inner)
             .width(Fill)
@@ -511,6 +535,30 @@ impl VaultView {
                 container::Style::default().background(theme.colors.background)
             })
             .into()
+    }
+
+    /// In narrow mode (`window_width < SHEET_BREAKPOINT_PX`) with a detail
+    /// selected, returns the bottom-sheet element that the app composes on
+    /// top of the entire window (including sidebar and title bar). Returns
+    /// `None` otherwise.
+    pub fn sheet_view<'a>(
+        &'a self,
+        colors: &'a AppColors,
+        window_width: f32,
+    ) -> Option<Element<'a, VaultMessage, AppTheme>> {
+        if window_width >= SHEET_BREAKPOINT_PX {
+            return None;
+        }
+        let item = self.selection.detail.as_ref()?;
+        let detail = detail_pane::view(item, colors, SHEET_TOP_RADIUS_PX).map(|msg| match msg {
+            DetailPaneMessage::Close => VaultMessage::CloseDetailPane,
+            other => VaultMessage::DetailPane(other),
+        });
+        Some(bottom_sheet::view(
+            detail,
+            SHEET_TOP_INSET_PX,
+            Some(VaultMessage::CloseDetailPane),
+        ))
     }
 
     /// Builds the list pane content (header + search + item list).

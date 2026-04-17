@@ -24,6 +24,7 @@ pub enum DetailPaneMessage {
 pub fn view<'a>(
     item: &'a CipherView,
     colors: &AppColors,
+    top_radius: f32,
 ) -> Element<'a, DetailPaneMessage, AppTheme> {
     let header = header_row(item, colors);
 
@@ -75,12 +76,19 @@ pub fn view<'a>(
     let body = scrollable(column(sections).spacing(4).padding([12, 20])).height(Fill);
     let bottom_bar = bottom_bar(colors);
 
-    let pane = container(column![header, body, bottom_bar].spacing(0).height(Fill))
+    container(column![header, body, bottom_bar].spacing(0).height(Fill))
         .width(Fill)
         .height(Fill)
-        .style(|theme: &AppTheme| container::Style::default().background(theme.colors.card_bg));
-
-    row![components::separator_v(), pane].height(Fill).into()
+        .style(move |theme: &AppTheme| {
+            container::Style::default()
+                .background(theme.colors.card_bg)
+                .border(
+                    iced::Border::default().rounded(
+                        iced::border::top_left(top_radius).top_right(top_radius),
+                    ),
+                )
+        })
+        .into()
 }
 
 // ---------------------------------------------------------------------------
@@ -108,12 +116,12 @@ fn header_row<'a>(
     .on_press(DetailPaneMessage::Close)
     .padding([1, 1]);
 
+    // No background fill on the header — it inherits the parent container's
+    // `card_bg`. A separate background here would mask the parent's rounded
+    // top corners (iced doesn't clip children to parent border radius).
     let header =
         container(row![title, Space::new().width(Fill), close_btn].align_y(Alignment::Center))
-            .padding([8, 20])
-            .style(|theme: &AppTheme| {
-                container::Style::default().background(theme.colors.background)
-            });
+            .padding([8, 20]);
 
     column![header, components::separator_h()].spacing(0).into()
 }

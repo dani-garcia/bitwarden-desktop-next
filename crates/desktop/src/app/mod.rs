@@ -101,8 +101,9 @@ impl App {
 
         // Open the main window via `window::open` — daemon mode doesn't
         // create a window automatically (unlike `iced::application`).
+        let main_size = iced::Size::new(1024.0, 800.0);
         let (main_id, open_task) = iced::window::open(iced::window::Settings {
-            size: iced::Size::new(1024.0, 800.0),
+            size: main_size,
             min_size: Some(iced::Size::new(800.0, 750.0)),
             decorations: crate::menu::should_use_native_title_bar(),
             platform_specific: main_window_platform_specific(),
@@ -115,15 +116,14 @@ impl App {
         });
 
         let mut windows = HashMap::new();
-        windows.insert(main_id, WindowInfo::new(WindowKind::Main));
+        windows.insert(main_id, WindowInfo::new(WindowKind::Main, main_size));
 
         // Discover users in `<workspace-root>/data/` and open one SQLite DB
         // per user. Runs as a regular async task on iced's tokio multi-thread
         // runtime; the `ClientManagerLoaded` handler swaps the Arc when done.
-        let load_task = Task::perform(
-            async { Arc::new(ClientManager::load().await) },
-            |mgr| Message::System(SystemMessage::ClientManagerLoaded(mgr)),
-        );
+        let load_task = Task::perform(async { Arc::new(ClientManager::load().await) }, |mgr| {
+            Message::System(SystemMessage::ClientManagerLoaded(mgr))
+        });
 
         let app = Self {
             active_user: None,
@@ -160,12 +160,14 @@ impl App {
         // the listener. `Subscription::map` requires a non-capturing
         // closure (iced enforces this at const-eval time), and we need
         // the id bound into the emitted message for daemon-readiness.
-        let keyboard_sub = iced::event::listen_with(|event, _status, id| {
-            if let iced::Event::Keyboard(ev) = event {
-                Some(Message::Window(WindowMessage::KeyPressed(id, ev)))
-            } else {
-                None
+        // The same listener also forwards `window::Event::Resized` so the
+        // app can drive a responsive layout (vault detail pane vs sheet).
+        let event_sub = iced::event::listen_with(|event, _status, id| match event {
+            iced::Event::Keyboard(ev) => Some(Message::Window(WindowMessage::KeyPressed(id, ev))),
+            iced::Event::Window(iced::window::Event::Resized(size)) => {
+                Some(Message::Window(WindowMessage::Resized(id, size)))
             }
+            _ => None,
         });
 
         let native_menu_sub = if self.native_menu.is_some() {
@@ -178,7 +180,7 @@ impl App {
         let theme_sub = Subscription::run_with(self.theme.system.clone(), |st| st.subscribe())
             .map(|_| Message::System(SystemMessage::ThemeChanged));
 
-        Subscription::batch([close_sub, keyboard_sub, native_menu_sub, theme_sub])
+        Subscription::batch([close_sub, event_sub, native_menu_sub, theme_sub])
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -266,6 +268,12 @@ impl App {
         let email = active.map(|a| a.email.as_str()).unwrap_or("No account");
         let server = active.map(|a| a.server_url.as_str()).unwrap_or("");
 
+        let main_window_width = self
+            .main_window_id()
+            .and_then(|id| self.windows.get(&id))
+            .map(|info| info.size.width)
+            .unwrap_or(1024.0);
+
         let page: Element<'_, Message, AppTheme> = match self.screen {
             Screen::Loading => {
                 iced::widget::center(crate::components::spinner::spinner(48.0, colors.accent))
@@ -288,11 +296,22 @@ impl App {
                     email,
                     &self.cache.accounts,
                     colors,
+                    main_window_width,
                 )
                 .map(Message::Vault),
         };
 
         let close_toast = |idx| Message::System(SystemMessage::CloseToast(idx));
+
+        // Bottom-sheet overlay for the narrow vault layout. Hoisted to the
+        // app level so it covers the sidebar AND the title bar.
+        let sheet: Option<Element<'_, Message, AppTheme>> = if self.screen == Screen::Vault {
+            self.vault_view
+                .sheet_view(colors, main_window_width)
+                .map(|el| el.map(Message::Vault))
+        } else {
+            None
+        };
 
         if crate::menu::should_use_custom_menu_bar() {
             let menu_state = self.menu_state();
@@ -300,19 +319,27 @@ impl App {
                 .title_bar
                 .view(self.main_window_maximized(), &menu_state, colors)
                 .map(Message::TitleBar);
-            let content: Element<'_, Message, AppTheme> =
+            let main_column: Element<'_, Message, AppTheme> =
                 iced::widget::column![tb, page].height(iced::Fill).into();
+            let with_sheet: Element<'_, Message, AppTheme> = match sheet {
+                Some(sheet) => iced::widget::stack![main_column, sheet].into(),
+                None => main_column,
+            };
             let with_toasts: Element<'_, Message, AppTheme> =
-                toast::Manager::new(content, &self.toasts, close_toast).into();
+                toast::Manager::new(with_sheet, &self.toasts, close_toast).into();
 
             title_bar::resize_wrapper(with_toasts, |dir| {
                 Message::TitleBar(TitleBarMessage::ResizeEdge(dir))
             })
         } else {
             let tb = title_bar::TitleBarState::view_empty().map(Message::TitleBar);
-            let content: Element<'_, Message, AppTheme> =
+            let main_column: Element<'_, Message, AppTheme> =
                 iced::widget::column![tb, page].height(iced::Fill).into();
-            toast::Manager::new(content, &self.toasts, close_toast).into()
+            let with_sheet: Element<'_, Message, AppTheme> = match sheet {
+                Some(sheet) => iced::widget::stack![main_column, sheet].into(),
+                None => main_column,
+            };
+            toast::Manager::new(with_sheet, &self.toasts, close_toast).into()
         }
     }
 }
