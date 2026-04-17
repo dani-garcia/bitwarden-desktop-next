@@ -1,29 +1,32 @@
 # bitwarden-desktop-next
 
-Lightweight Rust alternative to the Bitwarden desktop app using Iced 0.14 GUI framework.
+Lightweight Rust alternative to the Bitwarden desktop app using the Iced 0.15 GUI framework (git-pinned — 0.15 is still pre-release on crates.io).
 
 ## Quick Start
 
 ```bash
-cargo run                      # Starts on login screen
-cargo clippy                   # Lint check (must pass clean)
-cargo run --bin packager       # Package .app/.dmg/.msi via cargo-packager
+cargo run                                     # Starts on the loading screen, transitions to login
+cargo clippy                                  # Lint check (must pass clean)
+cargo run --bin packager                      # Package .app/.dmg/.msi via cargo-packager
+# --gpu is gated by cfg!(feature = "gpu") in main.rs; enable wgpu by uncommenting "wgpu" in iced features in Cargo.toml and rebuilding
 ```
 
 ### Dev Modes
 
 ```bash
-DEV_BOTH_MENUS=1 cargo run     # Show native + custom menus side-by-side
+DEV_BOTH_MENUS=1 cargo run                   # Show native + custom menus side-by-side
+RUST_LOG=bitwarden_desktop_next=debug,bitwarden_core=debug cargo run  # Full SDK tracing
 ```
 
 ## Project Context
 
-- **Cargo workspace** — root `Cargo.toml` defines members: `crates/desktop` (default), `bitwarden_license/*`, `tools/*`. Desktop crate is the only default member.
-- **UI-only stub** — no business logic, crypto, or API calls. A separate SDK (`PasswordManagerClient`) will handle that later.
-- **Multi-user** — state holds `HashMap<UserId, UserSession>`, mirrors the future SDK model.
-- **Iced 0.14** — Elm architecture (message-driven updates). Uses `iced` with `tokio`, `svg`, `advanced` features. `button::Style` requires a `snap: false` field.
-- **Custom theme type** — `AppTheme` implements `iced::theme::Base` + widget `Catalog` traits. Light theme is the default; dark/light toggle via Help > About Bitwarden. All `.style()` closures receive `&AppTheme`.
+- **Cargo workspace** — root `Cargo.toml` members: `crates/*`, `bitwarden_license/*`, `tools/*`. `default-members = ["crates/*", "bitwarden_license/*"]` so `cargo run` / `cargo build` target the app and licensed members but skip `tools/*`.
+- **UI-only stub** — no business logic beyond what the SDK exposes. Crypto, API, auth, and vault decrypt run through the real `bitwarden-*` SDK crates (git-pinned via `sdk-internal`); the UI consumes SDK types directly.
+- **Multi-user** — `Option<active_user: UserId>` + `HashMap<UserId, ItemCache>` on `VaultView`. One `PasswordManagerClient` per user lives in `ClientManager`.
+- **Iced 0.15** — Elm architecture (message-driven updates). Features: `tokio`, `tiny-skia` (default CPU renderer), `advanced`, `svg`, `image`, `crisp`, `hinting`, `web-colors`, `x11`, `wayland`. `button::Style` / `rule::Style` require a `snap: false` field.
+- **Custom theme** — `AppTheme` implements `iced::theme::Base` + widget `Catalog` traits. Light is the default; dark/light toggle via Help > About Bitwarden. All `.style()` closures receive `&AppTheme`. Color tokens live in `AppColors`; the only exception was a scrollbar thumb color that now also goes through the theme (`scrollbar_thumb`).
 - **Dual menu system** — Custom-drawn title bar on Windows/Linux, native muda menu on macOS. Both driven by a single `MENUS` definition with shortcuts, enabled states, and actions. `DEV_BOTH_MENUS=1` shows both simultaneously.
+- **Async** — iced's `tokio` feature starts a multi-threaded tokio runtime (`rt` + `rt-multi-thread` + `time` in iced_futures). Our crate adds `tokio = { workspace = true, features = ["rt"] }` for `spawn_blocking`, used to move the 24 MB JSON parse off the UI thread.
 
 ## Project Structure
 
@@ -31,59 +34,74 @@ DEV_BOTH_MENUS=1 cargo run     # Show native + custom menus side-by-side
 Cargo.toml                      — Workspace root (members: crates/desktop, bitwarden_license/*, tools/*)
 Packager.toml                   — cargo-packager config (.app, .dmg, .msi, signing)
 LICENSE.txt / LICENSE_*.txt     — License files
+assets/mock-vault.json          — Committed artifact (~24 MB) — encrypted ciphers for dev unlock
 
 crates/desktop/                 — Main desktop application crate
   src/
-    app.rs                      — Root App (11 fields), thin message dispatcher, view structs
-    main.rs                     — Entry point, window config, font loading, APP_FONT/APP_FONT_BOLD constants
-    menu.rs                     — MENUS definition, Shortcut, MenuAction, MenuState, native muda bridge
-    mock.rs                     — Fake users/vault items (each item has a stable `id` field)
-    state.rs                    — Core types: AppState, CipherItem, Screen, etc.
+    main.rs                     — Entry point, backend selection, font loading, iced::daemon launch
+    app/
+      mod.rs                    — App struct, App::new, App::update, App::view, App::subscription
+      message.rs                — Top-level Message + WindowMessage + SystemMessage + WindowInfo
+      handlers.rs               — handle_*_event + handle_menu_action + window/system handlers
+      helpers.rs                — refresh_cache, handle_user_switch, load_vault_list_task wrapper, menu_state
+    assets.rs                   — include_bytes! for fonts, SVGs, icons, mock-vault.json
+    menu.rs                     — MENUS static, Shortcut, MenuAction, MenuState, NativeMenuHandle
+    sdk.rs                      — ClientManager::empty + load, MemoryRepo<Cipher/Folder>, integration tests
+    state.rs                    — Screen (Loading/Login/Vault), UnlockMethod, UnlockMethods, SidebarFilter
 
     theme/
-      mod.rs                    — AppTheme, AppColors, Base impl, radius constants
-      dark.rs                   — Dark palette (colors from actual Bitwarden app)
-      light.rs                  — Light palette (colors from design mockup)
+      mod.rs                    — AppTheme, AppColors, ThemePreference, ThemeState, Base impl
+      dark.rs / light.rs        — Palettes
       catalog.rs                — Widget Catalog trait impls for AppTheme
 
     components/
-      mod.rs                    — separator_h(), separator_v(), styled_card() helpers
-      buttons.rs                — primary(), secondary(), ghost(), ghost_icon(), transparent()
-      icons.rs                  — Bootstrap Icons + BWI icons with .render() and .input_icon()
+      mod.rs                    — separator_h, separator_v, styled_card helpers
+      buttons.rs                — primary, secondary, ghost, ghost_icon, transparent
+      icons.rs                  — Icon type with .render() / .input_icon() / .char()
       account_switcher.rs       — Shared account dropdown (used by login + vault)
       drop_down.rs              — Local fork of iced_aw DropDown with BelowLeft/BelowRight/AboveRight
+      spinner.rs                — Self-animating 8-dot ring
+      toast.rs                  — Manager + ToastOverlay: fade, hover-pause, progress, severities
+      virtual_list.rs           — Viewport-windowed scrolling over uniform-height items
 
     views/
       login/
-        mod.rs                  — LoginView struct + LoginEvent + view()
+        mod.rs                  — LoginView, LoginMessage, LoginEvent, show_unlock_for, view()
+        unlock.rs               — Unlock card with in-button spinner when unlock_in_progress
+        login_email.rs / login_password.rs / server_selector.rs / input_field.rs / layout.rs
       vault/
-        mod.rs                  — VaultView struct + VaultEvent + PaneKind + view()
+        mod.rs                  — VaultView, VaultMessage, VaultEvent, load_list_task, view()
         widgets/
           sidebar.rs            — Icon rail + expanded nav panel
-          item_list.rs          — Vault item table with action icons
-          detail_pane.rs        — Item detail view (readonly fields, cards)
-          search_bar.rs         — Search input with native text_input icon
+          item_list.rs          — Virtualized table with action icons, SEARCH_ID const
+          detail_pane.rs        — Per-type item cards (Login/Card/Identity/SecureNote/SshKey)
+          search_bar.rs         — Text input + search icon, exports SEARCH_ID
       title_bar/
         mod.rs                  — TitleBarState + TitleBarEvent + WindowCommand + view() + view_empty()
         window_chrome.rs        — Platform chrome icons, resize wrapper
         dropdown.rs             — Menu dropdown panels + submenu rendering
+      about/mod.rs              — Stateless About window (AboutMessage handled directly in App)
 
 tools/
   packager/                     — Wrapper crate that invokes cargo_packager::cli::run
+  fake-data/                    — Generator that drives the real SDK to produce mock-vault.json
 
-bitwarden_license/              — Licensed workspace members (future)
+bitwarden_license/              — Licensed workspace members (empty placeholder)
 ```
 
 ## Why Things Are the Way They Are
 
-- **Custom `AppTheme` instead of `iced::Theme`**: iced 0.14's `application()` is generic over Theme. Our type gives `&AppTheme` in ALL `.style()` closures, with direct access to 20+ semantic color tokens. No thread_local, no registry, no downcasting.
-- **Local `DropDown` fork instead of `iced_aw`**: We needed `BelowLeft`/`BelowRight` alignments that upstream doesn't have. The fork is ~500 lines, identical logic except the added alignment variants.
-- **Custom title bar on Windows instead of native menus**: Native Win32 menus via `muda::init_for_hwnd()` create a 1px transparent gap (DWM compositor border). Drawing ourselves eliminates it.
-- **`refresh_cache()` still exists**: `view()` returns `Element<'_, ...>` borrowing from `&self`. Locally computed `Vec`s in `view()` would be dropped before the Element. Cached fields on the struct survive the borrow. This is an iced lifetime constraint, not a design choice.
-- **Sub-views return `(Task<SubMessage>, Option<Event>)`**: copies Halloy's compositional MVU pattern. Sub-views own their async lifecycle (they call `Task::perform` directly, with `&Arc<ClientManager>` injected at call time) so `app.rs` stops being a shared-write bottleneck when new async operations are added. Events are declarative domain facts ("Unlocked", "UserSelected") that App routes into side effects. See [docs/decisions.md](docs/decisions.md) → "View Architecture: Compositional MVU" for the full rationale.
-- **`NativeMenuHandle` on App, not static**: Avoids global mutable state. Supports potential multi-window future.
+- **Custom `AppTheme` instead of `iced::Theme`**: iced's `daemon()` is generic over Theme. Our type gives `&AppTheme` in ALL `.style()` closures with direct access to 25 semantic color tokens. No thread_local, no registry, no downcasting.
+- **Local `DropDown` fork instead of `iced_aw`**: Needed `BelowLeft`/`BelowRight`/`AboveRight` alignments that upstream doesn't have. Fork is ~500 lines, identical logic except the added variants.
+- **Custom title bar on Windows instead of native menus**: Native Win32 menus via `muda::init_for_hwnd()` create a 1 px transparent gap (DWM compositor border). Drawing ourselves eliminates it.
+- **`refresh_cache()` still exists**: `view()` returns `Element<'_, ...>` borrowing from `&self`. Locally computed `Vec`s in `view()` would be dropped before the Element. Cached fields on the struct survive the borrow. iced lifetime constraint, not a design choice.
+- **Sub-views return `(Task<SubMessage>, Option<Event>)`**: compositional MVU. Sub-views own their async lifecycle (they call `Task::perform` directly, with `&Arc<ClientManager>` injected at call time). App stops being a shared-write bottleneck when new async operations are added. Events are declarative domain facts ("Unlocked", "UserSelected") that App routes into side effects. See [docs/decisions.md](docs/decisions.md) → "Compositional MVU".
+- **`ClientManager::empty()` at startup + background load**: `App::new` returns fast with an empty manager and `Screen::Loading`. The 24 MB JSON parse runs on tokio's blocking pool (`spawn_blocking`). `SystemMessage::ClientManagerLoaded(Arc<ClientManager>)` swaps the `Arc` and transitions to `Screen::Login`. Existing accessors (`user_ids`, `is_unlocked`, etc.) all behave correctly on an empty `HashMap`, so no `Option<Arc<...>>` plumbing was needed.
+- **Self-animating widgets via `RedrawRequested`**: both `components/spinner.rs` and `components/toast.rs` drive their own redraws by intercepting `Event::Window(window::Event::RedrawRequested(now))` in `Widget::update` and calling `shell.request_redraw_at(now + delta)`. No app-level subscription, no dummy animation message.
+- **`NativeMenuHandle` on App, not static**: Avoids global mutable state.
+- **`std::mem::forget` the muda Menu**: muda hands ownership of the `Menu` + `MenuItem`s to the OS via `init_for_{nsapp,hwnd}`. The OS keeps references until shutdown; dropping the Menu would leave a dangling pointer.
 
-## Architecture: Compositional MVU
+## Compositional MVU
 
 Each sub-view owns its local state AND its async work, exposing:
 
@@ -96,110 +114,119 @@ pub fn update(
 ) -> (Task<SubMessage>, Option<SubEvent>);
 ```
 
-- **`LoginView`** — owns `password_input`, `show_password`, `dropdown_open`, `auth_page`. Runs `Task::perform(mgr.unlock(...))` directly; emits `LoginEvent::Unlocked { uid }` on completion. Events: `Unlocked` / `LoggedIn` / `SignOutRequested` / `UserSelected` / `AddAccountRequested` / `ToastRequested`.
-- **`VaultView`** — owns search, filter, selection, sidebar, pane state, item cache. Runs `Task::perform(mgr.list_ciphers(...))` and `full_cipher(...)` directly; handles `VaultMessage::ListLoaded` / `DetailLoaded` internally with stale-checks. Events: `UserSelected` / `AddAccountRequested` / `SearchFocusRequested` / `ToastRequested`.
-- **`TitleBarState`** — owns `open_menu`, `open_submenu`. No async work. Events: `MenuInvoked(MenuAction)` / `Window(WindowCommand)`.
-- **`App`** — thin router. Dispatches messages to sub-views via the compositional signature, lifts returned tasks with `.map(Message::Sub)`, translates events into side effects via `handle_*_event` methods.
+- **`LoginView`** — owns `auth_page`, `account_switcher_open`, `unlock_in_progress`. Runs `Task::perform(mgr.unlock(...))` directly; emits `LoginEvent::Unlocked { uid }` on completion with a stale-check against `active_user`. Events: `Unlocked` / `LoggedIn` / `SignOutRequested` / `UserSelected` / `AddAccountRequested` / `ToastRequested`.
+- **`VaultView`** — owns search, filter, selection, sidebar, pane state, per-user item cache. Runs `Task::perform(mgr.list_ciphers(...))` and `full_cipher(...)` directly; handles `ListLoaded` / `DetailLoaded` with stale-checks. Exposes `load_list_task(uid, &mgr) -> Task<VaultMessage>` as an associated factory for App handlers. Events: `UserSelected` / `AddAccountRequested` / `ToastRequested`.
+- **`TitleBarState`** — owns `open_menu`, `open_submenu`. No async. Events: `MenuInvoked(MenuAction)` / `Window(WindowCommand)`.
+- **`App`** — thin router. Dispatches messages to sub-views via the compositional signature, lifts returned tasks with `.map(Message::Sub)`, translates events to side effects via `handle_*_event` methods.
 
-The top-level `Message` enum is 5 variants: `Login(LoginMessage)`, `Vault(VaultMessage)`, `TitleBar(TitleBarMessage)`, `Window(WindowMessage)` (per-window OS events, daemon-ready), `System(SystemMessage)` (global signals). **No orphan async callback variants** — they live inside sub-enums (e.g. `LoginMessage::UnlockCompleted`, `VaultMessage::ListLoaded`).
+The top-level `Message` enum has 6 variants: `Login`, `Vault`, `TitleBar`, `About`, `Window` (per-window OS events), `System` (global signals). **No orphan async callback variants** — they live inside sub-enums (`LoginMessage::UnlockCompleted`, `VaultMessage::ListLoaded`, `SystemMessage::ClientManagerLoaded`).
 
 ### Message Flow Example
 
 ```
-User clicks "Unlock" button
-  → login view emits LoginMessage::Unlock
-  → iced delivers Message::Login(LoginMessage::Unlock) to App::update()
-  → App router calls self.login_view.update(msg, &client_manager, active_user)
-  → LoginView drains password, runs Task::perform(mgr.unlock(uid, pw))
-     and returns (Task<LoginMessage>, None)
+User types password + clicks "Unlock"
+  → LoginView drains password_input via std::mem::take, sets unlock_in_progress = true,
+    runs Task::perform(mgr.unlock(uid, pw)), returns (Task<LoginMessage>, None)
   → App lifts the task with .map(Message::Login) and runs it
   → task resolves; Message::Login(LoginMessage::UnlockCompleted(uid, Ok(()))) re-enters
-  → App router calls self.login_view.update(completion, ...)
-  → LoginView stale-checks active_user, returns (Task::none(), Some(LoginEvent::Unlocked { uid }))
-  → App's handle_login_event flips Screen::Vault and returns load_vault_list_task
+  → LoginView clears unlock_in_progress, stale-checks active_user,
+    returns (Task::none(), Some(LoginEvent::Unlocked { uid }))
+  → App's handle_login_event flips Screen::Vault and runs load_vault_list_task
   → task resolves; Message::Vault(VaultMessage::ListLoaded(uid, Ok(items))) re-enters
-  → VaultView handles it internally (stale-check, self.set_items(items))
+  → VaultView handles it internally (stale-check, recompute_filtered)
   → App calls post_update() → refresh_cache() → iced calls App::view() → vault screen renders
 ```
 
-Every async step re-enters through the owning view, keeping the async lifecycle local.
+Every async step re-enters through the owning view, keeping the async lifecycle local. On error the view emits `LoginEvent::ToastRequested(Toast::error(...))` with a sanitized message (raw SDK errors go to tracing, not to the UI).
 
 ### Cross-Cutting Dismissal
 
 LOAD-BEARING: the first `match &message` block at the top of `App::update` dismisses the other view's overlays on every sub-view message:
+
 - `Message::Login(_)` / `Message::Vault(_)` → `self.title_bar.dismiss_menu()`
 - `Message::TitleBar(_)` → `self.login_view.dismiss_dropdowns()` + `self.vault_view.dismiss_dropdowns()`
+- `Message::About(_)` / `Message::Window(_)` / `Message::System(_)` → nothing
 
-Without this block, a menu click from the vault would leave the account-switcher dropdown hanging. Sub-views provide `dismiss_dropdowns()` helpers; the policy itself stays at the router level so sub-views don't need to know about each other.
+Without this block, a menu click from the vault would leave the account-switcher dropdown hanging. Sub-views provide `dismiss_dropdowns()` helpers; the policy stays at the router level so sub-views don't need to know about each other.
 
 ### How to add a new view
 
-See [docs/architecture.md](docs/architecture.md) → "How to Add a New View" for the canonical 7-step recipe. Summary: create `views/<name>/mod.rs` with a `<Name>View` struct, `<Name>Message` enum, `<Name>Event` enum, and the `(Task, Option<Event>)` update signature; then in `app.rs` add a `Message::<Name>` variant, a view field on `App`, a router arm, and a `handle_<name>_event` method. Four mechanical adds in `app.rs`; everything else stays inside the view directory. That's the full multi-team story.
+See [docs/architecture.md](docs/architecture.md) → "How to Add a New View" for the canonical 7-step recipe. Summary: create `views/<name>/` with a `<Name>View` struct, `<Name>Message` enum, `<Name>Event` enum, and the `(Task, Option<Event>)` update signature; then in `app/` add a `Message::<Name>` variant, a view field on `App`, a router arm, and a `handle_<name>_event` method. Four mechanical adds in `app.rs`; everything else stays inside the view directory.
 
 ## Coding Conventions
 
 ### Imports
-- Group imports: `use crate::{a, b};` not separate `use crate::a; use crate::b;`
-- Nest component imports: `use crate::components::{buttons, icons, account_switcher};`
+- Group imports: `use crate::{a, b};` not separate `use crate::a; use crate::b;`.
+- Nest component imports: `use crate::components::{buttons, icons, account_switcher};`.
 - Import commonly-used iced types directly: `Background`, `Border`, `Color`, `Shadow`, `Alignment`.
 
 ### Padding
 - Use `[v, h]` shorthand: `.padding([8, 16])`.
-- Use `Padding { top, right, bottom, left }` only for asymmetric cases.
+- Use `Padding { top, right, bottom, left }` only for asymmetric cases where neither pair is symmetric.
 
 ### Theming
 - All colors come from `AppTheme.colors`. Never hardcode outside `theme/dark.rs` and `theme/light.rs`.
 - Radii (`RADIUS_SM/MD/LG/PILL`) are structural constants, not theme-dependent.
 - In `.style()` closures: `theme.colors.xxx`. For `text().color()` / `icon.render()`: pass `&AppColors`.
-- Sidebar-specific tokens: `nav_text` (white in both themes since sidebar is always dark blue) and `nav_item_hover` for sidebar hover state.
-- Font sizes are consolidated to 5 values: 12, 14, 16, 18, 28.
+- Sidebar-specific tokens: `nav_text` (white in both themes) and `nav_item_hover`.
+- Font sizes: 5 values — 12, 14, 16, 18, 28.
+- Prefer builder form: `Border::default().rounded(r).color(c).width(w)` and `container::Style::default().background(c).border(b)` over `{ ..Default::default() }` struct literals.
 
 ### Button Components
 - Use `components::buttons::{primary, secondary, ghost, ghost_icon, transparent}(content)`.
 - Takes `impl Into<Element>`, returns `Button` for chaining.
-- `ghost(content, hover_bg)` and `ghost_icon(content, hover_bg)` take an explicit `hover_bg: Color` parameter instead of reading from theme (needed because sidebar has different bg than content area).
+- `ghost(content, is_active, active_bg, hover_bg, radius)` — full knobs for sidebar + lists.
+- `ghost_icon(content, hover_bg)` — shorthand for icon-only transparent buttons (RADIUS_SM, no active state).
 
 ### Icons
 - `icon.render(size, color)` — renders as Element for general use.
-- `icon.input_icon(size, side)` — builds `text_input::Icon` for use with `TextInput::icon()`.
-- `icon.char()` is `pub(crate)` — prefer `render()` or `input_icon()`.
+- `icon.input_icon(size, side)` — builds `text_input::Icon` for `TextInput::icon()`.
+- `icon.char()` is `pub(crate)` — used by `toast` and `window_chrome` where the codepoint needs to compose with other text styling.
 
 ### Dropdowns
 - Use `components::drop_down::DropDown` with custom alignments: `BelowLeft`, `BelowRight`, `AboveRight`.
 - Always set `.on_dismiss(message)` for click-outside-to-close.
-- Cross-message dismissal: `Message::TitleBar` closes account dropdown, `Message::Login`/`Vault` closes title bar menu.
+- Cross-message dismissal: `Message::TitleBar` closes account dropdown; `Message::Login`/`Vault` closes title bar menu.
 
 ### Dead Code
 - Use `#[expect(dead_code)]` (not `#[allow]`) — warns if suppression becomes unnecessary.
+- **Exception**: `components/icons.rs` uses `#![allow(dead_code)]` at file scope because `bootstrap_icons_generated.rs` includes many unused `Icon` constants and some are actively used — `expect` at file scope would not fire correctly.
+
+### Widget IDs
+- Widget IDs referenced from more than one file live as `pub const <NAME>: widget::Id = widget::Id::new("...")` in the widget's own module (e.g. `views/vault/widgets/search_bar.rs::SEARCH_ID`).
 
 ### Menu System
-- `MENUS` static drives both custom title bar rendering and native muda menus.
+- `MENUS` static drives both custom title-bar rendering and native muda menus.
 - `Shortcut::to_accelerator()` converts to muda's `Accelerator` via string parsing.
 - `NativeMenuHandle` on App stores action map + item handles (no static mutable state).
-- `poll_native_event()` polled via 16ms iced subscription, dispatches to `handle_menu_action()`.
+- `poll_native_event()` polled via 16 ms iced subscription (only when `native_menu.is_some()`), dispatches to `handle_menu_action()`.
 - `sync_native_enabled()` called from `refresh_cache()` to keep native items in sync.
+- `MenuState` has 3 bools: `is_locked`, `has_accounts`, `has_lockable_accounts`.
 
 ## Reference App
 
 The official Bitwarden app is in `clients/` (git submodule). Key locations:
+
 - Button styles: `clients/libs/components/src/button/button.component.ts`
 - Logo SVG: `clients/libs/assets/src/svg/svgs/password-manager.ts`
 - Background illustrations: `clients/libs/assets/src/svg/svgs/background-{left,right}-illustration.ts`
 - BWI icon codepoints: `clients/libs/angular/src/scss/bwicons/styles/style.scss`
 - Menu entries: `clients/apps/desktop/src/main/menu/menu.*.ts`
+- Native modules (future integration candidates): `clients/apps/desktop/desktop_native/core/src/{biometric_v2,ssh_agent}/`
 
 ## Docs (IMPORTANT: read these before making changes)
 
-- `docs/architecture.md` — Current structure, state model, menu system, icon system
-- `docs/decisions.md` — Framework choice, theme system, overlay approach, state decentralization, menu unification
-- `docs/todo.md` — Pending work items, next up tasks
+- `docs/architecture.md` — Current structure, state model, compositional MVU, menu system, icon system
+- `docs/decisions.md` — Framework choice, theme system, overlay approach, MVU rationale, startup lazy-load
+- `docs/todo.md` — Pending work items, next up tasks, deferred / upstream items
 - `docs/design-reference.md` — Official app findings: button styles, colors, logos, illustrations
+- `docs/skills/` — Periodic review outputs from code-architect / code-explorer / code-reviewer / simplify
 
 ## Font
 
 - **Inter 18pt** — static weight files: `Inter_18pt-Medium.ttf` (default) + `Inter_18pt-Bold.ttf`. Family name: `"Inter 18pt"`.
 - `APP_FONT` and `APP_FONT_BOLD` constants in `main.rs` reference these fonts.
-- Default weight is Medium (500), not Normal (400). The "18pt" variant uses an open lowercase "g" (double-storey in standard Inter) which better matches the official app.
+- Default weight is Medium (500), not Normal (400). The "18pt" variant uses an open single-storey lowercase "g" which better matches the official app.
 
 ## Packaging
 
@@ -210,26 +237,30 @@ The official Bitwarden app is in `clients/` (git submodule). Key locations:
 
 ## Design Notes
 
-- All colors are theme-swappable. Light is the default theme; dark/light toggle via Help > About Bitwarden.
+- All colors are theme-swappable. Light is the default; dark/light toggle via Help > About Bitwarden.
 - Account switcher uses DropDown overlay with `BelowRight` alignment.
 - Sidebar uses BWI icons (not Bootstrap Icons) to match the official app.
-- SVG logo antialiasing: Iced's resvg rasterizer doesn't match browser-quality. Container constrains visual size while SVG fills available width.
+- SVG logo antialiasing: iced's resvg rasterizer doesn't match browser quality. Container constrains visual size while SVG fills available width.
 - `styled_card()` has a subtle shadow (black 20% opacity, offset 0,1, blur 2).
 - On macOS when `should_use_custom_menu_bar()` is false, `title_bar::view_empty()` renders an empty colored strip (no buttons or drag area).
+- During the unlock task: primary button shows a spinner at the same padded height, input is read-only, alternate-method + Log out buttons stay visible but inert. Nothing disappears mid-transition.
 
 ## Iced Gotchas
 
-- `button::Style` requires `snap: false` — missing it causes a compile error with no obvious message.
-- `view()` returns `Element<'_, M, Theme>` borrowing from `&self`. Locally computed `Vec`s can't be borrowed into the returned Element — use cached fields on the struct instead.
-- iced overlays only support ONE level — a `DropDown` inside another `DropDown`'s overlay won't render its own overlay. Submenus must be part of the same overlay content (e.g. a `row![main_panel, submenu]`).
-- `iced::time::every()` is useful for polling external event sources (like muda's `MenuEvent::receiver()`).
-- `widget::operation::focus(Id)` is needed after PaneGrid rebuilds to keep text input focus.
-- The `iced_aw` crate (0.13) is kept as a dependency for source reference but `default-features = false` — we use our own `drop_down.rs` fork.
+- `button::Style` / `rule::Style` require `snap: false` — missing it causes a compile error pointing at the struct literal, not at the missing field by name.
+- `view()` returns `Element<'_, M, Theme>` borrowing from `&self`. Locally computed `Vec`s can't flow into the returned Element — use cached fields on the struct instead (`ViewCache`, per-user `ItemCache`, etc.).
+- iced overlays only support ONE level — a `DropDown` inside another `DropDown`'s overlay won't render its own overlay. Submenus must be part of the same overlay content (e.g. `row![main_panel, submenu]`).
+- `iced::time::every()` is useful for polling external event sources (like muda's `MenuEvent::receiver()`), but for per-widget animation prefer the self-driving `RedrawRequested` + `shell.request_redraw_at(...)` pattern — it avoids running full `App::update` cycles just to redraw one widget.
+- `widget::operation::focus(Id)` is the way to set input focus without a message round-trip; it's a `Task`-returning operation, not a `Message`. Widget IDs it targets should live as `pub const` in the widget's own module.
+- The `iced_aw` crate (0.13) is kept as a dependency with `default-features = false` purely so the source is in the cargo registry cache for reference — we use our own `drop_down.rs` fork at runtime.
+- `AppTheme` is cloned every time iced calls `App::theme(window_id)`. Keep the struct cheap: `name` is `&'static str`, `colors` is `Copy`.
 
 ## Source Reference Locations
 
-When investigating iced internals, the cargo registry cache has the source:
-- iced core: `~/.cargo/registry/src/*/iced_core-0.14.0/src/`
-- iced widgets: `~/.cargo/registry/src/*/iced_widget-0.14.2/src/`
-- iced_aw: `~/.cargo/registry/src/*/iced_aw-0.13.1/src/`
-- muda: `~/.cargo/registry/src/*/muda-0.17.1/src/`
+When investigating iced internals, the git-pinned iced checkouts live at:
+
+- iced core: `~/.cargo/git/checkouts/iced-*/<rev>/core/src/`
+- iced widgets: `~/.cargo/git/checkouts/iced-*/<rev>/widget/src/`
+- iced futures (runtime / backend / executors): `~/.cargo/git/checkouts/iced-*/<rev>/futures/src/`
+- iced_aw (registry, old version kept as reference): `~/.cargo/registry/src/*/iced_aw-0.13.1/src/`
+- muda: `~/.cargo/registry/src/*/muda-0.18*/src/`

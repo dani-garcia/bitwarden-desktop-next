@@ -1,6 +1,6 @@
 use iced::{
-    Alignment, Background, Border, Color, Element, Fill, Shadow,
-    widget::{Space, button, column, container, svg, text},
+    Alignment, Element, Fill,
+    widget::{Space, column, container, svg, text},
 };
 
 use crate::{
@@ -51,20 +51,9 @@ fn card_content<'a>(
     );
 
     // TODO: "Get master password hint" navigates to hint request flow (not yet implemented)
-    let hint_link = button(
-        text("Get master password hint")
-            .size(14)
-            .color(colors.accent),
-    )
-    .on_press(LoginMessage::GetPasswordHint)
-    .padding(0)
-    .style(|_theme: &AppTheme, _status| button::Style {
-        background: Some(Background::Color(Color::TRANSPARENT)),
-        text_color: Color::TRANSPARENT,
-        border: Border::default(),
-        shadow: Shadow::default(),
-        snap: false,
-    });
+    let hint_link = buttons::transparent(text("Get master password hint").size(14).color(colors.accent))
+        .on_press(LoginMessage::GetPasswordHint)
+        .padding(0);
 
     let login_button = buttons::primary(
         container(text("Log in with master password").size(16))

@@ -36,6 +36,7 @@ impl AppColors {
             toast_success_bg: hex!(0x3b, 0xb3, 0x60),
             toast_warning_bg: hex!(0xbf, 0x8b, 0x00),
             toast_error_bg: hex!(0xc8, 0x3c, 0x3c),
+            scrollbar_thumb: hex!(0xc4, 0xc9, 0xd4),
         }
     }
 }

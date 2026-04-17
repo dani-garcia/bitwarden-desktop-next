@@ -14,7 +14,7 @@ pub const RADIUS_PILL: f32 = 20.0;
 #[derive(Debug, Clone)]
 pub struct AppTheme {
     pub colors: AppColors,
-    name: String,
+    name: &'static str,
     mode: iced::theme::Mode,
 }
 
@@ -49,7 +49,7 @@ impl AppTheme {
     pub fn dark() -> Self {
         Self {
             colors: AppColors::dark(),
-            name: "Bitwarden Dark".into(),
+            name: "Bitwarden Dark",
             mode: iced::theme::Mode::Dark,
         }
     }
@@ -57,7 +57,7 @@ impl AppTheme {
     pub fn light() -> Self {
         Self {
             colors: AppColors::light(),
-            name: "Bitwarden Light".into(),
+            name: "Bitwarden Light",
             mode: iced::theme::Mode::Light,
         }
     }
@@ -87,7 +87,7 @@ impl iced::theme::Base for AppTheme {
     }
 
     fn name(&self) -> &str {
-        &self.name
+        self.name
     }
 }
 
@@ -140,4 +140,6 @@ pub struct AppColors {
     pub toast_warning_bg: Color,
     /// Toast background — error severity
     pub toast_error_bg: Color,
+    /// Scrollbar thumb (the draggable part of the scrollable rail)
+    pub scrollbar_thumb: Color,
 }

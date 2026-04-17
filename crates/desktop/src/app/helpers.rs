@@ -1,11 +1,9 @@
-use std::sync::Arc;
-
 use iced::Task;
 
 use crate::{
     components::account_switcher::AccountEntry,
     state::{Screen, UserId},
-    views::{login::AuthPage, vault::VaultMessage},
+    views::login::AuthPage,
 };
 
 use super::{App, Message, WindowKind};
@@ -100,22 +98,12 @@ impl App {
         }
     }
 
-    /// Build the task that decrypts the user's vault list and lands as
-    /// `VaultMessage::ListLoaded`. Returns `Task<Message>` (already lifted
-    /// via `.map(Message::Vault)`) so all callers can plumb the result
-    /// without caring about the inner message type.
+    /// Lift `VaultView::load_list_task` into a top-level `Task<Message>`.
+    /// Thin wrapper so handlers don't have to repeat the `.map(Message::Vault)`
+    /// lift at each call site.
     pub(super) fn load_vault_list_task(&self, uid: UserId) -> Task<Message> {
-        let mgr = self.client_manager.clone();
-        let uid_for_msg = uid.clone();
-        Task::perform(
-            async move {
-                mgr.list_ciphers(&uid)
-                    .await
-                    .map(|items| items.into_iter().map(Arc::new).collect::<Vec<_>>())
-            },
-            move |result| VaultMessage::ListLoaded(uid_for_msg.clone(), result),
-        )
-        .map(Message::Vault)
+        crate::views::vault::VaultView::load_list_task(uid, &self.client_manager)
+            .map(Message::Vault)
     }
 
     pub(super) fn menu_state(&self) -> crate::menu::MenuState {
@@ -131,7 +119,6 @@ impl App {
             is_locked,
             has_accounts,
             has_lockable_accounts: has_lockable,
-            has_authenticated_accounts: has_accounts,
         }
     }
 }

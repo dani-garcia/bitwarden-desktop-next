@@ -250,6 +250,10 @@ impl LoginView {
                 match result {
                     Ok(()) => (Task::none(), Some(LoginEvent::Unlocked { uid: msg_uid })),
                     Err(err) => {
+                        // Log the raw SDK error for debugging, but show a
+                        // sanitized message to the user — SDK `Display`
+                        // impls can surface internal crypto state / module
+                        // paths that shouldn't land in a toast notification.
                         tracing::warn!(
                             uid = %msg_uid,
                             %err,
@@ -258,7 +262,7 @@ impl LoginView {
                         (
                             Task::none(),
                             Some(LoginEvent::ToastRequested(Toast::error(
-                                err,
+                                "Check your master password and try again.",
                                 Some("Unlock failed"),
                             ))),
                         )
@@ -387,15 +391,18 @@ impl LoginView {
                 }
             }
             LoginMessage::BackToEmail => {
-                // Preserve the selected server when going back
-                let server = match &self.auth_page {
+                // Preserve the email + selected server when going back so
+                // the user doesn't have to retype what they just entered.
+                let (email, server) = match &self.auth_page {
                     AuthPage::LoginPassword {
-                        selected_server, ..
-                    } => selected_server.clone(),
-                    _ => ServerOption::Bitwarden,
+                        email,
+                        selected_server,
+                        ..
+                    } => (email.clone(), selected_server.clone()),
+                    _ => (String::new(), ServerOption::Bitwarden),
                 };
                 self.auth_page = AuthPage::LoginEmail {
-                    email_input: String::new(),
+                    email_input: email,
                     remember_email: false,
                     server_selector_open: false,
                     selected_server: server,

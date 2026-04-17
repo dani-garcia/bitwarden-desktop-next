@@ -145,15 +145,16 @@ Menu entries from `clients/apps/desktop/src/main/menu/`:
 ### Enabled/Disabled State Rules
 Source: `clients/apps/desktop/src/main/menu/menu.*.ts`
 
-Most items depend on vault lock state. The key conditions are:
+Most items depend on vault lock state. The key conditions our implementation uses (`menu::EnabledWhen`):
 
 | Condition | Meaning | Affected Items |
 |-----------|---------|----------------|
-| `!isLocked` | Vault is unlocked | Add items, Search, Generator, Settings, Import/Export, Copy username/password/TOTP, all Account items |
-| `hasAccounts` | At least one account exists | Lock All, Log Out |
-| `hasLockableAccounts` | Has accounts that support locking | Lock Vault submenu |
-| `hasAuthenticatedAccounts` | Has synced accounts | Sync Vault |
-| always | No condition | Undo/Redo/Cut/Copy/Paste, Zoom, Fullscreen, Minimize, Close, all Help items |
+| `Unlocked` (`!is_locked`) | Vault is unlocked | Add items, Search, Generator, Settings, Import/Export, Copy username/password/TOTP, all Account items |
+| `HasAccounts` | At least one account exists | Lock All, Log Out, Sync Now |
+| `HasLockable` | Has accounts that support locking | Lock Vault submenu |
+| `Always` | No condition | Undo/Redo/Cut/Copy/Paste, Zoom, Fullscreen, Minimize, Close, all Help items |
+
+The upstream Electron code has a separate `hasAuthenticatedAccounts` gate for Sync that behaves identically to `hasAccounts` in our setup (no separate "registered but not authenticated" state exists yet); we collapsed it to `HasAccounts`.
 
 ### Keyboard Shortcuts
 Source: Electron `accelerator` strings in menu.*.ts. All use `CmdOrCtrl+` which maps to Cmd on macOS, Ctrl on Windows/Linux.
@@ -204,16 +205,22 @@ Several items open submenus rather than performing a direct action:
 
 ## Screens
 
+### Loading Screen
+- Blank background, centered 48 px spinner (`colors.accent`)
+- Shown briefly at startup while `ClientManager::load` parses the 24 MB mock vault on tokio's blocking pool
+- Window title bar is rendered as normal; menus are attached (account-dependent items disabled until load completes)
+
 ### Login/Lock Screen
 - Top bar: account switcher (right), bitwarden logo below on main background (left)
 - Lock icon (shield with stars) centered
 - "Your vault is locked" + email
-- Card: floating label input, Unlock button, "or", Log out button
+- Card: floating label input, Unlock button (replaced in-place by spinner during the unlock task), "or" separator, alternate-method buttons, Log out button
+- During the unlock task: the password input is read-only, primary button shows a spinner at the same padded height, alternate buttons + Log out stay visible but inert
 - Background illustrations at bottom corners (11% opacity)
 - "Accessing bitwarden.com" status text at bottom
 
 ### Main Vault Screen
 - **Top bar**: Search input + account switcher
 - **Sidebar**: "bitwarden / Password Manager" header, category tree navigation
-- **Item list**: Scrollable, colored initial circles + name + subtitle
-- **Detail pane** (future): Item details on selection
+- **Item list**: Virtualized scrollable over 20 k+ items, colored initial circles + name + subtitle
+- **Detail pane**: Per-type cards (Login / Card / Identity / SecureNote / SshKey). Edit / Delete buttons are stubs today. SSH private keys and card CVVs currently render in plaintext — TODO: reveal-on-click matching the official app.

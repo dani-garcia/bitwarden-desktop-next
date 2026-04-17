@@ -6,7 +6,7 @@ use crate::{
         about::AboutMessage,
         login::LoginEvent,
         title_bar::{TitleBarEvent, WindowCommand},
-        vault::VaultEvent,
+        vault::{VaultEvent, widgets::search_bar},
     },
 };
 
@@ -38,13 +38,20 @@ impl App {
                     self.vault_view.remove_user_items(uid);
                     // TODO: remove user from ClientManager (requires interior mutability)
                 }
-                // Pick next available user
-                self.active_user = self
+                let next_uid = self
                     .client_manager
                     .user_ids()
                     .find(|id| self.active_user.as_ref() != Some(id))
                     .cloned();
-                Task::none()
+                match next_uid {
+                    Some(uid) => self.handle_user_switch(uid),
+                    None => {
+                        self.active_user = None;
+                        self.screen = Screen::Login;
+                        self.login_view.reset_to_email_entry();
+                        Task::none()
+                    }
+                }
             }
             LoginEvent::UserSelected { uid } => self.handle_user_switch(uid),
             LoginEvent::ToastRequested(t) => {
@@ -61,12 +68,6 @@ impl App {
                 self.screen = Screen::Login;
                 self.login_view.reset_to_email_entry();
                 Task::none()
-            }
-            VaultEvent::SearchFocusRequested => {
-                // Focus ops don't emit messages so they can't live inside
-                // the view as a `Task<VaultMessage>`. The widget ID constant
-                // lives here with the one call site that produces it.
-                iced::widget::operation::focus(iced::widget::Id::new("vault-search"))
             }
             VaultEvent::ToastRequested(t) => {
                 self.push_toast(t);
@@ -230,7 +231,7 @@ impl App {
                 if self.screen == Screen::Vault {
                     self.vault_view.search_query.clear();
                     self.refresh_cache();
-                    return iced::widget::operation::focus(iced::widget::Id::new("vault-search"));
+                    return iced::widget::operation::focus(search_bar::SEARCH_ID);
                 }
             }
             MenuAction::SyncNow | MenuAction::Reload => {

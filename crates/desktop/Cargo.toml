@@ -6,12 +6,19 @@ license-file = "LICENSE.txt"
 
 [features]
 default = []
+
 # Debug overlay with layout bounds, render time, widget IDs. Toggle with F12.
 # Usage: cargo run --features dev
 dev = ["iced/debug"]
+
 # Interactive test recorder/player for UI automation. Opens automatically on launch.
 # Usage: cargo run --features test
 test = ["iced/tester"]
+
+# GPU rendering backend (wgpu). Adds ~9 MB binary size + ~500 ms startup.
+# Without this feature, `--gpu` at runtime is a no-op.
+# Usage: cargo run --features gpu -- --gpu
+gpu = ["iced/wgpu"]
 
 [dependencies]
 async-trait = { workspace = true }
@@ -26,8 +33,7 @@ iced = { workspace = true, features = [
     "web-colors", # sRGB blending to match Bitwarden web app colors
     "x11",        # Linux X11 display backend
     "wayland",    # Linux Wayland display backend
-    # "wgpu",         # GPU backend — adds ~9MB + ~500ms startup. Enable with --gpu flag.
-    # "lazy",         # lazy/responsive widgets — enable if scroll perf needs it
+    # "lazy",     # lazy/responsive widgets — enable if scroll perf needs it
 ] }
 image = "0.25"
 muda = "0.18"

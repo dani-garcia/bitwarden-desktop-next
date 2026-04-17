@@ -127,7 +127,6 @@ pub struct MenuState {
     pub is_locked: bool,
     pub has_accounts: bool,
     pub has_lockable_accounts: bool,
-    pub has_authenticated_accounts: bool,
 }
 
 impl Default for MenuState {
@@ -136,7 +135,6 @@ impl Default for MenuState {
             is_locked: true,
             has_accounts: false,
             has_lockable_accounts: false,
-            has_authenticated_accounts: false,
         }
     }
 }
@@ -148,7 +146,6 @@ pub enum EnabledWhen {
     Unlocked,
     HasAccounts,
     HasLockable,
-    HasAuthenticated,
 }
 
 impl EnabledWhen {
@@ -158,7 +155,6 @@ impl EnabledWhen {
             Self::Unlocked => !state.is_locked,
             Self::HasAccounts => state.has_accounts,
             Self::HasLockable => state.has_lockable_accounts,
-            Self::HasAuthenticated => state.has_authenticated_accounts,
         }
     }
 }
@@ -283,7 +279,7 @@ pub const MENUS: &[(&str, &[MenuEntry])] = &[
             ]),
             E("New folder").when(Unlocked),
             SEP,
-            E("Sync now").when(HasAuthenticated).action(SyncNow),
+            E("Sync now").when(HasAccounts).action(SyncNow),
             E("Import").when(Unlocked),
             E("Export").when(Unlocked),
             SEP,
@@ -494,10 +490,21 @@ pub fn attach_menu(raw_id: u64) -> Option<NativeMenuHandle> {
             let _ = menu.init_for_hwnd(raw_id as isize);
         }
     }
-    #[cfg(target_os = "linux")]
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
-        panic!("Native menu is not supported on Linux");
+        // `should_use_native_title_bar()` returns false on Linux so the
+        // early return above fires first; reaching here would mean someone
+        // forced the native path on an unsupported platform.
+        let _ = raw_id;
+        let _ = menu;
+        return None;
     }
+
+    // The `Menu` and its `MenuItem`s must outlive the process — muda's
+    // `init_for_{nsapp,hwnd}` hands ownership to the OS, which holds the
+    // references until shutdown. Dropping the `Menu` would leave the OS
+    // with a dangling pointer. Leaking is the idiomatic way to hand
+    // ownership off to the platform menu system.
     std::mem::forget(menu);
 
     Some(NativeMenuHandle { actions, items })

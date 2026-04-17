@@ -116,13 +116,7 @@ pub enum VaultEvent {
     UserSelected { uid: UserId },
     /// User clicked Add Account — App switches to the login screen.
     AddAccountRequested,
-    /// User pressed Cmd/Ctrl-F or the menu Search shortcut. App runs
-    /// `iced::widget::operation::focus(Id::new("vault-search"))` because
-    /// focus operations don't produce a message and therefore can't live
-    /// inside `VaultView::update` as a `Task<VaultMessage>`.
-    SearchFocusRequested,
     /// VaultView wants to show a cross-cutting toast notification.
-    #[expect(dead_code)] // No call sites yet; reserved for sync / copy / error flows.
     ToastRequested(Toast),
 }
 
@@ -155,7 +149,7 @@ impl VaultView {
         let (mut pane_state, list_pane) = pane_grid::State::new(PaneKind::List);
         let (_detail_pane, split_id) = pane_state
             .split(pane_grid::Axis::Vertical, list_pane, PaneKind::Detail)
-            .unwrap();
+            .expect("splitting a fresh single-pane state always succeeds");
         pane_state.resize(split_id, 0.4);
 
         Self {
@@ -167,6 +161,23 @@ impl VaultView {
             items: HashMap::new(),
             list_scroll: virtual_list::ScrollState::default(),
         }
+    }
+
+    /// Build the task that decrypts the user's vault list and lands as
+    /// `VaultMessage::ListLoaded`. Called from App handlers (unlock, user
+    /// switch, sync) — the factory lives here so all `Task::perform` calls
+    /// that produce `VaultMessage`s stay within the owning view.
+    pub fn load_list_task(uid: UserId, mgr: &Arc<ClientManager>) -> Task<VaultMessage> {
+        let mgr = mgr.clone();
+        let uid_for_msg = uid.clone();
+        Task::perform(
+            async move {
+                mgr.list_ciphers(&uid)
+                    .await
+                    .map(|items| items.into_iter().map(Arc::new).collect::<Vec<_>>())
+            },
+            move |result| VaultMessage::ListLoaded(uid_for_msg.clone(), result),
+        )
     }
 
     /// Compositional MVU update. Returns a task (for async work the view
@@ -215,7 +226,6 @@ impl VaultView {
                         .and_then(|uid| self.items.get(uid))
                         .and_then(|ic| ic.cached.get(idx))
                         .and_then(|i| i.id);
-                    self.selection.detail = None;
                     let Some(id) = self.selection.id else {
                         return (Task::none(), None);
                     };
@@ -243,7 +253,7 @@ impl VaultView {
                 if let Some(uid) = active_user {
                     self.recompute_filtered(uid);
                 }
-                (Task::none(), Some(VaultEvent::SearchFocusRequested))
+                (Task::none(), None)
             }
             VaultMessage::CloseDetailPane => {
                 self.selection.clear();
@@ -320,7 +330,13 @@ impl VaultView {
                     }
                     Err(err) => {
                         tracing::error!(cipher_id = %id, %err, "full_cipher failed");
-                        (Task::none(), None)
+                        (
+                            Task::none(),
+                            Some(VaultEvent::ToastRequested(Toast::error(
+                                "Couldn't load the item. Try again.",
+                                Some("Decrypt failed"),
+                            ))),
+                        )
                     }
                 }
             }
@@ -448,7 +464,7 @@ impl VaultView {
 
         // --- Content area: PaneGrid when detail open, plain list otherwise ---
         let content_area_inner: Element<'a, VaultMessage, AppTheme> =
-            if self.selection.detail.is_some() {
+            if let Some(item) = self.selection.detail.as_ref() {
                 pane_grid::PaneGrid::new(&self.pane_state, move |_pane, kind, _is_maximized| {
                     match kind {
                         PaneKind::List => pane_grid::Content::new(self.list_content(
@@ -458,15 +474,11 @@ impl VaultView {
                             colors,
                         )),
                         PaneKind::Detail => {
-                            if let Some(item) = self.selection.detail.as_ref() {
-                                let detail = detail_pane::view(item, colors).map(|msg| match msg {
-                                    DetailPaneMessage::Close => VaultMessage::CloseDetailPane,
-                                    other => VaultMessage::DetailPane(other),
-                                });
-                                pane_grid::Content::new(detail)
-                            } else {
-                                pane_grid::Content::new(Space::new())
-                            }
+                            let detail = detail_pane::view(item, colors).map(|msg| match msg {
+                                DetailPaneMessage::Close => VaultMessage::CloseDetailPane,
+                                other => VaultMessage::DetailPane(other),
+                            });
+                            pane_grid::Content::new(detail)
                         }
                     }
                 })
@@ -497,7 +509,9 @@ impl VaultView {
         container(main_row)
             .width(Fill)
             .height(Fill)
-            .style(|theme: &AppTheme| container::Style::default().background(theme.colors.background))
+            .style(|theme: &AppTheme| {
+                container::Style::default().background(theme.colors.background)
+            })
             .into()
     }
 

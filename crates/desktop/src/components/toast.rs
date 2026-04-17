@@ -304,7 +304,7 @@ fn white_alpha_style(
 
 fn toast_view<'a, Message: 'a + Clone>(
     index: usize,
-    toast: &Toast,
+    toast: &'a Toast,
     cell: Rc<Cell<ToastVisuals>>,
     on_close: &(impl Fn(usize) -> Message + 'a),
 ) -> Element<'a, Message, AppTheme> {
@@ -315,14 +315,14 @@ fn toast_view<'a, Message: 'a + Clone>(
         .size(22.0)
         .style(white_alpha_style(cell.clone(), 1.0));
 
-    let title_elem = text(toast.title.clone())
+    let title_elem = text(toast.title.as_str())
         .font(crate::APP_FONT_BOLD)
         .size(14)
         .style(white_alpha_style(cell.clone(), 1.0));
 
     // Body text slightly dimmer than the title for hierarchy.
-    let body_elem = text(toast.body.clone())
-        .size(13)
+    let body_elem = text(toast.body.as_str())
+        .size(12)
         .style(white_alpha_style(cell.clone(), 0.92));
 
     let close_icon = text(icons::BWI_CLOSE.char().to_string())

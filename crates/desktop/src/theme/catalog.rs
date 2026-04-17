@@ -96,13 +96,13 @@ impl widget::scrollable::Catalog for AppTheme {
     type Class<'a> = widget::scrollable::StyleFn<'a, Self>;
 
     fn default<'a>() -> Self::Class<'a> {
-        Box::new(|_theme, _status| widget::scrollable::Style {
+        Box::new(|theme, _status| widget::scrollable::Style {
             container: widget::container::Style::default(),
             vertical_rail: widget::scrollable::Rail {
                 background: None,
                 border: Border::default(),
                 scroller: widget::scrollable::Scroller {
-                    background: Background::Color(Color::from_rgb(0.5, 0.5, 0.5)),
+                    background: Background::Color(theme.colors.scrollbar_thumb),
                     border: Border::default(),
                 },
             },
@@ -110,7 +110,7 @@ impl widget::scrollable::Catalog for AppTheme {
                 background: None,
                 border: Border::default(),
                 scroller: widget::scrollable::Scroller {
-                    background: Background::Color(Color::from_rgb(0.5, 0.5, 0.5)),
+                    background: Background::Color(theme.colors.scrollbar_thumb),
                     border: Border::default(),
                 },
             },

@@ -1,4 +1,9 @@
-#![allow(unused)]
+// The generated `bootstrap_icons_generated.rs` below defines an `Icon`
+// constant per Bootstrap glyph; most are unused today. Suppressing at file
+// scope keeps the include site quiet without hand-annotating each constant.
+// Using `expect` over `allow` would require every constant to be genuinely
+// unused, which they aren't — many are referenced across views.
+#![allow(dead_code)]
 
 use iced::{
     Element, Font,
@@ -37,7 +42,8 @@ impl Icon {
     }
 
     /// Raw codepoint — prefer `render()` or `input_icon()` in public APIs.
-    #[allow(dead_code)] // used by window_chrome on non-Windows platforms
+    /// Used by `toast` for inline icon-in-styled-text composition and by
+    /// `title_bar::window_chrome` platform-specific chrome char constants.
     pub(crate) const fn char(self) -> char {
         self.0
     }

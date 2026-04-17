@@ -97,7 +97,7 @@ impl ThemeState {
 
 impl App {
     pub fn new() -> (Self, Task<Message>) {
-        let user_theme = ThemePreference::Dark;
+        let user_theme = ThemePreference::Light;
 
         // Open the main window via `window::open` — daemon mode doesn't
         // create a window automatically (unlike `iced::application`).

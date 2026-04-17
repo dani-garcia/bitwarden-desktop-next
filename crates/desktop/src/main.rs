@@ -33,11 +33,12 @@ pub const APP_FONT_BOLD: Font = Font {
 fn main() -> iced::Result {
     init_tracing();
 
-    // Default to tiny-skia (CPU) renderer to avoid ~500ms wgpu GPU init on
-    // startup. For a form-based UI this is fast enough, and the instant window
-    // appearance is a better UX trade-off. Override with `--gpu`.
-    // NOTE: This requires enabling the `wgpu` feature flag on `iced` in Cargo.toml.
-    let backend = if std::env::args().any(|a| a == "--gpu") {
+    // Default to tiny-skia (CPU) renderer to avoid ~500 ms wgpu GPU init on
+    // startup. For a form-based UI this is fast enough, and the instant
+    // window appearance is a better UX trade-off. The `gpu` Cargo feature
+    // enables the wgpu backend; `--gpu` then opts into it at runtime.
+    // Without the feature, the flag is a no-op.
+    let backend = if cfg!(feature = "gpu") && std::env::args().any(|a| a == "--gpu") {
         "wgpu"
     } else {
         "tiny-skia"

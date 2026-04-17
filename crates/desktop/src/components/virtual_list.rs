@@ -109,7 +109,7 @@ impl ScrollState {
 /// Minimum overscan in rows. A very small viewport (e.g. only 2-3 rows
 /// visible) still gets at least this many rows of buffer so quick scrolls
 /// don't pop.
-const MIN_OVERSCAN: usize = 3;
+const MIN_OVERSCAN: usize = 5;
 
 /// Overscan as a fraction of the visible window size. 30% on each side
 /// gives a comfortable buffer for flick scrolls without materially

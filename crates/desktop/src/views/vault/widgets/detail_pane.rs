@@ -225,7 +225,7 @@ fn card_details_card<'a>(
         (None, None) => None,
     };
     if let Some(exp) = expiration {
-        fields.push(field_readonly_owned("Expiration", exp, colors));
+        fields.push(field_readonly("Expiration", exp, colors));
     }
 
     push_optional_field(&mut fields, "Security code", card.code.as_deref(), colors);
@@ -262,7 +262,7 @@ fn identity_card<'a>(
     .collect::<Vec<_>>()
     .join(" ");
     if !full_name.is_empty() {
-        fields.push(field_readonly_owned("Name", full_name, colors));
+        fields.push(field_readonly("Name", full_name, colors));
     }
 
     push_optional_field(&mut fields, "Email", identity.email.as_deref(), colors);
@@ -279,7 +279,7 @@ fn identity_card<'a>(
     .collect::<Vec<_>>()
     .join(", ");
     if !address_lines.is_empty() {
-        fields.push(field_readonly_owned("Address", address_lines, colors));
+        fields.push(field_readonly("Address", address_lines, colors));
     }
 
     let locality = [
@@ -293,7 +293,7 @@ fn identity_card<'a>(
     .collect::<Vec<_>>()
     .join(", ");
     if !locality.is_empty() {
-        fields.push(field_readonly_owned("City / region", locality, colors));
+        fields.push(field_readonly("City / region", locality, colors));
     }
 
     if fields.is_empty() {
@@ -377,22 +377,7 @@ fn bottom_bar<'a>(colors: &AppColors) -> Element<'a, DetailPaneMessage, AppTheme
 
 fn field_readonly<'a>(
     label: &'a str,
-    value: &'a str,
-    colors: &AppColors,
-) -> Element<'a, DetailPaneMessage, AppTheme> {
-    column![
-        text(label).size(12).color(colors.text_muted),
-        text(value).size(14).color(colors.text_primary),
-    ]
-    .spacing(2)
-    .into()
-}
-
-/// Like `field_readonly` but takes an owned `String`, for synthesized values
-/// (joined names, formatted dates, etc.) that don't have a borrowable backing.
-fn field_readonly_owned<'a>(
-    label: &'a str,
-    value: String,
+    value: impl iced::widget::text::IntoFragment<'a>,
     colors: &AppColors,
 ) -> Element<'a, DetailPaneMessage, AppTheme> {
     column![

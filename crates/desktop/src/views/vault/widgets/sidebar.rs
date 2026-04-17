@@ -149,7 +149,6 @@ fn expanded_panel<'a>(
         icons::BWI_VAULT,
         state.vault_tree_open,
         SidebarMessage::ToggleVaultTree,
-        active_section == NavSection::Vault,
         colors,
     ));
 
@@ -225,7 +224,6 @@ fn expanded_panel<'a>(
         icons::BWI_SEND,
         state.send_tree_open,
         SidebarMessage::ToggleSendTree,
-        active_section == NavSection::Send,
         colors,
     ));
 
@@ -284,7 +282,6 @@ fn section_header<'a>(
     icon: icons::BwiIcon,
     is_open: bool,
     toggle_msg: SidebarMessage,
-    _is_active_section: bool,
     colors: &AppColors,
 ) -> Element<'a, SidebarMessage, AppTheme> {
     let chevron = if is_open {
