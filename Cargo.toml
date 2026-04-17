@@ -12,11 +12,13 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 
-bitwarden-core = { git = "https://github.com/bitwarden/sdk-internal", rev = "6c25425d1c1e81bb9a9fea6b50a5cb7827d57476" }
-bitwarden-crypto = { git = "https://github.com/bitwarden/sdk-internal", rev = "6c25425d1c1e81bb9a9fea6b50a5cb7827d57476" }
-bitwarden-pm = { git = "https://github.com/bitwarden/sdk-internal", rev = "6c25425d1c1e81bb9a9fea6b50a5cb7827d57476" }
-bitwarden-state = { git = "https://github.com/bitwarden/sdk-internal", rev = "6c25425d1c1e81bb9a9fea6b50a5cb7827d57476" }
-bitwarden-vault = { git = "https://github.com/bitwarden/sdk-internal", rev = "6c25425d1c1e81bb9a9fea6b50a5cb7827d57476" }
+bitwarden-core = { git = "https://github.com/bitwarden/sdk-internal", rev = "e352a06cdfc9e179b21d4b7b502b545fcc68b341" }
+bitwarden-crypto = { git = "https://github.com/bitwarden/sdk-internal", rev = "e352a06cdfc9e179b21d4b7b502b545fcc68b341" }
+bitwarden-pm = { git = "https://github.com/bitwarden/sdk-internal", rev = "e352a06cdfc9e179b21d4b7b502b545fcc68b341" }
+bitwarden-state = { git = "https://github.com/bitwarden/sdk-internal", rev = "e352a06cdfc9e179b21d4b7b502b545fcc68b341" }
+bitwarden-vault = { git = "https://github.com/bitwarden/sdk-internal", rev = "e352a06cdfc9e179b21d4b7b502b545fcc68b341" }
+
+iced = { git = "https://github.com/iced-rs/iced", rev = "ac1b2c7123ad82643482c0b3a4a776246c966697", default-features = false }
 
 # Compile all dependencies with some optimizations when building this crate on debug
 # This slows down clean builds by about 50%, but the resulting binaries can be orders of magnitude faster

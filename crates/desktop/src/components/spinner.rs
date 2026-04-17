@@ -10,7 +10,7 @@
 use std::time::{Duration, Instant};
 
 use iced::{
-    Background, Border, Color, Element, Event, Length, Rectangle, Renderer, Shadow, Size, window,
+    Background, Border, Color, Element, Event, Length, Rectangle, Renderer, Shadow, Size,
     advanced::{
         Layout, Shell, Widget,
         layout::{Limits, Node},
@@ -18,6 +18,7 @@ use iced::{
         renderer::{self, Quad},
         widget::{self, Tree},
     },
+    window,
 };
 
 use crate::theme::AppTheme;

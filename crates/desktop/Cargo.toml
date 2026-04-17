@@ -15,7 +15,7 @@ test = ["iced/tester"]
 
 [dependencies]
 async-trait = { workspace = true }
-iced = { git = "https://github.com/iced-rs/iced", rev = "6d5eb869c209e559900a1576277b0901d876b73b", default-features = false, features = [
+iced = { workspace = true, features = [
     "tokio",
     "tiny-skia",
     "advanced",   # custom widgets (DropDown, toast)

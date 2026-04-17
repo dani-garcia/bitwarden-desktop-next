@@ -507,8 +507,7 @@ impl LoginView {
                 selected_server,
             } => {
                 let center = login_email::view(email_input, *remember_email, colors);
-                let status =
-                    server_selector::view(selected_server, *server_selector_open, colors);
+                let status = server_selector::view(selected_server, *server_selector_open, colors);
                 (center, status)
             }
             AuthPage::LoginPassword {
@@ -517,10 +516,8 @@ impl LoginView {
                 show_password,
                 selected_server,
             } => {
-                let center =
-                    login_password::view(email, password_input, *show_password, colors);
-                let status =
-                    server_selector::simple_status(selected_server.display_name(), colors);
+                let center = login_password::view(email, password_input, *show_password, colors);
+                let status = server_selector::simple_status(selected_server.display_name(), colors);
                 (center, status)
             }
         };

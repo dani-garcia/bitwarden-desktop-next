@@ -217,7 +217,7 @@ async fn build_user(spec: &UserSpec) -> Result<MockUser, Box<dyn Error>> {
     }
     let mut ciphers = Vec::with_capacity(total);
     for (i, view) in cipher_views.into_iter().enumerate() {
-        let ctx = client.vault().ciphers().encrypt(view)?;
+        let ctx = client.vault().ciphers().encrypt(view).await?;
         ciphers.push(ctx.cipher);
         if total > 1_000 && (i + 1) % 5_000 == 0 {
             println!("    {} / {}", i + 1, total);

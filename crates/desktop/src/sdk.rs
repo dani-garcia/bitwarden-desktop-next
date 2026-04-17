@@ -22,7 +22,7 @@ use std::{
 use bitwarden_core::{
     ClientSettings, UserId,
     key_management::{
-        LocalUserDataKeyState, MasterPasswordUnlockData, SymmetricKeyId, UserKeyState,
+        LocalUserDataKeyState, MasterPasswordUnlockData, SymmetricKeySlotId, UserKeyState,
         account_cryptographic_state::WrappedAccountCryptographicState,
         crypto::{InitUserCryptoMethod, InitUserCryptoRequest},
     },
@@ -124,7 +124,7 @@ impl ClientExt for PasswordManagerClient {
             .internal
             .get_key_store()
             .context()
-            .has_symmetric_key(SymmetricKeyId::User)
+            .has_symmetric_key(SymmetricKeySlotId::User)
     }
 
     fn lock(&self) {
@@ -184,9 +184,7 @@ impl ClientManager {
     }
 
     pub fn is_unlocked(&self, uid: &str) -> bool {
-        self.users
-            .get(uid)
-            .is_some_and(|e| e.client.is_unlocked())
+        self.users.get(uid).is_some_and(|e| e.client.is_unlocked())
     }
 
     pub fn has_users(&self) -> bool {
@@ -262,6 +260,7 @@ impl ClientManager {
             .vault()
             .ciphers()
             .decrypt_list(ciphers)
+            .await
             .map_err(|e| e.to_string())
     }
 
@@ -294,6 +293,7 @@ impl ClientManager {
             .vault()
             .ciphers()
             .decrypt(cipher)
+            .await
             .map_err(|e| e.to_string())
     }
 }
@@ -428,9 +428,12 @@ mod tests {
     #[tokio::test]
     async fn unlock_user_1_with_correct_password() {
         let mgr = ClientManager::load();
-        mgr.unlock("11111111-1111-4111-a111-111111111111", "password".to_string())
-            .await
-            .expect("personal account should unlock with the dev password");
+        mgr.unlock(
+            "11111111-1111-4111-a111-111111111111",
+            "password".to_string(),
+        )
+        .await
+        .expect("personal account should unlock with the dev password");
     }
 
     #[tokio::test]
@@ -444,14 +447,24 @@ mod tests {
     #[tokio::test]
     async fn unlock_with_wrong_password_fails() {
         let mgr = ClientManager::load();
-        let result = mgr.unlock("11111111-1111-4111-a111-111111111111", "hunter2".to_string()).await;
+        let result = mgr
+            .unlock(
+                "11111111-1111-4111-a111-111111111111",
+                "hunter2".to_string(),
+            )
+            .await;
         assert!(result.is_err(), "wrong password should fail unlock");
     }
 
     #[tokio::test]
     async fn list_ciphers_after_unlock_returns_decrypted_items() {
         let mgr = ClientManager::load();
-        mgr.unlock("11111111-1111-4111-a111-111111111111", "password".to_string()).await.unwrap();
+        mgr.unlock(
+            "11111111-1111-4111-a111-111111111111",
+            "password".to_string(),
+        )
+        .await
+        .unwrap();
         let items = mgr
             .list_ciphers("11111111-1111-4111-a111-111111111111")
             .await
@@ -467,8 +480,16 @@ mod tests {
     #[tokio::test]
     async fn full_cipher_after_unlock_returns_login_view() {
         let mgr = ClientManager::load();
-        mgr.unlock("11111111-1111-4111-a111-111111111111", "password".to_string()).await.unwrap();
-        let list = mgr.list_ciphers("11111111-1111-4111-a111-111111111111").await.unwrap();
+        mgr.unlock(
+            "11111111-1111-4111-a111-111111111111",
+            "password".to_string(),
+        )
+        .await
+        .unwrap();
+        let list = mgr
+            .list_ciphers("11111111-1111-4111-a111-111111111111")
+            .await
+            .unwrap();
         let gmail_id = list
             .iter()
             .find(|i| i.name == "Gmail")

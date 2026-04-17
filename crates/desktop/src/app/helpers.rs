@@ -67,16 +67,16 @@ impl App {
             .collect();
 
         // Compute unlock alternatives for the current auth page
-        self.cache.unlock_alternatives = if let AuthPage::Unlock { method, .. } = self.login_view.auth_page
-        {
-            self.active_user
-                .as_ref()
-                .and_then(|uid| self.client_manager.unlock_methods(uid))
-                .map(|m| m.alternatives(method))
-                .unwrap_or_default()
-        } else {
-            Vec::new()
-        };
+        self.cache.unlock_alternatives =
+            if let AuthPage::Unlock { method, .. } = self.login_view.auth_page {
+                self.active_user
+                    .as_ref()
+                    .and_then(|uid| self.client_manager.unlock_methods(uid))
+                    .map(|m| m.alternatives(method))
+                    .unwrap_or_default()
+            } else {
+                Vec::new()
+            };
 
         if let Some(ref handle) = self.native_menu {
             crate::menu::sync_native_enabled(handle, &self.menu_state());

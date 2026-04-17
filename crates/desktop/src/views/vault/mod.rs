@@ -224,10 +224,10 @@ impl VaultView {
                         return (Task::none(), None);
                     };
                     let uid_for_msg = uid.clone();
-                    let task = Task::perform(
-                        async move { mgr.full_cipher(&uid, id).await },
-                        move |res| VaultMessage::DetailLoaded(uid_for_msg, id, res.map(Box::new)),
-                    );
+                    let task =
+                        Task::perform(async move { mgr.full_cipher(&uid, id).await }, move |res| {
+                            VaultMessage::DetailLoaded(uid_for_msg, id, res.map(Box::new))
+                        });
                     (task, None)
                 }
                 ItemListMessage::OpenExternal(_)
@@ -578,8 +578,9 @@ impl VaultView {
             })
             .width(Fill);
 
-        let item_list = item_list::view(cached_items, self.selection.item, self.list_scroll, colors)
-            .map(VaultMessage::ItemList);
+        let item_list =
+            item_list::view(cached_items, self.selection.item, self.list_scroll, colors)
+                .map(VaultMessage::ItemList);
 
         column![content_header, search_row, item_list]
             .width(Fill)
