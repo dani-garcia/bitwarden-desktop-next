@@ -1,26 +1,30 @@
-//! One-shot generator that creates real Bitwarden SDK encrypted data and dumps it to
-//! `assets/mock-vault.json`. The desktop app embeds the resulting JSON via `include_bytes!`
-//! and exercises the SDK's encrypt → store → unlock → decrypt round-trip end-to-end.
+//! One-shot generator that creates real Bitwarden SDK encrypted data and persists it to
+//! one SQLite database per user under `<workspace-root>/data/`, alongside a `mock.json`
+//! file holding per-user metadata (email, KDF, encrypted user key, unlock methods).
 //!
-//! Run with `cargo run --bin fake-data`.
+//! Run with `cargo run -p fake-data` from the workspace root.
 
 use std::{
     collections::HashMap,
     error::Error,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
 
 use bitwarden_core::{
-    ClientSettings, UserId,
+    ClientBuilder, ClientSettings, UserId,
     key_management::{
-        LocalUserDataKeyState, MasterPasswordUnlockData, UserKeyState,
+        LocalUserDataKeyState, MasterPasswordUnlockData,
         account_cryptographic_state::WrappedAccountCryptographicState,
         crypto::{InitUserCryptoMethod, InitUserCryptoRequest},
     },
 };
 use bitwarden_pm::PasswordManagerClient;
-use bitwarden_state::repository::{Repository, RepositoryError, RepositoryItem};
+use bitwarden_state::{
+    DatabaseConfiguration,
+    registry::StateRegistry,
+    repository::{Repository, RepositoryError, RepositoryItem},
+};
 use bitwarden_vault::{
     CardView, Cipher, CipherRepromptType, CipherType, CipherView, Folder, FolderView, IdentityView,
     LoginUriView, LoginView, SshKeyView, UriMatchType,
@@ -28,18 +32,20 @@ use bitwarden_vault::{
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
-// ── Mock vault file schema ─────────────────────────────────────────────────
+// ── Mock data file schema ──────────────────────────────────────────────────
 //
-// Mirrored in `crates/desktop/src/sdk.rs`. Keep field names + types in sync.
+// `mock.json` holds per-user metadata (everything except the encrypted ciphers
+// and folders, which now live in per-user SQLite DBs). Mirrored in
+// `crates/desktop/src/sdk.rs`. Keep field names + types in sync.
 
 #[derive(Serialize, Deserialize, Debug)]
-struct MockVaultFile {
-    users: Vec<MockUser>,
+struct MockVaultMeta {
+    users: Vec<MockUserMeta>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct MockUser {
-    user_id: String,
+struct MockUserMeta {
+    user_id: UserId,
     email: String,
     display_name: String,
     server_url: String,
@@ -49,8 +55,6 @@ struct MockUser {
     kdf: bitwarden_crypto::Kdf,
     encrypted_user_key: bitwarden_crypto::EncString,
     private_key: bitwarden_crypto::EncString,
-    ciphers: Vec<Cipher>,
-    folders: Vec<Folder>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -60,10 +64,9 @@ struct UnlockMethodsCfg {
     biometrics: bool,
 }
 
-// ── Hardcoded user specs ───────────────────────────────────────────────────
+// ── User specs ─────────────────────────────────────────────────────────────
 
 struct UserSpec {
-    user_id: &'static str,
     email: &'static str,
     display_name: &'static str,
     server_url: &'static str,
@@ -73,15 +76,10 @@ struct UserSpec {
     folders: fn() -> Vec<FolderView>,
 }
 
-// Stable per-user UUIDs. The SDK's `PasswordManagerClient` expects a single
-// `UserId` per client — one client, one user, for the client's entire lifetime
-// — so the ID must survive both regenerations of the mock vault and repeated
-// unlock calls on the desktop side. We hardcode explicit v4 UUIDs here so
-// regenerating `mock-vault.json` produces identical IDs and the desktop app's
-// per-user state (HashMap keyed by user_id) stays consistent across builds.
+// User IDs are generated as fresh UUIDv4s per `build_user` call, matching how
+// production IDs come from the server rather than being baked into the binary.
 const USER_SPECS: &[UserSpec] = &[
     UserSpec {
-        user_id: "11111111-1111-4111-a111-111111111111",
         email: "alice@example.com",
         display_name: "Alice Johnson",
         server_url: "bitwarden.com",
@@ -95,7 +93,6 @@ const USER_SPECS: &[UserSpec] = &[
         folders: personal_folders,
     },
     UserSpec {
-        user_id: "22222222-2222-4222-a222-222222222222",
         email: "alice@acmecorp.com",
         display_name: "Alice (Work)",
         server_url: "vault.acmecorp.com",
@@ -113,7 +110,6 @@ const USER_SPECS: &[UserSpec] = &[
     // decrypt-list, and filter perf against a realistic-size vault. Unlock
     // password is "loadtest".
     UserSpec {
-        user_id: "33333333-3333-4333-a333-333333333333",
         email: "loadtest@example.com",
         display_name: "Load Test",
         server_url: "bitwarden.com",
@@ -130,58 +126,82 @@ const USER_SPECS: &[UserSpec] = &[
 
 // ── Main ───────────────────────────────────────────────────────────────────
 
+/// Workspace-root `data/` folder. Resolved from cwd — this tool is meant to be
+/// run from the workspace root (`cargo run -p fake-data`).
+fn data_dir() -> PathBuf {
+    std::env::current_dir()
+        .expect("cwd is readable")
+        .join("data")
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let mut users = Vec::with_capacity(USER_SPECS.len());
+    let data_dir = data_dir();
+    if data_dir.exists() {
+        std::fs::remove_dir_all(&data_dir)?;
+    }
+    std::fs::create_dir_all(&data_dir)?;
 
+    let mut users = Vec::with_capacity(USER_SPECS.len());
     for spec in USER_SPECS {
-        users.push(build_user(spec).await?);
+        users.push(build_user(spec, &data_dir).await?);
     }
 
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("..")
-        .join("assets")
-        .join("mock-vault.json");
-
-    // Compact output: with 20k+ encrypted ciphers, pretty-printing roughly
-    // doubles the file size for no practical debugging benefit (no one is
-    // reading a 20k-item diff anyway). The desktop crate includes this file
-    // via `include_bytes!`, so every byte lands in the final binary.
-    let file = std::fs::File::create(&path)?;
-    serde_json::to_writer(file, &MockVaultFile { users })?;
+    let meta_path = data_dir.join("mock.json");
+    let file = std::fs::File::create(&meta_path)?;
+    serde_json::to_writer_pretty(file, &MockVaultMeta { users })?;
 
     println!(
         "Wrote {} users to {}",
         USER_SPECS.len(),
-        path.canonicalize()?.display()
+        data_dir.canonicalize()?.display()
     );
     Ok(())
 }
 
-async fn build_user(spec: &UserSpec) -> Result<MockUser, Box<dyn Error>> {
-    let client = PasswordManagerClient::new(Some(ClientSettings {
-        identity_url: "http://localhost:8080/identity".to_string(),
-        api_url: "http://localhost:8080/api".to_string(),
-        ..Default::default()
-    }));
+async fn build_user(spec: &UserSpec, data_dir: &Path) -> Result<MockUserMeta, Box<dyn Error>> {
+    // TODO: migrate to `PasswordManagerClient::load_from_state` once the SDK
+    // exposes it. We hand-assemble the client because `PasswordManagerClient::new`
+    // defaults the registry to `StateRegistry::new_with_memory_db`, which pre-sets
+    // the database `OnceLock` and prevents our per-user `initialize_database` call.
+    // Mirror the parts of `PasswordManagerClientBuilder::build` we still need:
+    // the `PasswordManagerTokenHandler` and our settings.
+    let token_handler = Arc::new(bitwarden_auth::token_management::PasswordManagerTokenHandler::default());
+    let inner = ClientBuilder::new()
+        .with_token_handler(token_handler)
+        .with_settings(ClientSettings {
+            identity_url: "http://localhost:8080/identity".to_string(),
+            api_url: "http://localhost:8080/api".to_string(),
+            ..Default::default()
+        })
+        .with_state(StateRegistry::new())
+        .build();
+    let client = PasswordManagerClient(inner);
 
-    // The crypto initializer touches `UserKeyState` and `LocalUserDataKeyState`,
-    // and encryption needs the cipher/folder repos for the vault client.
-    register_empty_repo::<UserKeyState>(&client);
+    // Fresh random UserId per run — matches how production IDs come from the server.
+    // One Client = one user, and this ID is what subsequent SDK calls bind to.
+    let sdk_user_id = UserId::new(uuid::Uuid::new_v4());
+
+    // `LocalUserDataKeyState` isn't in `get_sdk_managed_migrations()`, but
+    // `initialize_user_crypto` does write to it. Register an empty in-memory
+    // repo so the crypto init path doesn't fail. Everything else in the
+    // migration list (Cipher, Folder, UserKeyState, SettingItem, ...) gets a
+    // table created by `initialize_database` below.
     register_empty_repo::<LocalUserDataKeyState>(&client);
-    register_empty_repo::<Cipher>(&client);
-    register_empty_repo::<Folder>(&client);
+
+    client
+        .platform()
+        .state()
+        .initialize_database(
+            DatabaseConfiguration::Sqlite {
+                db_name: sdk_user_id.to_string(),
+                folder_path: data_dir.to_path_buf(),
+            },
+            bitwarden_pm::migrations::get_sdk_managed_migrations(),
+        )
+        .await?;
 
     let kdf = bitwarden_crypto::Kdf::default_pbkdf2();
-
-    // Stable per-user UUID: parsed from the spec so every regeneration of the
-    // mock vault produces the same SDK UserId. One Client = one user, and that
-    // UserId must match across `initialize_user_crypto` and every subsequent
-    // SDK call on this Client.
-    let sdk_user_id = UserId::new(
-        uuid::Uuid::parse_str(spec.user_id).expect("USER_SPECS user_id must be a valid UUID"),
-    );
 
     let reg = client.0.auth().make_register_keys(
         spec.email.to_string(),
@@ -230,8 +250,24 @@ async fn build_user(spec: &UserSpec) -> Result<MockUser, Box<dyn Error>> {
         folders.push(client.vault().folders().encrypt(view)?);
     }
 
-    Ok(MockUser {
-        user_id: spec.user_id.to_string(),
+    // Persist ciphers and folders to SQLite via the SDK-managed repo. Encrypt
+    // → set_bulk writes into the per-user `{sdk_user_id}.sqlite` file.
+    let cipher_repo = client.platform().state().get::<Cipher>()?;
+    let cipher_entries: Vec<(bitwarden_vault::CipherId, Cipher)> = ciphers
+        .into_iter()
+        .map(|c| (c.id.expect("generated ciphers always have an id"), c))
+        .collect();
+    cipher_repo.set_bulk(cipher_entries).await?;
+
+    let folder_repo = client.platform().state().get::<Folder>()?;
+    let folder_entries: Vec<(bitwarden_vault::FolderId, Folder)> = folders
+        .into_iter()
+        .map(|f| (f.id.expect("generated folders always have an id"), f))
+        .collect();
+    folder_repo.set_bulk(folder_entries).await?;
+
+    Ok(MockUserMeta {
+        user_id: sdk_user_id,
         email: spec.email.to_string(),
         display_name: spec.display_name.to_string(),
         server_url: spec.server_url.to_string(),
@@ -244,8 +280,6 @@ async fn build_user(spec: &UserSpec) -> Result<MockUser, Box<dyn Error>> {
         kdf,
         encrypted_user_key: reg.encrypted_user_key,
         private_key: reg.keys.private,
-        ciphers,
-        folders,
     })
 }
 

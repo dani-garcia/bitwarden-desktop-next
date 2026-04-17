@@ -117,15 +117,11 @@ impl App {
         let mut windows = HashMap::new();
         windows.insert(main_id, WindowInfo::new(WindowKind::Main));
 
-        // Parse the 24 MB mock-vault JSON on tokio's blocking pool so the
-        // window can render a spinner first. `Arc::new` happens on the
-        // async side so the `ClientManagerLoaded` handler only swaps Arcs.
+        // Discover users in `<workspace-root>/data/` and open one SQLite DB
+        // per user. Runs as a regular async task on iced's tokio multi-thread
+        // runtime; the `ClientManagerLoaded` handler swaps the Arc when done.
         let load_task = Task::perform(
-            async {
-                tokio::task::spawn_blocking(|| Arc::new(ClientManager::load()))
-                    .await
-                    .expect("ClientManager::load panicked")
-            },
+            async { Arc::new(ClientManager::load().await) },
             |mgr| Message::System(SystemMessage::ClientManagerLoaded(mgr)),
         );
 

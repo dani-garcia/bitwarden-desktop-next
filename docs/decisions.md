@@ -56,7 +56,7 @@
 
 **Spinner component** (`components/spinner.rs`): self-animating 8-dot ring widget. Intercepts `Event::Window(window::Event::RedrawRequested(now))` in `Widget::update` and calls `shell.request_redraw_at(now + 16ms)` to schedule the next frame. No app-level subscription, no dummy animation message. Same pattern as the toast overlay.
 
-**Per-user lazy cipher parsing (deferred)**: the bigger win — not parsing cipher HashMaps until a user actually unlocks — requires reshaping `mock-vault.json` into a 2-level structure or doing partial-JSON parsing. Out of scope for the lazy-load pass.
+**Per-user lazy cipher parsing (landed via SQLite)**: ciphers now live in per-user `<user_id>.sqlite` files under `data/` and are read through the SDK state registry only when `list_ciphers` / `full_cipher` runs. The original "parse all ciphers at startup" bottleneck is gone.
 
 ## Unlock in-flight indicator
 
@@ -184,13 +184,15 @@
 
 **Rationale**: String literals repeated across files are a silent-breakage failure mode — one gets updated, the others don't, the focus silently stops working. A single `pub const` forces all callers to import the same identifier.
 
-## SDK Integration: Generator Binary + Embedded JSON
+## SDK Integration: Generator Binary + Per-User SQLite
 
-**Decision**: Build a standalone `tools/fake-data` binary that drives the real Bitwarden SDK (`make_register_keys`, `initialize_user_crypto`, `vault().ciphers().encrypt`, `vault().folders().encrypt`) to produce `assets/mock-vault.json`, then embed that JSON in the desktop crate via `include_bytes!`. The desktop app parses it at startup into `ClientManager`, which owns one `PasswordManagerClient` per user.
+**Decision**: Build a standalone `tools/fake-data` binary that drives the real Bitwarden SDK (`make_register_keys`, `initialize_user_crypto`, `vault().ciphers().encrypt`, `vault().folders().encrypt`) to populate `<workspace-root>/data/` with one SQLite database per user (filename = user UUID) plus a `mock.json` file holding non-cipher user metadata (email, KDF, encrypted user key, unlock methods). The desktop app discovers users by listing `data/*.sqlite`, pairs each with its `mock.json` entry, and opens the DB via `client.platform().state().initialize_database(Sqlite { db_name, folder_path }, bitwarden_pm::migrations::get_sdk_managed_migrations())`. `ClientManager` then owns one `PasswordManagerClient` per user whose `Cipher`/`Folder` repositories read from SQLite.
 
-**Alternatives considered**: (1) Hand-roll fake `Cipher` structs and skip the SDK — rejected: the app would never exercise real crypto paths. (2) Generate a `.rs` file with `pub fn users() -> Vec<MockUser>` — rejected: `Cipher`/`EncString`/`CipherId`/`DateTime` aren't `const`-constructible. (3) Load the JSON at runtime from disk — `include_bytes!` is simpler.
+**Alternatives considered**: (1) Hand-roll fake `Cipher` structs and skip the SDK — rejected: the app would never exercise real crypto paths. (2) Keep the old single `mock-vault.json` + `MemoryRepo` design — rejected once the SDK grew SQLite support; per-user DBs match production and avoid the 24 MB parse at startup. (3) Embed the DB files in the binary — rejected: `include_bytes!`ing SQLite files bloats the binary and forbids writes.
 
-**Rationale**: Unlock is a real `crypto().initialize_user_crypto(...)` call against real encrypted data; `list_ciphers` is a real `decrypt_list` round-trip. Tests in `sdk.rs` cover the unlock → list → decrypt chain end-to-end with no mocking.
+**Rationale**: Unlock is a real `crypto().initialize_user_crypto(...)` call against real encrypted data; `list_ciphers` is a real `decrypt_list` round-trip. Data lives in real SDK-managed storage, not a hand-rolled `MemoryRepo`, so any future change to the SDK's persistence layer is automatically exercised in dev.
+
+**Caveats**: `LocalUserDataKeyState` isn't in `get_sdk_managed_migrations()` but `initialize_user_crypto` writes to it, so a narrow `MemoryRepo<LocalUserDataKeyState>` is registered client-managed per user. We also hand-assemble the `PasswordManagerClient` via `ClientBuilder` with `StateRegistry::new()` because `PasswordManagerClient::new` defaults to `new_with_memory_db`, which pre-sets the database `OnceLock` and blocks our `initialize_database` call. Both sites have a TODO to switch to `PasswordManagerClient::load_from_state` once the SDK exposes it.
 
 **Dev passwords** (documented in `sdk.rs`): `alice@example.com` / `password`, `alice@acmecorp.com` / `123456`, `loadtest@example.com` / `loadtest` (20 k ciphers).
 

@@ -11,6 +11,7 @@ serde_json = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 uuid = { workspace = true }
 
+bitwarden-auth = { workspace = true }
 bitwarden-core = { workspace = true }
 bitwarden-crypto = { workspace = true }
 bitwarden-pm = { workspace = true }

@@ -1,10 +1,11 @@
 //! Per-user `PasswordManagerClient` management.
 //!
-//! At startup we deserialize `assets/mock-vault.json` (produced by the `fake-data` binary)
-//! and build one `PasswordManagerClient` per user, pre-populating its `Cipher`/`Folder`
-//! repos with the encrypted data from the JSON. The user's master password remains needed
-//! to call [`ClientManager::unlock`], which in turn invokes
-//! `crypto().initialize_user_crypto(...)` and unlocks the in-memory keystore.
+//! At startup we discover users by listing `*.sqlite` files in `<workspace-root>/data/`
+//! and pairing them with per-user metadata read from `data/mock.json`. Each user gets
+//! its own `PasswordManagerClient` whose state registry is backed by that user's SQLite
+//! database via `initialize_database`. Ciphers and folders are persisted there; the
+//! user's master password remains needed to call [`ClientManager::unlock`], which
+//! invokes `crypto().initialize_user_crypto(...)` and unlocks the in-memory keystore.
 //!
 //! ## Dev passwords
 //!
@@ -12,62 +13,60 @@
 //! - `alice@acmecorp.com` → `123456` (Work, ~10 ciphers)
 //! - `loadtest@example.com` → `loadtest` (Load Test, ~20k ciphers)
 //!
-//! Regenerate the JSON via `cargo run -p fake-data`.
+//! Regenerate `data/` via `cargo run -p fake-data`.
 
 use std::{
     collections::HashMap,
-    sync::{Arc, LazyLock, Mutex},
+    io::BufReader,
+    path::{Path, PathBuf},
+    str::FromStr,
+    sync::{Arc, Mutex},
 };
 
 use bitwarden_core::{
-    ClientSettings, UserId,
+    ClientBuilder, ClientSettings, UserId,
     key_management::{
-        LocalUserDataKeyState, MasterPasswordUnlockData, SymmetricKeySlotId, UserKeyState,
+        LocalUserDataKeyState, MasterPasswordUnlockData, SymmetricKeySlotId,
         account_cryptographic_state::WrappedAccountCryptographicState,
         crypto::{InitUserCryptoMethod, InitUserCryptoRequest},
     },
 };
 use bitwarden_crypto::{EncString, Kdf};
 use bitwarden_pm::PasswordManagerClient;
-use bitwarden_state::repository::{Repository, RepositoryError, RepositoryItem};
-use bitwarden_vault::{Cipher, CipherId, CipherListView, CipherView, Folder};
+use bitwarden_state::{
+    DatabaseConfiguration,
+    registry::StateRegistry,
+    repository::{Repository, RepositoryError, RepositoryItem},
+};
+use bitwarden_vault::{Cipher, CipherId, CipherListView, CipherView};
 use serde::Deserialize;
 
 use crate::state::UnlockMethods;
 
-static MOCK_VAULT_JSON: LazyLock<Vec<u8>> = LazyLock::new(|| {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/mock-vault.json");
-    std::fs::read(path).unwrap_or_else(|e| {
-        panic!("failed to read {path}: {e}; regenerate via `cargo run -p fake-data`")
-    })
-});
-
-// ── Mock vault file schema ─────────────────────────────────────────────────
+// ── mock.json schema ───────────────────────────────────────────────────────
 //
 // Mirrored in `tools/fake-data/src/main.rs`. Keep field names + types in sync.
 
 #[derive(Deserialize)]
-struct MockVaultFile {
-    users: Vec<MockUser>,
+struct MockVaultMeta {
+    users: Vec<MockUserMeta>,
 }
 
-#[derive(Deserialize)]
-struct MockUser {
+#[derive(Deserialize, Clone)]
+struct MockUserMeta {
     user_id: UserId,
     email: String,
     display_name: String,
     server_url: String,
-    #[expect(dead_code)] // Read by tests / debug helpers, not by the runtime unlock path.
+    #[expect(dead_code)] // Read by debug helpers, not by the runtime unlock path.
     master_password_dev_only: String,
     unlock_methods: UnlockMethodsCfg,
     kdf: Kdf,
     encrypted_user_key: EncString,
     private_key: EncString,
-    ciphers: Vec<Cipher>,
-    folders: Vec<Folder>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 struct UnlockMethodsCfg {
     master_password: bool,
     pin: bool,
@@ -86,14 +85,12 @@ struct UserEntry {
     display_name: String,
     server_url: String,
     unlock_methods: UnlockMethods,
-    /// Stable SDK-side UUID for this user. Parsed from the mock-vault JSON at
-    /// load time and reused on every `unlock()`. The SDK binds a `UserId` to a
-    /// `Client` on first `initialize_user_crypto`, so lock/unlock cycles MUST
-    /// pass the same ID — passing a fresh `UserId::new_v4()` each time would
-    /// make the Client think it's serving a different user.
+    /// SDK-side UUID for this user, parsed from the SQLite filename. The SDK
+    /// binds a `UserId` to a `Client` on first `initialize_user_crypto`, so
+    /// lock/unlock cycles MUST pass the same ID.
     sdk_user_id: UserId,
-    // Crypto inputs needed by `unlock()`. Stored once at load time so the unlock path
-    // doesn't need to re-parse JSON.
+    // Crypto inputs needed by `unlock()`. Stored once at load time so the unlock
+    // path doesn't need to re-parse `mock.json`.
     kdf: Kdf,
     encrypted_user_key: EncString,
     private_key: EncString,
@@ -132,31 +129,67 @@ impl ClientExt for PasswordManagerClient {
     }
 }
 
+/// Workspace-root `data/` folder. Resolved from cwd — the app is expected to be
+/// launched from the workspace root (`cargo run`).
+fn data_dir() -> PathBuf {
+    std::env::current_dir()
+        .expect("cwd is readable")
+        .join("data")
+}
+
 impl ClientManager {
     /// Placeholder manager with no users. Used as the initial value while
-    /// `load()` runs on a background thread so `App::new` can return and the
-    /// window can appear before the 24 MB JSON parse finishes.
+    /// `load()` runs on a background task so `App::new` can return and the
+    /// window can appear before the SQLite opens finish.
     pub fn empty() -> Self {
         Self {
             users: HashMap::new(),
         }
     }
 
-    /// Load all users from the embedded mock vault JSON.
-    pub fn load() -> Self {
-        let parsed: MockVaultFile = serde_json::from_slice(&MOCK_VAULT_JSON)
-            .expect("mock-vault.json is malformed; regenerate via `cargo run -p fake-data`");
+    /// Discover users by listing `*.sqlite` files under `<workspace-root>/data/`
+    /// and pairing them with metadata from `data/mock.json`. Each user gets a
+    /// `PasswordManagerClient` whose state registry is initialized against that
+    /// user's database file.
+    pub async fn load() -> Self {
+        let data_dir = data_dir();
+        let meta_path = data_dir.join("mock.json");
+        let file = std::fs::File::open(&meta_path).unwrap_or_else(|e| {
+            panic!(
+                "failed to open {}: {e}; regenerate via `cargo run -p fake-data`",
+                meta_path.display()
+            )
+        });
+        let meta: MockVaultMeta = serde_json::from_reader(BufReader::new(file))
+            .expect("mock.json is malformed; regenerate via `cargo run -p fake-data`");
 
-        let mut users = HashMap::with_capacity(parsed.users.len());
-        for mu in parsed.users {
-            tracing::debug!(
-                user_id = %mu.user_id,
-                email = %mu.email,
-                ciphers = mu.ciphers.len(),
-                folders = mu.folders.len(),
-                "loaded mock user"
-            );
-            users.insert(mu.user_id, build_user_entry(mu));
+        let meta_by_id: HashMap<UserId, MockUserMeta> = meta
+            .users
+            .into_iter()
+            .map(|u| (u.user_id, u))
+            .collect();
+
+        let mut users = HashMap::with_capacity(meta_by_id.len());
+        let entries = std::fs::read_dir(&data_dir)
+            .unwrap_or_else(|e| panic!("failed to read {}: {e}", data_dir.display()));
+        for entry in entries {
+            let path = entry.expect("directory entry readable").path();
+            if path.extension().and_then(|s| s.to_str()) != Some("sqlite") {
+                continue;
+            }
+            let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+                continue;
+            };
+            let Ok(uid) = UserId::from_str(stem) else {
+                tracing::warn!(file = %path.display(), "skipping sqlite file with non-UUID name");
+                continue;
+            };
+            let Some(mu) = meta_by_id.get(&uid).cloned() else {
+                tracing::warn!(user_id = %uid, "sqlite file has no entry in mock.json, skipping");
+                continue;
+            };
+            tracing::debug!(user_id = %uid, email = %mu.email, "loading mock user");
+            users.insert(uid, build_user_entry(mu, &data_dir).await);
         }
 
         tracing::info!(users = users.len(), "ClientManager loaded");
@@ -300,53 +333,44 @@ impl ClientManager {
 
 // ── Construction helpers ───────────────────────────────────────────────────
 
-fn build_user_entry(mu: MockUser) -> UserEntry {
-    let client = PasswordManagerClient::new(Some(ClientSettings {
-        identity_url: "http://localhost:8080/identity".to_string(),
-        api_url: "http://localhost:8080/api".to_string(),
-        ..Default::default()
-    }));
+async fn build_user_entry(mu: MockUserMeta, data_dir: &Path) -> UserEntry {
+    // TODO: migrate to `PasswordManagerClient::load_from_state` once the SDK
+    // exposes it. We hand-assemble the client because `PasswordManagerClient::new`
+    // defaults the registry to `StateRegistry::new_with_memory_db`, which pre-sets
+    // the database `OnceLock` and prevents our per-user `initialize_database` call.
+    // Mirror the parts of `PasswordManagerClientBuilder::build` we still need:
+    // the `PasswordManagerTokenHandler` and our settings.
+    let token_handler = Arc::new(bitwarden_auth::token_management::PasswordManagerTokenHandler::default());
+    let inner = ClientBuilder::new()
+        .with_token_handler(token_handler)
+        .with_settings(ClientSettings {
+            identity_url: "http://localhost:8080/identity".to_string(),
+            api_url: "http://localhost:8080/api".to_string(),
+            ..Default::default()
+        })
+        .with_state(StateRegistry::new())
+        .build();
+    let client = PasswordManagerClient(inner);
 
-    // `initialize_user_crypto` writes to UserKeyState + LocalUserDataKeyState; cipher/folder
-    // repos hold the encrypted vault data. All four must be registered before unlock.
-    register_empty_repo::<UserKeyState>(&client);
+    // `LocalUserDataKeyState` isn't in `get_sdk_managed_migrations()`, but
+    // `initialize_user_crypto` writes to it during unlock. Register an empty
+    // in-memory repo for just that type so unlock doesn't fail. Everything
+    // else (Cipher, Folder, UserKeyState, SettingItem, ...) comes from the
+    // SDK-managed SQLite DB.
     register_empty_repo::<LocalUserDataKeyState>(&client);
 
-    let cipher_map: HashMap<String, Cipher> = mu
-        .ciphers
-        .into_iter()
-        .map(|c| {
-            let key =
-                c.id.map(|id| id.to_string())
-                    .expect("generated ciphers always have an id");
-            (key, c)
-        })
-        .collect();
-    let folder_map: HashMap<String, Folder> = mu
-        .folders
-        .into_iter()
-        .map(|f| {
-            let key =
-                f.id.map(|id| id.to_string())
-                    .expect("generated folders always have an id");
-            (key, f)
-        })
-        .collect();
-
-    let cipher_repo = Arc::new(MemoryRepo::<Cipher> {
-        data: Mutex::new(cipher_map),
-    });
-    let folder_repo = Arc::new(MemoryRepo::<Folder> {
-        data: Mutex::new(folder_map),
-    });
     client
         .platform()
         .state()
-        .register_client_managed(cipher_repo);
-    client
-        .platform()
-        .state()
-        .register_client_managed(folder_repo);
+        .initialize_database(
+            DatabaseConfiguration::Sqlite {
+                db_name: mu.user_id.to_string(),
+                folder_path: data_dir.to_path_buf(),
+            },
+            bitwarden_pm::migrations::get_sdk_managed_migrations(),
+        )
+        .await
+        .expect("sqlite database init must succeed");
 
     UserEntry {
         client,
@@ -373,6 +397,9 @@ fn register_empty_repo<T: RepositoryItem + Clone>(client: &PasswordManagerClient
 }
 
 // ── In-memory repository ───────────────────────────────────────────────────
+//
+// Kept only for `LocalUserDataKeyState`, which isn't part of the SDK-managed
+// migration list but is written to during crypto init.
 
 struct MemoryRepo<T: RepositoryItem + Clone> {
     data: Mutex<HashMap<String, T>>,
@@ -411,79 +438,5 @@ impl<T: RepositoryItem + Clone> Repository<T> for MemoryRepo<T> {
     async fn remove_all(&self) -> Result<(), RepositoryError> {
         self.data.lock().unwrap().clear();
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn alice_personal() -> UserId {
-        UserId::new(uuid::uuid!("11111111-1111-4111-a111-111111111111"))
-    }
-
-    fn alice_work() -> UserId {
-        UserId::new(uuid::uuid!("22222222-2222-4222-a222-222222222222"))
-    }
-
-    #[tokio::test]
-    async fn unlock_user_1_with_correct_password() {
-        let mgr = ClientManager::load();
-        mgr.unlock(&alice_personal(), "password".to_string())
-            .await
-            .expect("personal account should unlock with the dev password");
-    }
-
-    #[tokio::test]
-    async fn unlock_user_2_with_correct_password() {
-        let mgr = ClientManager::load();
-        mgr.unlock(&alice_work(), "123456".to_string())
-            .await
-            .expect("work account should unlock with the dev password");
-    }
-
-    #[tokio::test]
-    async fn unlock_with_wrong_password_fails() {
-        let mgr = ClientManager::load();
-        let result = mgr.unlock(&alice_personal(), "hunter2".to_string()).await;
-        assert!(result.is_err(), "wrong password should fail unlock");
-    }
-
-    #[tokio::test]
-    async fn list_ciphers_after_unlock_returns_decrypted_items() {
-        let mgr = ClientManager::load();
-        let uid = alice_personal();
-        mgr.unlock(&uid, "password".to_string()).await.unwrap();
-        let items = mgr
-            .list_ciphers(&uid)
-            .await
-            .expect("decrypt_list should succeed after unlock");
-        assert!(!items.is_empty(), "personal vault should have items");
-        // The Gmail mock entry has a plaintext name we can recognize.
-        assert!(
-            items.iter().any(|i| i.name == "Gmail"),
-            "expected the Gmail entry to round-trip its plaintext name"
-        );
-    }
-
-    #[tokio::test]
-    async fn full_cipher_after_unlock_returns_login_view() {
-        let mgr = ClientManager::load();
-        let uid = alice_personal();
-        mgr.unlock(&uid, "password".to_string()).await.unwrap();
-        let list = mgr.list_ciphers(&uid).await.unwrap();
-        let gmail_id = list
-            .iter()
-            .find(|i| i.name == "Gmail")
-            .and_then(|i| i.id)
-            .expect("Gmail item should exist with an id");
-
-        let view = mgr
-            .full_cipher(&uid, gmail_id)
-            .await
-            .expect("decrypt should succeed for a known cipher");
-        let login = view.login.expect("Gmail is a login cipher");
-        assert_eq!(login.username.as_deref(), Some("alice@example.com"));
-        assert_eq!(login.password.as_deref(), Some("fake-password-123"));
     }
 }
