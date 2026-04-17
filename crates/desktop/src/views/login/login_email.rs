@@ -63,6 +63,7 @@ fn card_content<'a>(
         Some(LoginMessage::ContinueWithEmail),
         false,
         None,
+        false,
         colors,
     );
 

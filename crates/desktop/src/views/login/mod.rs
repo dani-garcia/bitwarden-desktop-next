@@ -165,6 +165,9 @@ pub enum LoginEvent {
 pub struct LoginView {
     pub auth_page: AuthPage,
     pub account_switcher_open: bool,
+    /// True between `LoginMessage::Unlock` firing and `UnlockCompleted` arriving.
+    /// Drives the in-progress spinner on the unlock screen and gates re-entry.
+    pub unlock_in_progress: bool,
 }
 
 impl LoginView {
@@ -172,6 +175,7 @@ impl LoginView {
         Self {
             auth_page: AuthPage::new_unlock(UnlockMethod::MasterPassword),
             account_switcher_open: false,
+            unlock_in_progress: false,
         }
     }
 
@@ -203,6 +207,11 @@ impl LoginView {
                 (Task::none(), None)
             }
             LoginMessage::Unlock => {
+                // Re-entry guard: ignore Enter-spam while a task is already
+                // in flight (the text_input's on_submit fires per keystroke).
+                if self.unlock_in_progress {
+                    return (Task::none(), None);
+                }
                 let password = if let AuthPage::Unlock {
                     password_input,
                     show_password,
@@ -217,6 +226,7 @@ impl LoginView {
                 let Some(uid) = active_user.cloned() else {
                     return (Task::none(), None);
                 };
+                self.unlock_in_progress = true;
                 let mgr = client_manager.clone();
                 let uid_for_task = uid.clone();
                 let task = Task::perform(
@@ -226,6 +236,7 @@ impl LoginView {
                 (task, None)
             }
             LoginMessage::UnlockCompleted(msg_uid, result) => {
+                self.unlock_in_progress = false;
                 // Stale-check: the user may have switched accounts while the
                 // unlock was in flight. Drop stale results so they don't
                 // clobber a new active session.
@@ -287,6 +298,7 @@ impl LoginView {
             // ── Switch unlock method ───────────────────────────────────────
             LoginMessage::SwitchUnlockMethod(method) => {
                 self.auth_page = AuthPage::new_unlock(method);
+                self.unlock_in_progress = false;
                 (Task::none(), None)
             }
 
@@ -459,6 +471,7 @@ impl LoginView {
     /// vault screen (via `VaultEvent::AddAccountRequested` → handler).
     pub fn reset_to_email_entry(&mut self) {
         self.auth_page = AuthPage::new_login_email();
+        self.unlock_in_progress = false;
     }
 
     /// Show the unlock page for the given user, picking their preferred
@@ -471,6 +484,7 @@ impl LoginView {
             .map(|m| m.preferred())
             .unwrap_or(UnlockMethod::MasterPassword);
         self.auth_page = AuthPage::new_unlock(preferred);
+        self.unlock_in_progress = false;
     }
 
     pub fn view<'a>(
@@ -495,6 +509,7 @@ impl LoginView {
                     password_input,
                     pin_input,
                     *show_password,
+                    self.unlock_in_progress,
                     colors,
                 );
                 let status = server_selector::simple_status(server, colors);

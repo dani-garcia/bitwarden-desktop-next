@@ -4,7 +4,7 @@ use iced::{
 };
 
 use crate::{
-    components::buttons,
+    components::{buttons, spinner},
     state::UnlockMethod,
     theme::{AppColors, AppTheme},
 };
@@ -13,6 +13,12 @@ use super::{LoginMessage, input_field, layout};
 
 /// Renders the full center content for the unlock screen:
 /// lock icon, title, email, and the card with method-specific controls.
+///
+/// When `in_progress` is true (the unlock task is in flight), the input is
+/// read-only, the primary button is replaced by a spinner, and the alternate
+/// unlock methods + Log out button are hidden — same visual weight as the
+/// button so the card height doesn't jump.
+#[expect(clippy::too_many_arguments)] // Unlock screen composes many primitives; struct would be ceremony.
 pub fn view<'a>(
     method: UnlockMethod,
     alternatives: &[UnlockMethod],
@@ -20,6 +26,7 @@ pub fn view<'a>(
     password: &'a str,
     pin: &'a str,
     show_password: bool,
+    in_progress: bool,
     colors: &'a AppColors,
 ) -> Element<'a, LoginMessage, AppTheme> {
     let lock_icon = svg(svg::Handle::from_memory(crate::assets::LOCK_ICON))
@@ -38,6 +45,7 @@ pub fn view<'a>(
         password,
         pin,
         show_password,
+        in_progress,
         colors,
     ));
 
@@ -53,22 +61,19 @@ fn card_content<'a>(
     password: &'a str,
     pin: &'a str,
     show_password: bool,
+    in_progress: bool,
     colors: &'a AppColors,
 ) -> Element<'a, LoginMessage, AppTheme> {
     let mut items: Vec<Element<'_, LoginMessage, AppTheme>> = Vec::new();
 
     match method {
         UnlockMethod::Biometrics => {
-            items.push(
-                buttons::primary(
-                    container(text("Unlock with biometrics").size(16))
-                        .center_x(Fill)
-                        .padding([4, 8]),
-                )
-                .on_press(LoginMessage::UnlockWithBiometrics)
-                .width(Fill)
-                .into(),
-            );
+            items.push(primary_action(
+                "Unlock with biometrics",
+                LoginMessage::UnlockWithBiometrics,
+                in_progress,
+                colors,
+            ));
         }
         UnlockMethod::Pin => {
             items.push(input_field::floating_label_input(
@@ -78,18 +83,15 @@ fn card_content<'a>(
                 Some(LoginMessage::UnlockWithPin),
                 true,
                 None,
+                in_progress,
                 colors,
             ));
-            items.push(
-                buttons::primary(
-                    container(text("Unlock with PIN").size(16))
-                        .center_x(Fill)
-                        .padding([4, 8]),
-                )
-                .on_press(LoginMessage::UnlockWithPin)
-                .width(Fill)
-                .into(),
-            );
+            items.push(primary_action(
+                "Unlock with PIN",
+                LoginMessage::UnlockWithPin,
+                in_progress,
+                colors,
+            ));
         }
         UnlockMethod::MasterPassword => {
             items.push(input_field::floating_label_input(
@@ -99,78 +101,97 @@ fn card_content<'a>(
                 Some(LoginMessage::Unlock),
                 !show_password,
                 Some((show_password, LoginMessage::TogglePasswordVisibility)),
+                in_progress,
                 colors,
             ));
-            items.push(
-                buttons::primary(
-                    container(text("Unlock").size(16))
-                        .center_x(Fill)
-                        .padding([4, 8]),
-                )
-                .on_press(LoginMessage::Unlock)
-                .width(Fill)
-                .into(),
-            );
+            items.push(primary_action(
+                "Unlock",
+                LoginMessage::Unlock,
+                in_progress,
+                colors,
+            ));
         }
     }
 
-    // "or" separator + fallback buttons
-    if !alternatives.is_empty() {
-        items.push(
-            text("or")
-                .size(14)
-                .color(colors.text_primary)
-                .center()
-                .into(),
-        );
-
-        for alt in alternatives {
-            let (label, msg) = match alt {
-                UnlockMethod::Biometrics => (
-                    "Unlock with biometrics",
-                    LoginMessage::SwitchUnlockMethod(UnlockMethod::Biometrics),
-                ),
-                UnlockMethod::Pin => (
-                    "Unlock with PIN",
-                    LoginMessage::SwitchUnlockMethod(UnlockMethod::Pin),
-                ),
-                UnlockMethod::MasterPassword => (
-                    "Unlock with master password",
-                    LoginMessage::SwitchUnlockMethod(UnlockMethod::MasterPassword),
-                ),
-            };
-            items.push(
-                buttons::secondary(
-                    container(text(label).size(16))
-                        .center_x(Fill)
-                        .padding([4, 8]),
-                )
-                .on_press(msg)
-                .width(Fill)
-                .into(),
-            );
-        }
-    } else {
-        items.push(
-            text("or")
-                .size(14)
-                .color(colors.text_primary)
-                .center()
-                .into(),
-        );
-    }
-
-    // Log out button always at the end
+    // While unlocking, the alternate-method + Log out buttons stay visible
+    // but inert (no `on_press`), keeping layout stable and avoiding the jar
+    // of UI disappearing and returning around a ~200 ms task.
     items.push(
-        buttons::secondary(
-            container(text("Log out").size(16))
+        text("or")
+            .size(14)
+            .color(colors.text_primary)
+            .center()
+            .into(),
+    );
+
+    for alt in alternatives {
+        let (label, msg) = match alt {
+            UnlockMethod::Biometrics => (
+                "Unlock with biometrics",
+                LoginMessage::SwitchUnlockMethod(UnlockMethod::Biometrics),
+            ),
+            UnlockMethod::Pin => (
+                "Unlock with PIN",
+                LoginMessage::SwitchUnlockMethod(UnlockMethod::Pin),
+            ),
+            UnlockMethod::MasterPassword => (
+                "Unlock with master password",
+                LoginMessage::SwitchUnlockMethod(UnlockMethod::MasterPassword),
+            ),
+        };
+        items.push(secondary_action(label, msg, in_progress).into());
+    }
+
+    items.push(secondary_action("Log out", LoginMessage::LogOut, in_progress).into());
+
+    column(items).spacing(12).align_x(Alignment::Center).into()
+}
+
+/// Secondary (outline) button used for alternate unlock methods and Log out.
+/// Omits `on_press` while an unlock task is in flight so the widget renders
+/// as inert (iced treats a button without `on_press` as disabled).
+fn secondary_action<'a>(
+    label: &'a str,
+    msg: LoginMessage,
+    in_progress: bool,
+) -> iced::widget::Button<'a, LoginMessage, AppTheme> {
+    let mut btn = buttons::secondary(
+        container(text(label).size(16))
+            .center_x(Fill)
+            .padding([4, 8]),
+    )
+    .width(Fill);
+    if !in_progress {
+        btn = btn.on_press(msg);
+    }
+    btn
+}
+
+/// The primary unlock button. While `in_progress`, it renders as a spinner
+/// at the same padded height as the active button so the card layout
+/// doesn't shift when the unlock flips into the in-flight state.
+fn primary_action<'a>(
+    label: &'a str,
+    msg: LoginMessage,
+    in_progress: bool,
+    colors: &'a AppColors,
+) -> Element<'a, LoginMessage, AppTheme> {
+    if in_progress {
+        buttons::primary(
+            container(spinner::spinner(21.0, colors.nav_text))
                 .center_x(Fill)
                 .padding([4, 8]),
         )
-        .on_press(LoginMessage::LogOut)
         .width(Fill)
-        .into(),
-    );
-
-    column(items).spacing(12).align_x(Alignment::Center).into()
+        .into()
+    } else {
+        buttons::primary(
+            container(text(label).size(16))
+                .center_x(Fill)
+                .padding([4, 8]),
+        )
+        .on_press(msg)
+        .width(Fill)
+        .into()
+    }
 }

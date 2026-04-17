@@ -46,6 +46,7 @@ fn card_content<'a>(
         Some(LoginMessage::LoginWithPassword),
         !show_password,
         Some((show_password, LoginMessage::ToggleLoginPasswordVisibility)),
+        false,
         colors,
     );
 

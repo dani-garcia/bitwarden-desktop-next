@@ -23,7 +23,7 @@ use iced::{
 
 use crate::theme::AppTheme;
 
-const N_DOTS: usize = 8;
+const N_DOTS: usize = 6;
 /// Full revolutions per second.
 const REV_PER_SEC: f32 = 1.0;
 /// ~60fps — matches the existing `PollNativeMenu` cadence, so we don't add a
