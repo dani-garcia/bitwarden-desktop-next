@@ -20,11 +20,7 @@ pub fn view<'a>(query: &'a str) -> Element<'a, SearchMessage, AppTheme> {
         .width(Fill)
         .style(|theme: &AppTheme, _status| text_input::Style {
             background: Background::Color(Color::TRANSPARENT),
-            border: Border {
-                color: Color::TRANSPARENT,
-                width: 0.0,
-                radius: 0.0.into(),
-            },
+            border: Border::default(),
             icon: theme.colors.text_muted,
             placeholder: theme.colors.text_muted,
             value: theme.colors.text_primary,
@@ -32,14 +28,13 @@ pub fn view<'a>(query: &'a str) -> Element<'a, SearchMessage, AppTheme> {
         });
 
     container(input)
-        .style(|theme: &AppTheme| container::Style {
-            background: Some(Background::Color(Color::TRANSPARENT)),
-            border: Border {
-                color: theme.colors.border,
-                width: 1.0,
-                radius: 4.0.into(),
-            },
-            ..Default::default()
+        .style(|theme: &AppTheme| {
+            container::Style::default().border(
+                Border::default()
+                    .color(theme.colors.border)
+                    .width(1.0)
+                    .rounded(4),
+            )
         })
         .padding([4, 16])
         .width(Fill)

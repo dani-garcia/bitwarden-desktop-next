@@ -1,5 +1,5 @@
 use iced::{
-    Alignment, Background, Element, Fill, Length,
+    Alignment, Element, Fill, Length,
     widget::{Space, column, container, row, text},
 };
 
@@ -79,9 +79,6 @@ pub fn view(colors: &AppColors) -> Element<'_, AboutMessage, AppTheme> {
     .padding(24)
     .width(Fill)
     .height(Fill)
-    .style(|theme: &AppTheme| container::Style {
-        background: Some(Background::Color(theme.colors.background)),
-        ..Default::default()
-    })
+    .style(|theme: &AppTheme| container::Style::default().background(theme.colors.background))
     .into()
 }

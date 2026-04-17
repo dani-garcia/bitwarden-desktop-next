@@ -17,10 +17,7 @@ pub fn primary<'a, M: 'a>(content: impl Into<Element<'a, M, AppTheme>>) -> Butto
         button::Style {
             background: Some(Background::Color(bg)),
             text_color: theme.colors.card_bg,
-            border: Border {
-                radius: RADIUS_PILL.into(),
-                ..Default::default()
-            },
+            border: Border::default().rounded(RADIUS_PILL),
             shadow: Shadow::default(),
             snap: false,
         }
@@ -39,11 +36,10 @@ pub fn secondary<'a, M: 'a>(
         button::Style {
             background: Some(Background::Color(bg)),
             text_color: theme.colors.accent,
-            border: Border {
-                color: theme.colors.accent,
-                width: 1.0,
-                radius: RADIUS_PILL.into(),
-            },
+            border: Border::default()
+                .color(theme.colors.accent)
+                .width(1.0)
+                .rounded(RADIUS_PILL),
             shadow: Shadow::default(),
             snap: false,
         }
@@ -76,10 +72,7 @@ pub fn ghost<'a, M: 'a>(
         button::Style {
             background: Some(Background::Color(bg)),
             text_color: theme.colors.text_primary,
-            border: Border {
-                radius: radius.into(),
-                ..Default::default()
-            },
+            border: Border::default().rounded(radius),
             shadow: Shadow::default(),
             snap: false,
         }

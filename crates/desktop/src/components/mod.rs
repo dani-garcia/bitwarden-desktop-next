@@ -7,7 +7,7 @@ pub mod toast;
 pub mod virtual_list;
 
 use iced::{
-    Background, Border, Color, Element, Fill, Shadow,
+    Color, Element, Fill, Shadow,
     widget::{container, rule},
 };
 
@@ -42,18 +42,15 @@ pub fn styled_card<'a, M: 'a>(content: Element<'a, M, AppTheme>) -> Element<'a, 
     container(content)
         .padding([12, 16])
         .width(Fill)
-        .style(|theme: &AppTheme| container::Style {
-            background: Some(Background::Color(theme.colors.background)),
-            border: Border {
-                radius: RADIUS_LG.into(),
-                ..Default::default()
-            },
-            shadow: Shadow {
-                color: Color::from_rgba(0.0, 0.0, 0.0, 0.20),
-                offset: iced::Vector::new(0.0, 1.0),
-                blur_radius: 2.0,
-            },
-            ..Default::default()
+        .style(|theme: &AppTheme| {
+            container::Style::default()
+                .background(theme.colors.background)
+                .border(iced::border::rounded(RADIUS_LG))
+                .shadow(Shadow {
+                    color: Color::from_rgba(0.0, 0.0, 0.0, 0.20),
+                    offset: iced::Vector::new(0.0, 1.0),
+                    blur_radius: 2.0,
+                })
         })
         .into()
 }

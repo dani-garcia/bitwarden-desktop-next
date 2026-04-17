@@ -52,6 +52,7 @@ use iced::{
         renderer::{self, Quad},
         widget::{self, Tree},
     },
+    border::Radius,
     widget::{button, column, container, row, text},
     window,
 };
@@ -365,21 +366,14 @@ fn toast_view<'a, Message: 'a + Clone>(
         .max_width(TOAST_MAX_WIDTH)
         .style(move |theme: &AppTheme| {
             let alpha = outer_cell.get().alpha;
-            container::Style {
-                background: Some(Background::Color(
-                    status.background(&theme.colors).scale_alpha(alpha),
-                )),
-                border: Border {
-                    radius: RADIUS_MD.into(),
-                    ..Default::default()
-                },
-                shadow: iced::Shadow {
+            container::Style::default()
+                .background(status.background(&theme.colors).scale_alpha(alpha))
+                .border(iced::border::rounded(RADIUS_MD))
+                .shadow(iced::Shadow {
                     color: Color::from_rgba(0.0, 0.0, 0.0, 0.30 * alpha),
                     offset: Vector::new(0.0, 2.0),
                     blur_radius: 6.0,
-                },
-                ..Default::default()
-            }
+                })
         })
         .into()
 }
@@ -424,7 +418,7 @@ impl<Message> Widget<Message, AppTheme, iced::Renderer> for ToastProgressBar {
         let bounds = layout.bounds();
         let progress = visuals.progress.clamp(0.0, 1.0);
         let alpha = visuals.alpha;
-        let filled_width = bounds.width * progress;
+        let filled_width = (bounds.width - 2.0) * progress;
         if filled_width <= 0.0 || alpha <= 0.0 {
             return;
         }
@@ -432,12 +426,12 @@ impl<Message> Widget<Message, AppTheme, iced::Renderer> for ToastProgressBar {
         renderer.fill_quad(
             Quad {
                 bounds: Rectangle {
-                    x: bounds.x,
-                    y: bounds.y,
+                    x: bounds.x + 1.0,
+                    y: bounds.y - 1.0,
                     width: filled_width,
                     height: bounds.height,
                 },
-                border: Border::default(),
+                border: Border::default().rounded(Radius::default().bottom(bounds.height / 2.0)),
                 shadow: iced::Shadow::default(),
                 snap: false,
             },

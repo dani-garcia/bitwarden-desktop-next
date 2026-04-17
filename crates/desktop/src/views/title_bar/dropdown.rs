@@ -62,14 +62,15 @@ fn styled_panel<'a>(
 ) -> Element<'a, TitleBarMessage, AppTheme> {
     container(content)
         .padding([6, 0])
-        .style(|theme: &AppTheme| container::Style {
-            background: Some(Background::Color(theme.colors.card_bg)),
-            border: Border {
-                color: theme.colors.border,
-                width: 1.0,
-                radius: PANEL_RADIUS.into(),
-            },
-            ..Default::default()
+        .style(|theme: &AppTheme| {
+            container::Style::default()
+                .background(theme.colors.card_bg)
+                .border(
+                    Border::default()
+                        .color(theme.colors.border)
+                        .width(1.0)
+                        .rounded(PANEL_RADIUS),
+                )
         })
         .into()
 }

@@ -77,10 +77,7 @@ pub fn auth_page_shell<'a>(
         button::Style {
             background: Some(Background::Color(bg)),
             text_color: Color::WHITE,
-            border: Border {
-                radius: 18.0.into(),
-                ..Default::default()
-            },
+            border: Border::default().rounded(18),
             shadow: Shadow::default(),
             snap: false,
         }
@@ -120,10 +117,7 @@ pub fn auth_page_shell<'a>(
     container(layered)
         .width(Fill)
         .height(Fill)
-        .style(|theme: &AppTheme| container::Style {
-            background: Some(Background::Color(theme.colors.card_bg)),
-            ..Default::default()
-        })
+        .style(|theme: &AppTheme| container::Style::default().background(theme.colors.card_bg))
         .into()
 }
 
@@ -134,14 +128,15 @@ pub fn auth_card<'a>(
     container(content)
         .max_width(450)
         .padding(32)
-        .style(|theme: &AppTheme| container::Style {
-            background: Some(Background::Color(theme.colors.background)),
-            border: Border {
-                color: theme.colors.border,
-                width: 1.0,
-                radius: 16.0.into(),
-            },
-            ..Default::default()
+        .style(|theme: &AppTheme| {
+            container::Style::default()
+                .background(theme.colors.background)
+                .border(
+                    Border::default()
+                        .color(theme.colors.border)
+                        .width(1.0)
+                        .rounded(16),
+                )
         })
         .into()
 }

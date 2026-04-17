@@ -4,7 +4,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use bitwarden_vault::{CipherId, CipherListView, CipherListViewType, CipherView};
 use iced::{
-    Alignment, Background, Border, Element, Fill, Padding, Task,
+    Alignment, Border, Element, Fill, Padding, Task,
     widget::{Space, column, container, pane_grid, row, text},
 };
 
@@ -481,35 +481,23 @@ impl VaultView {
         let content_area = container(content_area_inner)
             .width(Fill)
             .height(Fill)
-            .style(|theme: &AppTheme| container::Style {
-                background: Some(Background::Color(theme.colors.background)),
-                border: Border {
-                    radius: iced::border::Radius {
-                        top_left: 10.0,
-                        top_right: 0.0,
-                        bottom_right: 0.0,
-                        bottom_left: 0.0,
-                    },
-                    ..Default::default()
-                },
-                ..Default::default()
+            .style(|theme: &AppTheme| {
+                container::Style::default()
+                    .background(theme.colors.background)
+                    .border(Border::default().rounded(iced::border::top_left(10)))
             });
 
         let main_row = container(row![sidebar, content_area].height(Fill))
             .width(Fill)
             .height(Fill)
-            .style(|theme: &AppTheme| container::Style {
-                background: Some(Background::Color(theme.colors.header_bg)),
-                ..Default::default()
+            .style(|theme: &AppTheme| {
+                container::Style::default().background(theme.colors.header_bg)
             });
 
         container(main_row)
             .width(Fill)
             .height(Fill)
-            .style(|theme: &AppTheme| container::Style {
-                background: Some(Background::Color(theme.colors.background)),
-                ..Default::default()
-            })
+            .style(|theme: &AppTheme| container::Style::default().background(theme.colors.background))
             .into()
     }
 

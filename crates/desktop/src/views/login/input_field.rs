@@ -31,11 +31,7 @@ pub fn floating_label_input<'a>(
         .width(Fill)
         .style(|theme: &AppTheme, _status| text_input::Style {
             background: Background::Color(Color::TRANSPARENT),
-            border: Border {
-                color: Color::TRANSPARENT,
-                width: 0.0,
-                radius: 0.0.into(),
-            },
+            border: Border::default(),
             icon: theme.colors.text_muted,
             placeholder: theme.colors.text_secondary,
             value: theme.colors.text_primary,
@@ -77,23 +73,18 @@ pub fn floating_label_input<'a>(
 
     let floating_label = container(text(label).size(14).color(colors.text_secondary))
         .padding([0, 4])
-        .style(|theme: &AppTheme| container::Style {
-            background: Some(Background::Color(theme.colors.background)),
-            ..Default::default()
+        .style(|theme: &AppTheme| {
+            container::Style::default().background(theme.colors.background)
         });
 
-    let input_border =
-        container(input_row)
-            .width(Fill)
-            .style(|theme: &AppTheme| container::Style {
-                background: Some(Background::Color(Color::TRANSPARENT)),
-                border: Border {
-                    color: theme.colors.border,
-                    width: 1.0,
-                    radius: 4.0.into(),
-                },
-                ..Default::default()
-            });
+    let input_border = container(input_row).width(Fill).style(|theme: &AppTheme| {
+        container::Style::default().border(
+            Border::default()
+                .color(theme.colors.border)
+                .width(1.0)
+                .rounded(4),
+        )
+    });
 
     stack![
         column![Space::new().height(Length::Fixed(8.0)), input_border],

@@ -1,5 +1,5 @@
 use iced::{
-    Alignment, Background, Border, Element, Fill,
+    Alignment, Border, Element, Fill,
     widget::{column, container, row, text},
 };
 
@@ -42,13 +42,10 @@ pub fn avatar_trigger<'a>(
             .height(36)
             .align_x(Alignment::Center)
             .align_y(Alignment::Center)
-            .style(|theme: &AppTheme| container::Style {
-                background: Some(Background::Color(theme.colors.avatar_bg)),
-                border: Border {
-                    radius: 18.0.into(),
-                    ..Default::default()
-                },
-                ..Default::default()
+            .style(|theme: &AppTheme| {
+                container::Style::default()
+                    .background(theme.colors.avatar_bg)
+                    .border(iced::border::rounded(18))
             }),
     )
     .on_press(AccountSwitcherMessage::ToggleDropdown)
@@ -80,13 +77,10 @@ pub fn dropdown<'a>(
                 row![
                     container(text(initial).size(14).color(colors.text_primary))
                         .padding([3, 7])
-                        .style(|theme: &AppTheme| container::Style {
-                            background: Some(Background::Color(theme.colors.accent)),
-                            border: Border {
-                                radius: 10.0.into(),
-                                ..Default::default()
-                            },
-                            ..Default::default()
+                        .style(|theme: &AppTheme| {
+                            container::Style::default()
+                                .background(theme.colors.accent)
+                                .border(iced::border::rounded(10))
                         }),
                     column![
                         text(format!("{}{}", account.email, locked_label))
@@ -129,14 +123,15 @@ pub fn dropdown<'a>(
     container(column(items).spacing(0))
         .width(240)
         .padding([4, 0])
-        .style(|theme: &AppTheme| container::Style {
-            background: Some(Background::Color(theme.colors.card_bg)),
-            border: Border {
-                color: theme.colors.border,
-                width: 1.0,
-                radius: 4.0.into(),
-            },
-            ..Default::default()
+        .style(|theme: &AppTheme| {
+            container::Style::default()
+                .background(theme.colors.card_bg)
+                .border(
+                    Border::default()
+                        .color(theme.colors.border)
+                        .width(1.0)
+                        .rounded(4),
+                )
         })
         .into()
 }

@@ -1,5 +1,5 @@
 use iced::{
-    Alignment, Background, Border, Element, Fill, Length, Padding,
+    Alignment, Element, Fill, Length, Padding,
     widget::{Space, column, container, row, svg, text},
 };
 
@@ -110,14 +110,7 @@ fn icon_rail<'a>(
     )
     .width(Length::Fixed(RAIL_WIDTH))
     .height(Fill)
-    .style(|theme: &AppTheme| container::Style {
-        background: Some(Background::Color(theme.colors.header_bg)),
-        border: Border {
-            radius: 0.0.into(),
-            ..Default::default()
-        },
-        ..Default::default()
-    })
+    .style(|theme: &AppTheme| container::Style::default().background(theme.colors.header_bg))
     .into()
 }
 
@@ -282,14 +275,7 @@ fn expanded_panel<'a>(
     )
     .width(Length::Fixed(PANEL_WIDTH))
     .height(Fill)
-    .style(|theme: &AppTheme| container::Style {
-        background: Some(Background::Color(theme.colors.header_bg)),
-        border: Border {
-            radius: 0.0.into(),
-            ..Default::default()
-        },
-        ..Default::default()
-    })
+    .style(|theme: &AppTheme| container::Style::default().background(theme.colors.header_bg))
     .into()
 }
 

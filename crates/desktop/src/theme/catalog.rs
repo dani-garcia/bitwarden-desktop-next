@@ -182,15 +182,14 @@ impl widget::checkbox::Catalog for AppTheme {
                     Color::TRANSPARENT
                 }),
                 icon_color: Color::WHITE,
-                border: Border {
-                    color: if is_checked {
+                border: Border::default()
+                    .color(if is_checked {
                         theme.colors.accent
                     } else {
                         theme.colors.border
-                    },
-                    width: 1.5,
-                    radius: 4.0.into(),
-                },
+                    })
+                    .width(1.5)
+                    .rounded(4),
                 text_color: Some(theme.colors.text_primary),
             }
         })

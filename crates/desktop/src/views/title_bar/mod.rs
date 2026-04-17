@@ -165,9 +165,8 @@ impl TitleBarState {
         container(iced::widget::Space::new())
             .width(Fill)
             .height(TITLE_BAR_HEIGHT)
-            .style(|theme: &AppTheme| container::Style {
-                background: Some(Background::Color(theme.colors.header_bg)),
-                ..Default::default()
+            .style(|theme: &AppTheme| {
+                container::Style::default().background(theme.colors.header_bg)
             })
             .into()
     }
@@ -276,9 +275,8 @@ impl TitleBarState {
         let bar = container(bar_content)
             .width(Fill)
             .height(TITLE_BAR_HEIGHT)
-            .style(|theme: &AppTheme| container::Style {
-                background: Some(Background::Color(theme.colors.header_bg)),
-                ..Default::default()
+            .style(|theme: &AppTheme| {
+                container::Style::default().background(theme.colors.header_bg)
             });
 
         mouse_area(bar).on_press(TitleBarMessage::DragStart).into()

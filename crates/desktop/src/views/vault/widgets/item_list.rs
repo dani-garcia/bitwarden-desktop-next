@@ -99,10 +99,7 @@ pub fn view<'a>(
             border: Border::default(),
             scroller: scrollable::Scroller {
                 background: Background::Color(theme.colors.item_hover),
-                border: Border {
-                    radius: 4.0.into(),
-                    ..Default::default()
-                },
+                border: Border::default().rounded(4),
             },
         },
         horizontal_rail: scrollable::Rail {
@@ -110,10 +107,7 @@ pub fn view<'a>(
             border: Border::default(),
             scroller: scrollable::Scroller {
                 background: Background::Color(theme.colors.item_hover),
-                border: Border {
-                    radius: 4.0.into(),
-                    ..Default::default()
-                },
+                border: Border::default().rounded(4),
             },
         },
         gap: None,
@@ -168,13 +162,10 @@ fn row_element<'a>(
         .height(32)
         .center_x(32)
         .center_y(32)
-        .style(move |_theme: &AppTheme| container::Style {
-            background: Some(Background::Color(circle_color)),
-            border: Border {
-                radius: 16.0.into(),
-                ..Default::default()
-            },
-            ..Default::default()
+        .style(move |_theme: &AppTheme| {
+            container::Style::default()
+                .background(circle_color)
+                .border(iced::border::rounded(16))
         });
 
     let info = column![

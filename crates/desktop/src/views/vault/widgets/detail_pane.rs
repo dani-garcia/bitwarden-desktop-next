@@ -1,6 +1,6 @@
 use bitwarden_vault::{CardView, CipherType, CipherView, IdentityView, LoginView, SshKeyView};
 use iced::{
-    Alignment, Background, Element, Fill, Padding,
+    Alignment, Element, Fill, Padding,
     widget::{Space, column, container, row, scrollable, text},
 };
 
@@ -78,10 +78,7 @@ pub fn view<'a>(
     let pane = container(column![header, body, bottom_bar].spacing(0).height(Fill))
         .width(Fill)
         .height(Fill)
-        .style(|theme: &AppTheme| container::Style {
-            background: Some(Background::Color(theme.colors.card_bg)),
-            ..Default::default()
-        });
+        .style(|theme: &AppTheme| container::Style::default().background(theme.colors.card_bg));
 
     row![components::separator_v(), pane].height(Fill).into()
 }
@@ -114,9 +111,8 @@ fn header_row<'a>(
     let header =
         container(row![title, Space::new().width(Fill), close_btn].align_y(Alignment::Center))
             .padding([8, 20])
-            .style(|theme: &AppTheme| container::Style {
-                background: Some(Background::Color(theme.colors.background)),
-                ..Default::default()
+            .style(|theme: &AppTheme| {
+                container::Style::default().background(theme.colors.background)
             });
 
     column![header, components::separator_h()].spacing(0).into()
@@ -368,9 +364,8 @@ fn bottom_bar<'a>(colors: &AppColors) -> Element<'a, DetailPaneMessage, AppTheme
     let bar =
         container(row![edit_btn, Space::new().width(Fill), delete_btn].align_y(Alignment::Center))
             .padding([8, 20])
-            .style(|theme: &AppTheme| container::Style {
-                background: Some(Background::Color(theme.colors.background)),
-                ..Default::default()
+            .style(|theme: &AppTheme| {
+                container::Style::default().background(theme.colors.background)
             });
 
     column![components::separator_h(), bar].spacing(0).into()

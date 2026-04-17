@@ -107,10 +107,7 @@ impl<Message> Widget<Message, AppTheme, Renderer> for Spinner {
                         width: dot_size,
                         height: dot_size,
                     },
-                    border: Border {
-                        radius: (dot_size / 2.0).into(),
-                        ..Default::default()
-                    },
+                    border: Border::default().rounded(dot_size / 2.0),
                     shadow: Shadow::default(),
                     snap: false,
                 },
