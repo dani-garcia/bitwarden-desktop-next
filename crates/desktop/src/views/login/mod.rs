@@ -461,6 +461,18 @@ impl LoginView {
         self.auth_page = AuthPage::new_login_email();
     }
 
+    /// Show the unlock page for the given user, picking their preferred
+    /// unlock method. Falls back to master password when the user is absent
+    /// or unknown to the client manager (e.g. during initial startup).
+    /// Called from the post-load transition, user-switch, and lock-all flows.
+    pub fn show_unlock_for(&mut self, uid: Option<&UserId>, mgr: &ClientManager) {
+        let preferred = uid
+            .and_then(|uid| mgr.unlock_methods(uid))
+            .map(|m| m.preferred())
+            .unwrap_or(UnlockMethod::MasterPassword);
+        self.auth_page = AuthPage::new_unlock(preferred);
+    }
+
     pub fn view<'a>(
         &'a self,
         email: &'a str,

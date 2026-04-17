@@ -4,7 +4,7 @@ use iced::Task;
 
 use crate::{
     components::account_switcher::AccountEntry,
-    state::{Screen, UnlockMethod, UserId},
+    state::{Screen, UserId},
     views::{login::AuthPage, vault::VaultMessage},
 };
 
@@ -91,12 +91,8 @@ impl App {
         self.vault_view.reset(&uid);
         if !self.client_manager.is_unlocked(&uid) {
             self.screen = Screen::Login;
-            let preferred = self
-                .client_manager
-                .unlock_methods(&uid)
-                .map(|m| m.preferred())
-                .unwrap_or(UnlockMethod::MasterPassword);
-            self.login_view.auth_page = AuthPage::new_unlock(preferred);
+            self.login_view
+                .show_unlock_for(Some(&uid), &self.client_manager);
             Task::none()
         } else {
             self.screen = Screen::Vault;

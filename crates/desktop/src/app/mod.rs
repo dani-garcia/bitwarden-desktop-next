@@ -73,14 +73,31 @@ pub struct ThemeState {
     pub(super) system: Arc<system_theme::SystemTheme>,
 }
 
+impl ThemeState {
+    pub fn new(preference: ThemePreference) -> Self {
+        let system = Arc::new(
+            system_theme::SystemTheme::new().expect("failed to initialize system theme observer"),
+        );
+        let current = preference.resolve(system.get_scheme());
+        Self {
+            preference,
+            current,
+            system,
+        }
+    }
+
+    pub fn refresh(&mut self) {
+        if self.preference == ThemePreference::System {
+            self.current = self.preference.resolve(self.system.get_scheme());
+        }
+    }
+}
+
 // ── Construction + iced daemon callbacks ───────────────────────────────────
 
 impl App {
     pub fn new() -> (Self, Task<Message>) {
-        let system_theme = Arc::new(
-            system_theme::SystemTheme::new().expect("failed to initialize system theme observer"),
-        );
-        let initial_theme = ThemePreference::Dark.resolve(system_theme.get_scheme());
+        let user_theme = ThemePreference::Dark;
 
         // Open the main window via `window::open` — daemon mode doesn't
         // create a window automatically (unlike `iced::application`).
@@ -120,11 +137,7 @@ impl App {
             title_bar: title_bar::TitleBarState::new(),
             client_manager: Arc::new(ClientManager::empty()),
             cache: ViewCache::default(),
-            theme: ThemeState {
-                preference: ThemePreference::System,
-                current: initial_theme,
-                system: system_theme,
-            },
+            theme: ThemeState::new(user_theme),
             windows,
             native_menu: None,
             toasts: Vec::new(),
