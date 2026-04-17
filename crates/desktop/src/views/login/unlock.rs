@@ -4,12 +4,12 @@ use iced::{
 };
 
 use crate::{
-    components::{buttons, spinner},
+    components::{buttons, inputs::floating_label_input, spinner},
     state::UnlockMethod,
     theme::{AppColors, AppTheme},
 };
 
-use super::{LoginMessage, input_field, layout};
+use super::{LoginMessage, layout};
 
 /// Renders the full center content for the unlock screen:
 /// lock icon, title, email, and the card with method-specific controls.
@@ -76,7 +76,7 @@ fn card_content<'a>(
             ));
         }
         UnlockMethod::Pin => {
-            items.push(input_field::floating_label_input(
+            items.push(floating_label_input(
                 "PIN (required)",
                 pin,
                 LoginMessage::PinChanged,
@@ -94,7 +94,7 @@ fn card_content<'a>(
             ));
         }
         UnlockMethod::MasterPassword => {
-            items.push(input_field::floating_label_input(
+            items.push(floating_label_input(
                 "Master password (required)",
                 password,
                 LoginMessage::PasswordChanged,

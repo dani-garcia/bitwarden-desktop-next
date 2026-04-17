@@ -1,9 +1,10 @@
 use bitwarden_vault::{CardView, CipherType, CipherView, IdentityView, LoginView, SshKeyView};
 use iced::{
-    Alignment, Element, Fill, Padding,
+    Alignment, Element, Fill,
     widget::{Space, column, container, row, scrollable, text},
 };
 
+use super::field_helpers::{card_with_margin, field_readonly, icon_button, section_label, styled_card};
 use crate::{
     components::{self, buttons, icons},
     theme::{AppColors, AppTheme},
@@ -60,7 +61,7 @@ pub fn view<'a>(
         CipherType::SecureNote => {
             if let Some(notes) = item.notes.as_deref() {
                 sections.push(section_label("Note", colors));
-                sections.push(card_with_margin(components::styled_card(
+                sections.push(card_with_margin(styled_card(
                     text(notes).size(14).color(colors.text_primary).into(),
                 )));
             }
@@ -127,17 +128,6 @@ fn header_row<'a>(
 }
 
 // ---------------------------------------------------------------------------
-// Section label
-// ---------------------------------------------------------------------------
-
-fn section_label<'a>(
-    label: &'a str,
-    colors: &AppColors,
-) -> Element<'a, DetailPaneMessage, AppTheme> {
-    text(label).size(14).color(colors.text_primary).into()
-}
-
-// ---------------------------------------------------------------------------
 // Item details (universal)
 // ---------------------------------------------------------------------------
 
@@ -152,7 +142,7 @@ fn item_details_card<'a>(
     {
         fields.push(field_readonly("Notes", notes, colors));
     }
-    card_with_margin(components::styled_card(column(fields).spacing(12).into()))
+    card_with_margin(styled_card(column(fields).spacing(12).into()))
 }
 
 // ---------------------------------------------------------------------------
@@ -197,7 +187,7 @@ fn login_card<'a>(
         );
     }
 
-    card_with_margin(components::styled_card(column(fields).spacing(16).into()))
+    card_with_margin(styled_card(column(fields).spacing(16).into()))
 }
 
 fn first_login_uri(login: &LoginView) -> Option<&str> {
@@ -246,7 +236,7 @@ fn card_details_card<'a>(
                 .into(),
         );
     }
-    card_with_margin(components::styled_card(column(fields).spacing(12).into()))
+    card_with_margin(styled_card(column(fields).spacing(12).into()))
 }
 
 // ---------------------------------------------------------------------------
@@ -312,7 +302,7 @@ fn identity_card<'a>(
                 .into(),
         );
     }
-    card_with_margin(components::styled_card(column(fields).spacing(12).into()))
+    card_with_margin(styled_card(column(fields).spacing(12).into()))
 }
 
 // ---------------------------------------------------------------------------
@@ -328,7 +318,7 @@ fn ssh_key_card<'a>(
         field_readonly("Private key", &key.private_key, colors),
         field_readonly("Fingerprint", &key.fingerprint, colors),
     ];
-    card_with_margin(components::styled_card(column(fields).spacing(12).into()))
+    card_with_margin(styled_card(column(fields).spacing(12).into()))
 }
 
 // ---------------------------------------------------------------------------
@@ -350,7 +340,7 @@ fn autofill_card<'a>(uri: &'a str, colors: &AppColors) -> Element<'a, DetailPane
     .spacing(4)
     .align_y(Alignment::Center);
 
-    card_with_margin(components::styled_card(field_row.into()))
+    card_with_margin(styled_card(field_row.into()))
 }
 
 // ---------------------------------------------------------------------------
@@ -380,21 +370,8 @@ fn bottom_bar<'a>(colors: &AppColors) -> Element<'a, DetailPaneMessage, AppTheme
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Helpers (detail-pane-specific; shared primitives live in `field_helpers`)
 // ---------------------------------------------------------------------------
-
-fn field_readonly<'a>(
-    label: &'a str,
-    value: impl iced::widget::text::IntoFragment<'a>,
-    colors: &AppColors,
-) -> Element<'a, DetailPaneMessage, AppTheme> {
-    column![
-        text(label).size(12).color(colors.text_muted),
-        text(value).size(14).color(colors.text_primary),
-    ]
-    .spacing(2)
-    .into()
-}
 
 fn push_optional_field<'a>(
     fields: &mut Vec<Element<'a, DetailPaneMessage, AppTheme>>,
@@ -434,29 +411,4 @@ fn field_with_action<'a>(
     .spacing(4)
     .align_y(Alignment::Center)
     .into()
-}
-
-fn icon_button<'a>(
-    icon: icons::BwiIcon,
-    msg: DetailPaneMessage,
-    colors: &AppColors,
-) -> Element<'a, DetailPaneMessage, AppTheme> {
-    buttons::ghost_icon(icon.render(18.0, colors.text_primary), colors.item_hover)
-        .on_press(msg)
-        .padding([6, 6])
-        .into()
-}
-
-/// Wraps a card element with bottom margin for section spacing.
-fn card_with_margin<'a>(
-    card: Element<'a, DetailPaneMessage, AppTheme>,
-) -> Element<'a, DetailPaneMessage, AppTheme> {
-    container(card)
-        .padding(Padding {
-            top: 0.0,
-            right: 0.0,
-            bottom: 8.0,
-            left: 0.0,
-        })
-        .into()
 }

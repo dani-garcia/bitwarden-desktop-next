@@ -15,7 +15,7 @@ use crate::{
         toast::Toast,
         virtual_list,
     },
-    sdk::ClientManager,
+    sdk::{ClientManager, Collection, Organization},
     state::{NavSection, SidebarFilter, SidebarMode, UserId},
     theme::{AppColors, AppTheme},
 };
@@ -32,19 +32,21 @@ pub const SHEET_TOP_INSET_PX: f32 = 64.0;
 pub const SHEET_TOP_RADIUS_PX: f32 = 16.0;
 
 use self::widgets::{
+    cipher_form::{self, CipherForm, CipherFormMessage, FolderOption, FormAction},
     detail_pane::{self, DetailPaneMessage},
     item_list::{self, ItemListMessage},
     search_bar::{self, SearchMessage},
     sidebar::{self, SidebarMessage},
 };
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum VaultMessage {
     Sidebar(SidebarMessage),
     ItemList(ItemListMessage),
     Search(SearchMessage),
     AccountSwitcher(AccountSwitcherMessage),
-    DetailPane(#[expect(dead_code)] DetailPaneMessage),
+    DetailPane(DetailPaneMessage),
+    CipherForm(CipherFormMessage),
     CloseDetailPane,
     PaneResized(pane_grid::ResizeEvent),
     NewItem,
@@ -52,6 +54,86 @@ pub enum VaultMessage {
     ListLoaded(UserId, Result<Vec<Arc<CipherListView>>, String>),
     /// Fires when the async `ClientManager::full_cipher` task completes.
     DetailLoaded(UserId, CipherId, Result<Box<CipherView>, String>),
+    /// Fires when `ClientManager::list_folders` completes for the form.
+    /// Carries `FolderOption` (not `FolderView`) because `FolderView` isn't
+    /// `Clone` and `VaultMessage` must be.
+    FoldersLoaded(UserId, Result<Vec<FolderOption>, String>),
+    /// Fires when orgs are loaded for the form.
+    OrganizationsLoaded(UserId, Vec<Organization>),
+    /// Fires when collections are loaded for the form.
+    CollectionsLoaded(UserId, Vec<Collection>),
+    /// Fires when `ClientManager::save_cipher` finishes.
+    SaveCompleted(UserId, Result<Box<CipherView>, String>),
+}
+
+// iced debug-formats every update Message and warns if it takes >1ms. The
+// default `#[derive(Debug)]` on `ListLoaded` walks through ~20k entries of
+// `Arc<CipherListView>` on the load-test account, which measured ~31 ms.
+// The only variant that carries a genuinely heavy payload is `ListLoaded`
+// (and the option loads for the form); everything else is short. Hand-roll
+// Debug so bulk variants render as a terse summary and the cheap variants
+// keep their natural derive-like output.
+impl std::fmt::Debug for VaultMessage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Sidebar(m) => f.debug_tuple("Sidebar").field(m).finish(),
+            Self::ItemList(m) => f.debug_tuple("ItemList").field(m).finish(),
+            Self::Search(m) => f.debug_tuple("Search").field(m).finish(),
+            Self::AccountSwitcher(m) => f.debug_tuple("AccountSwitcher").field(m).finish(),
+            Self::DetailPane(m) => f.debug_tuple("DetailPane").field(m).finish(),
+            Self::CipherForm(m) => f.debug_tuple("CipherForm").field(m).finish(),
+            Self::CloseDetailPane => f.write_str("CloseDetailPane"),
+            Self::PaneResized(e) => f.debug_tuple("PaneResized").field(e).finish(),
+            Self::NewItem => f.write_str("NewItem"),
+            Self::ListLoaded(uid, result) => {
+                let mut t = f.debug_tuple("ListLoaded");
+                t.field(uid);
+                match result {
+                    Ok(items) => t.field(&format_args!("Ok(<{} items>)", items.len())),
+                    Err(e) => t.field(&format_args!("Err({e})")),
+                };
+                t.finish()
+            }
+            Self::DetailLoaded(uid, id, result) => {
+                let mut t = f.debug_tuple("DetailLoaded");
+                t.field(uid);
+                t.field(id);
+                match result {
+                    Ok(_) => t.field(&"Ok(<CipherView>)"),
+                    Err(e) => t.field(&format_args!("Err({e})")),
+                };
+                t.finish()
+            }
+            Self::FoldersLoaded(uid, result) => {
+                let mut t = f.debug_tuple("FoldersLoaded");
+                t.field(uid);
+                match result {
+                    Ok(items) => t.field(&format_args!("Ok(<{} folders>)", items.len())),
+                    Err(e) => t.field(&format_args!("Err({e})")),
+                };
+                t.finish()
+            }
+            Self::OrganizationsLoaded(uid, orgs) => f
+                .debug_tuple("OrganizationsLoaded")
+                .field(uid)
+                .field(&format_args!("<{} orgs>", orgs.len()))
+                .finish(),
+            Self::CollectionsLoaded(uid, cols) => f
+                .debug_tuple("CollectionsLoaded")
+                .field(uid)
+                .field(&format_args!("<{} collections>", cols.len()))
+                .finish(),
+            Self::SaveCompleted(uid, result) => {
+                let mut t = f.debug_tuple("SaveCompleted");
+                t.field(uid);
+                match result {
+                    Ok(_) => t.field(&"Ok(<CipherView>)"),
+                    Err(e) => t.field(&format_args!("Err({e})")),
+                };
+                t.finish()
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -89,15 +171,17 @@ impl Default for SidebarState {
     }
 }
 
-/// The currently-selected vault item. All three fields are always set
-/// and cleared together — an item click sets index + id + clears detail
-/// (which then fills in from an async load), and closing the pane clears
-/// all three.
+/// The currently-selected vault item. An item click sets index + id and
+/// triggers an async decrypt that populates `detail`. When `form` is `Some`,
+/// the right-hand pane renders the editable form instead of the read-only
+/// detail view; `detail` stays populated throughout so cancel returns
+/// instantly without a reload.
 #[derive(Default)]
 pub struct Selection {
     pub item: Option<usize>,
     pub id: Option<CipherId>,
     pub detail: Option<CipherView>,
+    pub form: Option<CipherForm>,
 }
 
 impl Selection {
@@ -272,7 +356,138 @@ impl VaultView {
                 self.pane_state.resize(event.split, event.ratio);
                 (Task::none(), None)
             }
-            VaultMessage::DetailPane(_) => (Task::none(), None),
+            VaultMessage::DetailPane(detail_msg) => match detail_msg {
+                DetailPaneMessage::Edit => {
+                    let Some(detail) = self.selection.detail.clone() else {
+                        return (Task::none(), None);
+                    };
+                    let Some(uid) = active_user.copied() else {
+                        return (Task::none(), None);
+                    };
+                    let form = CipherForm::edit(detail);
+                    self.selection.form = Some(form);
+
+                    // Kick off the three option-list loads in parallel.
+                    // Folders go through the SDK repo; orgs + collections are
+                    // pure reads off the already-loaded ClientManager, so we
+                    // wrap them in `Task::done` to keep the message flow
+                    // uniform with the async case.
+                    let mgr = client_manager.clone();
+                    let folders_task = Task::perform(
+                        async move {
+                            mgr.list_folders(&uid).await.map(|folders| {
+                                folders.into_iter().map(FolderOption::from).collect()
+                            })
+                        },
+                        move |res| VaultMessage::FoldersLoaded(uid, res),
+                    );
+                    let orgs = client_manager.list_organizations(&uid);
+                    let cols = client_manager.list_collections(&uid);
+                    let orgs_task = Task::done(VaultMessage::OrganizationsLoaded(uid, orgs));
+                    let cols_task = Task::done(VaultMessage::CollectionsLoaded(uid, cols));
+                    (
+                        Task::batch([folders_task, orgs_task, cols_task]),
+                        None,
+                    )
+                }
+                // Other detail messages (copy, delete, open URL, reveal) stay
+                // unhandled for this pass.
+                _ => (Task::none(), None),
+            },
+            VaultMessage::CipherForm(form_msg) => {
+                let Some(form) = self.selection.form.as_mut() else {
+                    return (Task::none(), None);
+                };
+                match form.update(form_msg) {
+                    FormAction::None => (Task::none(), None),
+                    FormAction::Cancel => {
+                        self.selection.form = None;
+                        (Task::none(), None)
+                    }
+                    FormAction::Save => {
+                        let Some(uid) = active_user.copied() else {
+                            return (Task::none(), None);
+                        };
+                        form.saving = true;
+                        let mgr = client_manager.clone();
+                        let cipher_view = form.modified.clone();
+                        let task = Task::perform(
+                            async move { mgr.save_cipher(&uid, cipher_view).await },
+                            move |res| VaultMessage::SaveCompleted(uid, res.map(Box::new)),
+                        );
+                        (task, None)
+                    }
+                }
+            }
+            VaultMessage::FoldersLoaded(msg_uid, result) => {
+                if active_user != Some(&msg_uid) {
+                    return (Task::none(), None);
+                }
+                match result {
+                    Ok(folders) => {
+                        if let Some(form) = self.selection.form.as_mut() {
+                            form.folders = folders;
+                        }
+                        (Task::none(), None)
+                    }
+                    Err(err) => {
+                        tracing::error!(%err, "list_folders failed");
+                        (Task::none(), None)
+                    }
+                }
+            }
+            VaultMessage::OrganizationsLoaded(msg_uid, orgs) => {
+                if active_user != Some(&msg_uid) {
+                    return (Task::none(), None);
+                }
+                if let Some(form) = self.selection.form.as_mut() {
+                    form.organizations = orgs;
+                }
+                (Task::none(), None)
+            }
+            VaultMessage::CollectionsLoaded(msg_uid, cols) => {
+                if active_user != Some(&msg_uid) {
+                    return (Task::none(), None);
+                }
+                if let Some(form) = self.selection.form.as_mut() {
+                    form.collections = cols;
+                }
+                (Task::none(), None)
+            }
+            VaultMessage::SaveCompleted(msg_uid, result) => {
+                if active_user != Some(&msg_uid) {
+                    return (Task::none(), None);
+                }
+                match result {
+                    Ok(view) => {
+                        self.selection.detail = Some(*view);
+                        self.selection.form = None;
+                        // Refresh the list so renamed items / ownership changes
+                        // show up in the left pane's list without a manual reload.
+                        let reload = Self::load_list_task(msg_uid, client_manager);
+                        (
+                            reload,
+                            Some(VaultEvent::ToastRequested(Toast::success(
+                                "Item saved",
+                                None,
+                            ))),
+                        )
+                    }
+                    Err(err) => {
+                        tracing::error!(%err, "save_cipher failed");
+                        if let Some(form) = self.selection.form.as_mut() {
+                            form.saving = false;
+                        }
+                        (
+                            Task::none(),
+                            Some(VaultEvent::ToastRequested(Toast::error(
+                                "Couldn't save the item. Try again.",
+                                Some("Save failed"),
+                            ))),
+                        )
+                    }
+                }
+            }
             VaultMessage::AccountSwitcher(asm) => match asm {
                 AccountSwitcherMessage::ToggleDropdown => {
                     self.account_switcher_open = !self.account_switcher_open;
@@ -357,6 +572,9 @@ impl VaultView {
     /// dismissal block in `App::update`.
     pub fn dismiss_dropdowns(&mut self) {
         self.account_switcher_open = false;
+        if let Some(form) = self.selection.form.as_mut() {
+            form.dismiss_dropdowns();
+        }
     }
 
     /// Recompute the filtered item list for a specific user. Uses the
@@ -480,11 +698,6 @@ impl VaultView {
         //   `sheet_view()` below.)
         let show_pane_grid = self.selection.detail.is_some() && window_width >= SHEET_BREAKPOINT_PX;
         let content_area_inner: Element<'a, VaultMessage, AppTheme> = if show_pane_grid {
-            let item = self
-                .selection
-                .detail
-                .as_ref()
-                .expect("guarded by show_pane_grid");
             pane_grid::PaneGrid::new(&self.pane_state, move |_pane, kind, _is_maximized| {
                 match kind {
                     PaneKind::List => pane_grid::Content::new(self.list_content(
@@ -494,13 +707,9 @@ impl VaultView {
                         colors,
                     )),
                     PaneKind::Detail => {
-                        let detail = detail_pane::view(item, colors, 0.0).map(|msg| match msg {
-                            DetailPaneMessage::Close => VaultMessage::CloseDetailPane,
-                            other => VaultMessage::DetailPane(other),
-                        });
-                        let detail_with_separator =
-                            row![separator_v(), detail].height(Fill);
-                        pane_grid::Content::new(detail_with_separator)
+                        let right_pane = self.detail_or_form_pane(colors, 0.0);
+                        let with_separator = row![separator_v(), right_pane].height(Fill);
+                        pane_grid::Content::new(with_separator)
                     }
                 }
             })
@@ -549,16 +758,35 @@ impl VaultView {
         if window_width >= SHEET_BREAKPOINT_PX {
             return None;
         }
-        let item = self.selection.detail.as_ref()?;
-        let detail = detail_pane::view(item, colors, SHEET_TOP_RADIUS_PX).map(|msg| match msg {
-            DetailPaneMessage::Close => VaultMessage::CloseDetailPane,
-            other => VaultMessage::DetailPane(other),
-        });
+        self.selection.detail.as_ref()?;
+        let pane = self.detail_or_form_pane(colors, SHEET_TOP_RADIUS_PX);
         Some(bottom_sheet::view(
-            detail,
+            pane,
             SHEET_TOP_INSET_PX,
             Some(VaultMessage::CloseDetailPane),
         ))
+    }
+
+    /// Builds the right-side pane content: either the editable `cipher_form`
+    /// when `selection.form.is_some()`, or the read-only `detail_pane`.
+    fn detail_or_form_pane<'a>(
+        &'a self,
+        colors: &'a AppColors,
+        top_radius: f32,
+    ) -> Element<'a, VaultMessage, AppTheme> {
+        if let Some(form) = self.selection.form.as_ref() {
+            cipher_form::view(form, colors, top_radius).map(VaultMessage::CipherForm)
+        } else {
+            let item = self
+                .selection
+                .detail
+                .as_ref()
+                .expect("detail_or_form_pane called without a selection");
+            detail_pane::view(item, colors, top_radius).map(|msg| match msg {
+                DetailPaneMessage::Close => VaultMessage::CloseDetailPane,
+                other => VaultMessage::DetailPane(other),
+            })
+        }
     }
 
     /// Builds the list pane content (header + search + item list).

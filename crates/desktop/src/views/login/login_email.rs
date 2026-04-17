@@ -4,11 +4,11 @@ use iced::{
 };
 
 use crate::{
-    components::{buttons, icons},
+    components::{buttons, icons, inputs::floating_label_input},
     theme::{AppColors, AppTheme},
 };
 
-use super::{LoginMessage, input_field, layout};
+use super::{LoginMessage, layout};
 
 /// Renders the full center content for the login email entry screen:
 /// vault icon, title, card with email field + checkbox + buttons,
@@ -56,7 +56,7 @@ fn card_content<'a>(
     remember_email: bool,
     colors: &'a AppColors,
 ) -> Element<'a, LoginMessage, AppTheme> {
-    let email_field = input_field::floating_label_input(
+    let email_field = floating_label_input(
         "Email address (required)",
         email,
         LoginMessage::EmailChanged,

@@ -11,14 +11,18 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use std::collections::HashMap as StdHashMap;
+
+use bitwarden_collections::collection::CollectionId;
 use bitwarden_core::{
-    ClientBuilder, ClientSettings, UserId,
+    ClientBuilder, ClientSettings, OrganizationId, UserId,
     key_management::{
-        LocalUserDataKeyState, MasterPasswordUnlockData,
+        LocalUserDataKeyState, MasterPasswordUnlockData, PrivateKeySlotId,
         account_cryptographic_state::WrappedAccountCryptographicState,
-        crypto::{InitUserCryptoMethod, InitUserCryptoRequest},
+        crypto::{InitOrgCryptoRequest, InitUserCryptoMethod, InitUserCryptoRequest},
     },
 };
+use bitwarden_crypto::{SymmetricCryptoKey, UnsignedSharedKey};
 use bitwarden_pm::PasswordManagerClient;
 use bitwarden_state::{
     DatabaseConfiguration,
@@ -55,6 +59,31 @@ struct MockUserMeta {
     kdf: bitwarden_crypto::Kdf,
     encrypted_user_key: bitwarden_crypto::EncString,
     private_key: bitwarden_crypto::EncString,
+    /// Orgs the user belongs to. Stored here (not in SQLite) because the app
+    /// is a UI-only stub with no sync flow that would normally populate these.
+    #[serde(default)]
+    organizations: Vec<MockOrganization>,
+    /// Collections within the user's orgs. Each entry is scoped to one org.
+    #[serde(default)]
+    collections: Vec<MockCollection>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct MockOrganization {
+    id: OrganizationId,
+    name: String,
+    /// Org's symmetric key, wrapped with the user's public key. Replayed on
+    /// unlock via `initialize_org_crypto` so the app can encrypt/decrypt
+    /// org-owned ciphers. Generated fresh per `cargo run -p fake-data`.
+    #[serde(default)]
+    wrapped_key: Option<UnsignedSharedKey>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct MockCollection {
+    id: CollectionId,
+    organization_id: OrganizationId,
+    name: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -74,6 +103,14 @@ struct UserSpec {
     unlock_methods: UnlockMethodsCfg,
     ciphers: fn() -> Vec<CipherView>,
     folders: fn() -> Vec<FolderView>,
+    /// Organizations + collections the user belongs to. Produces
+    /// `(orgs, collections)` at build time so names can share closures.
+    orgs_and_collections: fn() -> (Vec<MockOrganization>, Vec<MockCollection>),
+    /// Optionally reassigns ciphers to an org + collections after they're
+    /// generated. Passed (ciphers, orgs, collections) and mutates in place.
+    /// Lets the work user have some org-owned items without baking the IDs
+    /// into every cipher builder.
+    assign_ownership: fn(&mut [CipherView], &[MockOrganization], &[MockCollection]),
 }
 
 // User IDs are generated as fresh UUIDv4s per `build_user` call, matching how
@@ -91,6 +128,8 @@ const USER_SPECS: &[UserSpec] = &[
         },
         ciphers: personal_ciphers,
         folders: personal_folders,
+        orgs_and_collections: no_orgs,
+        assign_ownership: no_ownership,
     },
     UserSpec {
         email: "alice@acmecorp.com",
@@ -104,6 +143,8 @@ const USER_SPECS: &[UserSpec] = &[
         },
         ciphers: work_ciphers,
         folders: work_folders,
+        orgs_and_collections: work_orgs_and_collections,
+        assign_ownership: assign_work_ownership,
     },
     // Load-test account: ~20k ciphers mixing logins/cards/notes/identities/ssh
     // keys with deterministic pseudo-random names. Exercises layout, scroll,
@@ -121,6 +162,8 @@ const USER_SPECS: &[UserSpec] = &[
         },
         ciphers: load_test_ciphers,
         folders: load_test_folders,
+        orgs_and_collections: no_orgs,
+        assign_ownership: no_ownership,
     },
 ];
 
@@ -230,7 +273,36 @@ async fn build_user(spec: &UserSpec, data_dir: &Path) -> Result<MockUserMeta, Bo
         })
         .await?;
 
-    let cipher_views = (spec.ciphers)();
+    let (mut organizations, collections) = (spec.orgs_and_collections)();
+
+    // For each org: generate a fresh symmetric key, wrap it with the user's
+    // public key into an `UnsignedSharedKey`, stash it in the mock meta, and
+    // register it in the client's keystore via `initialize_org_crypto` so the
+    // subsequent `encrypt(view)` calls can handle org-owned ciphers.
+    if !organizations.is_empty() {
+        let mut org_init: StdHashMap<OrganizationId, UnsignedSharedKey> = StdHashMap::new();
+        let public_key = {
+            let ctx = client.0.internal.get_key_store().context();
+            ctx.get_public_key(PrivateKeySlotId::UserPrivateKey)?
+        };
+        for org in organizations.iter_mut() {
+            let sym_key = SymmetricCryptoKey::make_aes256_cbc_hmac_key();
+            #[allow(deprecated)]
+            let wrapped = UnsignedSharedKey::encapsulate_key_unsigned(&sym_key, &public_key)?;
+            org.wrapped_key = Some(wrapped.clone());
+            org_init.insert(org.id, wrapped);
+        }
+        client
+            .crypto()
+            .initialize_org_crypto(InitOrgCryptoRequest {
+                organization_keys: org_init,
+            })
+            .await?;
+    }
+
+    let mut cipher_views = (spec.ciphers)();
+    (spec.assign_ownership)(&mut cipher_views, &organizations, &collections);
+
     let total = cipher_views.len();
     if total > 1_000 {
         println!("  encrypting {} ciphers for {}…", total, spec.email);
@@ -280,6 +352,8 @@ async fn build_user(spec: &UserSpec, data_dir: &Path) -> Result<MockUserMeta, Bo
         kdf,
         encrypted_user_key: reg.encrypted_user_key,
         private_key: reg.keys.private,
+        organizations,
+        collections,
     })
 }
 
@@ -461,22 +535,62 @@ fn folder(name: &str) -> FolderView {
 
 fn personal_ciphers() -> Vec<CipherView> {
     vec![
+        // Email / comms
         login("Gmail", Some("alice@example.com"), Some("mail.google.com")),
-        login("GitHub", Some("alice-dev"), Some("github.com")),
-        login("Netflix", Some("alice@example.com"), Some("netflix.com")),
-        login("Amazon", Some("alice@example.com"), Some("amazon.com")),
+        login("Outlook", Some("alice.johnson@outlook.com"), Some("outlook.live.com")),
+        login("iCloud Mail", Some("alice@icloud.com"), Some("icloud.com")),
+        login("ProtonMail", Some("alice.j"), Some("mail.proton.me")),
+        login("Discord", Some("alice#1234"), Some("discord.com")),
+        login("Slack (Community)", Some("alice_j"), Some("rustlang.slack.com")),
+        login("WhatsApp Web", Some("+15550100"), Some("web.whatsapp.com")),
+        login("Signal", Some("+15550100"), Some("signal.org")),
+        login("Zoom", Some("alice@example.com"), Some("zoom.us")),
+        // Social
         login("Reddit", Some("alice_online"), Some("reddit.com")),
-        login("Steam", Some("alice_gamer"), Some("store.steampowered.com")),
+        login("Twitter / X", Some("@alice_j"), Some("x.com")),
+        login("LinkedIn", Some("alice@example.com"), Some("linkedin.com")),
+        login("Instagram", Some("alice.j.photos"), Some("instagram.com")),
+        login("TikTok", Some("@alicej"), Some("tiktok.com")),
+        login("Mastodon (mastodon.social)", Some("@alice"), Some("mastodon.social")),
+        login("Bluesky", Some("alice.bsky.social"), Some("bsky.app")),
+        login("Facebook", Some("alice.johnson.94"), Some("facebook.com")),
+        // Dev
+        login("GitHub", Some("alice-dev"), Some("github.com")),
+        login("GitLab", Some("alice-dev"), Some("gitlab.com")),
+        login("Stack Overflow", Some("alice-dev"), Some("stackoverflow.com")),
+        login("npm", Some("alice-dev"), Some("npmjs.com")),
+        login("crates.io", Some("alice_dev"), Some("crates.io")),
+        login("Docker Hub", Some("alicej"), Some("hub.docker.com")),
+        // Streaming / entertainment
+        login("Netflix", Some("alice@example.com"), Some("netflix.com")),
         login("Spotify", Some("alice@example.com"), Some("spotify.com")),
+        login("YouTube Premium", Some("alice@example.com"), Some("youtube.com")),
+        login("Disney+", Some("alice@example.com"), Some("disneyplus.com")),
+        login("HBO Max", Some("alice@example.com"), Some("max.com")),
+        login("Twitch", Some("alice_streams"), Some("twitch.tv")),
+        login("Steam", Some("alice_gamer"), Some("store.steampowered.com")),
+        login("GOG", Some("alice_gamer"), Some("gog.com")),
+        // Shopping
+        login("Amazon", Some("alice@example.com"), Some("amazon.com")),
+        login("eBay", Some("alicej_buys"), Some("ebay.com")),
+        login("Etsy", Some("alice_j"), Some("etsy.com")),
+        login("PayPal", Some("alice@example.com"), Some("paypal.com")),
+        // Finance
         login(
             "Bank of Example",
             Some("alice.johnson"),
             Some("bankofexample.com"),
         ),
-        login("Discord", Some("alice#1234"), Some("discord.com")),
-        login("Twitter / X", Some("@alice_j"), Some("x.com")),
-        login("LinkedIn", Some("alice@example.com"), Some("linkedin.com")),
+        login("Chase", Some("alice_johnson"), Some("chase.com")),
+        login("Venmo", Some("@alice-j"), Some("venmo.com")),
+        login("Robinhood", Some("alice@example.com"), Some("robinhood.com")),
+        // Productivity / misc
         login("Dropbox", Some("alice@example.com"), Some("dropbox.com")),
+        login("Notion", Some("alice@example.com"), Some("notion.so")),
+        login("1Password (legacy)", Some("alice@example.com"), Some("1password.com")),
+        login("Pinboard", Some("alice_j"), Some("pinboard.in")),
+        login("Duolingo", Some("alice_j"), Some("duolingo.com")),
+        // Cards
         card(
             "Personal Visa",
             "Alice Johnson",
@@ -495,6 +609,16 @@ fn personal_ciphers() -> Vec<CipherView> {
             "2027",
             "456",
         ),
+        card(
+            "Debit",
+            "Alice Johnson",
+            "Visa",
+            "4242 4242 4242 4242",
+            "03",
+            "2028",
+            "789",
+        ),
+        // Identity
         identity(
             "Alice Johnson",
             "Ms",
@@ -503,13 +627,23 @@ fn personal_ciphers() -> Vec<CipherView> {
             "alice@example.com",
             "+1 555 0100",
         ),
+        // Secure notes
         note("Recovery Codes Backup"),
         note("WiFi Passwords"),
+        note("Passport info"),
+        note("Emergency contacts"),
+        // SSH
         ssh_key(
             "GitHub SSH Key",
             "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleAlicePublicKey alice@desktop",
             "-----BEGIN OPENSSH PRIVATE KEY-----\nfake-private-key-bytes\n-----END OPENSSH PRIVATE KEY-----\n",
             "SHA256:abc123ExampleFingerprintAliceDesktop",
+        ),
+        ssh_key(
+            "Home Server",
+            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleAliceHomePublicKey alice@homelab",
+            "-----BEGIN OPENSSH PRIVATE KEY-----\nfake-homelab-private\n-----END OPENSSH PRIVATE KEY-----\n",
+            "SHA256:homeAlice123",
         ),
     ]
 }
@@ -520,18 +654,66 @@ fn personal_folders() -> Vec<FolderView> {
 
 fn work_ciphers() -> Vec<CipherView> {
     vec![
+        // Core work tools
         login(
             "Company Jira",
             Some("ajohnson@acmecorp.com"),
             Some("acmecorp.atlassian.net"),
         ),
+        login(
+            "Confluence",
+            Some("ajohnson@acmecorp.com"),
+            Some("acmecorp.atlassian.net"),
+        ),
         login("Company GitHub", Some("alice-acme"), Some("github.com")),
+        login("Company GitLab", Some("alice-acme"), Some("gitlab.acmecorp.com")),
+        login("Bitbucket", Some("alice-acme"), Some("bitbucket.org")),
+        login("Slack", Some("ajohnson"), Some("acmecorp.slack.com")),
+        login("Microsoft Teams", Some("ajohnson@acmecorp.com"), Some("teams.microsoft.com")),
+        login("Zoom (Work)", Some("ajohnson@acmecorp.com"), Some("acmecorp.zoom.us")),
+        login("Google Workspace", Some("ajohnson@acmecorp.com"), Some("workspace.google.com")),
+        login("Office 365", Some("ajohnson@acmecorp.com"), Some("office.com")),
+        login("Dropbox Business", Some("ajohnson@acmecorp.com"), Some("business.dropbox.com")),
+        // Cloud providers
         login(
             "AWS Console",
             Some("ajohnson@acmecorp.com"),
             Some("aws.amazon.com"),
         ),
-        login("Slack", Some("ajohnson"), Some("acmecorp.slack.com")),
+        login("AWS (dev account)", Some("alice-dev"), Some("aws.amazon.com")),
+        login("GCP Console", Some("ajohnson@acmecorp.com"), Some("console.cloud.google.com")),
+        login("Azure Portal", Some("ajohnson@acmecorp.com"), Some("portal.azure.com")),
+        login("Cloudflare", Some("ajohnson@acmecorp.com"), Some("dash.cloudflare.com")),
+        login("Vercel", Some("alice-acme"), Some("vercel.com")),
+        login("Netlify", Some("alice-acme"), Some("app.netlify.com")),
+        login("Heroku", Some("ajohnson@acmecorp.com"), Some("dashboard.heroku.com")),
+        login("Fastly", Some("alice-acme"), Some("manage.fastly.com")),
+        // Ops / observability
+        login("Datadog", Some("ajohnson@acmecorp.com"), Some("app.datadoghq.com")),
+        login("PagerDuty", Some("ajohnson@acmecorp.com"), Some("acmecorp.pagerduty.com")),
+        login("Grafana Cloud", Some("ajohnson@acmecorp.com"), Some("grafana.net")),
+        login("Sentry", Some("alice-acme"), Some("sentry.io")),
+        login("Linear", Some("ajohnson@acmecorp.com"), Some("linear.app")),
+        login("Notion (Team)", Some("ajohnson@acmecorp.com"), Some("acmecorp.notion.site")),
+        // HR / admin
+        login("Workday", Some("ajohnson"), Some("acmecorp.workday.com")),
+        login("Expensify", Some("ajohnson@acmecorp.com"), Some("expensify.com")),
+        login("Greenhouse", Some("ajohnson@acmecorp.com"), Some("acmecorp.greenhouse.io")),
+        login("DocuSign", Some("ajohnson@acmecorp.com"), Some("docusign.net")),
+        login("Gusto (Payroll)", Some("ajohnson@acmecorp.com"), Some("gusto.com")),
+        // SaaS customers care about
+        login("Stripe", Some("ajohnson@acmecorp.com"), Some("dashboard.stripe.com")),
+        login("Segment", Some("alice-acme"), Some("app.segment.com")),
+        login("Mixpanel", Some("ajohnson@acmecorp.com"), Some("mixpanel.com")),
+        login("Intercom", Some("ajohnson@acmecorp.com"), Some("app.intercom.com")),
+        login("Zendesk", Some("ajohnson@acmecorp.com"), Some("acmecorp.zendesk.com")),
+        login("Salesforce", Some("ajohnson@acmecorp.com"), Some("acmecorp.my.salesforce.com")),
+        login("HubSpot", Some("ajohnson@acmecorp.com"), Some("app.hubspot.com")),
+        login("Figma", Some("ajohnson@acmecorp.com"), Some("figma.com")),
+        // Domain / DNS / infra
+        login("Namecheap", Some("alice-acme"), Some("namecheap.com")),
+        login("Terraform Cloud", Some("alice-acme"), Some("app.terraform.io")),
+        // Cards
         card(
             "Corporate Card",
             "Acme Corp",
@@ -541,18 +723,91 @@ fn work_ciphers() -> Vec<CipherView> {
             "2028",
             "7890",
         ),
+        card(
+            "Travel Expenses Card",
+            "Alice Johnson",
+            "Visa",
+            "4000 1234 5678 9010",
+            "04",
+            "2027",
+            "321",
+        ),
+        // Notes
         note("Production DB Credentials"),
+        note("On-call Runbook"),
+        note("Release Process Checklist"),
+        note("VPN Config"),
+        // SSH
         ssh_key(
             "Deploy SSH Key",
             "ssh-rsa AAAAB3NzaC1yc2EExampleDeployKey deploy@acmecorp",
             "-----BEGIN OPENSSH PRIVATE KEY-----\nfake-deploy-private-bytes\n-----END OPENSSH PRIVATE KEY-----\n",
             "SHA256:def456ExampleFingerprintDeploy",
         ),
+        ssh_key(
+            "Staging Bastion",
+            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleStaging alice@staging",
+            "-----BEGIN OPENSSH PRIVATE KEY-----\nfake-staging-private\n-----END OPENSSH PRIVATE KEY-----\n",
+            "SHA256:staging456",
+        ),
     ]
 }
 
 fn work_folders() -> Vec<FolderView> {
     vec![folder("Work"), folder("Infrastructure")]
+}
+
+// ── Org / collection generators ────────────────────────────────────────────
+
+fn no_orgs() -> (Vec<MockOrganization>, Vec<MockCollection>) {
+    (vec![], vec![])
+}
+
+fn no_ownership(_: &mut [CipherView], _: &[MockOrganization], _: &[MockCollection]) {}
+
+fn work_orgs_and_collections() -> (Vec<MockOrganization>, Vec<MockCollection>) {
+    let org = MockOrganization {
+        id: OrganizationId::new(uuid::Uuid::new_v4()),
+        name: "Acme Corp".to_string(),
+        wrapped_key: None, // filled in by `build_user` after user crypto init
+    };
+    let collections = vec![
+        MockCollection {
+            id: CollectionId::new(uuid::Uuid::new_v4()),
+            organization_id: org.id,
+            name: "Engineering".to_string(),
+        },
+        MockCollection {
+            id: CollectionId::new(uuid::Uuid::new_v4()),
+            organization_id: org.id,
+            name: "Marketing".to_string(),
+        },
+        MockCollection {
+            id: CollectionId::new(uuid::Uuid::new_v4()),
+            organization_id: org.id,
+            name: "HR".to_string(),
+        },
+    ];
+    (vec![org], collections)
+}
+
+/// Assign the first two work ciphers to the Engineering collection so the
+/// edit form has a realistic preselected org + collection to render. Relies
+/// on `build_user` having called `initialize_org_crypto` first so the org
+/// key is in the keystore by the time we encrypt these views.
+fn assign_work_ownership(
+    ciphers: &mut [CipherView],
+    orgs: &[MockOrganization],
+    collections: &[MockCollection],
+) {
+    let Some(org) = orgs.first() else { return };
+    let Some(eng) = collections.iter().find(|c| c.name == "Engineering") else {
+        return;
+    };
+    for cipher in ciphers.iter_mut().take(2) {
+        cipher.organization_id = Some(org.id);
+        cipher.collection_ids = vec![eng.id];
+    }
 }
 
 // ── Load-test generators ───────────────────────────────────────────────────

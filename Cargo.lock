@@ -864,6 +864,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "bitwarden-auth",
+ "bitwarden-collections",
  "bitwarden-core",
  "bitwarden-crypto",
  "bitwarden-pm",
@@ -2602,6 +2603,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "bitwarden-auth",
+ "bitwarden-collections",
  "bitwarden-core",
  "bitwarden-crypto",
  "bitwarden-pm",

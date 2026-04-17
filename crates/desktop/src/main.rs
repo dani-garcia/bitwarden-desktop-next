@@ -75,7 +75,7 @@ fn init_tracing() {
 
     fmt()
         .with_env_filter(filter)
-        .with_target(false)
+        .with_target(true)
         .with_writer(std::io::stderr)
         .init();
 }

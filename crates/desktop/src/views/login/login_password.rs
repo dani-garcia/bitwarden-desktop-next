@@ -4,11 +4,11 @@ use iced::{
 };
 
 use crate::{
-    components::buttons,
+    components::{buttons, inputs::floating_label_input},
     theme::{AppColors, AppTheme},
 };
 
-use super::{LoginMessage, input_field, layout};
+use super::{LoginMessage, layout};
 
 /// Renders the full center content for the login password screen:
 /// wave icon, "Welcome back" title, email subtitle, card with password field + buttons.
@@ -39,7 +39,7 @@ fn card_content<'a>(
     show_password: bool,
     colors: &'a AppColors,
 ) -> Element<'a, LoginMessage, AppTheme> {
-    let password_field = input_field::floating_label_input(
+    let password_field = floating_label_input(
         "Master password (required)",
         password,
         LoginMessage::LoginPasswordChanged,
