@@ -10,13 +10,11 @@
 
 ## Renderer: tiny-skia by default
 
-**Decision**: Default to tiny-skia (CPU renderer). The wgpu GPU backend is available but not compiled in by default.
+**Decision**: Default to tiny-skia (CPU renderer). The wgpu GPU backend is available behind a feature flag.
 
-**Previous approach**: wgpu as the default renderer.
+**Why**: wgpu init takes ~500 ms and adds ~9 MB to the binary. A form-based UI does not need it.
 
-**Why changed**: wgpu init takes ~500 ms and adds ~9 MB to the binary. A form-based UI does not need it.
-
-**How to enable wgpu**: uncomment `"wgpu"` in the iced features list in `crates/desktop/Cargo.toml` and rebuild. The `--gpu` runtime flag in `main.rs` switches `ICED_BACKEND=wgpu` but only takes effect when the feature is compiled in (gated by `cfg!(feature = "gpu")`). Without the feature, the flag is a no-op — the current expected state.
+**How to enable wgpu**: see [architecture.md](./architecture.md) → "wgpu opt-in".
 
 ## Crate Name: bitwarden-desktop-next
 
@@ -68,29 +66,13 @@
 
 ## Compositional MVU
 
-**Decision**: Each view (`LoginView`, `VaultView`, `TitleBarState`) owns its local state and async work, and returns `(Task<SubMessage>, Option<SubEvent>)` from its `update()` method. The parent `App` is a thin router that lifts sub-tasks via `Task::map(Message::Sub)` and translates events into cross-cutting side effects.
+**Decision**: Each view owns its local state and async work, and returns `(Task<SubMessage>, Option<SubEvent>)` from its `update()` method. App is a thin router. See [architecture.md](./architecture.md) → "Compositional MVU Pattern" for the implementation shape, message flow, and "How to Add a New View" recipe.
 
-**Previous approach**: Sub-views returned `Vec<Action>` with imperative requests ("App please call `mgr.unlock(pw)` now"); App owned every `Task::perform` call. Async completions were orphan top-level `Message` variants.
+**Previous approach**: Sub-views returned `Vec<Action>` with imperative requests; App owned every `Task::perform` call; async completions were orphan top-level `Message` variants.
 
-**Why changed**: the top-level `Message` enum had grown to 13 variants; `App::update()` was 220 lines mixing routing, async dispatch, toast pushes, theme sync, and window chrome. Every new feature touched shared files. `app.rs` became the single-team bottleneck.
-
-**New pattern**:
-
-1. Sub-views own their async work (call `Task::perform` directly, return `Task<SubMessage>`).
-2. Async callbacks re-enter the owning view (`LoginMessage::UnlockCompleted` is a variant of `LoginMessage`, not the top-level `Message`). The view handles the completion, performs a stale-check against `active_user`, and emits a completed-state event.
-3. Events are declarative (`LoginEvent::Unlocked { uid }` — a domain fact, not a request).
-4. `ClientManager` is injected call-time via `&Arc<ClientManager>`. Views stay cheaply constructible in tests.
-5. Cross-cutting dismissal stays at the router level. The pre-match block at the top of `App::update` closes the other view's overlays on every sub-view message.
-
-**Result**: Top-level `Message` shrank to 6 (`Login`, `Vault`, `TitleBar`, `About`, `Window`, `System`). `App::update()` is now a pure router (plus a pre-match dismissal block and a `post_update()` call). Adding a new screen costs exactly four mechanical lines in `app.rs` — see `docs/architecture.md` → "How to Add a New View".
-
-**Factory methods for cross-view tasks**: when a task is kicked off from App but its completion message belongs to a sub-view, the factory lives on the sub-view as a static function (e.g. `VaultView::load_list_task(uid, mgr) -> Task<VaultMessage>`). App's `helpers::load_vault_list_task` is a thin wrapper that lifts to `Task<Message>`.
-
-**About window exception**: `about/mod.rs` is a stateless pure view function handled directly in `App::handle_about_message`. Intentional deviation — gaining state would convert it to the compositional pattern. Flagging here so future contributors don't accidentally model `Message::About` handling as the normal pattern.
+**Why changed**: top-level `Message` had grown to 13 variants; `App::update()` was 220 lines mixing routing, async dispatch, toast pushes, theme sync, and window chrome. Every new feature touched shared files. `app.rs` became the single-team bottleneck. After the refactor: `Message` shrank to 6, adding a new screen costs four mechanical lines in `app.rs`.
 
 **Prior art**: Halloy — [investigation/halloy/src/buffer.rs:247](../investigation/halloy/src/buffer.rs); cosmic-settings — [investigation/cosmic-settings/cosmic-settings/src/pages/mod.rs:113](../investigation/cosmic-settings/cosmic-settings/src/pages/mod.rs); iced-guide — [investigation/iced-guide/src/app_structure/composition.md](../investigation/iced-guide/src/app_structure/composition.md).
-
-**Daemon-ready shapes**: `WindowMessage` (per-window OS events) — every variant carries `window::Id`. The app is already on `iced::daemon` — sub-view dispatch stays identical.
 
 **Kill-switch criteria**: revisit this pattern if (a) sub-views need to nest multiple levels deep — the `Task::map` chain gets awkward past two levels, or (b) we need a middleware router (e.g. undo/redo).
 
@@ -155,6 +137,22 @@
 **Previous approach**: `iced::widget::stack!` with manual backdrops for click-outside-to-close.
 
 **Why changed**: Stack-based overlays couldn't cover the title bar. DropDown uses iced's native overlay system which renders at the window level, handles click-outside automatically, and positions relative to the trigger.
+
+## Window-Level Overlays Composed at App Root
+
+**Decision**: Overlays meant to cover the whole window (bottom sheet, future modals) are composed as siblings of the root column at the App level via `iced::widget::stack`, not nested inside the screen they belong to. Sub-views expose an `Option<Element>`-returning method (e.g. `VaultView::sheet_view(colors, width)`) that App stacks on top of `column![title_bar, page]`.
+
+**Why**: `iced::widget::stack` doesn't cull or clip — every child fully lays out at the same bounds. Stacking a heavy detail subtree inside a content area meant iced walked both the list AND the detail tree on every frame, even when one was visually covered. Hoisting to the App level let the underlying screen take a cheaper exclusive branch (e.g. vault narrow mode renders only the list, no `pane_grid`), so the total per-frame layout work dropped despite the sheet being conceptually "more on top".
+
+**How to apply**: Any future overlay that conceptually covers the entire window — modals, sheets, full-screen confirmations — should expose an `Option<Element>` accessor on the owning view and be stacked at the App level. If the overlay only covers a sub-region, prefer an exclusive branch in the view's own `view()` over stacking.
+
+## Responsive Layout Pattern
+
+**Decision**: For layouts that change based on window size: subscribe to `window::Event::Resized` via `iced::event::listen_with`, store `iced::Size` per `WindowInfo` in `App.windows`, thread the width into the view function, and branch on a `pub const ..._BREAKPOINT_PX: f32` constant near the view module.
+
+**Rationale**: Iced provides no other way to access window size from a view. `view()` re-runs every frame, so the layout swaps automatically on resize without any extra plumbing. Constants keep the breakpoint editable in one place.
+
+**First consumer**: vault detail. `SHEET_BREAKPOINT_PX` in `views/vault/mod.rs` switches between a side `pane_grid` split (wide) and an App-level bottom sheet (narrow).
 
 ## Self-Animating Widgets via RedrawRequested
 

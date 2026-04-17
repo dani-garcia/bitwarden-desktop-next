@@ -1,35 +1,15 @@
 # TODO
 
 Tasks are organized into four rough tiers by priority. Within a tier, pick what's
-most unblocking or most interesting — the tiers are not a strict ordering.
+most unblocking or most interesting — the tiers are not a strict ordering. Completed
+work isn't tracked here; check `git log` or [docs/decisions.md](./decisions.md) for context.
 
 ## Contents
 
-- [Recently Completed](#recently-completed)
 - [Tier 1 — Do Next](#tier-1--do-next)
 - [Tier 2 — User-Visible Features](#tier-2--user-visible-features)
 - [Tier 3 — Research & Architecture](#tier-3--research--architecture)
 - [Tier 4 — Deferred / Waiting Upstream](#tier-4--deferred--waiting-upstream)
-
----
-
-## Recently Completed
-
-- **Per-user SQLite state, `mock-vault.json` retired.** Mock data now lives in `<workspace-root>/data/`: one `<user_uuid>.sqlite` per user plus `data/mock.json` for non-cipher metadata (email, KDF, encrypted user key, unlock methods). The desktop app discovers users by listing `data/*.sqlite`, opens each via `client.platform().state().initialize_database(Sqlite { db_name, folder_path }, get_sdk_managed_migrations())`, and reads ciphers/folders through the resulting SDK-managed `Repository`. `MemoryRepo` is gone except for a narrow instance kept for `LocalUserDataKeyState` (not part of the migration list but touched by `initialize_user_crypto`). `tools/fake-data` wipes `data/` at the start of each run and writes to each per-user DB via `set_bulk`. User IDs are freshly generated random UUIDv4s per run. `ClientManager::load()` is now async end-to-end; startup uses `Task::perform(async { Arc::new(ClientManager::load().await) }, ...)`. `data/` is gitignored. TODO left in both `build_user` call-sites to migrate to `PasswordManagerClient::load_from_state` once the SDK exposes it.
-- **Iced 0.15 upgrade + CPU renderer default.** `iced = "0.15"` (git-pinned), default backend `tiny-skia` — saves ~500 ms startup + ~9 MB binary vs wgpu. `--gpu` runtime flag in `main.rs` is gated by `cfg!(feature = "gpu")`; enable wgpu by uncommenting `"wgpu"` in the iced features list in `crates/desktop/Cargo.toml`.
-- **Lazy data load + Loading screen.** `App::new` returns fast with `ClientManager::empty()` and `Screen::Loading`; 24 MB JSON parse runs on tokio's blocking pool via `spawn_blocking`. When `SystemMessage::ClientManagerLoaded` arrives, the handler swaps the `Arc` and transitions to `Screen::Login`. New `components/spinner.rs` is a self-animating 8-dot ring widget (same `RedrawRequested` + `request_redraw_at` pattern as the toast overlay, no app-level subscription).
-- **Unlock loading indicator.** `LoginView.unlock_in_progress: bool` drives an inline spinner inside the primary button during the unlock task. Password input becomes read-only, alternate buttons + Log out stay visible but inert. Re-entry guards in `LoginMessage::Unlock` prevent Enter-spam. Flag cleared on `UnlockCompleted` (Ok + Err), `SwitchUnlockMethod`, `reset_to_email_entry`, `show_unlock_for`.
-- **Skill-driven code review pass.** Ran code-architect, code-explorer, code-reviewer, and simplify over the whole project; written reports under `docs/skills/`. High-confidence bug / quality / efficiency findings landed as concrete fixes: sign-out screen transition, `MemoryRepo` mutex-poison-to-`RepositoryError::Internal` mapping, scrollbar thumb theme token, `AppTheme.name` → `&'static str`, toast string clone removal, SDK error sanitization in unlock-failure toast, `SEARCH_ID` widget-id constant, `field_readonly` helper unification, `load_vault_list_task` factory moved onto `VaultView`, dead `has_authenticated_accounts` menu-state bool collapsed, Linux dead-panic removed, spurious `SearchFocusRequested` spam on every keystroke removed, `BackToEmail` now preserves the typed email, `DetailLoaded` decrypt errors now toast instead of silently logging.
-- **Virtual List / Lazy Scrolling.** New generic `components::virtual_list` module implements DIY viewport-windowed scrolling over uniform-height items: builds widgets only for rows inside the visible window (+ `MIN_OVERSCAN = 5` rows of overscan), with `Space::with_height` fillers above/below to preserve the scroll thumb ratio. Drops `Column::layout()` cost from O(N) to O(window ≈ 20). `item_list::view` is the first consumer — each row is wrapped in a `Length::Fixed(49)` container.
-- **Stable SDK `UserId` per Client.** `UserEntry::sdk_user_id` is parsed once from the mock vault's stable UUID string (`11111111-1111-4111-a111-...` and friends) and reused on every unlock. Fixed the latent bug where `UserId::new_v4()` was generated fresh on every `unlock()` call.
-- **Unified `UserId` type.** `state::UserId` is now a re-export of `bitwarden_core::UserId` (a `Copy` newtype around `uuid::Uuid`) instead of a `String` alias. `ClientManager` accessors take `&UserId`, `HashMap<UserId, _>` keys are parsed UUIDs from the mock vault via serde, and the redundant `UserId::new(uuid::Uuid::parse_str(...))` step in `build_user_entry` is gone. Closes the "any string accepted" gap at the type level.
-- **Observability: `tracing` + `tracing_subscriber`.** Workspace deps added; subscriber installed in `main.rs::init_tracing()` driven by `RUST_LOG` (default `bitwarden_desktop_next=debug,warn`). All `eprintln!` call sites converted to structured `tracing::info!` / `warn!` / `error!` / `debug!` with named fields. SDK `#[tracing::instrument]` spans visible for free under `RUST_LOG=...,bitwarden_core=debug`.
-- **Load-test account (~20 k ciphers).** Third user `loadtest@example.com` / password `loadtest` in `tools/fake-data`. Deterministic xorshift64 PRNG drives name/username picks. JSON output switched to compact form — `assets/mock-vault.json` is now ~24 MB.
-- **View Encapsulation refactor (compositional MVU).** Sub-views return `(Task<SubMessage>, Option<SubEvent>)`; async lifecycle lives with the owning view; `app.rs::update` is a pure router. See [decisions.md](./decisions.md) → "Compositional MVU".
-- **`App` struct regrouped** into `ViewCache` / `ThemeState` / `WindowInfo` sub-structs.
-- **`VaultView` regrouped** into `SidebarState` / `Selection` / `ItemCache` sub-structs. `sidebar::view` / `expanded_panel` signatures dropped from 6 and 5 params to 2 each.
-- **`view()` functions are now methods** on their view structs.
-- **`Border` / `container::Style` builder pattern adoption.** `Border::default().color(c).width(w).rounded(r)` and `container::Style::default().background(c).border(b)` replaced `{ ..Default::default() }` struct-literal boilerplate across 14 files. Style construction is shorter and less error-prone.
 
 ---
 
