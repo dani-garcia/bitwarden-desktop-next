@@ -103,6 +103,16 @@ pub struct ClientManager {
     users: HashMap<DesktopUserId, UserEntry>,
 }
 
+// Needed so `Message` can derive `Debug` with the `ClientManagerLoaded(Arc<ClientManager>)`
+// variant; `PasswordManagerClient` doesn't implement `Debug`, so we print just the count.
+impl std::fmt::Debug for ClientManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ClientManager")
+            .field("users", &self.users.len())
+            .finish()
+    }
+}
+
 pub trait ClientExt {
     fn is_unlocked(&self) -> bool;
     fn lock(&self);
@@ -123,6 +133,15 @@ impl ClientExt for PasswordManagerClient {
 }
 
 impl ClientManager {
+    /// Placeholder manager with no users. Used as the initial value while
+    /// `load()` runs on a background thread so `App::new` can return and the
+    /// window can appear before the 24 MB JSON parse finishes.
+    pub fn empty() -> Self {
+        Self {
+            users: HashMap::new(),
+        }
+    }
+
     /// Load all users from the embedded mock vault JSON.
     pub fn load() -> Self {
         let parsed: MockVaultFile = serde_json::from_slice(&MOCK_VAULT_JSON)

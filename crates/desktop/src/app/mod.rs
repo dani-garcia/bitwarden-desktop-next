@@ -18,7 +18,7 @@ use crate::{
     state::{Screen, UnlockMethod, UserId},
     theme::{AppTheme, ThemePreference},
     views::{
-        login::{self, AuthPage},
+        login,
         title_bar::{self, TitleBarMessage},
         vault,
     },
@@ -77,13 +77,10 @@ pub struct ThemeState {
 
 impl App {
     pub fn new() -> (Self, Task<Message>) {
-        let client_manager = Arc::new(ClientManager::load());
-        let active_user = client_manager.user_ids().next().cloned();
-
         let system_theme = Arc::new(
             system_theme::SystemTheme::new().expect("failed to initialize system theme observer"),
         );
-        let initial_theme = ThemePreference::System.resolve(system_theme.get_scheme());
+        let initial_theme = ThemePreference::Dark.resolve(system_theme.get_scheme());
 
         // Open the main window via `window::open` — daemon mode doesn't
         // create a window automatically (unlike `iced::application`).
@@ -103,13 +100,25 @@ impl App {
         let mut windows = HashMap::new();
         windows.insert(main_id, WindowInfo::new(WindowKind::Main));
 
-        let mut app = Self {
-            active_user,
-            screen: Screen::Login,
+        // Parse the 24 MB mock-vault JSON on tokio's blocking pool so the
+        // window can render a spinner first. `Arc::new` happens on the
+        // async side so the `ClientManagerLoaded` handler only swaps Arcs.
+        let load_task = Task::perform(
+            async {
+                tokio::task::spawn_blocking(|| Arc::new(ClientManager::load()))
+                    .await
+                    .expect("ClientManager::load panicked")
+            },
+            |mgr| Message::System(SystemMessage::ClientManagerLoaded(mgr)),
+        );
+
+        let app = Self {
+            active_user: None,
+            screen: Screen::Loading,
             login_view: login::LoginView::new(),
             vault_view: vault::VaultView::new(),
             title_bar: title_bar::TitleBarState::new(),
-            client_manager,
+            client_manager: Arc::new(ClientManager::empty()),
             cache: ViewCache::default(),
             theme: ThemeState {
                 preference: ThemePreference::System,
@@ -120,19 +129,13 @@ impl App {
             native_menu: None,
             toasts: Vec::new(),
         };
-        // Set initial unlock method based on active user's preferred method
-        let preferred = app
-            .active_user
-            .as_ref()
-            .and_then(|uid| app.client_manager.unlock_methods(uid))
-            .map(|m| m.preferred())
-            .unwrap_or(UnlockMethod::MasterPassword);
-        app.login_view.auth_page = AuthPage::new_unlock(preferred);
-        app.refresh_cache();
 
         (
             app,
-            open_task.map(|id| Message::Window(WindowMessage::Opened(id))),
+            Task::batch([
+                open_task.map(|id| Message::Window(WindowMessage::Opened(id))),
+                load_task,
+            ]),
         )
     }
 
@@ -187,11 +190,9 @@ impl App {
 
         let task = match message {
             Message::Login(m) => {
-                let (task, ev) = self.login_view.update(
-                    m,
-                    &self.client_manager,
-                    self.active_user.as_ref(),
-                );
+                let (task, ev) =
+                    self.login_view
+                        .update(m, &self.client_manager, self.active_user.as_ref());
                 let task = task.map(Message::Login);
                 let ev_task = ev
                     .map(|e| self.handle_login_event(e))
@@ -199,11 +200,9 @@ impl App {
                 Task::batch([task, ev_task])
             }
             Message::Vault(m) => {
-                let (task, ev) = self.vault_view.update(
-                    m,
-                    &self.client_manager,
-                    self.active_user.as_ref(),
-                );
+                let (task, ev) =
+                    self.vault_view
+                        .update(m, &self.client_manager, self.active_user.as_ref());
                 let task = task.map(Message::Vault);
                 let ev_task = ev
                     .map(|e| self.handle_vault_event(e))
@@ -259,6 +258,10 @@ impl App {
         let server = active.map(|a| a.server_url.as_str()).unwrap_or("");
 
         let page: Element<'_, Message, AppTheme> = match self.screen {
+            Screen::Loading => {
+                iced::widget::center(crate::components::spinner::spinner(48.0, colors.accent))
+                    .into()
+            }
             Screen::Login => self
                 .login_view
                 .view(

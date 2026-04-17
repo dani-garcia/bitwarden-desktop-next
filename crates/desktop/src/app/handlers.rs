@@ -183,6 +183,19 @@ impl App {
                 }
                 Task::none()
             }
+            SystemMessage::ClientManagerLoaded(mgr) => {
+                self.client_manager = mgr;
+                self.active_user = self.client_manager.user_ids().next().cloned();
+                let preferred = self
+                    .active_user
+                    .as_ref()
+                    .and_then(|uid| self.client_manager.unlock_methods(uid))
+                    .map(|m| m.preferred())
+                    .unwrap_or(UnlockMethod::MasterPassword);
+                self.login_view.auth_page = AuthPage::new_unlock(preferred);
+                self.screen = Screen::Login;
+                Task::none()
+            }
         }
     }
 

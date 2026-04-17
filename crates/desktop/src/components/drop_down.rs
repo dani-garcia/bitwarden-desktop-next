@@ -509,19 +509,20 @@ where
 
         if let Some(on_dismiss) = self.on_dismiss {
             match &event {
-                Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) => {
-                    if key == &keyboard::Key::Named(Named::Escape) {
-                        shell.publish(on_dismiss.clone());
-                    }
+                Event::Keyboard(keyboard::Event::KeyPressed { key, .. })
+                    if key == &keyboard::Key::Named(Named::Escape) =>
+                {
+                    shell.publish(on_dismiss.clone());
                 }
 
                 Event::Mouse(iced::mouse::Event::ButtonPressed(
                     iced::mouse::Button::Left | iced::mouse::Button::Right,
                 ))
-                | Event::Touch(touch::Event::FingerPressed { .. }) => {
-                    if !cursor.is_over(layout.bounds()) && !cursor.is_over(self.underlay_bounds) {
-                        shell.publish(on_dismiss.clone());
-                    }
+                | Event::Touch(touch::Event::FingerPressed { .. })
+                    if !cursor.is_over(layout.bounds())
+                        && !cursor.is_over(self.underlay_bounds) =>
+                {
+                    shell.publish(on_dismiss.clone());
                 }
 
                 _ => {}

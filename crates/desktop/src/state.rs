@@ -44,6 +44,10 @@ impl UnlockMethods {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Screen {
+    // Initial screen while `ClientManager::load` runs on a background thread.
+    // Switches to `Login` once the loaded manager arrives via
+    // `SystemMessage::ClientManagerLoaded`.
+    Loading,
     Login,
     Vault,
 }

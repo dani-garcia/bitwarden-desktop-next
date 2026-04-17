@@ -1,5 +1,10 @@
-use crate::views::{
-    about::AboutMessage, login::LoginMessage, title_bar::TitleBarMessage, vault::VaultMessage,
+use std::sync::Arc;
+
+use crate::{
+    sdk::ClientManager,
+    views::{
+        about::AboutMessage, login::LoginMessage, title_bar::TitleBarMessage, vault::VaultMessage,
+    },
 };
 
 // ── Top-level Message ──────────────────────────────────────────────────────
@@ -41,6 +46,10 @@ pub enum SystemMessage {
     ThemeChanged,
     /// User dismissed a toast via the x button or auto-dismiss expiry.
     CloseToast(usize),
+    /// The background `ClientManager::load` task finished. Swaps the placeholder
+    /// `ClientManager::empty()` for the fully-populated one and transitions out
+    /// of `Screen::Loading`.
+    ClientManagerLoaded(Arc<ClientManager>),
 }
 
 /// Per-window metadata. Keyed by `iced::window::Id` in a `HashMap` on `App`.
