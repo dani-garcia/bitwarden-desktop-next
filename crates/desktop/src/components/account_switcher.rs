@@ -63,7 +63,7 @@ pub fn dropdown<'a>(
         .iter()
         .filter(|a| a.email != active_email)
         .map(|account| {
-            let uid = account.user_id.clone();
+            let uid = account.user_id;
             let locked_label = if account.locked { " (locked)" } else { "" };
             let initial = account
                 .email

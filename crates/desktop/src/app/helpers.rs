@@ -48,7 +48,7 @@ impl App {
             .client_manager
             .user_ids()
             .map(|uid| AccountEntry {
-                user_id: uid.clone(),
+                user_id: *uid,
                 email: self.client_manager.email(uid).unwrap_or("").to_string(),
                 display_name: self
                     .client_manager
@@ -85,7 +85,7 @@ impl App {
     /// if the new user is unlocked, returns the task that repopulates the
     /// vault list.
     pub(super) fn handle_user_switch(&mut self, uid: UserId) -> Task<Message> {
-        self.active_user = Some(uid.clone());
+        self.active_user = Some(uid);
         self.vault_view.reset(&uid);
         if !self.client_manager.is_unlocked(&uid) {
             self.screen = Screen::Login;

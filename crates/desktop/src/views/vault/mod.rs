@@ -169,14 +169,13 @@ impl VaultView {
     /// that produce `VaultMessage`s stay within the owning view.
     pub fn load_list_task(uid: UserId, mgr: &Arc<ClientManager>) -> Task<VaultMessage> {
         let mgr = mgr.clone();
-        let uid_for_msg = uid.clone();
         Task::perform(
             async move {
                 mgr.list_ciphers(&uid)
                     .await
                     .map(|items| items.into_iter().map(Arc::new).collect::<Vec<_>>())
             },
-            move |result| VaultMessage::ListLoaded(uid_for_msg.clone(), result),
+            move |result| VaultMessage::ListLoaded(uid, result),
         )
     }
 
@@ -230,13 +229,12 @@ impl VaultView {
                         return (Task::none(), None);
                     };
                     let mgr = client_manager.clone();
-                    let Some(uid) = active_user.cloned() else {
+                    let Some(uid) = active_user.copied() else {
                         return (Task::none(), None);
                     };
-                    let uid_for_msg = uid.clone();
                     let task =
                         Task::perform(async move { mgr.full_cipher(&uid, id).await }, move |res| {
-                            VaultMessage::DetailLoaded(uid_for_msg, id, res.map(Box::new))
+                            VaultMessage::DetailLoaded(uid, id, res.map(Box::new))
                         });
                     (task, None)
                 }
@@ -287,7 +285,7 @@ impl VaultView {
                             count = items.len(),
                             "vault list loaded"
                         );
-                        let cache = self.items.entry(msg_uid.clone()).or_default();
+                        let cache = self.items.entry(msg_uid).or_default();
                         cache.all = items;
                         // Only recompute the filtered view if this is the
                         // active user — search_query / active_filter are

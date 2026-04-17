@@ -33,7 +33,7 @@ use bitwarden_state::repository::{Repository, RepositoryError, RepositoryItem};
 use bitwarden_vault::{Cipher, CipherId, CipherListView, CipherView, Folder};
 use serde::Deserialize;
 
-use crate::state::{UnlockMethods, UserId as DesktopUserId};
+use crate::state::UnlockMethods;
 
 static MOCK_VAULT_JSON: LazyLock<Vec<u8>> = LazyLock::new(|| {
     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/mock-vault.json");
@@ -53,7 +53,7 @@ struct MockVaultFile {
 
 #[derive(Deserialize)]
 struct MockUser {
-    user_id: String,
+    user_id: UserId,
     email: String,
     display_name: String,
     server_url: String,
@@ -100,7 +100,7 @@ struct UserEntry {
 }
 
 pub struct ClientManager {
-    users: HashMap<DesktopUserId, UserEntry>,
+    users: HashMap<UserId, UserEntry>,
 }
 
 // Needed so `Message` can derive `Debug` with the `ClientManagerLoaded(Arc<ClientManager>)`
@@ -156,34 +156,34 @@ impl ClientManager {
                 folders = mu.folders.len(),
                 "loaded mock user"
             );
-            users.insert(mu.user_id.clone(), build_user_entry(mu));
+            users.insert(mu.user_id, build_user_entry(mu));
         }
 
         tracing::info!(users = users.len(), "ClientManager loaded");
         Self { users }
     }
 
-    pub fn user_ids(&self) -> impl Iterator<Item = &DesktopUserId> {
+    pub fn user_ids(&self) -> impl Iterator<Item = &UserId> {
         self.users.keys()
     }
 
-    pub fn email(&self, uid: &str) -> Option<&str> {
+    pub fn email(&self, uid: &UserId) -> Option<&str> {
         self.users.get(uid).map(|e| e.email.as_str())
     }
 
-    pub fn display_name(&self, uid: &str) -> Option<&str> {
+    pub fn display_name(&self, uid: &UserId) -> Option<&str> {
         self.users.get(uid).map(|e| e.display_name.as_str())
     }
 
-    pub fn server_url(&self, uid: &str) -> Option<&str> {
+    pub fn server_url(&self, uid: &UserId) -> Option<&str> {
         self.users.get(uid).map(|e| e.server_url.as_str())
     }
 
-    pub fn unlock_methods(&self, uid: &str) -> Option<&UnlockMethods> {
+    pub fn unlock_methods(&self, uid: &UserId) -> Option<&UnlockMethods> {
         self.users.get(uid).map(|e| &e.unlock_methods)
     }
 
-    pub fn is_unlocked(&self, uid: &str) -> bool {
+    pub fn is_unlocked(&self, uid: &UserId) -> bool {
         self.users.get(uid).is_some_and(|e| e.client.is_unlocked())
     }
 
@@ -205,7 +205,7 @@ impl ClientManager {
     /// Initialize the SDK crypto state for the given user with their master password.
     /// On success, the user's keystore is unlocked in memory and subsequent decrypt
     /// calls will succeed. Returns an error if the user is unknown or the password is wrong.
-    pub async fn unlock(&self, user_id: &str, password: String) -> Result<(), String> {
+    pub async fn unlock(&self, user_id: &UserId, password: String) -> Result<(), String> {
         let entry = self
             .users
             .get(user_id)
@@ -241,7 +241,7 @@ impl ClientManager {
 
     /// Decrypt all ciphers belonging to the given user. Requires `unlock` to have been called
     /// first; otherwise the SDK keystore is empty and decryption fails.
-    pub async fn list_ciphers(&self, user_id: &str) -> Result<Vec<CipherListView>, String> {
+    pub async fn list_ciphers(&self, user_id: &UserId) -> Result<Vec<CipherListView>, String> {
         let entry = self
             .users
             .get(user_id)
@@ -268,7 +268,7 @@ impl ClientManager {
     /// opens the detail pane.
     pub async fn full_cipher(
         &self,
-        user_id: &str,
+        user_id: &UserId,
         cipher_id: CipherId,
     ) -> Result<CipherView, String> {
         let entry = self
@@ -306,13 +306,6 @@ fn build_user_entry(mu: MockUser) -> UserEntry {
         api_url: "http://localhost:8080/api".to_string(),
         ..Default::default()
     }));
-
-    // Stable SDK-side UUID: the mock JSON's `user_id` field is itself a valid
-    // UUID (fake-data hardcodes stable v4 UUIDs per spec). Parsing fails loud
-    // if that invariant is ever broken.
-    let sdk_user_id = UserId::new(uuid::Uuid::parse_str(&mu.user_id).expect(
-        "mock-vault user_id must be a valid UUID; regenerate via `cargo run -p fake-data`",
-    ));
 
     // `initialize_user_crypto` writes to UserKeyState + LocalUserDataKeyState; cipher/folder
     // repos hold the encrypted vault data. All four must be registered before unlock.
@@ -365,7 +358,7 @@ fn build_user_entry(mu: MockUser) -> UserEntry {
             pin: mu.unlock_methods.pin,
             biometrics: mu.unlock_methods.biometrics,
         },
-        sdk_user_id,
+        sdk_user_id: mu.user_id,
         kdf: mu.kdf,
         encrypted_user_key: mu.encrypted_user_key,
         private_key: mu.private_key,
@@ -425,21 +418,26 @@ impl<T: RepositoryItem + Clone> Repository<T> for MemoryRepo<T> {
 mod tests {
     use super::*;
 
+    fn alice_personal() -> UserId {
+        UserId::new(uuid::uuid!("11111111-1111-4111-a111-111111111111"))
+    }
+
+    fn alice_work() -> UserId {
+        UserId::new(uuid::uuid!("22222222-2222-4222-a222-222222222222"))
+    }
+
     #[tokio::test]
     async fn unlock_user_1_with_correct_password() {
         let mgr = ClientManager::load();
-        mgr.unlock(
-            "11111111-1111-4111-a111-111111111111",
-            "password".to_string(),
-        )
-        .await
-        .expect("personal account should unlock with the dev password");
+        mgr.unlock(&alice_personal(), "password".to_string())
+            .await
+            .expect("personal account should unlock with the dev password");
     }
 
     #[tokio::test]
     async fn unlock_user_2_with_correct_password() {
         let mgr = ClientManager::load();
-        mgr.unlock("22222222-2222-4222-a222-222222222222", "123456".to_string())
+        mgr.unlock(&alice_work(), "123456".to_string())
             .await
             .expect("work account should unlock with the dev password");
     }
@@ -447,26 +445,17 @@ mod tests {
     #[tokio::test]
     async fn unlock_with_wrong_password_fails() {
         let mgr = ClientManager::load();
-        let result = mgr
-            .unlock(
-                "11111111-1111-4111-a111-111111111111",
-                "hunter2".to_string(),
-            )
-            .await;
+        let result = mgr.unlock(&alice_personal(), "hunter2".to_string()).await;
         assert!(result.is_err(), "wrong password should fail unlock");
     }
 
     #[tokio::test]
     async fn list_ciphers_after_unlock_returns_decrypted_items() {
         let mgr = ClientManager::load();
-        mgr.unlock(
-            "11111111-1111-4111-a111-111111111111",
-            "password".to_string(),
-        )
-        .await
-        .unwrap();
+        let uid = alice_personal();
+        mgr.unlock(&uid, "password".to_string()).await.unwrap();
         let items = mgr
-            .list_ciphers("11111111-1111-4111-a111-111111111111")
+            .list_ciphers(&uid)
             .await
             .expect("decrypt_list should succeed after unlock");
         assert!(!items.is_empty(), "personal vault should have items");
@@ -480,16 +469,9 @@ mod tests {
     #[tokio::test]
     async fn full_cipher_after_unlock_returns_login_view() {
         let mgr = ClientManager::load();
-        mgr.unlock(
-            "11111111-1111-4111-a111-111111111111",
-            "password".to_string(),
-        )
-        .await
-        .unwrap();
-        let list = mgr
-            .list_ciphers("11111111-1111-4111-a111-111111111111")
-            .await
-            .unwrap();
+        let uid = alice_personal();
+        mgr.unlock(&uid, "password".to_string()).await.unwrap();
+        let list = mgr.list_ciphers(&uid).await.unwrap();
         let gmail_id = list
             .iter()
             .find(|i| i.name == "Gmail")
@@ -497,7 +479,7 @@ mod tests {
             .expect("Gmail item should exist with an id");
 
         let view = mgr
-            .full_cipher("11111111-1111-4111-a111-111111111111", gmail_id)
+            .full_cipher(&uid, gmail_id)
             .await
             .expect("decrypt should succeed for a known cipher");
         let login = view.login.expect("Gmail is a login cipher");

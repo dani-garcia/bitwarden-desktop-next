@@ -21,6 +21,7 @@ most unblocking or most interesting — the tiers are not a strict ordering.
 - **Skill-driven code review pass.** Ran code-architect, code-explorer, code-reviewer, and simplify over the whole project; written reports under `docs/skills/`. High-confidence bug / quality / efficiency findings landed as concrete fixes: sign-out screen transition, `MemoryRepo` mutex-poison-to-`RepositoryError::Internal` mapping, scrollbar thumb theme token, `AppTheme.name` → `&'static str`, toast string clone removal, SDK error sanitization in unlock-failure toast, `SEARCH_ID` widget-id constant, `field_readonly` helper unification, `load_vault_list_task` factory moved onto `VaultView`, dead `has_authenticated_accounts` menu-state bool collapsed, Linux dead-panic removed, spurious `SearchFocusRequested` spam on every keystroke removed, `BackToEmail` now preserves the typed email, `DetailLoaded` decrypt errors now toast instead of silently logging.
 - **Virtual List / Lazy Scrolling.** New generic `components::virtual_list` module implements DIY viewport-windowed scrolling over uniform-height items: builds widgets only for rows inside the visible window (+ `MIN_OVERSCAN = 5` rows of overscan), with `Space::with_height` fillers above/below to preserve the scroll thumb ratio. Drops `Column::layout()` cost from O(N) to O(window ≈ 20). `item_list::view` is the first consumer — each row is wrapped in a `Length::Fixed(49)` container.
 - **Stable SDK `UserId` per Client.** `UserEntry::sdk_user_id` is parsed once from the mock vault's stable UUID string (`11111111-1111-4111-a111-...` and friends) and reused on every unlock. Fixed the latent bug where `UserId::new_v4()` was generated fresh on every `unlock()` call.
+- **Unified `UserId` type.** `state::UserId` is now a re-export of `bitwarden_core::UserId` (a `Copy` newtype around `uuid::Uuid`) instead of a `String` alias. `ClientManager` accessors take `&UserId`, `HashMap<UserId, _>` keys are parsed UUIDs from the mock vault via serde, and the redundant `UserId::new(uuid::Uuid::parse_str(...))` step in `build_user_entry` is gone. Closes the "any string accepted" gap at the type level.
 - **Observability: `tracing` + `tracing_subscriber`.** Workspace deps added; subscriber installed in `main.rs::init_tracing()` driven by `RUST_LOG` (default `bitwarden_desktop_next=debug,warn`). All `eprintln!` call sites converted to structured `tracing::info!` / `warn!` / `error!` / `debug!` with named fields. SDK `#[tracing::instrument]` spans visible for free under `RUST_LOG=...,bitwarden_core=debug`.
 - **Load-test account (~20 k ciphers).** Third user `loadtest@example.com` / password `loadtest` in `tools/fake-data`. Deterministic xorshift64 PRNG drives name/username picks. JSON output switched to compact form — `assets/mock-vault.json` is now ~24 MB.
 - **View Encapsulation refactor (compositional MVU).** Sub-views return `(Task<SubMessage>, Option<SubEvent>)`; async lifecycle lives with the owning view; `app.rs::update` is a pure router. See [decisions.md](./decisions.md) → "Compositional MVU".
@@ -46,10 +47,6 @@ Currently `views/vault/widgets/detail_pane.rs` renders `key.private_key` and `ca
 ### Sanitize remaining SDK error echoes into toasts
 
 `LoginMessage::UnlockCompleted` now shows "Check your master password and try again" instead of the raw SDK error. Apply the same treatment to any future toast paths that surface SDK errors. Rule: raw `e.to_string()` goes to `tracing::warn!`/`error!`, the user sees a short sanitized string.
-
-### `UserId` newtype
-
-`state::UserId = String` today. The SDK's `bitwarden_core::UserId` is a distinct newtype; our alias accepts any string. Wrap as `pub struct UserId(String)` with `Clone`, `Debug`, `PartialEq`, `Eq`, `Hash`, `Display`, `Deref<Target=str>`, `AsRef<str>`, `From<String>`. rustc guides the migration; closes the "any string accepted" gap. Once done, consider formalizing the boundary so the newtype carries a parsed `uuid::Uuid` internally and `ClientManager` keys off that.
 
 ---
 
@@ -95,10 +92,6 @@ Iced's `resvg` rasterizer doesn't match browser quality. Consider a pre-rasteriz
 ## Tier 3 — Research & Architecture
 
 Larger investigations or design decisions that need a written plan before implementation. Each could become its own "plan mode" session.
-
-### Password / PIN zeroize
-
-`AuthPage::Unlock { password_input: String, pin_input: String, ... }` and `AuthPage::LoginPassword { password_input: String, ... }` hold sensitive credentials as plain `String`s that aren't zeroed on drop. `std::mem::take` moves the value but leaves the allocator free to reuse the backing bytes without clearing. Minimum viable fix: depend on `zeroize` (already a transitive dep via `bitwarden-crypto`), change the field type to `zeroize::Zeroizing<String>`. Also consider: clear inputs proactively on screen switch, on `LockAllVaults`, on app suspend. The iced `text_input` widget still keeps its own `Value` buffer that isn't zeroable without forking — see Tier 4 "Secure Text Input" for that piece.
 
 ### Integrate `desktop_native` from the old clients
 
@@ -184,18 +177,6 @@ Before we grow many more call sites (unlock failure, copy-to-clipboard, sync err
 ---
 
 ## Tier 4 — Deferred / Waiting Upstream
-
-### Secure Text Input
-
-Iced's `text_input` uses a standard `String` internally that isn't scrubbed on drop. Master passwords may linger in heap memory after reallocation.
-
-**Practical impact is debatable** — an attacker with enough access to probe process memory likely has easier vectors (keyloggers, `/proc/mem`, input ring buffers). Memory scrubbing is defense-in-depth, not a primary control. See [Zulip discussion](https://iced.zulipchat.com/#narrow/channel/213316-discussions/topic/Secure.20text_input/with/221416543).
-
-**Our SDK already helps** — zeroizing allocator scrubs secrets passed *through* SDK types. The gap is specifically iced's `text_input::Value` before the password reaches the SDK. The Tier 3 "Password / PIN zeroize" item is the fix for the `AuthPage` side; `text_input` itself still needs upstream work or a fork.
-
-**Options:** (1) fork `text_input` / `value.rs` to use `zeroize::Zeroizing<String>` — maintenance burden on iced upgrades. (2) Minimize exposure window — copy out into a zeroizing type immediately on submit (already done via `std::mem::take`), clear input field on page transitions. (3) Accept the gap.
-
-**Decision:** low priority. Approach (2) is essentially free — done. Approach (1) only if compliance requires it.
 
 ### Hot reloading
 

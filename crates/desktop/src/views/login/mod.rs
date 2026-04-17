@@ -228,10 +228,9 @@ impl LoginView {
                 };
                 self.unlock_in_progress = true;
                 let mgr = client_manager.clone();
-                let uid_for_task = uid.clone();
                 let task = Task::perform(
-                    async move { mgr.unlock(&uid_for_task, password).await },
-                    move |res| LoginMessage::UnlockCompleted(uid.clone(), res),
+                    async move { mgr.unlock(&uid, password).await },
+                    move |res| LoginMessage::UnlockCompleted(uid, res),
                 );
                 (task, None)
             }

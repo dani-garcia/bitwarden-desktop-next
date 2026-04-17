@@ -1,6 +1,6 @@
 use bitwarden_vault::CipherType;
 
-pub type UserId = String;
+pub use bitwarden_core::UserId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnlockMethod {

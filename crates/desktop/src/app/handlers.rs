@@ -22,7 +22,7 @@ impl App {
     pub(super) fn handle_login_event(&mut self, event: LoginEvent) -> Task<Message> {
         match event {
             LoginEvent::Unlocked { uid } | LoginEvent::LoggedIn { uid } => {
-                if self.active_user.as_deref() != Some(&uid) {
+                if self.active_user != Some(uid) {
                     tracing::debug!(
                         %uid,
                         "unlock event dropped: active user changed while in flight"
