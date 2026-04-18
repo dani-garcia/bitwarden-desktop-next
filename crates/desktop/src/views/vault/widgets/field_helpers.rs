@@ -13,10 +13,7 @@ use crate::{
 };
 
 /// Section label (14 px, primary text color). Sits above a card.
-pub fn section_label<'a, M: 'a>(
-    label: &'a str,
-    colors: &AppColors,
-) -> Element<'a, M, AppTheme> {
+pub fn section_label<'a, M: 'a>(label: &'a str, colors: &AppColors) -> Element<'a, M, AppTheme> {
     text(label).size(14).color(colors.text_primary).into()
 }
 
@@ -48,9 +45,7 @@ pub fn icon_button<'a, M: 'a + Clone>(
 }
 
 /// Wraps a card element with bottom margin for section spacing.
-pub fn card_with_margin<'a, M: 'a>(
-    card: Element<'a, M, AppTheme>,
-) -> Element<'a, M, AppTheme> {
+pub fn card_with_margin<'a, M: 'a>(card: Element<'a, M, AppTheme>) -> Element<'a, M, AppTheme> {
     container(card)
         .padding(Padding {
             top: 0.0,

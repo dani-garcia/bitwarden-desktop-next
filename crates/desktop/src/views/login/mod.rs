@@ -26,7 +26,6 @@ pub enum AuthPage {
         method: UnlockMethod,
         password_input: String,
         pin_input: String,
-        show_password: bool,
     },
     LoginEmail {
         email_input: String,
@@ -37,7 +36,6 @@ pub enum AuthPage {
     LoginPassword {
         email: String,
         password_input: String,
-        show_password: bool,
         selected_server: ServerOption,
     },
 }
@@ -48,7 +46,6 @@ impl AuthPage {
             method,
             password_input: String::new(),
             pin_input: String::new(),
-            show_password: false,
         }
     }
 
@@ -65,7 +62,6 @@ impl AuthPage {
         Self::LoginPassword {
             email,
             password_input: String::new(),
-            show_password: false,
             selected_server,
         }
     }
@@ -95,7 +91,6 @@ impl ServerOption {
 pub enum LoginMessage {
     // Unlock — master password
     PasswordChanged(String),
-    TogglePasswordVisibility,
     Unlock,
     /// Fires when the async `ClientManager::unlock` task completes.
     UnlockCompleted(UserId, Result<(), String>),
@@ -116,7 +111,6 @@ pub enum LoginMessage {
 
     // Login — password entry
     LoginPasswordChanged(String),
-    ToggleLoginPasswordVisibility,
     LoginWithPassword,
     /// Fires when the async `ClientManager::login` task completes.
     /// TODO: wire up once SDK login support lands.
@@ -199,25 +193,14 @@ impl LoginView {
                 }
                 (Task::none(), None)
             }
-            LoginMessage::TogglePasswordVisibility => {
-                if let AuthPage::Unlock { show_password, .. } = &mut self.auth_page {
-                    *show_password = !*show_password;
-                }
-                (Task::none(), None)
-            }
             LoginMessage::Unlock => {
                 // Re-entry guard: ignore Enter-spam while a task is already
                 // in flight (the text_input's on_submit fires per keystroke).
                 if self.unlock_in_progress {
                     return (Task::none(), None);
                 }
-                let password = if let AuthPage::Unlock {
-                    password_input,
-                    show_password,
-                    ..
-                } = &mut self.auth_page
+                let password = if let AuthPage::Unlock { password_input, .. } = &mut self.auth_page
                 {
-                    *show_password = false;
                     std::mem::take(password_input)
                 } else {
                     return (Task::none(), None);
@@ -344,25 +327,13 @@ impl LoginView {
                 }
                 (Task::none(), None)
             }
-            LoginMessage::ToggleLoginPasswordVisibility => {
-                if let AuthPage::LoginPassword { show_password, .. } = &mut self.auth_page {
-                    *show_password = !*show_password;
-                }
-                (Task::none(), None)
-            }
             LoginMessage::LoginWithPassword => {
                 // TODO: call `client_manager.login(email, password).await`
                 // once SDK login support lands. For now this is a stub — we
                 // clear the input and emit nothing so the button press is
                 // visibly consumed.
-                if let AuthPage::LoginPassword {
-                    password_input,
-                    show_password,
-                    ..
-                } = &mut self.auth_page
-                {
+                if let AuthPage::LoginPassword { password_input, .. } = &mut self.auth_page {
                     let _password = std::mem::take(password_input);
-                    *show_password = false;
                 }
                 (Task::none(), None)
             }
@@ -505,7 +476,6 @@ impl LoginView {
                 method,
                 password_input,
                 pin_input,
-                show_password,
             } => {
                 let center = unlock::view(
                     *method,
@@ -513,7 +483,6 @@ impl LoginView {
                     email,
                     password_input,
                     pin_input,
-                    *show_password,
                     self.unlock_in_progress,
                     colors,
                 );
@@ -533,10 +502,9 @@ impl LoginView {
             AuthPage::LoginPassword {
                 email,
                 password_input,
-                show_password,
                 selected_server,
             } => {
-                let center = login_password::view(email, password_input, *show_password, colors);
+                let center = login_password::view(email, password_input, colors);
                 let status = server_selector::simple_status(selected_server.display_name(), colors);
                 (center, status)
             }

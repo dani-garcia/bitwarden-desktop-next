@@ -4,7 +4,7 @@ use iced::{
 };
 
 use crate::{
-    components::{buttons, inputs::floating_label_input, spinner},
+    components::{buttons, reveal_input::reveal_input_with_submit, spinner},
     state::UnlockMethod,
     theme::{AppColors, AppTheme},
 };
@@ -18,14 +18,12 @@ use super::{LoginMessage, layout};
 /// read-only, the primary button is replaced by a spinner, and the alternate
 /// unlock methods + Log out button are hidden — same visual weight as the
 /// button so the card height doesn't jump.
-#[expect(clippy::too_many_arguments)] // Unlock screen composes many primitives; struct would be ceremony.
 pub fn view<'a>(
     method: UnlockMethod,
     alternatives: &[UnlockMethod],
     email: &'a str,
     password: &'a str,
     pin: &'a str,
-    show_password: bool,
     in_progress: bool,
     colors: &'a AppColors,
 ) -> Element<'a, LoginMessage, AppTheme> {
@@ -44,7 +42,6 @@ pub fn view<'a>(
         alternatives,
         password,
         pin,
-        show_password,
         in_progress,
         colors,
     ));
@@ -60,7 +57,6 @@ fn card_content<'a>(
     alternatives: &[UnlockMethod],
     password: &'a str,
     pin: &'a str,
-    show_password: bool,
     in_progress: bool,
     colors: &'a AppColors,
 ) -> Element<'a, LoginMessage, AppTheme> {
@@ -76,13 +72,11 @@ fn card_content<'a>(
             ));
         }
         UnlockMethod::Pin => {
-            items.push(floating_label_input(
+            items.push(reveal_input_with_submit(
                 "PIN (required)",
                 pin,
                 LoginMessage::PinChanged,
-                Some(LoginMessage::UnlockWithPin),
-                true,
-                None,
+                LoginMessage::UnlockWithPin,
                 in_progress,
                 colors,
             ));
@@ -94,13 +88,11 @@ fn card_content<'a>(
             ));
         }
         UnlockMethod::MasterPassword => {
-            items.push(floating_label_input(
+            items.push(reveal_input_with_submit(
                 "Master password (required)",
                 password,
                 LoginMessage::PasswordChanged,
-                Some(LoginMessage::Unlock),
-                !show_password,
-                Some((show_password, LoginMessage::TogglePasswordVisibility)),
+                LoginMessage::Unlock,
                 in_progress,
                 colors,
             ));

@@ -385,10 +385,7 @@ impl VaultView {
                     let cols = client_manager.list_collections(&uid);
                     let orgs_task = Task::done(VaultMessage::OrganizationsLoaded(uid, orgs));
                     let cols_task = Task::done(VaultMessage::CollectionsLoaded(uid, cols));
-                    (
-                        Task::batch([folders_task, orgs_task, cols_task]),
-                        None,
-                    )
+                    (Task::batch([folders_task, orgs_task, cols_task]), None)
                 }
                 // Other detail messages (copy, delete, open URL, reveal) stay
                 // unhandled for this pass.
@@ -698,8 +695,9 @@ impl VaultView {
         //   `sheet_view()` below.)
         let show_pane_grid = self.selection.detail.is_some() && window_width >= SHEET_BREAKPOINT_PX;
         let content_area_inner: Element<'a, VaultMessage, AppTheme> = if show_pane_grid {
-            pane_grid::PaneGrid::new(&self.pane_state, move |_pane, kind, _is_maximized| {
-                match kind {
+            pane_grid::PaneGrid::new(
+                &self.pane_state,
+                move |_pane, kind, _is_maximized| match kind {
                     PaneKind::List => pane_grid::Content::new(self.list_content(
                         cached_items,
                         active_email,
@@ -711,8 +709,8 @@ impl VaultView {
                         let with_separator = row![separator_v(), right_pane].height(Fill);
                         pane_grid::Content::new(with_separator)
                     }
-                }
-            })
+                },
+            )
             .on_resize(6, VaultMessage::PaneResized)
             .spacing(1)
             .min_size(250)

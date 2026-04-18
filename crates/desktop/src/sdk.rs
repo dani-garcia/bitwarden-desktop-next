@@ -195,11 +195,8 @@ impl ClientManager {
         let meta: MockVaultMeta = serde_json::from_reader(BufReader::new(file))
             .expect("mock.json is malformed; regenerate via `cargo run -p fake-data`");
 
-        let meta_by_id: HashMap<UserId, MockUserMeta> = meta
-            .users
-            .into_iter()
-            .map(|u| (u.user_id, u))
-            .collect();
+        let meta_by_id: HashMap<UserId, MockUserMeta> =
+            meta.users.into_iter().map(|u| (u.user_id, u)).collect();
 
         let mut users = HashMap::with_capacity(meta_by_id.len());
         let entries = std::fs::read_dir(&data_dir)
@@ -485,7 +482,8 @@ async fn build_user_entry(mu: MockUserMeta, data_dir: &Path) -> UserEntry {
     // the database `OnceLock` and prevents our per-user `initialize_database` call.
     // Mirror the parts of `PasswordManagerClientBuilder::build` we still need:
     // the `PasswordManagerTokenHandler` and our settings.
-    let token_handler = Arc::new(bitwarden_auth::token_management::PasswordManagerTokenHandler::default());
+    let token_handler =
+        Arc::new(bitwarden_auth::token_management::PasswordManagerTokenHandler::default());
     let inner = ClientBuilder::new()
         .with_token_handler(token_handler)
         .with_settings(ClientSettings {

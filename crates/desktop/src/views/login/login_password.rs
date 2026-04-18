@@ -4,7 +4,7 @@ use iced::{
 };
 
 use crate::{
-    components::{buttons, inputs::floating_label_input},
+    components::{buttons, reveal_input::reveal_input_with_submit},
     theme::{AppColors, AppTheme},
 };
 
@@ -15,7 +15,6 @@ use super::{LoginMessage, layout};
 pub fn view<'a>(
     email: &'a str,
     password: &'a str,
-    show_password: bool,
     colors: &'a AppColors,
 ) -> Element<'a, LoginMessage, AppTheme> {
     let wave_icon = svg(svg::Handle::from_memory(crate::assets::WAVE_ICON))
@@ -26,7 +25,7 @@ pub fn view<'a>(
 
     let email_label = text(email).size(16).color(colors.text_secondary);
 
-    let card = layout::auth_card(card_content(password, show_password, colors));
+    let card = layout::auth_card(card_content(password, colors));
 
     column![wave_icon, title, email_label, Space::new().height(12), card]
         .spacing(8)
@@ -36,24 +35,25 @@ pub fn view<'a>(
 
 fn card_content<'a>(
     password: &'a str,
-    show_password: bool,
     colors: &'a AppColors,
 ) -> Element<'a, LoginMessage, AppTheme> {
-    let password_field = floating_label_input(
+    let password_field = reveal_input_with_submit(
         "Master password (required)",
         password,
         LoginMessage::LoginPasswordChanged,
-        Some(LoginMessage::LoginWithPassword),
-        !show_password,
-        Some((show_password, LoginMessage::ToggleLoginPasswordVisibility)),
+        LoginMessage::LoginWithPassword,
         false,
         colors,
     );
 
     // TODO: "Get master password hint" navigates to hint request flow (not yet implemented)
-    let hint_link = buttons::transparent(text("Get master password hint").size(14).color(colors.accent))
-        .on_press(LoginMessage::GetPasswordHint)
-        .padding(0);
+    let hint_link = buttons::transparent(
+        text("Get master password hint")
+            .size(14)
+            .color(colors.accent),
+    )
+    .on_press(LoginMessage::GetPasswordHint)
+    .padding(0);
 
     let login_button = buttons::primary(
         container(text("Log in with master password").size(16))

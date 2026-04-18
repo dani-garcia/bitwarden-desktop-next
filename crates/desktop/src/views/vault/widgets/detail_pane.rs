@@ -4,7 +4,9 @@ use iced::{
     widget::{Space, column, container, row, scrollable, text},
 };
 
-use super::field_helpers::{card_with_margin, field_readonly, icon_button, section_label, styled_card};
+use super::field_helpers::{
+    card_with_margin, field_readonly, icon_button, section_label, styled_card,
+};
 use crate::{
     components::{self, buttons, icons},
     theme::{AppColors, AppTheme},
@@ -84,9 +86,8 @@ pub fn view<'a>(
             container::Style::default()
                 .background(theme.colors.card_bg)
                 .border(
-                    iced::Border::default().rounded(
-                        iced::border::top_left(top_radius).top_right(top_radius),
-                    ),
+                    iced::Border::default()
+                        .rounded(iced::border::top_left(top_radius).top_right(top_radius)),
                 )
         })
         .into()

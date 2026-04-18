@@ -33,7 +33,11 @@ iced = { workspace = true, features = [
     "web-colors", # sRGB blending to match Bitwarden web app colors
     "x11",        # Linux X11 display backend
     "wayland",    # Linux Wayland display backend
-    # "lazy",     # lazy/responsive widgets — enable if scroll perf needs it
+    "lazy",       # `iced::widget::component` — encapsulated local widget
+                  # state (reveal toggle for password fields). Component is
+                  # upstream-deprecated; the replacement is "implement a
+                  # full custom Widget", which is ~3x the code for the same
+                  # result. Revisit if the feature disappears.
 ] }
 image = "0.25"
 muda = "0.18"

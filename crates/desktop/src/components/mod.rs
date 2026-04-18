@@ -4,6 +4,7 @@ pub mod buttons;
 pub mod drop_down;
 pub mod icons;
 pub mod inputs;
+pub mod reveal_input;
 pub mod spinner;
 pub mod toast;
 pub mod virtual_list;

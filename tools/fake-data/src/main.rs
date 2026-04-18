@@ -209,7 +209,8 @@ async fn build_user(spec: &UserSpec, data_dir: &Path) -> Result<MockUserMeta, Bo
     // the database `OnceLock` and prevents our per-user `initialize_database` call.
     // Mirror the parts of `PasswordManagerClientBuilder::build` we still need:
     // the `PasswordManagerTokenHandler` and our settings.
-    let token_handler = Arc::new(bitwarden_auth::token_management::PasswordManagerTokenHandler::default());
+    let token_handler =
+        Arc::new(bitwarden_auth::token_management::PasswordManagerTokenHandler::default());
     let inner = ClientBuilder::new()
         .with_token_handler(token_handler)
         .with_settings(ClientSettings {
@@ -537,11 +538,19 @@ fn personal_ciphers() -> Vec<CipherView> {
     vec![
         // Email / comms
         login("Gmail", Some("alice@example.com"), Some("mail.google.com")),
-        login("Outlook", Some("alice.johnson@outlook.com"), Some("outlook.live.com")),
+        login(
+            "Outlook",
+            Some("alice.johnson@outlook.com"),
+            Some("outlook.live.com"),
+        ),
         login("iCloud Mail", Some("alice@icloud.com"), Some("icloud.com")),
         login("ProtonMail", Some("alice.j"), Some("mail.proton.me")),
         login("Discord", Some("alice#1234"), Some("discord.com")),
-        login("Slack (Community)", Some("alice_j"), Some("rustlang.slack.com")),
+        login(
+            "Slack (Community)",
+            Some("alice_j"),
+            Some("rustlang.slack.com"),
+        ),
         login("WhatsApp Web", Some("+15550100"), Some("web.whatsapp.com")),
         login("Signal", Some("+15550100"), Some("signal.org")),
         login("Zoom", Some("alice@example.com"), Some("zoom.us")),
@@ -551,20 +560,32 @@ fn personal_ciphers() -> Vec<CipherView> {
         login("LinkedIn", Some("alice@example.com"), Some("linkedin.com")),
         login("Instagram", Some("alice.j.photos"), Some("instagram.com")),
         login("TikTok", Some("@alicej"), Some("tiktok.com")),
-        login("Mastodon (mastodon.social)", Some("@alice"), Some("mastodon.social")),
+        login(
+            "Mastodon (mastodon.social)",
+            Some("@alice"),
+            Some("mastodon.social"),
+        ),
         login("Bluesky", Some("alice.bsky.social"), Some("bsky.app")),
         login("Facebook", Some("alice.johnson.94"), Some("facebook.com")),
         // Dev
         login("GitHub", Some("alice-dev"), Some("github.com")),
         login("GitLab", Some("alice-dev"), Some("gitlab.com")),
-        login("Stack Overflow", Some("alice-dev"), Some("stackoverflow.com")),
+        login(
+            "Stack Overflow",
+            Some("alice-dev"),
+            Some("stackoverflow.com"),
+        ),
         login("npm", Some("alice-dev"), Some("npmjs.com")),
         login("crates.io", Some("alice_dev"), Some("crates.io")),
         login("Docker Hub", Some("alicej"), Some("hub.docker.com")),
         // Streaming / entertainment
         login("Netflix", Some("alice@example.com"), Some("netflix.com")),
         login("Spotify", Some("alice@example.com"), Some("spotify.com")),
-        login("YouTube Premium", Some("alice@example.com"), Some("youtube.com")),
+        login(
+            "YouTube Premium",
+            Some("alice@example.com"),
+            Some("youtube.com"),
+        ),
         login("Disney+", Some("alice@example.com"), Some("disneyplus.com")),
         login("HBO Max", Some("alice@example.com"), Some("max.com")),
         login("Twitch", Some("alice_streams"), Some("twitch.tv")),
@@ -583,11 +604,19 @@ fn personal_ciphers() -> Vec<CipherView> {
         ),
         login("Chase", Some("alice_johnson"), Some("chase.com")),
         login("Venmo", Some("@alice-j"), Some("venmo.com")),
-        login("Robinhood", Some("alice@example.com"), Some("robinhood.com")),
+        login(
+            "Robinhood",
+            Some("alice@example.com"),
+            Some("robinhood.com"),
+        ),
         // Productivity / misc
         login("Dropbox", Some("alice@example.com"), Some("dropbox.com")),
         login("Notion", Some("alice@example.com"), Some("notion.so")),
-        login("1Password (legacy)", Some("alice@example.com"), Some("1password.com")),
+        login(
+            "1Password (legacy)",
+            Some("alice@example.com"),
+            Some("1password.com"),
+        ),
         login("Pinboard", Some("alice_j"), Some("pinboard.in")),
         login("Duolingo", Some("alice_j"), Some("duolingo.com")),
         // Cards
@@ -666,53 +695,157 @@ fn work_ciphers() -> Vec<CipherView> {
             Some("acmecorp.atlassian.net"),
         ),
         login("Company GitHub", Some("alice-acme"), Some("github.com")),
-        login("Company GitLab", Some("alice-acme"), Some("gitlab.acmecorp.com")),
+        login(
+            "Company GitLab",
+            Some("alice-acme"),
+            Some("gitlab.acmecorp.com"),
+        ),
         login("Bitbucket", Some("alice-acme"), Some("bitbucket.org")),
         login("Slack", Some("ajohnson"), Some("acmecorp.slack.com")),
-        login("Microsoft Teams", Some("ajohnson@acmecorp.com"), Some("teams.microsoft.com")),
-        login("Zoom (Work)", Some("ajohnson@acmecorp.com"), Some("acmecorp.zoom.us")),
-        login("Google Workspace", Some("ajohnson@acmecorp.com"), Some("workspace.google.com")),
-        login("Office 365", Some("ajohnson@acmecorp.com"), Some("office.com")),
-        login("Dropbox Business", Some("ajohnson@acmecorp.com"), Some("business.dropbox.com")),
+        login(
+            "Microsoft Teams",
+            Some("ajohnson@acmecorp.com"),
+            Some("teams.microsoft.com"),
+        ),
+        login(
+            "Zoom (Work)",
+            Some("ajohnson@acmecorp.com"),
+            Some("acmecorp.zoom.us"),
+        ),
+        login(
+            "Google Workspace",
+            Some("ajohnson@acmecorp.com"),
+            Some("workspace.google.com"),
+        ),
+        login(
+            "Office 365",
+            Some("ajohnson@acmecorp.com"),
+            Some("office.com"),
+        ),
+        login(
+            "Dropbox Business",
+            Some("ajohnson@acmecorp.com"),
+            Some("business.dropbox.com"),
+        ),
         // Cloud providers
         login(
             "AWS Console",
             Some("ajohnson@acmecorp.com"),
             Some("aws.amazon.com"),
         ),
-        login("AWS (dev account)", Some("alice-dev"), Some("aws.amazon.com")),
-        login("GCP Console", Some("ajohnson@acmecorp.com"), Some("console.cloud.google.com")),
-        login("Azure Portal", Some("ajohnson@acmecorp.com"), Some("portal.azure.com")),
-        login("Cloudflare", Some("ajohnson@acmecorp.com"), Some("dash.cloudflare.com")),
+        login(
+            "AWS (dev account)",
+            Some("alice-dev"),
+            Some("aws.amazon.com"),
+        ),
+        login(
+            "GCP Console",
+            Some("ajohnson@acmecorp.com"),
+            Some("console.cloud.google.com"),
+        ),
+        login(
+            "Azure Portal",
+            Some("ajohnson@acmecorp.com"),
+            Some("portal.azure.com"),
+        ),
+        login(
+            "Cloudflare",
+            Some("ajohnson@acmecorp.com"),
+            Some("dash.cloudflare.com"),
+        ),
         login("Vercel", Some("alice-acme"), Some("vercel.com")),
         login("Netlify", Some("alice-acme"), Some("app.netlify.com")),
-        login("Heroku", Some("ajohnson@acmecorp.com"), Some("dashboard.heroku.com")),
+        login(
+            "Heroku",
+            Some("ajohnson@acmecorp.com"),
+            Some("dashboard.heroku.com"),
+        ),
         login("Fastly", Some("alice-acme"), Some("manage.fastly.com")),
         // Ops / observability
-        login("Datadog", Some("ajohnson@acmecorp.com"), Some("app.datadoghq.com")),
-        login("PagerDuty", Some("ajohnson@acmecorp.com"), Some("acmecorp.pagerduty.com")),
-        login("Grafana Cloud", Some("ajohnson@acmecorp.com"), Some("grafana.net")),
+        login(
+            "Datadog",
+            Some("ajohnson@acmecorp.com"),
+            Some("app.datadoghq.com"),
+        ),
+        login(
+            "PagerDuty",
+            Some("ajohnson@acmecorp.com"),
+            Some("acmecorp.pagerduty.com"),
+        ),
+        login(
+            "Grafana Cloud",
+            Some("ajohnson@acmecorp.com"),
+            Some("grafana.net"),
+        ),
         login("Sentry", Some("alice-acme"), Some("sentry.io")),
         login("Linear", Some("ajohnson@acmecorp.com"), Some("linear.app")),
-        login("Notion (Team)", Some("ajohnson@acmecorp.com"), Some("acmecorp.notion.site")),
+        login(
+            "Notion (Team)",
+            Some("ajohnson@acmecorp.com"),
+            Some("acmecorp.notion.site"),
+        ),
         // HR / admin
         login("Workday", Some("ajohnson"), Some("acmecorp.workday.com")),
-        login("Expensify", Some("ajohnson@acmecorp.com"), Some("expensify.com")),
-        login("Greenhouse", Some("ajohnson@acmecorp.com"), Some("acmecorp.greenhouse.io")),
-        login("DocuSign", Some("ajohnson@acmecorp.com"), Some("docusign.net")),
-        login("Gusto (Payroll)", Some("ajohnson@acmecorp.com"), Some("gusto.com")),
+        login(
+            "Expensify",
+            Some("ajohnson@acmecorp.com"),
+            Some("expensify.com"),
+        ),
+        login(
+            "Greenhouse",
+            Some("ajohnson@acmecorp.com"),
+            Some("acmecorp.greenhouse.io"),
+        ),
+        login(
+            "DocuSign",
+            Some("ajohnson@acmecorp.com"),
+            Some("docusign.net"),
+        ),
+        login(
+            "Gusto (Payroll)",
+            Some("ajohnson@acmecorp.com"),
+            Some("gusto.com"),
+        ),
         // SaaS customers care about
-        login("Stripe", Some("ajohnson@acmecorp.com"), Some("dashboard.stripe.com")),
+        login(
+            "Stripe",
+            Some("ajohnson@acmecorp.com"),
+            Some("dashboard.stripe.com"),
+        ),
         login("Segment", Some("alice-acme"), Some("app.segment.com")),
-        login("Mixpanel", Some("ajohnson@acmecorp.com"), Some("mixpanel.com")),
-        login("Intercom", Some("ajohnson@acmecorp.com"), Some("app.intercom.com")),
-        login("Zendesk", Some("ajohnson@acmecorp.com"), Some("acmecorp.zendesk.com")),
-        login("Salesforce", Some("ajohnson@acmecorp.com"), Some("acmecorp.my.salesforce.com")),
-        login("HubSpot", Some("ajohnson@acmecorp.com"), Some("app.hubspot.com")),
+        login(
+            "Mixpanel",
+            Some("ajohnson@acmecorp.com"),
+            Some("mixpanel.com"),
+        ),
+        login(
+            "Intercom",
+            Some("ajohnson@acmecorp.com"),
+            Some("app.intercom.com"),
+        ),
+        login(
+            "Zendesk",
+            Some("ajohnson@acmecorp.com"),
+            Some("acmecorp.zendesk.com"),
+        ),
+        login(
+            "Salesforce",
+            Some("ajohnson@acmecorp.com"),
+            Some("acmecorp.my.salesforce.com"),
+        ),
+        login(
+            "HubSpot",
+            Some("ajohnson@acmecorp.com"),
+            Some("app.hubspot.com"),
+        ),
         login("Figma", Some("ajohnson@acmecorp.com"), Some("figma.com")),
         // Domain / DNS / infra
         login("Namecheap", Some("alice-acme"), Some("namecheap.com")),
-        login("Terraform Cloud", Some("alice-acme"), Some("app.terraform.io")),
+        login(
+            "Terraform Cloud",
+            Some("alice-acme"),
+            Some("app.terraform.io"),
+        ),
         // Cards
         card(
             "Corporate Card",

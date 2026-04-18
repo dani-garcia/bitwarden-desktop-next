@@ -62,8 +62,6 @@ fn card_content<'a>(
         LoginMessage::EmailChanged,
         Some(LoginMessage::ContinueWithEmail),
         false,
-        None,
-        false,
         colors,
     );
 

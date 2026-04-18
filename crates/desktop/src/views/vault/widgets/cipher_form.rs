@@ -10,8 +10,6 @@
 //! `modified` back to `ClientManager::save_cipher` which encrypts and
 //! persists via the per-user SQLite repo.
 
-use std::collections::HashMap;
-
 use bitwarden_collections::collection::CollectionId;
 use bitwarden_core::OrganizationId;
 use bitwarden_vault::{
@@ -21,7 +19,7 @@ use bitwarden_vault::{
 };
 use iced::{
     Alignment, Background, Border, Color, Element, Fill,
-    widget::{Space, checkbox, column, container, row, scrollable, text, text_input},
+    widget::{Space, checkbox, column, container, pick_list, row, scrollable, text},
 };
 
 use super::field_helpers::{card_with_margin, field_readonly, section_label, styled_card};
@@ -30,6 +28,7 @@ use crate::{
         self, buttons,
         drop_down::{self, DropDown},
         icons,
+        inputs::floating_label_input,
     },
     sdk::{Collection, Organization},
     theme::{AppColors, AppTheme, RADIUS_SM},
@@ -68,22 +67,13 @@ pub struct CipherForm {
     pub organizations: Vec<OrganizationOption>,
     pub collections: Vec<CollectionOption>,
 
-    // Per-field reveal flags
-    pub password_visible: bool,
-    pub card_code_visible: bool,
-    pub identity_ssn_visible: bool,
-    pub identity_passport_visible: bool,
-    pub custom_field_reveals: HashMap<usize, bool>,
-
-    // Dropdown open flags
-    pub folder_dropdown_open: bool,
-    pub org_dropdown_open: bool,
+    // The collections multi-select still uses our custom DropDown widget
+    // (iced's pick_list is single-select). The single-select dropdowns were
+    // replaced with pick_list, and the reveal-toggle password fields were
+    // replaced with `reveal_input` — both of which manage their own
+    // transient state inside iced's widget tree, so only the multi-select
+    // needs an explicit flag here.
     pub collections_dropdown_open: bool,
-    pub card_brand_dropdown_open: bool,
-    pub card_exp_month_dropdown_open: bool,
-    pub identity_title_dropdown_open: bool,
-    /// Custom-field type dropdowns keyed by field index.
-    pub custom_field_type_dropdowns: HashMap<usize, bool>,
 
     /// Disables the Save button + form inputs while the save task is in flight.
     pub saving: bool,
@@ -99,18 +89,7 @@ impl CipherForm {
             folders: Vec::new(),
             organizations: Vec::new(),
             collections: Vec::new(),
-            password_visible: false,
-            card_code_visible: false,
-            identity_ssn_visible: false,
-            identity_passport_visible: false,
-            custom_field_reveals: HashMap::new(),
-            folder_dropdown_open: false,
-            org_dropdown_open: false,
             collections_dropdown_open: false,
-            card_brand_dropdown_open: false,
-            card_exp_month_dropdown_open: false,
-            identity_title_dropdown_open: false,
-            custom_field_type_dropdowns: HashMap::new(),
             saving: false,
         };
         form.ensure_sub_structs();
@@ -174,15 +153,10 @@ impl CipherForm {
         }
     }
 
-    /// Router-triggered close helper; flips any open dropdown closed.
+    /// Router-triggered close helper; flips the collections multi-select
+    /// closed. The single-select pick_lists manage their own overlay state.
     pub fn dismiss_dropdowns(&mut self) {
-        self.folder_dropdown_open = false;
-        self.org_dropdown_open = false;
         self.collections_dropdown_open = false;
-        self.card_brand_dropdown_open = false;
-        self.card_exp_month_dropdown_open = false;
-        self.identity_title_dropdown_open = false;
-        self.custom_field_type_dropdowns.clear();
     }
 }
 
@@ -197,9 +171,7 @@ pub enum CipherFormMessage {
     RepromptToggled,
 
     // Ownership
-    FolderDropdownToggled,
     FolderSelected(Option<FolderId>),
-    OrgDropdownToggled,
     OrgSelected(Option<OrganizationId>),
     CollectionsDropdownToggled,
     CollectionToggled(CollectionId),
@@ -208,24 +180,19 @@ pub enum CipherFormMessage {
     UsernameChanged(String),
     PasswordChanged(String),
     TotpChanged(String),
-    TogglePasswordVisibility,
     UriChanged(usize, String),
     UriAdded,
     UriRemoved(usize),
 
     // Card
     CardCardholderChanged(String),
-    CardBrandDropdownToggled,
     CardBrandSelected(Option<String>),
     CardNumberChanged(String),
-    CardExpMonthDropdownToggled,
     CardExpMonthSelected(Option<String>),
     CardExpYearChanged(String),
     CardCodeChanged(String),
-    ToggleCardCodeVisibility,
 
     // Identity
-    IdentityTitleDropdownToggled,
     IdentityTitleSelected(Option<String>),
     IdentityFirstNameChanged(String),
     IdentityMiddleNameChanged(String),
@@ -235,8 +202,6 @@ pub enum CipherFormMessage {
     IdentitySsnChanged(String),
     IdentityPassportChanged(String),
     IdentityLicenseChanged(String),
-    ToggleIdentitySsnVisibility,
-    ToggleIdentityPassportVisibility,
     IdentityEmailChanged(String),
     IdentityPhoneChanged(String),
     IdentityAddress1Changed(String),
@@ -250,12 +215,10 @@ pub enum CipherFormMessage {
     // Custom fields
     CustomFieldAdded,
     CustomFieldRemoved(usize),
-    CustomFieldTypeDropdownToggled(usize),
     CustomFieldTypeSelected(usize, FieldType),
     CustomFieldNameChanged(usize, String),
     CustomFieldValueChanged(usize, String),
     CustomFieldBoolToggled(usize),
-    ToggleCustomFieldReveal(usize),
 
     // Flow
     Save,
@@ -289,15 +252,8 @@ impl CipherForm {
             }
 
             // Ownership
-            FolderDropdownToggled => {
-                self.folder_dropdown_open = !self.folder_dropdown_open;
-            }
             FolderSelected(id) => {
                 self.modified.folder_id = id;
-                self.folder_dropdown_open = false;
-            }
-            OrgDropdownToggled => {
-                self.org_dropdown_open = !self.org_dropdown_open;
             }
             OrgSelected(id) => {
                 self.modified.organization_id = id;
@@ -305,11 +261,12 @@ impl CipherForm {
                 if id.is_none() {
                     self.modified.collection_ids.clear();
                 } else {
-                    self.modified
-                        .collection_ids
-                        .retain(|cid| self.collections.iter().any(|c| &c.id == cid && Some(c.organization_id) == id));
+                    self.modified.collection_ids.retain(|cid| {
+                        self.collections
+                            .iter()
+                            .any(|c| &c.id == cid && Some(c.organization_id) == id)
+                    });
                 }
-                self.org_dropdown_open = false;
             }
             CollectionsDropdownToggled => {
                 self.collections_dropdown_open = !self.collections_dropdown_open;
@@ -338,7 +295,6 @@ impl CipherForm {
                     l.totp = opt_string(s);
                 }
             }
-            TogglePasswordVisibility => self.password_visible = !self.password_visible,
             UriChanged(idx, s) => {
                 if let Some(l) = self.modified.login.as_mut() {
                     let uris = l.uris.get_or_insert_default();
@@ -371,28 +327,20 @@ impl CipherForm {
                     c.cardholder_name = opt_string(s);
                 }
             }
-            CardBrandDropdownToggled => {
-                self.card_brand_dropdown_open = !self.card_brand_dropdown_open;
-            }
             CardBrandSelected(s) => {
                 if let Some(c) = self.modified.card.as_mut() {
                     c.brand = s;
                 }
-                self.card_brand_dropdown_open = false;
             }
             CardNumberChanged(s) => {
                 if let Some(c) = self.modified.card.as_mut() {
                     c.number = opt_string(s);
                 }
             }
-            CardExpMonthDropdownToggled => {
-                self.card_exp_month_dropdown_open = !self.card_exp_month_dropdown_open;
-            }
             CardExpMonthSelected(s) => {
                 if let Some(c) = self.modified.card.as_mut() {
                     c.exp_month = s;
                 }
-                self.card_exp_month_dropdown_open = false;
             }
             CardExpYearChanged(s) => {
                 if let Some(c) = self.modified.card.as_mut() {
@@ -404,29 +352,28 @@ impl CipherForm {
                     c.code = opt_string(s);
                 }
             }
-            ToggleCardCodeVisibility => self.card_code_visible = !self.card_code_visible,
 
             // Identity
-            IdentityTitleDropdownToggled => {
-                self.identity_title_dropdown_open = !self.identity_title_dropdown_open;
-            }
             IdentityTitleSelected(s) => {
                 if let Some(i) = self.modified.identity.as_mut() {
                     i.title = s;
                 }
-                self.identity_title_dropdown_open = false;
             }
-            IdentityFirstNameChanged(s) => identity_set(&mut self.modified, |i| &mut i.first_name, s),
-            IdentityMiddleNameChanged(s) => identity_set(&mut self.modified, |i| &mut i.middle_name, s),
+            IdentityFirstNameChanged(s) => {
+                identity_set(&mut self.modified, |i| &mut i.first_name, s)
+            }
+            IdentityMiddleNameChanged(s) => {
+                identity_set(&mut self.modified, |i| &mut i.middle_name, s)
+            }
             IdentityLastNameChanged(s) => identity_set(&mut self.modified, |i| &mut i.last_name, s),
             IdentityUsernameChanged(s) => identity_set(&mut self.modified, |i| &mut i.username, s),
             IdentityCompanyChanged(s) => identity_set(&mut self.modified, |i| &mut i.company, s),
             IdentitySsnChanged(s) => identity_set(&mut self.modified, |i| &mut i.ssn, s),
-            IdentityPassportChanged(s) => identity_set(&mut self.modified, |i| &mut i.passport_number, s),
-            IdentityLicenseChanged(s) => identity_set(&mut self.modified, |i| &mut i.license_number, s),
-            ToggleIdentitySsnVisibility => self.identity_ssn_visible = !self.identity_ssn_visible,
-            ToggleIdentityPassportVisibility => {
-                self.identity_passport_visible = !self.identity_passport_visible;
+            IdentityPassportChanged(s) => {
+                identity_set(&mut self.modified, |i| &mut i.passport_number, s)
+            }
+            IdentityLicenseChanged(s) => {
+                identity_set(&mut self.modified, |i| &mut i.license_number, s)
             }
             IdentityEmailChanged(s) => identity_set(&mut self.modified, |i| &mut i.email, s),
             IdentityPhoneChanged(s) => identity_set(&mut self.modified, |i| &mut i.phone, s),
@@ -435,7 +382,9 @@ impl CipherForm {
             IdentityAddress3Changed(s) => identity_set(&mut self.modified, |i| &mut i.address3, s),
             IdentityCityChanged(s) => identity_set(&mut self.modified, |i| &mut i.city, s),
             IdentityStateChanged(s) => identity_set(&mut self.modified, |i| &mut i.state, s),
-            IdentityPostalCodeChanged(s) => identity_set(&mut self.modified, |i| &mut i.postal_code, s),
+            IdentityPostalCodeChanged(s) => {
+                identity_set(&mut self.modified, |i| &mut i.postal_code, s)
+            }
             IdentityCountryChanged(s) => identity_set(&mut self.modified, |i| &mut i.country, s),
 
             // Custom fields
@@ -453,16 +402,7 @@ impl CipherForm {
                     && idx < fields.len()
                 {
                     fields.remove(idx);
-                    self.custom_field_reveals.remove(&idx);
-                    self.custom_field_type_dropdowns.remove(&idx);
                 }
-            }
-            CustomFieldTypeDropdownToggled(idx) => {
-                let entry = self
-                    .custom_field_type_dropdowns
-                    .entry(idx)
-                    .or_insert(false);
-                *entry = !*entry;
             }
             CustomFieldTypeSelected(idx, ty) => {
                 if let Some(fields) = self.modified.fields.as_mut()
@@ -478,7 +418,6 @@ impl CipherForm {
                         f.value = Some("false".to_string());
                     }
                 }
-                self.custom_field_type_dropdowns.insert(idx, false);
             }
             CustomFieldNameChanged(idx, s) => {
                 if let Some(fields) = self.modified.fields.as_mut()
@@ -502,10 +441,6 @@ impl CipherForm {
                     f.value = Some(if next { "true" } else { "false" }.to_string());
                 }
             }
-            ToggleCustomFieldReveal(idx) => {
-                let entry = self.custom_field_reveals.entry(idx).or_insert(false);
-                *entry = !*entry;
-            }
 
             // Flow
             Save => return FormAction::Save,
@@ -519,76 +454,11 @@ fn opt_string(s: String) -> Option<String> {
     if s.is_empty() { None } else { Some(s) }
 }
 
-// ── Input primitives ───────────────────────────────────────────────────────
-//
-// The form uses a plain "label above input" layout (column) rather than the
-// floating-label `stack` pattern from the login view. `stack` lays out both
-// children at the same bounds on every frame (see CLAUDE.md → "Stack doesn't
-// cull or clip") — at ~20 inputs in the identity form that's a measurable
-// extra cost per scroll frame. Column is strictly cheaper and reads fine in
-// a form context where every field has a label.
-
-fn labeled_input<'a, M>(
-    label: &'a str,
-    value: &'a str,
-    on_input: impl Fn(String) -> M + 'a,
-    secure: bool,
-    show_toggle: Option<(bool, M)>,
-    disabled: bool,
-    colors: &'a AppColors,
-) -> Element<'a, M, AppTheme>
-where
-    M: Clone + 'a,
-{
-    let mut input = text_input("", value)
-        .size(14)
-        .padding([8, 12])
-        .width(Fill)
-        .style(|theme: &AppTheme, _status| text_input::Style {
-            background: Background::Color(Color::TRANSPARENT),
-            border: Border::default()
-                .color(theme.colors.border)
-                .width(1.0)
-                .rounded(RADIUS_SM),
-            icon: theme.colors.text_muted,
-            placeholder: theme.colors.text_secondary,
-            value: theme.colors.text_primary,
-            selection: theme.colors.accent,
-        });
-    if !disabled {
-        input = input.on_input(on_input);
-    }
-    if secure {
-        input = input.secure(true);
-    }
-
-    let control: Element<'a, M, AppTheme> = if let Some((is_visible, toggle_msg)) = show_toggle {
-        let toggle_icon = if is_visible {
-            icons::EYE
-        } else {
-            icons::EYE_SLASH
-        }
-        .render(16.0, colors.text_secondary);
-
-        let mut toggle_button =
-            buttons::ghost_icon(toggle_icon, colors.item_hover).padding([8, 10]);
-        if !disabled {
-            toggle_button = toggle_button.on_press(toggle_msg);
-        }
-        row![input, toggle_button].align_y(Alignment::Center).into()
-    } else {
-        input.into()
-    };
-
-    column![
-        text(label).size(12).color(colors.text_muted),
-        control,
-    ]
-    .spacing(4)
-    .into()
-}
-
-fn identity_set(cv: &mut CipherView, pick: impl Fn(&mut IdentityView) -> &mut Option<String>, s: String) {
+fn identity_set(
+    cv: &mut CipherView,
+    pick: impl Fn(&mut IdentityView) -> &mut Option<String>,
+    s: String,
+) {
     if let Some(i) = cv.identity.as_mut() {
         *pick(i) = opt_string(s);
     }
@@ -686,10 +556,9 @@ fn header_row<'a>(
     .on_press(CipherFormMessage::Cancel)
     .padding([1, 1]);
 
-    let header = container(
-        row![title, Space::new().width(Fill), cancel_btn].align_y(Alignment::Center),
-    )
-    .padding([8, 20]);
+    let header =
+        container(row![title, Space::new().width(Fill), cancel_btn].align_y(Alignment::Center))
+            .padding([8, 20]);
 
     column![header, components::separator_h()].spacing(0).into()
 }
@@ -713,10 +582,9 @@ fn bottom_bar<'a>(
             .spacing(8)
             .align_y(Alignment::Center),
     )
+    .width(Fill)
     .padding([8, 20])
-    .style(|theme: &AppTheme| {
-        container::Style::default().background(theme.colors.background)
-    });
+    .style(|theme: &AppTheme| container::Style::default().background(theme.colors.background));
 
     column![components::separator_h(), bar].spacing(0).into()
 }
@@ -729,7 +597,13 @@ fn item_details_card<'a>(
 ) -> Element<'a, CipherFormMessage, AppTheme> {
     let mut rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = Vec::new();
 
-    rows.push(labeled_input("Name (required)", &form.modified.name, CipherFormMessage::NameChanged, false, None, form.saving, colors,
+    rows.push(floating_label_input(
+        "Name (required)",
+        &form.modified.name,
+        CipherFormMessage::NameChanged,
+        None,
+        form.saving,
+        colors,
     ));
 
     // Favorite + reprompt toggles in a row so the card stays compact.
@@ -763,14 +637,28 @@ fn login_card<'a>(
     let login = form.modified.login.as_ref().expect("ensure_sub_structs");
 
     let rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = vec![
-        labeled_input("Username", login.username.as_deref().unwrap_or(""), CipherFormMessage::UsernameChanged, false, None, form.saving, colors,
-        ),
-        labeled_input("Password", login.password.as_deref().unwrap_or(""), CipherFormMessage::PasswordChanged, !form.password_visible, Some((
-                form.password_visible, CipherFormMessage::TogglePasswordVisibility,  )),
+        floating_label_input(
+            "Username",
+            login.username.as_deref().unwrap_or(""),
+            CipherFormMessage::UsernameChanged,
+            None,
             form.saving,
             colors,
         ),
-        labeled_input("Authenticator key (TOTP)", login.totp.as_deref().unwrap_or(""), CipherFormMessage::TotpChanged, false, None, form.saving, colors,
+        crate::components::reveal_input::reveal_input(
+            "Password",
+            login.password.as_deref().unwrap_or(""),
+            CipherFormMessage::PasswordChanged,
+            form.saving,
+            colors,
+        ),
+        floating_label_input(
+            "Authenticator key (TOTP)",
+            login.totp.as_deref().unwrap_or(""),
+            CipherFormMessage::TotpChanged,
+            None,
+            form.saving,
+            colors,
         ),
     ];
 
@@ -800,11 +688,10 @@ fn autofill_card<'a>(
     } else {
         for (idx, uri) in uris.iter().enumerate() {
             let value = uri.uri.as_deref().unwrap_or("");
-            let input = labeled_input(
+            let input = floating_label_input(
                 "Website (URI)",
                 value,
                 move |s| CipherFormMessage::UriChanged(idx, s),
-                false,
                 None,
                 form.saving,
                 colors,
@@ -817,13 +704,10 @@ fn autofill_card<'a>(
             .padding([6, 6]);
 
             rows.push(
-                row![
-                    container(input).width(Fill),
-                    remove_btn,
-                ]
-                .spacing(6)
-                .align_y(Alignment::Center)
-                .into(),
+                row![container(input).width(Fill), remove_btn,]
+                    .spacing(6)
+                    .align_y(Alignment::Center)
+                    .into(),
             );
         }
     }
@@ -850,15 +734,37 @@ fn card_details_card<'a>(
     let c = form.modified.card.as_ref().expect("ensure_sub_structs");
 
     let rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = vec![
-        labeled_input("Cardholder name", c.cardholder_name.as_deref().unwrap_or(""), CipherFormMessage::CardCardholderChanged, false, None, form.saving, colors,
+        floating_label_input(
+            "Cardholder name",
+            c.cardholder_name.as_deref().unwrap_or(""),
+            CipherFormMessage::CardCardholderChanged,
+            None,
+            form.saving,
+            colors,
         ),
         brand_selector(form, colors),
-        labeled_input("Number", c.number.as_deref().unwrap_or(""), CipherFormMessage::CardNumberChanged, false, None, form.saving, colors,
+        floating_label_input(
+            "Number",
+            c.number.as_deref().unwrap_or(""),
+            CipherFormMessage::CardNumberChanged,
+            None,
+            form.saving,
+            colors,
         ),
         exp_month_selector(form, colors),
-        labeled_input("Expiration year", c.exp_year.as_deref().unwrap_or(""), CipherFormMessage::CardExpYearChanged, false, None, form.saving, colors,
+        floating_label_input(
+            "Expiration year",
+            c.exp_year.as_deref().unwrap_or(""),
+            CipherFormMessage::CardExpYearChanged,
+            None,
+            form.saving,
+            colors,
         ),
-        labeled_input("Security code", c.code.as_deref().unwrap_or(""), CipherFormMessage::CardCodeChanged, !form.card_code_visible, Some((form.card_code_visible, CipherFormMessage::ToggleCardCodeVisibility)), form.saving,
+        crate::components::reveal_input::reveal_input(
+            "Security code",
+            c.code.as_deref().unwrap_or(""),
+            CipherFormMessage::CardCodeChanged,
+            form.saving,
             colors,
         ),
     ];
@@ -873,15 +779,45 @@ fn identity_personal_card<'a>(
     let i = form.modified.identity.as_ref().expect("ensure_sub_structs");
     let rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = vec![
         title_selector(form, colors),
-        labeled_input("First name", i.first_name.as_deref().unwrap_or(""), CipherFormMessage::IdentityFirstNameChanged, false, None, form.saving, colors,
+        floating_label_input(
+            "First name",
+            i.first_name.as_deref().unwrap_or(""),
+            CipherFormMessage::IdentityFirstNameChanged,
+            None,
+            form.saving,
+            colors,
         ),
-        labeled_input("Middle name", i.middle_name.as_deref().unwrap_or(""), CipherFormMessage::IdentityMiddleNameChanged, false, None, form.saving, colors,
+        floating_label_input(
+            "Middle name",
+            i.middle_name.as_deref().unwrap_or(""),
+            CipherFormMessage::IdentityMiddleNameChanged,
+            None,
+            form.saving,
+            colors,
         ),
-        labeled_input("Last name", i.last_name.as_deref().unwrap_or(""), CipherFormMessage::IdentityLastNameChanged, false, None, form.saving, colors,
+        floating_label_input(
+            "Last name",
+            i.last_name.as_deref().unwrap_or(""),
+            CipherFormMessage::IdentityLastNameChanged,
+            None,
+            form.saving,
+            colors,
         ),
-        labeled_input("Username", i.username.as_deref().unwrap_or(""), CipherFormMessage::IdentityUsernameChanged, false, None, form.saving, colors,
+        floating_label_input(
+            "Username",
+            i.username.as_deref().unwrap_or(""),
+            CipherFormMessage::IdentityUsernameChanged,
+            None,
+            form.saving,
+            colors,
         ),
-        labeled_input("Company", i.company.as_deref().unwrap_or(""), CipherFormMessage::IdentityCompanyChanged, false, None, form.saving, colors,
+        floating_label_input(
+            "Company",
+            i.company.as_deref().unwrap_or(""),
+            CipherFormMessage::IdentityCompanyChanged,
+            None,
+            form.saving,
+            colors,
         ),
     ];
     card_with_margin(styled_card(column(rows).spacing(12).into()))
@@ -893,15 +829,27 @@ fn identity_identification_card<'a>(
 ) -> Element<'a, CipherFormMessage, AppTheme> {
     let i = form.modified.identity.as_ref().expect("ensure_sub_structs");
     let rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = vec![
-        labeled_input("Social Security number", i.ssn.as_deref().unwrap_or(""), CipherFormMessage::IdentitySsnChanged, !form.identity_ssn_visible, Some((form.identity_ssn_visible, CipherFormMessage::ToggleIdentitySsnVisibility)), form.saving,
-            colors,
-        ),
-        labeled_input("Passport number", i.passport_number.as_deref().unwrap_or(""), CipherFormMessage::IdentityPassportChanged, !form.identity_passport_visible, Some((
-                form.identity_passport_visible, CipherFormMessage::ToggleIdentityPassportVisibility,  )),
+        crate::components::reveal_input::reveal_input(
+            "Social Security number",
+            i.ssn.as_deref().unwrap_or(""),
+            CipherFormMessage::IdentitySsnChanged,
             form.saving,
             colors,
         ),
-        labeled_input("License number", i.license_number.as_deref().unwrap_or(""), CipherFormMessage::IdentityLicenseChanged, false, None, form.saving, colors,
+        crate::components::reveal_input::reveal_input(
+            "Passport number",
+            i.passport_number.as_deref().unwrap_or(""),
+            CipherFormMessage::IdentityPassportChanged,
+            form.saving,
+            colors,
+        ),
+        floating_label_input(
+            "License number",
+            i.license_number.as_deref().unwrap_or(""),
+            CipherFormMessage::IdentityLicenseChanged,
+            None,
+            form.saving,
+            colors,
         ),
     ];
     card_with_margin(styled_card(column(rows).spacing(12).into()))
@@ -913,9 +861,21 @@ fn identity_contact_card<'a>(
 ) -> Element<'a, CipherFormMessage, AppTheme> {
     let i = form.modified.identity.as_ref().expect("ensure_sub_structs");
     let rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = vec![
-        labeled_input("Email", i.email.as_deref().unwrap_or(""), CipherFormMessage::IdentityEmailChanged, false, None, form.saving, colors,
+        floating_label_input(
+            "Email",
+            i.email.as_deref().unwrap_or(""),
+            CipherFormMessage::IdentityEmailChanged,
+            None,
+            form.saving,
+            colors,
         ),
-        labeled_input("Phone", i.phone.as_deref().unwrap_or(""), CipherFormMessage::IdentityPhoneChanged, false, None, form.saving, colors,
+        floating_label_input(
+            "Phone",
+            i.phone.as_deref().unwrap_or(""),
+            CipherFormMessage::IdentityPhoneChanged,
+            None,
+            form.saving,
+            colors,
         ),
     ];
     card_with_margin(styled_card(column(rows).spacing(12).into()))
@@ -927,19 +887,61 @@ fn identity_address_card<'a>(
 ) -> Element<'a, CipherFormMessage, AppTheme> {
     let i = form.modified.identity.as_ref().expect("ensure_sub_structs");
     let rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = vec![
-        labeled_input("Address line 1", i.address1.as_deref().unwrap_or(""), CipherFormMessage::IdentityAddress1Changed, false, None, form.saving, colors,
+        floating_label_input(
+            "Address line 1",
+            i.address1.as_deref().unwrap_or(""),
+            CipherFormMessage::IdentityAddress1Changed,
+            None,
+            form.saving,
+            colors,
         ),
-        labeled_input("Address line 2", i.address2.as_deref().unwrap_or(""), CipherFormMessage::IdentityAddress2Changed, false, None, form.saving, colors,
+        floating_label_input(
+            "Address line 2",
+            i.address2.as_deref().unwrap_or(""),
+            CipherFormMessage::IdentityAddress2Changed,
+            None,
+            form.saving,
+            colors,
         ),
-        labeled_input("Address line 3", i.address3.as_deref().unwrap_or(""), CipherFormMessage::IdentityAddress3Changed, false, None, form.saving, colors,
+        floating_label_input(
+            "Address line 3",
+            i.address3.as_deref().unwrap_or(""),
+            CipherFormMessage::IdentityAddress3Changed,
+            None,
+            form.saving,
+            colors,
         ),
-        labeled_input("City / town", i.city.as_deref().unwrap_or(""), CipherFormMessage::IdentityCityChanged, false, None, form.saving, colors,
+        floating_label_input(
+            "City / town",
+            i.city.as_deref().unwrap_or(""),
+            CipherFormMessage::IdentityCityChanged,
+            None,
+            form.saving,
+            colors,
         ),
-        labeled_input("State / province", i.state.as_deref().unwrap_or(""), CipherFormMessage::IdentityStateChanged, false, None, form.saving, colors,
+        floating_label_input(
+            "State / province",
+            i.state.as_deref().unwrap_or(""),
+            CipherFormMessage::IdentityStateChanged,
+            None,
+            form.saving,
+            colors,
         ),
-        labeled_input("Zip / postal code", i.postal_code.as_deref().unwrap_or(""), CipherFormMessage::IdentityPostalCodeChanged, false, None, form.saving, colors,
+        floating_label_input(
+            "Zip / postal code",
+            i.postal_code.as_deref().unwrap_or(""),
+            CipherFormMessage::IdentityPostalCodeChanged,
+            None,
+            form.saving,
+            colors,
         ),
-        labeled_input("Country", i.country.as_deref().unwrap_or(""), CipherFormMessage::IdentityCountryChanged, false, None, form.saving, colors,
+        floating_label_input(
+            "Country",
+            i.country.as_deref().unwrap_or(""),
+            CipherFormMessage::IdentityCountryChanged,
+            None,
+            form.saving,
+            colors,
         ),
     ];
     card_with_margin(styled_card(column(rows).spacing(12).into()))
@@ -969,7 +971,13 @@ fn additional_options_card<'a>(
     colors: &'a AppColors,
 ) -> Element<'a, CipherFormMessage, AppTheme> {
     let notes_value = form.modified.notes.as_deref().unwrap_or("");
-    let notes = labeled_input("Notes", notes_value, CipherFormMessage::NotesChanged, false, None, form.saving, colors,
+    let notes = floating_label_input(
+        "Notes",
+        notes_value,
+        CipherFormMessage::NotesChanged,
+        None,
+        form.saving,
+        colors,
     );
 
     let reprompt_checkbox = checkbox(matches!(
@@ -1028,81 +1036,50 @@ fn custom_field_row<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
 ) -> Element<'a, CipherFormMessage, AppTheme> {
-    let type_label = match f.r#type {
-        FieldType::Text => "Text",
-        FieldType::Hidden => "Hidden",
-        FieldType::Boolean => "Boolean",
-        FieldType::Linked => "Linked",
-    };
-
-    let type_trigger: Element<'a, CipherFormMessage, AppTheme> =
-        bordered_dropdown_trigger(type_label, colors, move || {
-            CipherFormMessage::CustomFieldTypeDropdownToggled(idx)
-        });
-
-    let type_options_panel: Element<'a, CipherFormMessage, AppTheme> = dropdown_panel(
-        [FieldType::Text, FieldType::Hidden, FieldType::Boolean]
-            .into_iter()
-            .map(|ty| {
-                let label = match ty {
-                    FieldType::Text => "Text",
-                    FieldType::Hidden => "Hidden",
-                    FieldType::Boolean => "Boolean",
-                    FieldType::Linked => "Linked",
-                };
-                (
-                    label.to_string(),
-                    CipherFormMessage::CustomFieldTypeSelected(idx, ty),
-                )
-            })
-            .collect(),
+    let type_picker: Element<'a, CipherFormMessage, AppTheme> = container(labeled_pick_list(
+        "Type",
+        Some(f.r#type),
+        vec![FieldType::Text, FieldType::Hidden, FieldType::Boolean],
+        |ty: &FieldType| {
+            match ty {
+                FieldType::Text => "Text",
+                FieldType::Hidden => "Hidden",
+                FieldType::Boolean => "Boolean",
+                FieldType::Linked => "Linked",
+            }
+            .to_string()
+        },
+        move |ty| CipherFormMessage::CustomFieldTypeSelected(idx, ty),
         colors,
-    );
-
-    let is_open = self::dropdown_open(&form.custom_field_type_dropdowns, idx);
-    let type_picker: Element<'a, CipherFormMessage, AppTheme> = DropDown::new(
-        type_trigger,
-        type_options_panel,
-        is_open,
-    )
-    .alignment(drop_down::Alignment::BelowLeft)
-    .on_dismiss(CipherFormMessage::CustomFieldTypeDropdownToggled(idx))
-    .width(160.0)
-    .offset(4.0)
+    ))
+    .width(140)
     .into();
 
-    let name_input = labeled_input(
+    let name_input = floating_label_input(
         "Name",
         f.name.as_deref().unwrap_or(""),
         move |s| CipherFormMessage::CustomFieldNameChanged(idx, s),
-        false,
         None,
         form.saving,
         colors,
     );
 
     let value_widget: Element<'a, CipherFormMessage, AppTheme> = match f.r#type {
-        FieldType::Text => labeled_input(
+        FieldType::Text => floating_label_input(
             "Value",
             f.value.as_deref().unwrap_or(""),
             move |s| CipherFormMessage::CustomFieldValueChanged(idx, s),
-            false,
             None,
             form.saving,
             colors,
         ),
-        FieldType::Hidden => {
-            let revealed = form.custom_field_reveals.get(&idx).copied().unwrap_or(false);
-            labeled_input(
-                "Value",
-                f.value.as_deref().unwrap_or(""),
-                move |s| CipherFormMessage::CustomFieldValueChanged(idx, s),
-                !revealed,
-                Some((revealed, CipherFormMessage::ToggleCustomFieldReveal(idx))),
-                form.saving,
-                colors,
-            )
-        }
+        FieldType::Hidden => crate::components::reveal_input::reveal_input(
+            "Value",
+            f.value.as_deref().unwrap_or(""),
+            move |s| CipherFormMessage::CustomFieldValueChanged(idx, s),
+            form.saving,
+            colors,
+        ),
         FieldType::Boolean => {
             let checked = matches!(f.value.as_deref(), Some("true"));
             checkbox(checked)
@@ -1136,42 +1113,70 @@ fn custom_field_row<'a>(
     .into()
 }
 
-fn dropdown_open(map: &HashMap<usize, bool>, idx: usize) -> bool {
-    map.get(&idx).copied().unwrap_or(false)
-}
-
 // ── Selector helpers ───────────────────────────────────────────────────────
+
+/// Wraps an iced `pick_list` with the same floating-label chip pattern used by
+/// `floating_label_input`: a label sits on top of the control's border, with
+/// its background matching the page so the border visually "breaks" behind it.
+/// `pick_list` handles its own overlay/positioning — that's why these don't
+/// need the open-state flag + custom DropDown our old `labeled_dropdown` did.
+fn labeled_pick_list<'a, T, M>(
+    label: &'a str,
+    selected: Option<T>,
+    options: Vec<T>,
+    to_string: impl Fn(&T) -> String + 'a,
+    on_select: impl Fn(T) -> M + 'a,
+    colors: &'a AppColors,
+) -> Element<'a, M, AppTheme>
+where
+    T: PartialEq + Clone + 'a,
+    M: Clone + 'a,
+{
+    // Pick_list draws its own border via the `pick_list::Catalog` default.
+    // We want the *frame* to own the border so the floating label chip
+    // cleanly erases its top edge — override the per-instance style to
+    // transparent.
+    let picker = pick_list(selected, options, to_string)
+        .on_select(on_select)
+        .width(Fill)
+        .padding([8, 12])
+        .style(|theme: &AppTheme, _status| iced::widget::pick_list::Style {
+            text_color: theme.colors.text_primary,
+            background: Background::Color(Color::TRANSPARENT),
+            placeholder_color: theme.colors.text_secondary,
+            handle_color: theme.colors.text_secondary,
+            border: Border::default(),
+        });
+
+    crate::components::inputs::floating_label_frame(label, picker.into(), colors)
+}
 
 fn folder_selector<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
 ) -> Element<'a, CipherFormMessage, AppTheme> {
-    let selected_name = form
-        .modified
-        .folder_id
-        .as_ref()
-        .and_then(|id| form.folders.iter().find(|f| f.id == *id))
-        .map(|f| f.name.as_str())
-        .unwrap_or("No folder");
+    let mut options: Vec<Option<FolderId>> = vec![None];
+    options.extend(form.folders.iter().map(|f| Some(f.id)));
 
-    let trigger =
-        bordered_dropdown_trigger(selected_name, colors, || CipherFormMessage::FolderDropdownToggled);
+    let folder_names: Vec<(FolderId, String)> = form
+        .folders
+        .iter()
+        .map(|f| (f.id, f.name.clone()))
+        .collect();
 
-    let mut options: Vec<(String, CipherFormMessage)> =
-        vec![("No folder".to_string(), CipherFormMessage::FolderSelected(None))];
-    for f in &form.folders {
-        options.push((
-            f.name.clone(),
-            CipherFormMessage::FolderSelected(Some(f.id)),
-        ));
-    }
-
-    labeled_dropdown(
+    labeled_pick_list(
         "Folder",
-        trigger,
-        dropdown_panel(options, colors),
-        form.folder_dropdown_open,
-        CipherFormMessage::FolderDropdownToggled,
+        Some(form.modified.folder_id),
+        options,
+        move |choice: &Option<FolderId>| match choice {
+            None => "No folder".to_string(),
+            Some(id) => folder_names
+                .iter()
+                .find(|(fid, _)| fid == id)
+                .map(|(_, name)| name.clone())
+                .unwrap_or_default(),
+        },
+        CipherFormMessage::FolderSelected,
         colors,
     )
 }
@@ -1180,32 +1185,28 @@ fn org_selector<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
 ) -> Element<'a, CipherFormMessage, AppTheme> {
-    let selected_name = form
-        .modified
-        .organization_id
-        .as_ref()
-        .and_then(|id| form.organizations.iter().find(|o| o.id == *id))
-        .map(|o| o.name.as_str())
-        .unwrap_or("Personal (me)");
+    let mut options: Vec<Option<OrganizationId>> = vec![None];
+    options.extend(form.organizations.iter().map(|o| Some(o.id)));
 
-    let trigger =
-        bordered_dropdown_trigger(selected_name, colors, || CipherFormMessage::OrgDropdownToggled);
+    let org_names: Vec<(OrganizationId, String)> = form
+        .organizations
+        .iter()
+        .map(|o| (o.id, o.name.clone()))
+        .collect();
 
-    let mut options: Vec<(String, CipherFormMessage)> =
-        vec![("Personal (me)".to_string(), CipherFormMessage::OrgSelected(None))];
-    for o in &form.organizations {
-        options.push((
-            o.name.clone(),
-            CipherFormMessage::OrgSelected(Some(o.id)),
-        ));
-    }
-
-    labeled_dropdown(
+    labeled_pick_list(
         "Organization",
-        trigger,
-        dropdown_panel(options, colors),
-        form.org_dropdown_open,
-        CipherFormMessage::OrgDropdownToggled,
+        Some(form.modified.organization_id),
+        options,
+        move |choice: &Option<OrganizationId>| match choice {
+            None => "Personal (me)".to_string(),
+            Some(id) => org_names
+                .iter()
+                .find(|(oid, _)| oid == id)
+                .map(|(_, name)| name.clone())
+                .unwrap_or_default(),
+        },
+        CipherFormMessage::OrgSelected,
         colors,
     )
 }
@@ -1236,9 +1237,13 @@ fn collections_selector<'a>(
     let mut options: Vec<Element<'a, CipherFormMessage, AppTheme>> = Vec::new();
     if scoped.is_empty() {
         options.push(
-            container(text("No collections in this org").size(12).color(colors.text_muted))
-                .padding([8, 12])
-                .into(),
+            container(
+                text("No collections in this org")
+                    .size(12)
+                    .color(colors.text_muted),
+            )
+            .padding([8, 12])
+            .into(),
         );
     } else {
         for c in scoped {
@@ -1294,46 +1299,35 @@ fn brand_selector<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
 ) -> Element<'a, CipherFormMessage, AppTheme> {
-    let current = form
-        .modified
-        .card
-        .as_ref()
-        .and_then(|c| c.brand.as_deref())
-        .unwrap_or("-- Select --");
+    let mut options: Vec<Option<String>> = vec![None];
+    options.extend(
+        [
+            "Visa",
+            "Mastercard",
+            "Amex",
+            "Discover",
+            "Diners Club",
+            "JCB",
+            "Maestro",
+            "UnionPay",
+            "RuPay",
+            "Other",
+        ]
+        .into_iter()
+        .map(|b| Some(b.to_string())),
+    );
 
-    let trigger = bordered_dropdown_trigger(current, colors, || {
-        CipherFormMessage::CardBrandDropdownToggled
-    });
+    let selected = form.modified.card.as_ref().map(|c| c.brand.clone());
 
-    let brands = [
-        "Visa",
-        "Mastercard",
-        "Amex",
-        "Discover",
-        "Diners Club",
-        "JCB",
-        "Maestro",
-        "UnionPay",
-        "RuPay",
-        "Other",
-    ];
-    let mut options: Vec<(String, CipherFormMessage)> = vec![(
-        "-- Select --".to_string(),
-        CipherFormMessage::CardBrandSelected(None),
-    )];
-    for b in brands {
-        options.push((
-            b.to_string(),
-            CipherFormMessage::CardBrandSelected(Some(b.to_string())),
-        ));
-    }
-
-    labeled_dropdown(
+    labeled_pick_list(
         "Brand",
-        trigger,
-        dropdown_panel(options, colors),
-        form.card_brand_dropdown_open,
-        CipherFormMessage::CardBrandDropdownToggled,
+        selected,
+        options,
+        |choice: &Option<String>| match choice {
+            None => "-- Select --".to_string(),
+            Some(s) => s.clone(),
+        },
+        CipherFormMessage::CardBrandSelected,
         colors,
     )
 }
@@ -1342,35 +1336,20 @@ fn exp_month_selector<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
 ) -> Element<'a, CipherFormMessage, AppTheme> {
-    let current = form
-        .modified
-        .card
-        .as_ref()
-        .and_then(|c| c.exp_month.as_deref())
-        .unwrap_or("-- Month --");
+    let mut options: Vec<Option<String>> = vec![None];
+    options.extend((1..=12).map(|m| Some(format!("{m:02}"))));
 
-    let trigger = bordered_dropdown_trigger(current, colors, || {
-        CipherFormMessage::CardExpMonthDropdownToggled
-    });
+    let selected = form.modified.card.as_ref().map(|c| c.exp_month.clone());
 
-    let mut options: Vec<(String, CipherFormMessage)> = vec![(
-        "-- Month --".to_string(),
-        CipherFormMessage::CardExpMonthSelected(None),
-    )];
-    for m in 1..=12 {
-        let label = format!("{m:02}");
-        options.push((
-            label.clone(),
-            CipherFormMessage::CardExpMonthSelected(Some(label)),
-        ));
-    }
-
-    labeled_dropdown(
+    labeled_pick_list(
         "Expiration month",
-        trigger,
-        dropdown_panel(options, colors),
-        form.card_exp_month_dropdown_open,
-        CipherFormMessage::CardExpMonthDropdownToggled,
+        selected,
+        options,
+        |choice: &Option<String>| match choice {
+            None => "-- Month --".to_string(),
+            Some(s) => s.clone(),
+        },
+        CipherFormMessage::CardExpMonthSelected,
         colors,
     )
 }
@@ -1379,35 +1358,20 @@ fn title_selector<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
 ) -> Element<'a, CipherFormMessage, AppTheme> {
-    let current = form
-        .modified
-        .identity
-        .as_ref()
-        .and_then(|i| i.title.as_deref())
-        .unwrap_or("-- Title --");
+    let mut options: Vec<Option<String>> = vec![None];
+    options.extend(["Mr", "Mrs", "Ms", "Mx", "Dr"].into_iter().map(|t| Some(t.to_string())));
 
-    let trigger = bordered_dropdown_trigger(current, colors, || {
-        CipherFormMessage::IdentityTitleDropdownToggled
-    });
+    let selected = form.modified.identity.as_ref().map(|i| i.title.clone());
 
-    let titles = ["Mr", "Mrs", "Ms", "Mx", "Dr"];
-    let mut options: Vec<(String, CipherFormMessage)> = vec![(
-        "-- Title --".to_string(),
-        CipherFormMessage::IdentityTitleSelected(None),
-    )];
-    for t in titles {
-        options.push((
-            t.to_string(),
-            CipherFormMessage::IdentityTitleSelected(Some(t.to_string())),
-        ));
-    }
-
-    labeled_dropdown(
+    labeled_pick_list(
         "Title",
-        trigger,
-        dropdown_panel(options, colors),
-        form.identity_title_dropdown_open,
-        CipherFormMessage::IdentityTitleDropdownToggled,
+        selected,
+        options,
+        |choice: &Option<String>| match choice {
+            None => "-- Title --".to_string(),
+            Some(s) => s.clone(),
+        },
+        CipherFormMessage::IdentityTitleSelected,
         colors,
     )
 }
@@ -1435,56 +1399,17 @@ fn bordered_dropdown_trigger<'a, M: Clone + 'a>(
     .on_press(on_click())
     .padding(0)
     .width(Fill)
-    .style(|theme: &AppTheme, _status| {
-        iced::widget::button::Style {
-            background: Some(Background::Color(Color::TRANSPARENT)),
-            text_color: theme.colors.text_primary,
-            border: Border::default()
-                .color(theme.colors.border)
-                .width(1.0)
-                .rounded(RADIUS_SM),
-            shadow: iced::Shadow::default(),
-            snap: false,
-        }
+    .style(|theme: &AppTheme, _status| iced::widget::button::Style {
+        background: Some(Background::Color(Color::TRANSPARENT)),
+        text_color: theme.colors.text_primary,
+        border: Border::default()
+            .color(theme.colors.border)
+            .width(1.0)
+            .rounded(RADIUS_SM),
+        shadow: iced::Shadow::default(),
+        snap: false,
     })
     .into()
-}
-
-fn dropdown_panel<'a, M: Clone + 'a>(
-    options: Vec<(String, M)>,
-    colors: &'a AppColors,
-) -> Element<'a, M, AppTheme> {
-    let items: Vec<Element<'a, M, AppTheme>> = options
-        .into_iter()
-        .map(|(label, msg)| {
-            buttons::ghost(
-                text(label).size(14).color(colors.text_primary),
-                false,
-                Color::TRANSPARENT,
-                colors.item_hover,
-                0.0,
-            )
-            .on_press(msg)
-            .padding([6, 12])
-            .width(Fill)
-            .into()
-        })
-        .collect();
-
-    container(column(items).spacing(0))
-        .width(Fill)
-        .padding([4, 0])
-        .style(|theme: &AppTheme| {
-            container::Style::default()
-                .background(theme.colors.card_bg)
-                .border(
-                    Border::default()
-                        .color(theme.colors.border)
-                        .width(1.0)
-                        .rounded(RADIUS_SM),
-                )
-        })
-        .into()
 }
 
 fn labeled_dropdown<'a>(
@@ -1496,23 +1421,13 @@ fn labeled_dropdown<'a>(
     colors: &'a AppColors,
 ) -> Element<'a, CipherFormMessage, AppTheme> {
     // Don't set a width on the DropDown — the overlay defaults to the
-    // trigger's width (see `drop_down.rs` layout), which is what we want.
-    // `Length::Fill` would stretch the overlay to the whole window.
+    // trigger's width (see `drop_down.rs` layout). `Length::Fill` would
+    // stretch the overlay to the whole window.
     let dd: Element<'a, CipherFormMessage, AppTheme> = DropDown::new(trigger, panel, open)
         .alignment(drop_down::Alignment::BelowLeft)
         .on_dismiss(dismiss_msg)
         .offset(4.0)
         .into();
 
-    // Plain "label above control" layout. The stack-based floating label
-    // used by `floating_label_input` doubles layout cost per frame (see
-    // CLAUDE.md → "Stack doesn't cull or clip"); at ~10 dropdowns per
-    // form the extra layout passes add up noticeably during scroll.
-    column![
-        text(label).size(12).color(colors.text_muted),
-        dd,
-    ]
-    .spacing(4)
-    .into()
+    crate::components::inputs::floating_label_frame(label, dd, colors)
 }
-

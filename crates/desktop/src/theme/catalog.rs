@@ -231,3 +231,71 @@ impl iced::widget::text::Catalog for AppTheme {
         class(self)
     }
 }
+
+// ── pick_list ───────────────────────────────────────────────────────────────
+
+impl widget::pick_list::Catalog for AppTheme {
+    type Class<'a> = widget::pick_list::StyleFn<'a, Self>;
+
+    fn default<'a>() -> <Self as widget::pick_list::Catalog>::Class<'a> {
+        Box::new(|theme: &AppTheme, status| {
+            let (border_color, text_color) = match status {
+                widget::pick_list::Status::Hovered | widget::pick_list::Status::Opened { .. } => {
+                    (theme.colors.accent, theme.colors.text_primary)
+                }
+                widget::pick_list::Status::Active => {
+                    (theme.colors.border, theme.colors.text_primary)
+                }
+                widget::pick_list::Status::Disabled => {
+                    (theme.colors.border, theme.colors.text_muted)
+                }
+            };
+            widget::pick_list::Style {
+                text_color,
+                background: Background::Color(Color::TRANSPARENT),
+                placeholder_color: theme.colors.text_secondary,
+                handle_color: theme.colors.text_secondary,
+                border: Border::default()
+                    .color(border_color)
+                    .width(1.0)
+                    .rounded(4),
+            }
+        })
+    }
+
+    fn style(
+        &self,
+        class: &<Self as widget::pick_list::Catalog>::Class<'_>,
+        status: widget::pick_list::Status,
+    ) -> widget::pick_list::Style {
+        class(self, status)
+    }
+}
+
+// ── overlay::menu (dropdown panel for pick_list) ───────────────────────────
+
+impl iced::overlay::menu::Catalog for AppTheme {
+    type Class<'a> = iced::overlay::menu::StyleFn<'a, Self>;
+
+    fn default<'a>() -> <Self as iced::overlay::menu::Catalog>::Class<'a> {
+        Box::new(|theme: &AppTheme| iced::overlay::menu::Style {
+            background: Background::Color(theme.colors.card_bg),
+            border: Border::default()
+                .color(theme.colors.border)
+                .width(1.0)
+                .rounded(4),
+            text_color: theme.colors.text_primary,
+            selected_text_color: theme.colors.text_primary,
+            selected_background: Background::Color(theme.colors.item_hover),
+            shadow: Shadow {
+                color: Color::from_rgba(0.0, 0.0, 0.0, 0.15),
+                offset: iced::Vector::new(0.0, 2.0),
+                blur_radius: 6.0,
+            },
+        })
+    }
+
+    fn style(&self, class: &<Self as iced::overlay::menu::Catalog>::Class<'_>) -> iced::overlay::menu::Style {
+        class(self)
+    }
+}

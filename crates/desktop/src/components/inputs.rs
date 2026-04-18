@@ -1,37 +1,24 @@
 //! Reusable input primitives shared across views.
+//!
+//! For inputs that need a show/hide toggle (password, card CVV, SSN, hidden
+//! custom fields), use [`crate::components::reveal_input`] — it keeps the
+//! reveal state inside the widget tree instead of threading it through app
+//! state. Both that module and [`floating_label_input`] compose through
+//! [`floating_label_frame`] for a consistent visual idiom.
 
 use iced::{
-    Alignment, Background, Border, Color, Element, Fill, Length,
-    widget::{Space, column, container, row, stack, text, text_input},
+    Background, Border, Color, Element, Fill, Length,
+    widget::{Space, column, container, stack, text, text_input, TextInput},
 };
 
-use crate::{
-    components::{buttons, icons},
-    theme::{AppColors, AppTheme},
-};
+use crate::theme::{AppColors, AppTheme};
 
-/// Reusable floating-label text input with optional password toggle.
-///
-/// The pattern: a bordered container holds the text input (and optional eye toggle),
-/// with a small label positioned on the top border via `stack`.
-///
-/// Generic over the caller's message type `M` so both the login view and the
-/// cipher edit form can reuse this widget.
-#[expect(clippy::too_many_arguments)] // View-composition primitive; all args are structural.
-pub fn floating_label_input<'a, M>(
-    label: &'a str,
-    value: &'a str,
-    on_input: impl Fn(String) -> M + 'a,
-    on_submit: Option<M>,
-    secure: bool,
-    show_toggle: Option<(bool, M)>,
-    disabled: bool,
-    colors: &'a AppColors,
-) -> Element<'a, M, AppTheme>
-where
-    M: Clone + 'a,
-{
-    let mut input = text_input("", value)
+/// Preconfigured `text_input` matching our floating-label look:
+/// transparent background + no border (the wrapping
+/// [`floating_label_frame`] draws the border). Callers chain
+/// `.on_input`/`.on_submit`/`.secure` as needed.
+pub fn bare_text_input<'a, M: Clone + 'a>(value: &'a str) -> TextInput<'a, M, AppTheme> {
+    text_input("", value)
         .size(16)
         .padding([10, 12])
         .width(Fill)
@@ -42,47 +29,26 @@ where
             placeholder: theme.colors.text_secondary,
             value: theme.colors.text_primary,
             selection: theme.colors.accent,
-        });
+        })
+}
 
-    // Skipping `.on_input` leaves the text_input read-only (iced renders it
-    // as non-editable). We also drop `.on_submit` so Enter-spam during the
-    // unlock is ignored at the widget layer.
-    if !disabled {
-        input = input.on_input(on_input);
-        if let Some(submit_msg) = on_submit {
-            input = input.on_submit(submit_msg);
-        }
-    }
-    if secure {
-        input = input.secure(true);
-    }
-
-    let input_row: Element<'_, M, AppTheme> = if let Some((is_visible, toggle_msg)) = show_toggle {
-        let toggle_icon = if is_visible {
-            icons::EYE
-        } else {
-            icons::EYE_SLASH
-        }
-        .render(16.0, colors.text_secondary);
-
-        let mut toggle_button =
-            buttons::ghost_icon(toggle_icon, colors.item_hover).padding([10, 12]);
-        if !disabled {
-            toggle_button = toggle_button.on_press(toggle_msg);
-        }
-
-        row![input, toggle_button].align_y(Alignment::Center).into()
-    } else {
-        input.into()
-    };
-
+/// Wrap any content in the floating-label frame: a bordered container with
+/// a small label chip stacked on top of the border. The chip has a
+/// background matching the page, so the border visually breaks behind it.
+///
+/// Used by [`floating_label_input`] (plain text input),
+/// [`crate::components::reveal_input`] (text input + eye toggle), and the
+/// labeled pick_list wrappers in the cipher form.
+pub fn floating_label_frame<'a, M: 'a>(
+    label: &'a str,
+    content: Element<'a, M, AppTheme>,
+    colors: &'a AppColors,
+) -> Element<'a, M, AppTheme> {
     let floating_label = container(text(label).size(14).color(colors.text_secondary))
         .padding([0, 4])
-        .style(|theme: &AppTheme| {
-            container::Style::default().background(theme.colors.background)
-        });
+        .style(|theme: &AppTheme| container::Style::default().background(theme.colors.background));
 
-    let input_border = container(input_row).width(Fill).style(|theme: &AppTheme| {
+    let bordered = container(content).width(Fill).style(|theme: &AppTheme| {
         container::Style::default().border(
             Border::default()
                 .color(theme.colors.border)
@@ -92,8 +58,38 @@ where
     });
 
     stack![
-        column![Space::new().height(Length::Fixed(8.0)), input_border],
+        column![Space::new().height(Length::Fixed(8.0)), bordered],
         container(floating_label).padding([0, 12]),
     ]
     .into()
+}
+
+/// Reusable floating-label text input.
+///
+/// Generic over the caller's message type `M` so both the login view and
+/// the cipher edit form can reuse this widget.
+pub fn floating_label_input<'a, M>(
+    label: &'a str,
+    value: &'a str,
+    on_input: impl Fn(String) -> M + 'a,
+    on_submit: Option<M>,
+    disabled: bool,
+    colors: &'a AppColors,
+) -> Element<'a, M, AppTheme>
+where
+    M: Clone + 'a,
+{
+    let mut input = bare_text_input(value);
+
+    // Skipping `.on_input` leaves the text_input read-only (iced renders it
+    // as non-editable). We also drop `.on_submit` so Enter-spam during any
+    // in-flight task is ignored at the widget layer.
+    if !disabled {
+        input = input.on_input(on_input);
+        if let Some(submit_msg) = on_submit {
+            input = input.on_submit(submit_msg);
+        }
+    }
+
+    floating_label_frame(label, input.into(), colors)
 }
