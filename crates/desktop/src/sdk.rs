@@ -225,8 +225,13 @@ impl ClientManager {
         Self { users }
     }
 
+    /// User IDs sorted by email. `HashMap` iteration order is non-deterministic, so
+    /// callers that pick "the first user" (startup default, sign-out next-user) would
+    /// otherwise land on a different account each launch.
     pub fn user_ids(&self) -> impl Iterator<Item = &UserId> {
-        self.users.keys()
+        let mut ids: Vec<&UserId> = self.users.keys().collect();
+        ids.sort_by(|a, b| self.users[a].email.cmp(&self.users[b].email));
+        ids.into_iter()
     }
 
     pub fn email(&self, uid: &UserId) -> Option<&str> {

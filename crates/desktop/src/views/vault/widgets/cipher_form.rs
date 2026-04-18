@@ -18,8 +18,8 @@ use bitwarden_vault::{
     UriMatchType,
 };
 use iced::{
-    Alignment, Background, Border, Color, Element, Fill,
-    widget::{Space, checkbox, column, combo_box, container, row, scrollable, text},
+    Alignment, Background, Border, Color, Element, Fill, Length,
+    widget::{Space, checkbox, column, combo_box, container, row, scrollable, text, text_editor},
 };
 
 use super::field_helpers::{card_with_margin, field_readonly, section_label, styled_card};
@@ -134,6 +134,11 @@ pub struct CipherForm {
     // multi-select needs an explicit flag here.
     pub collections_dropdown_open: bool,
 
+    /// Multi-line editor buffer for the Notes field. `text_editor` requires
+    /// its content/cursor state to live on the parent; mutations flow through
+    /// `CipherFormMessage::NotesAction`.
+    pub notes_content: text_editor::Content,
+
     /// Disables the Save button + form inputs while the save task is in flight.
     pub saving: bool,
 }
@@ -142,6 +147,7 @@ impl CipherForm {
     /// Construct for editing an existing cipher. Clones the view so `original`
     /// stays pristine regardless of what form events do to `modified`.
     pub fn edit(cv: CipherView) -> Self {
+        let notes_content = text_editor::Content::with_text(cv.notes.as_deref().unwrap_or(""));
         let mut form = Self {
             original: Some(cv.clone()),
             modified: cv,
@@ -151,6 +157,7 @@ impl CipherForm {
             folder_combo_state: combo_box::State::new(vec![FolderChoice::None]),
             org_combo_state: combo_box::State::new(vec![OrgChoice::None]),
             collections_dropdown_open: false,
+            notes_content,
             saving: false,
         };
         form.ensure_sub_structs();
@@ -255,7 +262,7 @@ impl CipherForm {
 pub enum CipherFormMessage {
     // Item details (universal)
     NameChanged(String),
-    NotesChanged(String),
+    NotesAction(text_editor::Action),
     FavoriteToggled,
     RepromptToggled,
 
@@ -333,7 +340,13 @@ impl CipherForm {
         match msg {
             // Item details
             NameChanged(s) => self.modified.name = s,
-            NotesChanged(s) => self.modified.notes = opt_string(s),
+            NotesAction(action) => {
+                // `text_editor` owns its buffer + cursor; we mirror the
+                // plain-text value back onto the CipherView so saves / diff
+                // logic keep working without knowing about the editor state.
+                self.notes_content.perform(action);
+                self.modified.notes = opt_string(self.notes_content.text());
+            }
             FavoriteToggled => self.modified.favorite = !self.modified.favorite,
             RepromptToggled => {
                 self.modified.reprompt = match self.modified.reprompt {
@@ -1071,21 +1084,25 @@ fn additional_options_card<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
 ) -> Element<'a, CipherFormMessage, AppTheme> {
-    let notes_value = form.modified.notes.as_deref().unwrap_or("");
-    let notes = text_field(
-        "Notes",
-        notes_value,
-        CipherFormMessage::NotesChanged,
-        None,
-        form.saving,
-        colors,
-    );
+    // Multi-line notes field — `text_editor` grows with content between
+    // `min_height` and `max_height`. Border/label come from `field_frame`
+    // so the visual matches the single-line inputs; we strip the editor's
+    // own border via `text_editor::Catalog`'s default style.
+    let mut notes_editor = text_editor(&form.notes_content)
+        .padding([10, 12])
+        .height(Length::Shrink)
+        .min_height(80.0)
+        .max_height(600.0);
+    if !form.saving {
+        notes_editor = notes_editor.on_action(CipherFormMessage::NotesAction);
+    }
+    let notes = crate::components::inputs::field_frame("Notes", notes_editor.into(), colors);
 
     let reprompt_checkbox = checkbox(matches!(
         form.modified.reprompt,
         CipherRepromptType::Password
     ))
-    .label("Password prompt")
+    .label("Master password re-prompt")
     .on_toggle(|_| CipherFormMessage::RepromptToggled)
     .size(18)
     .spacing(8);

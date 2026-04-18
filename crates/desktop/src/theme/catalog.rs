@@ -71,6 +71,30 @@ impl widget::text_input::Catalog for AppTheme {
     }
 }
 
+// ── text_editor (multi-line) ───────────────────────────────────────────────
+
+impl widget::text_editor::Catalog for AppTheme {
+    type Class<'a> = widget::text_editor::StyleFn<'a, Self>;
+
+    fn default<'a>() -> Self::Class<'a> {
+        Box::new(|theme, _status| widget::text_editor::Style {
+            background: Background::Color(Color::TRANSPARENT),
+            border: Border::default(),
+            placeholder: theme.colors.text_secondary,
+            value: theme.colors.text_primary,
+            selection: theme.colors.accent,
+        })
+    }
+
+    fn style(
+        &self,
+        class: &Self::Class<'_>,
+        status: widget::text_editor::Status,
+    ) -> widget::text_editor::Style {
+        class(self, status)
+    }
+}
+
 // ── rule ────────────────────────────────────────────────────────────────────
 
 impl widget::rule::Catalog for AppTheme {
