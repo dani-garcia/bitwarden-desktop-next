@@ -103,6 +103,7 @@ pub const BWI_COPY: BwiIcon = BwiIcon('\u{f14e}');
 pub const BWI_CLOSE: BwiIcon = BwiIcon('\u{f151}');
 pub const BWI_EXTERNAL_LINK: BwiIcon = BwiIcon('\u{f13e}');
 pub const BWI_EYE: BwiIcon = BwiIcon('\u{f104}');
+pub const BWI_EYE_SLASH: BwiIcon = BwiIcon('\u{f105}');
 pub const BWI_EDIT: BwiIcon = BwiIcon('\u{f142}');
 pub const BWI_LOCK: BwiIcon = BwiIcon('\u{f12b}');
 pub const BWI_HANDSHAKE: BwiIcon = BwiIcon('\u{f135}');

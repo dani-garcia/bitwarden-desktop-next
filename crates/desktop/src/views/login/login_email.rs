@@ -4,7 +4,7 @@ use iced::{
 };
 
 use crate::{
-    components::{buttons, icons, inputs::floating_label_input},
+    components::{buttons, icons, inputs::text_field},
     theme::{AppColors, AppTheme},
 };
 
@@ -56,7 +56,7 @@ fn card_content<'a>(
     remember_email: bool,
     colors: &'a AppColors,
 ) -> Element<'a, LoginMessage, AppTheme> {
-    let email_field = floating_label_input(
+    let email_field = text_field(
         "Email address (required)",
         email,
         LoginMessage::EmailChanged,

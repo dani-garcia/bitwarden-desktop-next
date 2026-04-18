@@ -4,7 +4,7 @@ use iced::{
 };
 
 use crate::{
-    components::{buttons, reveal_input::reveal_input_with_submit},
+    components::{buttons, inputs::reveal_text_field_with_submit},
     theme::{AppColors, AppTheme},
 };
 
@@ -37,7 +37,7 @@ fn card_content<'a>(
     password: &'a str,
     colors: &'a AppColors,
 ) -> Element<'a, LoginMessage, AppTheme> {
-    let password_field = reveal_input_with_submit(
+    let password_field = reveal_text_field_with_submit(
         "Master password (required)",
         password,
         LoginMessage::LoginPasswordChanged,

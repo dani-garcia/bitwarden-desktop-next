@@ -19,16 +19,16 @@ use bitwarden_vault::{
 };
 use iced::{
     Alignment, Background, Border, Color, Element, Fill,
-    widget::{Space, checkbox, column, container, pick_list, row, scrollable, text},
+    widget::{Space, checkbox, column, combo_box, container, row, scrollable, text},
 };
 
 use super::field_helpers::{card_with_margin, field_readonly, section_label, styled_card};
 use crate::{
     components::{
-        self, buttons,
-        drop_down::{self, DropDown},
-        icons,
-        inputs::floating_label_input,
+        self, buttons, icons,
+        inputs::{
+            multi_select_field, reveal_text_field, search_select_field, select_field, text_field,
+        },
     },
     sdk::{Collection, Organization},
     theme::{AppColors, AppTheme, RADIUS_SM},
@@ -57,6 +57,59 @@ impl From<FolderView> for FolderOption {
 pub type OrganizationOption = Organization;
 pub type CollectionOption = Collection;
 
+/// Options shown in the searchable folder `combo_box`. `None` is a first-class
+/// "No folder" entry so users can clear the selection by picking it — iced's
+/// `combo_box` doesn't surface a separate clear signal.
+#[derive(Debug, Clone)]
+pub enum FolderChoice {
+    None,
+    Folder(FolderOption),
+}
+
+impl FolderChoice {
+    fn id(&self) -> Option<FolderId> {
+        match self {
+            Self::None => None,
+            Self::Folder(f) => Some(f.id),
+        }
+    }
+}
+
+impl std::fmt::Display for FolderChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::None => f.write_str("No folder"),
+            Self::Folder(fo) => f.write_str(&fo.name),
+        }
+    }
+}
+
+/// Options shown in the searchable organization `combo_box`. `None` is
+/// the "Personal (me)" entry — personal ciphers have no organization.
+#[derive(Debug, Clone)]
+pub enum OrgChoice {
+    None,
+    Org(OrganizationOption),
+}
+
+impl OrgChoice {
+    fn id(&self) -> Option<OrganizationId> {
+        match self {
+            Self::None => None,
+            Self::Org(o) => Some(o.id),
+        }
+    }
+}
+
+impl std::fmt::Display for OrgChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::None => f.write_str("Personal (me)"),
+            Self::Org(o) => f.write_str(&o.name),
+        }
+    }
+}
+
 /// Form backing the cipher edit view. Also sized to back the "New item"
 /// flow (`original = None`), though wiring that is out of scope here.
 pub struct CipherForm {
@@ -67,12 +120,18 @@ pub struct CipherForm {
     pub organizations: Vec<OrganizationOption>,
     pub collections: Vec<CollectionOption>,
 
+    // `combo_box` holds its filter text / open state in a `RefCell<Inner<T>>`
+    // that must persist across frames, so we keep the state on the struct
+    // rather than recreating it in `view()`. Rebuilt by `set_folders` /
+    // `set_organizations` when the SDK lists arrive.
+    pub folder_combo_state: combo_box::State<FolderChoice>,
+    pub org_combo_state: combo_box::State<OrgChoice>,
+
     // The collections multi-select still uses our custom DropDown widget
-    // (iced's pick_list is single-select). The single-select dropdowns were
-    // replaced with pick_list, and the reveal-toggle password fields were
-    // replaced with `reveal_input` — both of which manage their own
-    // transient state inside iced's widget tree, so only the multi-select
-    // needs an explicit flag here.
+    // (iced's pick_list is single-select). Single-select dropdowns
+    // (`select_field`) and reveal-toggle password fields (`reveal_text_field`)
+    // manage their transient state inside iced's widget tree, so only the
+    // multi-select needs an explicit flag here.
     pub collections_dropdown_open: bool,
 
     /// Disables the Save button + form inputs while the save task is in flight.
@@ -89,11 +148,41 @@ impl CipherForm {
             folders: Vec::new(),
             organizations: Vec::new(),
             collections: Vec::new(),
+            folder_combo_state: combo_box::State::new(vec![FolderChoice::None]),
+            org_combo_state: combo_box::State::new(vec![OrgChoice::None]),
             collections_dropdown_open: false,
             saving: false,
         };
         form.ensure_sub_structs();
         form
+    }
+
+    /// Replace the folder list and rebuild the combo_box state. Uses
+    /// `State::new` (rather than `State::with_selection`) so the internal
+    /// `value` field starts empty — combo_box uses `value` as both the
+    /// displayed text *and* the filter key, so a pre-filled value would
+    /// reduce the next open to a single filtered row. The currently-selected
+    /// folder is rendered via the `selected` argument passed into
+    /// `search_select_field`; nothing in combo_box state needs to know it.
+    pub fn set_folders(&mut self, folders: Vec<FolderOption>) {
+        let mut choices = Vec::with_capacity(folders.len() + 1);
+        choices.push(FolderChoice::None);
+        choices.extend(folders.iter().cloned().map(FolderChoice::Folder));
+
+        self.folder_combo_state = combo_box::State::new(choices);
+        self.folders = folders;
+    }
+
+    /// Replace the organization list and rebuild the combo_box state. Same
+    /// pattern as `set_folders` — `State::new` (empty value) so the next
+    /// expand shows the full list unfiltered.
+    pub fn set_organizations(&mut self, organizations: Vec<OrganizationOption>) {
+        let mut choices = Vec::with_capacity(organizations.len() + 1);
+        choices.push(OrgChoice::None);
+        choices.extend(organizations.iter().cloned().map(OrgChoice::Org));
+
+        self.org_combo_state = combo_box::State::new(choices);
+        self.organizations = organizations;
     }
 
     /// Ensure the type-specific sub-view (`login`, `card`, ...) is populated
@@ -172,7 +261,9 @@ pub enum CipherFormMessage {
 
     // Ownership
     FolderSelected(Option<FolderId>),
+    FolderComboClosed,
     OrgSelected(Option<OrganizationId>),
+    OrgComboClosed,
     CollectionsDropdownToggled,
     CollectionToggled(CollectionId),
 
@@ -255,6 +346,12 @@ impl CipherForm {
             FolderSelected(id) => {
                 self.modified.folder_id = id;
             }
+            FolderComboClosed => {
+                // combo_box has no public API to reset its internal `value`;
+                // rebuilding the State via `set_folders` is the only way.
+                let folders = std::mem::take(&mut self.folders);
+                self.set_folders(folders);
+            }
             OrgSelected(id) => {
                 self.modified.organization_id = id;
                 // Clearing the org clears any collections that were scoped to it.
@@ -267,6 +364,10 @@ impl CipherForm {
                             .any(|c| &c.id == cid && Some(c.organization_id) == id)
                     });
                 }
+            }
+            OrgComboClosed => {
+                let orgs = std::mem::take(&mut self.organizations);
+                self.set_organizations(orgs);
             }
             CollectionsDropdownToggled => {
                 self.collections_dropdown_open = !self.collections_dropdown_open;
@@ -597,7 +698,7 @@ fn item_details_card<'a>(
 ) -> Element<'a, CipherFormMessage, AppTheme> {
     let mut rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = Vec::new();
 
-    rows.push(floating_label_input(
+    rows.push(text_field(
         "Name (required)",
         &form.modified.name,
         CipherFormMessage::NameChanged,
@@ -637,7 +738,7 @@ fn login_card<'a>(
     let login = form.modified.login.as_ref().expect("ensure_sub_structs");
 
     let rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = vec![
-        floating_label_input(
+        text_field(
             "Username",
             login.username.as_deref().unwrap_or(""),
             CipherFormMessage::UsernameChanged,
@@ -645,14 +746,14 @@ fn login_card<'a>(
             form.saving,
             colors,
         ),
-        crate::components::reveal_input::reveal_input(
+        reveal_text_field(
             "Password",
             login.password.as_deref().unwrap_or(""),
             CipherFormMessage::PasswordChanged,
             form.saving,
             colors,
         ),
-        floating_label_input(
+        text_field(
             "Authenticator key (TOTP)",
             login.totp.as_deref().unwrap_or(""),
             CipherFormMessage::TotpChanged,
@@ -688,7 +789,7 @@ fn autofill_card<'a>(
     } else {
         for (idx, uri) in uris.iter().enumerate() {
             let value = uri.uri.as_deref().unwrap_or("");
-            let input = floating_label_input(
+            let input = text_field(
                 "Website (URI)",
                 value,
                 move |s| CipherFormMessage::UriChanged(idx, s),
@@ -734,7 +835,7 @@ fn card_details_card<'a>(
     let c = form.modified.card.as_ref().expect("ensure_sub_structs");
 
     let rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = vec![
-        floating_label_input(
+        text_field(
             "Cardholder name",
             c.cardholder_name.as_deref().unwrap_or(""),
             CipherFormMessage::CardCardholderChanged,
@@ -743,7 +844,7 @@ fn card_details_card<'a>(
             colors,
         ),
         brand_selector(form, colors),
-        floating_label_input(
+        text_field(
             "Number",
             c.number.as_deref().unwrap_or(""),
             CipherFormMessage::CardNumberChanged,
@@ -752,7 +853,7 @@ fn card_details_card<'a>(
             colors,
         ),
         exp_month_selector(form, colors),
-        floating_label_input(
+        text_field(
             "Expiration year",
             c.exp_year.as_deref().unwrap_or(""),
             CipherFormMessage::CardExpYearChanged,
@@ -760,7 +861,7 @@ fn card_details_card<'a>(
             form.saving,
             colors,
         ),
-        crate::components::reveal_input::reveal_input(
+        reveal_text_field(
             "Security code",
             c.code.as_deref().unwrap_or(""),
             CipherFormMessage::CardCodeChanged,
@@ -779,7 +880,7 @@ fn identity_personal_card<'a>(
     let i = form.modified.identity.as_ref().expect("ensure_sub_structs");
     let rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = vec![
         title_selector(form, colors),
-        floating_label_input(
+        text_field(
             "First name",
             i.first_name.as_deref().unwrap_or(""),
             CipherFormMessage::IdentityFirstNameChanged,
@@ -787,7 +888,7 @@ fn identity_personal_card<'a>(
             form.saving,
             colors,
         ),
-        floating_label_input(
+        text_field(
             "Middle name",
             i.middle_name.as_deref().unwrap_or(""),
             CipherFormMessage::IdentityMiddleNameChanged,
@@ -795,7 +896,7 @@ fn identity_personal_card<'a>(
             form.saving,
             colors,
         ),
-        floating_label_input(
+        text_field(
             "Last name",
             i.last_name.as_deref().unwrap_or(""),
             CipherFormMessage::IdentityLastNameChanged,
@@ -803,7 +904,7 @@ fn identity_personal_card<'a>(
             form.saving,
             colors,
         ),
-        floating_label_input(
+        text_field(
             "Username",
             i.username.as_deref().unwrap_or(""),
             CipherFormMessage::IdentityUsernameChanged,
@@ -811,7 +912,7 @@ fn identity_personal_card<'a>(
             form.saving,
             colors,
         ),
-        floating_label_input(
+        text_field(
             "Company",
             i.company.as_deref().unwrap_or(""),
             CipherFormMessage::IdentityCompanyChanged,
@@ -829,21 +930,21 @@ fn identity_identification_card<'a>(
 ) -> Element<'a, CipherFormMessage, AppTheme> {
     let i = form.modified.identity.as_ref().expect("ensure_sub_structs");
     let rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = vec![
-        crate::components::reveal_input::reveal_input(
+        reveal_text_field(
             "Social Security number",
             i.ssn.as_deref().unwrap_or(""),
             CipherFormMessage::IdentitySsnChanged,
             form.saving,
             colors,
         ),
-        crate::components::reveal_input::reveal_input(
+        reveal_text_field(
             "Passport number",
             i.passport_number.as_deref().unwrap_or(""),
             CipherFormMessage::IdentityPassportChanged,
             form.saving,
             colors,
         ),
-        floating_label_input(
+        text_field(
             "License number",
             i.license_number.as_deref().unwrap_or(""),
             CipherFormMessage::IdentityLicenseChanged,
@@ -861,7 +962,7 @@ fn identity_contact_card<'a>(
 ) -> Element<'a, CipherFormMessage, AppTheme> {
     let i = form.modified.identity.as_ref().expect("ensure_sub_structs");
     let rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = vec![
-        floating_label_input(
+        text_field(
             "Email",
             i.email.as_deref().unwrap_or(""),
             CipherFormMessage::IdentityEmailChanged,
@@ -869,7 +970,7 @@ fn identity_contact_card<'a>(
             form.saving,
             colors,
         ),
-        floating_label_input(
+        text_field(
             "Phone",
             i.phone.as_deref().unwrap_or(""),
             CipherFormMessage::IdentityPhoneChanged,
@@ -887,7 +988,7 @@ fn identity_address_card<'a>(
 ) -> Element<'a, CipherFormMessage, AppTheme> {
     let i = form.modified.identity.as_ref().expect("ensure_sub_structs");
     let rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = vec![
-        floating_label_input(
+        text_field(
             "Address line 1",
             i.address1.as_deref().unwrap_or(""),
             CipherFormMessage::IdentityAddress1Changed,
@@ -895,7 +996,7 @@ fn identity_address_card<'a>(
             form.saving,
             colors,
         ),
-        floating_label_input(
+        text_field(
             "Address line 2",
             i.address2.as_deref().unwrap_or(""),
             CipherFormMessage::IdentityAddress2Changed,
@@ -903,7 +1004,7 @@ fn identity_address_card<'a>(
             form.saving,
             colors,
         ),
-        floating_label_input(
+        text_field(
             "Address line 3",
             i.address3.as_deref().unwrap_or(""),
             CipherFormMessage::IdentityAddress3Changed,
@@ -911,7 +1012,7 @@ fn identity_address_card<'a>(
             form.saving,
             colors,
         ),
-        floating_label_input(
+        text_field(
             "City / town",
             i.city.as_deref().unwrap_or(""),
             CipherFormMessage::IdentityCityChanged,
@@ -919,7 +1020,7 @@ fn identity_address_card<'a>(
             form.saving,
             colors,
         ),
-        floating_label_input(
+        text_field(
             "State / province",
             i.state.as_deref().unwrap_or(""),
             CipherFormMessage::IdentityStateChanged,
@@ -927,7 +1028,7 @@ fn identity_address_card<'a>(
             form.saving,
             colors,
         ),
-        floating_label_input(
+        text_field(
             "Zip / postal code",
             i.postal_code.as_deref().unwrap_or(""),
             CipherFormMessage::IdentityPostalCodeChanged,
@@ -935,7 +1036,7 @@ fn identity_address_card<'a>(
             form.saving,
             colors,
         ),
-        floating_label_input(
+        text_field(
             "Country",
             i.country.as_deref().unwrap_or(""),
             CipherFormMessage::IdentityCountryChanged,
@@ -971,7 +1072,7 @@ fn additional_options_card<'a>(
     colors: &'a AppColors,
 ) -> Element<'a, CipherFormMessage, AppTheme> {
     let notes_value = form.modified.notes.as_deref().unwrap_or("");
-    let notes = floating_label_input(
+    let notes = text_field(
         "Notes",
         notes_value,
         CipherFormMessage::NotesChanged,
@@ -1036,7 +1137,7 @@ fn custom_field_row<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
 ) -> Element<'a, CipherFormMessage, AppTheme> {
-    let type_picker: Element<'a, CipherFormMessage, AppTheme> = container(labeled_pick_list(
+    let type_picker: Element<'a, CipherFormMessage, AppTheme> = container(select_field(
         "Type",
         Some(f.r#type),
         vec![FieldType::Text, FieldType::Hidden, FieldType::Boolean],
@@ -1055,7 +1156,7 @@ fn custom_field_row<'a>(
     .width(140)
     .into();
 
-    let name_input = floating_label_input(
+    let name_input = text_field(
         "Name",
         f.name.as_deref().unwrap_or(""),
         move |s| CipherFormMessage::CustomFieldNameChanged(idx, s),
@@ -1065,7 +1166,7 @@ fn custom_field_row<'a>(
     );
 
     let value_widget: Element<'a, CipherFormMessage, AppTheme> = match f.r#type {
-        FieldType::Text => floating_label_input(
+        FieldType::Text => text_field(
             "Value",
             f.value.as_deref().unwrap_or(""),
             move |s| CipherFormMessage::CustomFieldValueChanged(idx, s),
@@ -1073,7 +1174,7 @@ fn custom_field_row<'a>(
             form.saving,
             colors,
         ),
-        FieldType::Hidden => crate::components::reveal_input::reveal_input(
+        FieldType::Hidden => reveal_text_field(
             "Value",
             f.value.as_deref().unwrap_or(""),
             move |s| CipherFormMessage::CustomFieldValueChanged(idx, s),
@@ -1115,68 +1216,29 @@ fn custom_field_row<'a>(
 
 // ── Selector helpers ───────────────────────────────────────────────────────
 
-/// Wraps an iced `pick_list` with the same floating-label chip pattern used by
-/// `floating_label_input`: a label sits on top of the control's border, with
-/// its background matching the page so the border visually "breaks" behind it.
-/// `pick_list` handles its own overlay/positioning — that's why these don't
-/// need the open-state flag + custom DropDown our old `labeled_dropdown` did.
-fn labeled_pick_list<'a, T, M>(
-    label: &'a str,
-    selected: Option<T>,
-    options: Vec<T>,
-    to_string: impl Fn(&T) -> String + 'a,
-    on_select: impl Fn(T) -> M + 'a,
-    colors: &'a AppColors,
-) -> Element<'a, M, AppTheme>
-where
-    T: PartialEq + Clone + 'a,
-    M: Clone + 'a,
-{
-    // Pick_list draws its own border via the `pick_list::Catalog` default.
-    // We want the *frame* to own the border so the floating label chip
-    // cleanly erases its top edge — override the per-instance style to
-    // transparent.
-    let picker = pick_list(selected, options, to_string)
-        .on_select(on_select)
-        .width(Fill)
-        .padding([8, 12])
-        .style(|theme: &AppTheme, _status| iced::widget::pick_list::Style {
-            text_color: theme.colors.text_primary,
-            background: Background::Color(Color::TRANSPARENT),
-            placeholder_color: theme.colors.text_secondary,
-            handle_color: theme.colors.text_secondary,
-            border: Border::default(),
-        });
-
-    crate::components::inputs::floating_label_frame(label, picker.into(), colors)
-}
-
 fn folder_selector<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
 ) -> Element<'a, CipherFormMessage, AppTheme> {
-    let mut options: Vec<Option<FolderId>> = vec![None];
-    options.extend(form.folders.iter().map(|f| Some(f.id)));
+    let selected = match form.modified.folder_id {
+        None => FolderChoice::None,
+        Some(id) => form
+            .folders
+            .iter()
+            .find(|f| f.id == id)
+            .cloned()
+            .map(FolderChoice::Folder)
+            .unwrap_or(FolderChoice::None),
+    };
+    let placeholder = selected.to_string();
 
-    let folder_names: Vec<(FolderId, String)> = form
-        .folders
-        .iter()
-        .map(|f| (f.id, f.name.clone()))
-        .collect();
-
-    labeled_pick_list(
+    search_select_field(
+        &form.folder_combo_state,
         "Folder",
-        Some(form.modified.folder_id),
-        options,
-        move |choice: &Option<FolderId>| match choice {
-            None => "No folder".to_string(),
-            Some(id) => folder_names
-                .iter()
-                .find(|(fid, _)| fid == id)
-                .map(|(_, name)| name.clone())
-                .unwrap_or_default(),
-        },
-        CipherFormMessage::FolderSelected,
+        placeholder,
+        Some(selected),
+        |choice: FolderChoice| CipherFormMessage::FolderSelected(choice.id()),
+        CipherFormMessage::FolderComboClosed,
         colors,
     )
 }
@@ -1185,28 +1247,25 @@ fn org_selector<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
 ) -> Element<'a, CipherFormMessage, AppTheme> {
-    let mut options: Vec<Option<OrganizationId>> = vec![None];
-    options.extend(form.organizations.iter().map(|o| Some(o.id)));
+    let selected = match form.modified.organization_id {
+        None => OrgChoice::None,
+        Some(id) => form
+            .organizations
+            .iter()
+            .find(|o| o.id == id)
+            .cloned()
+            .map(OrgChoice::Org)
+            .unwrap_or(OrgChoice::None),
+    };
+    let placeholder = selected.to_string();
 
-    let org_names: Vec<(OrganizationId, String)> = form
-        .organizations
-        .iter()
-        .map(|o| (o.id, o.name.clone()))
-        .collect();
-
-    labeled_pick_list(
+    search_select_field(
+        &form.org_combo_state,
         "Organization",
-        Some(form.modified.organization_id),
-        options,
-        move |choice: &Option<OrganizationId>| match choice {
-            None => "Personal (me)".to_string(),
-            Some(id) => org_names
-                .iter()
-                .find(|(oid, _)| oid == id)
-                .map(|(_, name)| name.clone())
-                .unwrap_or_default(),
-        },
-        CipherFormMessage::OrgSelected,
+        placeholder,
+        Some(selected),
+        |choice: OrgChoice| CipherFormMessage::OrgSelected(choice.id()),
+        CipherFormMessage::OrgComboClosed,
         colors,
     )
 }
@@ -1285,7 +1344,7 @@ fn collections_selector<'a>(
         })
         .into();
 
-    labeled_dropdown(
+    multi_select_field(
         "Collections",
         trigger,
         panel,
@@ -1319,7 +1378,7 @@ fn brand_selector<'a>(
 
     let selected = form.modified.card.as_ref().map(|c| c.brand.clone());
 
-    labeled_pick_list(
+    select_field(
         "Brand",
         selected,
         options,
@@ -1341,7 +1400,7 @@ fn exp_month_selector<'a>(
 
     let selected = form.modified.card.as_ref().map(|c| c.exp_month.clone());
 
-    labeled_pick_list(
+    select_field(
         "Expiration month",
         selected,
         options,
@@ -1363,7 +1422,7 @@ fn title_selector<'a>(
 
     let selected = form.modified.identity.as_ref().map(|i| i.title.clone());
 
-    labeled_pick_list(
+    select_field(
         "Title",
         selected,
         options,
@@ -1412,22 +1471,3 @@ fn bordered_dropdown_trigger<'a, M: Clone + 'a>(
     .into()
 }
 
-fn labeled_dropdown<'a>(
-    label: &'a str,
-    trigger: Element<'a, CipherFormMessage, AppTheme>,
-    panel: Element<'a, CipherFormMessage, AppTheme>,
-    open: bool,
-    dismiss_msg: CipherFormMessage,
-    colors: &'a AppColors,
-) -> Element<'a, CipherFormMessage, AppTheme> {
-    // Don't set a width on the DropDown — the overlay defaults to the
-    // trigger's width (see `drop_down.rs` layout). `Length::Fill` would
-    // stretch the overlay to the whole window.
-    let dd: Element<'a, CipherFormMessage, AppTheme> = DropDown::new(trigger, panel, open)
-        .alignment(drop_down::Alignment::BelowLeft)
-        .on_dismiss(dismiss_msg)
-        .offset(4.0)
-        .into();
-
-    crate::components::inputs::floating_label_frame(label, dd, colors)
-}

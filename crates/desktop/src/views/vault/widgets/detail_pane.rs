@@ -8,7 +8,7 @@ use super::field_helpers::{
     card_with_margin, field_readonly, icon_button, section_label, styled_card,
 };
 use crate::{
-    components::{self, buttons, icons},
+    components::{self, buttons, icons, inputs::reveal_field},
     theme::{AppColors, AppTheme},
 };
 
@@ -19,14 +19,13 @@ pub enum DetailPaneMessage {
     CopyPassword,
     CopyUrl,
     OpenUrl,
-    TogglePasswordVisibility,
     Edit,
     Delete,
 }
 
 pub fn view<'a>(
     item: &'a CipherView,
-    colors: &AppColors,
+    colors: &'a AppColors,
     top_radius: f32,
 ) -> Element<'a, DetailPaneMessage, AppTheme> {
     let header = header_row(item, colors);
@@ -152,7 +151,7 @@ fn item_details_card<'a>(
 
 fn login_card<'a>(
     login: &'a LoginView,
-    colors: &AppColors,
+    colors: &'a AppColors,
 ) -> Element<'a, DetailPaneMessage, AppTheme> {
     let mut fields: Vec<Element<'a, DetailPaneMessage, AppTheme>> = Vec::new();
 
@@ -166,15 +165,11 @@ fn login_card<'a>(
         ));
     }
 
-    if login.password.is_some() {
-        fields.push(field_with_action(
+    if let Some(password) = login.password.as_deref() {
+        fields.push(reveal_field(
             "Password",
-            "\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}",
-            &[icons::BWI_EYE, icons::BWI_COPY],
-            &[
-                DetailPaneMessage::TogglePasswordVisibility,
-                DetailPaneMessage::CopyPassword,
-            ],
+            password,
+            Some(DetailPaneMessage::CopyPassword),
             colors,
         ));
     }
@@ -205,7 +200,7 @@ fn first_login_uri(login: &LoginView) -> Option<&str> {
 
 fn card_details_card<'a>(
     card: &'a CardView,
-    colors: &AppColors,
+    colors: &'a AppColors,
 ) -> Element<'a, DetailPaneMessage, AppTheme> {
     let mut fields: Vec<Element<'a, DetailPaneMessage, AppTheme>> = Vec::new();
     push_optional_field(
@@ -227,7 +222,9 @@ fn card_details_card<'a>(
         fields.push(field_readonly("Expiration", exp, colors));
     }
 
-    push_optional_field(&mut fields, "Security code", card.code.as_deref(), colors);
+    if let Some(code) = card.code.as_deref() {
+        fields.push(reveal_field("Security code", code, None, colors));
+    }
 
     if fields.is_empty() {
         fields.push(
@@ -312,11 +309,11 @@ fn identity_card<'a>(
 
 fn ssh_key_card<'a>(
     key: &'a SshKeyView,
-    colors: &AppColors,
+    colors: &'a AppColors,
 ) -> Element<'a, DetailPaneMessage, AppTheme> {
     let fields = vec![
         field_readonly("Public key", &key.public_key, colors),
-        field_readonly("Private key", &key.private_key, colors),
+        reveal_field("Private key", &key.private_key, None, colors),
         field_readonly("Fingerprint", &key.fingerprint, colors),
     ];
     card_with_margin(styled_card(column(fields).spacing(12).into()))

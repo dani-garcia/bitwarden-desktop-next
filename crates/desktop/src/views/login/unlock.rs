@@ -4,7 +4,7 @@ use iced::{
 };
 
 use crate::{
-    components::{buttons, reveal_input::reveal_input_with_submit, spinner},
+    components::{buttons, inputs::reveal_text_field_with_submit, spinner},
     state::UnlockMethod,
     theme::{AppColors, AppTheme},
 };
@@ -72,7 +72,7 @@ fn card_content<'a>(
             ));
         }
         UnlockMethod::Pin => {
-            items.push(reveal_input_with_submit(
+            items.push(reveal_text_field_with_submit(
                 "PIN (required)",
                 pin,
                 LoginMessage::PinChanged,
@@ -88,7 +88,7 @@ fn card_content<'a>(
             ));
         }
         UnlockMethod::MasterPassword => {
-            items.push(reveal_input_with_submit(
+            items.push(reveal_text_field_with_submit(
                 "Master password (required)",
                 password,
                 LoginMessage::PasswordChanged,

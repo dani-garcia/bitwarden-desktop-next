@@ -299,3 +299,9 @@ impl iced::overlay::menu::Catalog for AppTheme {
         class(self)
     }
 }
+
+// ── combo_box (searchable pick_list) ───────────────────────────────────────
+// combo_box::Catalog is a blanket trait over text_input::Catalog + menu::Catalog
+// with only default methods; both are implemented above.
+
+impl widget::combo_box::Catalog for AppTheme {}

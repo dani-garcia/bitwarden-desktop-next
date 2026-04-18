@@ -423,7 +423,7 @@ impl VaultView {
                 match result {
                     Ok(folders) => {
                         if let Some(form) = self.selection.form.as_mut() {
-                            form.folders = folders;
+                            form.set_folders(folders);
                         }
                         (Task::none(), None)
                     }
@@ -438,7 +438,7 @@ impl VaultView {
                     return (Task::none(), None);
                 }
                 if let Some(form) = self.selection.form.as_mut() {
-                    form.organizations = orgs;
+                    form.set_organizations(orgs);
                 }
                 (Task::none(), None)
             }

@@ -21,13 +21,25 @@ These are the highest-value tasks with no architectural prerequisites. Doing the
 
 Use `arboard` crate or iced clipboard API. The detail pane buttons exist but are stubs today — this is the most-noticed missing feature when manually testing.
 
-### Mask SSH private keys and card CVVs
+### Mask SSH private keys and card CVVs in the detail pane
 
-Currently `views/vault/widgets/detail_pane.rs` renders `key.private_key` and `card.code` as plaintext. Match the official app: default to masked (bullets), show a reveal toggle (eye icon) per field. Reuse the password-field reveal pattern from `input_field.rs` as a starting point, or factor out a `reveal_field(label, value, revealed, on_toggle)` helper once two fields want it.
+The edit form (`cipher_form`) already hides these behind a self-toggling reveal via `components::reveal_input`. The read-only **detail pane** (`views/vault/widgets/detail_pane.rs`) still renders `key.private_key` and `card.code` as plaintext. Match the official app: default to masked (bullets), show a reveal toggle per field. Factor out a `reveal_field(label, value, revealed, on_toggle)` helper if a second field wants it — or see if `reveal_input` can be adapted to a read-only variant.
+
+### Consistent naming for input primitives
+
+Today `components::inputs` exposes `floating_label_input`, `floating_label_pick_list`, and `floating_label_frame`, while the same visual idiom is also wrapped by `components::reveal_input::reveal_input` / `reveal_input_with_submit` and cipher_form's `labeled_dropdown` (the collections multi-select). Settle on one scheme so readers don't have to guess — candidates: everything under `components::inputs::{floating_label_*}`, or everything `{primitive}_input` / `{primitive}_frame`. Whichever wins, rename the stragglers and add a one-line convention note at the top of `components/inputs.rs`.
+
+### Try `combo_box` for folder / organization / collection pickers
+
+iced's `combo_box` is a searchable dropdown (text filter + option list). With 50+ folders or collections in a real vault, `pick_list` becomes scrollable-only — a combo_box would let users type to filter. Add a `floating_label_combo_box` alongside `floating_label_pick_list` in `components::inputs`, and try it for the folder selector first. Worth evaluating visually + keyboard-wise before converting the others.
 
 ### Sanitize remaining SDK error echoes into toasts
 
 `LoginMessage::UnlockCompleted` now shows "Check your master password and try again" instead of the raw SDK error. Apply the same treatment to any future toast paths that surface SDK errors. Rule: raw `e.to_string()` goes to `tracing::warn!`/`error!`, the user sees a short sanitized string.
+
+### Localization
+
+All user-visible strings today are inline English literals. Before they spread further (cipher form labels, toasts, detail pane, login flow), adopt an existing library rather than inventing a keyed-lookup system. Requirements: translations loaded from **per-language files in a standard-ish format** (Fluent `.ftl`, gettext `.po`, or simple TOML/JSON key maps — no bespoke schema), and the active language must be **switchable at runtime without an app restart** (so a settings dropdown re-renders all views with the new strings). Candidates worth evaluating: [`fluent-rs`](https://github.com/projectfluent/fluent-rs) (Mozilla Fluent — standard `.ftl` files, runtime `FluentBundle` swap is trivial), [`rust-i18n`](https://github.com/longbridge/rust-i18n) (macro-heavy, loads YAML/TOML/JSON at compile time — harder to swap dynamically), or [`gettext-rs`](https://github.com/Koka/gettext-rs) (PO files, ubiquitous but heavy). An iced-native l10n widget does not exist — the integration is just "call the library in `view()` and theme the result." Store the active locale in `App` state so the `view()` chain re-reads it each frame; flipping the locale → iced's next render cycle picks up the new strings automatically. Deliverable: a short ADR in `decisions.md` with the chosen crate + a pilot conversion of one screen (probably the login view, smallest string set).
 
 ---
 
@@ -44,7 +56,7 @@ Features that complete the happy paths users expect. No architectural work requi
 
 ### Detail pane completion
 
-- **Wire edit/delete buttons** — currently stubs. Edit opens an editor (modal or new screen); delete confirms then calls the SDK.
+- **Wire delete button** — Edit already flips the pane to `cipher_form` (save encrypts via `ClientManager::save_cipher` and writes to the per-user SQLite repo). Delete is still a stub; should confirm then call the SDK.
 - **TOTP circular timer** — currently placeholder text.
 
 ### Account switcher polish
