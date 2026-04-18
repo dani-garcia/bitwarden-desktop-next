@@ -5,6 +5,7 @@ use iced::{
 
 use crate::{
     components::{buttons, inputs::reveal_text_field_with_submit, spinner},
+    fl,
     state::UnlockMethod,
     theme::{AppColors, AppTheme},
 };
@@ -21,7 +22,7 @@ use super::{LoginMessage, layout};
 pub fn view<'a>(
     method: UnlockMethod,
     alternatives: &[UnlockMethod],
-    email: &'a str,
+    email: Option<&'a str>,
     password: &'a str,
     pin: &'a str,
     in_progress: bool,
@@ -31,10 +32,12 @@ pub fn view<'a>(
         .width(64)
         .height(60);
 
-    let title = text("Your vault is locked")
+    let title = text(fl!("login-unlock-title"))
         .size(28)
         .color(colors.text_primary);
 
+    // Invariant: the unlock screen is only reached via an active user.
+    let email = email.expect("unlock::view without active email");
     let email_label = text(email).size(16).color(colors.text_secondary);
 
     let card = layout::auth_card(card_content(
@@ -65,7 +68,7 @@ fn card_content<'a>(
     match method {
         UnlockMethod::Biometrics => {
             items.push(primary_action(
-                "Unlock with biometrics",
+                fl!("login-unlock-biometrics-button"),
                 LoginMessage::UnlockWithBiometrics,
                 in_progress,
                 colors,
@@ -73,7 +76,7 @@ fn card_content<'a>(
         }
         UnlockMethod::Pin => {
             items.push(reveal_text_field_with_submit(
-                "PIN (required)",
+                fl!("login-unlock-pin-placeholder"),
                 pin,
                 LoginMessage::PinChanged,
                 LoginMessage::UnlockWithPin,
@@ -81,7 +84,7 @@ fn card_content<'a>(
                 colors,
             ));
             items.push(primary_action(
-                "Unlock with PIN",
+                fl!("login-unlock-pin-button"),
                 LoginMessage::UnlockWithPin,
                 in_progress,
                 colors,
@@ -89,7 +92,7 @@ fn card_content<'a>(
         }
         UnlockMethod::MasterPassword => {
             items.push(reveal_text_field_with_submit(
-                "Master password (required)",
+                fl!("login-unlock-password-placeholder"),
                 password,
                 LoginMessage::PasswordChanged,
                 LoginMessage::Unlock,
@@ -97,7 +100,7 @@ fn card_content<'a>(
                 colors,
             ));
             items.push(primary_action(
-                "Unlock",
+                fl!("login-unlock-button"),
                 LoginMessage::Unlock,
                 in_progress,
                 colors,
@@ -109,7 +112,7 @@ fn card_content<'a>(
     // but inert (no `on_press`), keeping layout stable and avoiding the jar
     // of UI disappearing and returning around a ~200 ms task.
     items.push(
-        text("or")
+        text(fl!("login-unlock-or"))
             .size(14)
             .color(colors.text_primary)
             .center()
@@ -119,22 +122,22 @@ fn card_content<'a>(
     for alt in alternatives {
         let (label, msg) = match alt {
             UnlockMethod::Biometrics => (
-                "Unlock with biometrics",
+                fl!("login-unlock-biometrics-button"),
                 LoginMessage::SwitchUnlockMethod(UnlockMethod::Biometrics),
             ),
             UnlockMethod::Pin => (
-                "Unlock with PIN",
+                fl!("login-unlock-pin-button"),
                 LoginMessage::SwitchUnlockMethod(UnlockMethod::Pin),
             ),
             UnlockMethod::MasterPassword => (
-                "Unlock with master password",
+                fl!("login-unlock-master-password-button"),
                 LoginMessage::SwitchUnlockMethod(UnlockMethod::MasterPassword),
             ),
         };
         items.push(secondary_action(label, msg, in_progress).into());
     }
 
-    items.push(secondary_action("Log out", LoginMessage::LogOut, in_progress).into());
+    items.push(secondary_action(fl!("login-log-out"), LoginMessage::LogOut, in_progress).into());
 
     column(items).spacing(12).align_x(Alignment::Center).into()
 }
@@ -143,7 +146,7 @@ fn card_content<'a>(
 /// Omits `on_press` while an unlock task is in flight so the widget renders
 /// as inert (iced treats a button without `on_press` as disabled).
 fn secondary_action<'a>(
-    label: &'a str,
+    label: String,
     msg: LoginMessage,
     in_progress: bool,
 ) -> iced::widget::Button<'a, LoginMessage, AppTheme> {
@@ -163,7 +166,7 @@ fn secondary_action<'a>(
 /// at the same padded height as the active button so the card layout
 /// doesn't shift when the unlock flips into the in-flight state.
 fn primary_action<'a>(
-    label: &'a str,
+    label: String,
     msg: LoginMessage,
     in_progress: bool,
     colors: &'a AppColors,

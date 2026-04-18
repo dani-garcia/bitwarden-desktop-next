@@ -37,9 +37,20 @@ iced's `combo_box` is a searchable dropdown (text filter + option list). With 50
 
 `LoginMessage::UnlockCompleted` now shows "Check your master password and try again" instead of the raw SDK error. Apply the same treatment to any future toast paths that surface SDK errors. Rule: raw `e.to_string()` goes to `tracing::warn!`/`error!`, the user sees a short sanitized string.
 
-### Localization
+### Migrate remaining views to `fl!`
 
-All user-visible strings today are inline English literals. Before they spread further (cipher form labels, toasts, detail pane, login flow), adopt an existing library rather than inventing a keyed-lookup system. Requirements: translations loaded from **per-language files in a standard-ish format** (Fluent `.ftl`, gettext `.po`, or simple TOML/JSON key maps — no bespoke schema), and the active language must be **switchable at runtime without an app restart** (so a settings dropdown re-renders all views with the new strings). Candidates worth evaluating: [`fluent-rs`](https://github.com/projectfluent/fluent-rs) (Mozilla Fluent — standard `.ftl` files, runtime `FluentBundle` swap is trivial), [`rust-i18n`](https://github.com/longbridge/rust-i18n) (macro-heavy, loads YAML/TOML/JSON at compile time — harder to swap dynamically), or [`gettext-rs`](https://github.com/Koka/gettext-rs) (PO files, ubiquitous but heavy). An iced-native l10n widget does not exist — the integration is just "call the library in `view()` and theme the result." Store the active locale in `App` state so the `view()` chain re-reads it each frame; flipping the locale → iced's next render cycle picks up the new strings automatically. Deliverable: a short ADR in `decisions.md` with the chosen crate + a pilot conversion of one screen (probably the login view, smallest string set).
+The i18n infrastructure landed — `i18n-embed` + `i18n-embed-fl` with Fluent `.ftl` files under `assets/i18n/`, convenience `fl!` macro at the crate root, and the **login view** fully converted as the pilot. See [decisions.md → Localization](./decisions.md#localization-i18n-embed--fluent) for the architecture.
+
+Remaining work is mechanical — each view gets a `use crate::fl;` import and `"literal"` → `fl!("key")` substitutions, with new keys added to `assets/i18n/en/bitwarden_desktop_next.ftl`:
+
+- **Vault view** — sidebar labels ("All items", "Favorites", "Trash"), item list placeholders, empty-state text, search bar placeholder, TOTP label.
+- **Cipher form** (`cipher_form.rs`) — the largest string set: 30+ field labels ("Name", "Username", "Notes", "URI", card fields, identity fields, SSH key fields, etc.), the new-field dropdown, the dialogs / empty states.
+- **Detail pane** — section headings, copy-button tooltips, "No folder" placeholder, history, attachments.
+- **Account switcher** — "Lock", "Log out", "Add account", "Options".
+- **Toasts across the app** — any `Toast::*("literal body", Some("literal title"))` still using English literals (already done in login).
+- **About dialog**, **menu labels**, **window titles**.
+
+When touching a view for other reasons, migrate its strings opportunistically — avoid a single mega-PR. Bonus task: add a `settings` view with a language dropdown that calls `i18n_embed::select(...)` on change (re-renders automatically on iced's next frame).
 
 ---
 

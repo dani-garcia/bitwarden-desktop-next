@@ -3,11 +3,32 @@
 mod app;
 mod assets;
 mod components;
+mod i18n;
 mod menu;
 mod sdk;
 mod state;
 mod theme;
 mod views;
+
+/// Convenience wrapper around [`i18n_embed_fl::fl!`] that passes our static
+/// [`i18n::LANGUAGE_LOADER`] implicitly. Usage:
+///
+/// ```ignore
+/// fl!("login-unlock-title")
+/// fl!("login-server-accessing", server = "bitwarden.com")
+/// ```
+///
+/// Unknown message IDs or wrong argument names are a **compile error** — the
+/// macro validates against the `.ftl` files under `i18n/` at build time.
+#[macro_export]
+macro_rules! fl {
+    ($message_id:literal) => {{
+        ::i18n_embed_fl::fl!($crate::i18n::LANGUAGE_LOADER, $message_id)
+    }};
+    ($message_id:literal, $($args:expr),*) => {{
+        ::i18n_embed_fl::fl!($crate::i18n::LANGUAGE_LOADER, $message_id, $($args),*)
+    }};
+}
 
 use iced::{
     Font,
@@ -32,6 +53,7 @@ pub const APP_FONT_BOLD: Font = Font {
 
 fn main() -> iced::Result {
     init_tracing();
+    i18n::init();
 
     // Default to tiny-skia (CPU) renderer to avoid ~500 ms wgpu GPU init on
     // startup. For a form-based UI this is fast enough, and the instant

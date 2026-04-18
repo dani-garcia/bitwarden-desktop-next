@@ -5,6 +5,7 @@ use iced::{
 
 use crate::{
     components::buttons,
+    fl,
     state::UserId,
     theme::{AppColors, AppTheme},
 };
@@ -53,18 +54,26 @@ pub fn avatar_trigger<'a>(
     .into()
 }
 
-/// Renders the floating dropdown panel (other accounts + add account)
+/// Renders the floating dropdown panel (other accounts + add account).
+///
+/// `active_email` is `Option` because the login screen can be shown with no
+/// active account (fresh install, after sign-out). `None` means no account
+/// is filtered out of the list — every known account appears.
 pub fn dropdown<'a>(
-    active_email: &'a str,
+    active_email: Option<&'a str>,
     accounts: &'a [AccountEntry],
     colors: &AppColors,
 ) -> Element<'a, AccountSwitcherMessage, AppTheme> {
     let mut items: Vec<Element<'a, AccountSwitcherMessage, AppTheme>> = accounts
         .iter()
-        .filter(|a| a.email != active_email)
+        .filter(|a| Some(a.email.as_str()) != active_email)
         .map(|account| {
             let uid = account.user_id;
-            let locked_label = if account.locked { " (locked)" } else { "" };
+            let locked_label = if account.locked {
+                format!(" {}", fl!("account-switcher-locked-suffix"))
+            } else {
+                String::new()
+            };
             let initial = account
                 .email
                 .chars()
@@ -108,7 +117,9 @@ pub fn dropdown<'a>(
 
     items.push(
         buttons::ghost(
-            text("+ Add account").size(14).color(colors.text_secondary),
+            text(fl!("account-switcher-add"))
+                .size(14)
+                .color(colors.text_secondary),
             false,
             iced::Color::TRANSPARENT,
             colors.item_hover,

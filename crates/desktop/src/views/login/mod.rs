@@ -75,12 +75,14 @@ pub enum ServerOption {
 }
 
 impl ServerOption {
-    pub fn display_name(&self) -> &str {
+    pub fn display_name(&self) -> String {
         match self {
-            ServerOption::Bitwarden => "bitwarden.com",
-            ServerOption::BitwardenEu => "bitwarden.eu",
-            ServerOption::SelfHosted(url) if url.is_empty() => "Self-hosted",
-            ServerOption::SelfHosted(url) => url.as_str(),
+            ServerOption::Bitwarden => "bitwarden.com".to_string(),
+            ServerOption::BitwardenEu => "bitwarden.eu".to_string(),
+            ServerOption::SelfHosted(url) if url.is_empty() => {
+                crate::fl!("login-server-self-hosted")
+            }
+            ServerOption::SelfHosted(url) => url.clone(),
         }
     }
 }
@@ -243,8 +245,8 @@ impl LoginView {
                         (
                             Task::none(),
                             Some(LoginEvent::ToastRequested(Toast::error(
-                                "Check your master password and try again.",
-                                Some("Unlock failed"),
+                                crate::fl!("login-toast-unlock-failed-body"),
+                                Some(&crate::fl!("login-toast-unlock-failed-title")),
                             ))),
                         )
                     }
@@ -265,7 +267,7 @@ impl LoginView {
                 (
                     Task::none(),
                     Some(LoginEvent::ToastRequested(Toast::warning(
-                        "PIN unlock is not yet supported",
+                        crate::fl!("login-toast-pin-unsupported"),
                         None,
                     ))),
                 )
@@ -275,7 +277,7 @@ impl LoginView {
             LoginMessage::UnlockWithBiometrics => (
                 Task::none(),
                 Some(LoginEvent::ToastRequested(Toast::warning(
-                    "Biometric unlock is not yet supported",
+                    crate::fl!("login-toast-biometrics-unsupported"),
                     None,
                 ))),
             ),
@@ -353,7 +355,7 @@ impl LoginView {
                             Task::none(),
                             Some(LoginEvent::ToastRequested(Toast::error(
                                 err,
-                                Some("Login failed"),
+                                Some(&crate::fl!("login-toast-login-failed-title")),
                             ))),
                         )
                     }
@@ -465,7 +467,7 @@ impl LoginView {
 
     pub fn view<'a>(
         &'a self,
-        email: &'a str,
+        email: Option<&'a str>,
         server: &'a str,
         accounts: &'a [AccountEntry],
         unlock_alternatives: &'a [UnlockMethod],
@@ -505,7 +507,8 @@ impl LoginView {
                 selected_server,
             } => {
                 let center = login_password::view(email, password_input, colors);
-                let status = server_selector::simple_status(selected_server.display_name(), colors);
+                let status =
+                    server_selector::simple_status(&selected_server.display_name(), colors);
                 (center, status)
             }
         };

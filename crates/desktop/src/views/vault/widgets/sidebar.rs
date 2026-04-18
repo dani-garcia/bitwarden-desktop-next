@@ -7,6 +7,7 @@ use bitwarden_vault::CipherType;
 
 use crate::{
     components::{self, buttons, icons},
+    fl,
     state::{NavSection, SidebarFilter, SidebarMode},
     theme::{AppColors, AppTheme},
     views::vault::SidebarState,
@@ -145,7 +146,7 @@ fn expanded_panel<'a>(
 
     // Vault section (collapsible)
     items.push(section_header(
-        "Vault",
+        fl!("sidebar-section-vault"),
         icons::BWI_VAULT,
         state.vault_tree_open,
         SidebarMessage::ToggleVaultTree,
@@ -154,63 +155,63 @@ fn expanded_panel<'a>(
 
     if state.vault_tree_open {
         items.push(nav_button(
-            "My Vault",
+            fl!("sidebar-filter-my-vault"),
             icons::BWI_USER,
             SidebarFilter::AllItems,
             active_filter,
             colors,
         ));
         items.push(nav_button(
-            "Favorites",
+            fl!("sidebar-filter-favorites"),
             icons::BWI_STAR,
             SidebarFilter::Favorites,
             active_filter,
             colors,
         ));
         items.push(nav_button(
-            "Logins",
+            fl!("sidebar-filter-logins"),
             icons::BWI_LOGIN,
             SidebarFilter::Category(CipherType::Login),
             active_filter,
             colors,
         ));
         items.push(nav_button(
-            "Cards",
+            fl!("sidebar-filter-cards"),
             icons::BWI_CREDIT_CARD,
             SidebarFilter::Category(CipherType::Card),
             active_filter,
             colors,
         ));
         items.push(nav_button(
-            "Identities",
+            fl!("sidebar-filter-identities"),
             icons::BWI_IDENTITY,
             SidebarFilter::Category(CipherType::Identity),
             active_filter,
             colors,
         ));
         items.push(nav_button(
-            "Notes",
+            fl!("sidebar-filter-notes"),
             icons::BWI_NOTE,
             SidebarFilter::Category(CipherType::SecureNote),
             active_filter,
             colors,
         ));
         items.push(nav_button(
-            "SSH keys",
+            fl!("sidebar-filter-ssh-keys"),
             icons::BWI_KEY,
             SidebarFilter::Category(CipherType::SshKey),
             active_filter,
             colors,
         ));
         items.push(nav_button(
-            "Archive",
+            fl!("sidebar-filter-archive"),
             icons::BWI_ARCHIVE,
             SidebarFilter::Archive,
             active_filter,
             colors,
         ));
         items.push(nav_button(
-            "Trash",
+            fl!("sidebar-filter-trash"),
             icons::BWI_TRASH,
             SidebarFilter::Trash,
             active_filter,
@@ -220,7 +221,7 @@ fn expanded_panel<'a>(
 
     // Send section (collapsible)
     items.push(section_header(
-        "Send",
+        fl!("sidebar-section-send"),
         icons::BWI_SEND,
         state.send_tree_open,
         SidebarMessage::ToggleSendTree,
@@ -229,21 +230,21 @@ fn expanded_panel<'a>(
 
     // Standalone nav items
     items.push(standalone_item(
-        "Generator",
+        fl!("sidebar-item-generator"),
         icons::BWI_GENERATE,
         NavSection::Generator,
         active_section,
         colors,
     ));
     items.push(standalone_item(
-        "Import",
+        fl!("sidebar-item-import"),
         icons::BWI_IMPORT,
         NavSection::Import,
         active_section,
         colors,
     ));
     items.push(standalone_item(
-        "Export",
+        fl!("sidebar-item-export"),
         icons::BWI_DOWNLOAD,
         NavSection::Export,
         active_section,
@@ -278,7 +279,7 @@ fn expanded_panel<'a>(
 }
 
 fn section_header<'a>(
-    label: &'a str,
+    label: impl Into<String>,
     icon: icons::BwiIcon,
     is_open: bool,
     toggle_msg: SidebarMessage,
@@ -292,7 +293,7 @@ fn section_header<'a>(
     buttons::ghost_icon(
         row![
             icon.render(18.0, colors.nav_text),
-            text(label).size(16).color(colors.nav_text),
+            text(label.into()).size(16).color(colors.nav_text),
             Space::new().width(Fill),
             chevron.render(21.0, colors.nav_text),
         ]
@@ -307,7 +308,7 @@ fn section_header<'a>(
 }
 
 fn nav_button<'a>(
-    label: &'a str,
+    label: impl Into<String>,
     icon: icons::BwiIcon,
     filter: SidebarFilter,
     active_filter: SidebarFilter,
@@ -318,7 +319,7 @@ fn nav_button<'a>(
     buttons::ghost(
         row![
             icon.render(17.0, colors.nav_text),
-            text(label).size(16).color(colors.nav_text)
+            text(label.into()).size(16).color(colors.nav_text)
         ]
         .spacing(8)
         .align_y(Alignment::Center),
@@ -339,7 +340,7 @@ fn nav_button<'a>(
 }
 
 fn standalone_item<'a>(
-    label: &'a str,
+    label: impl Into<String>,
     icon: icons::BwiIcon,
     section: NavSection,
     active_section: NavSection,
@@ -349,7 +350,7 @@ fn standalone_item<'a>(
     let color = colors.nav_text;
 
     buttons::ghost(
-        row![icon.render(17.0, color), text(label).size(16).color(color)]
+        row![icon.render(17.0, color), text(label.into()).size(16).color(color)]
             .spacing(8)
             .align_y(Alignment::Center),
         is_active,

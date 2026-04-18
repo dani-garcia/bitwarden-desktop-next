@@ -15,6 +15,7 @@ use crate::{
         toast::Toast,
         virtual_list,
     },
+    fl,
     sdk::{ClientManager, Collection, Organization},
     state::{NavSection, SidebarFilter, SidebarMode, UserId},
     theme::{AppColors, AppTheme},
@@ -465,7 +466,7 @@ impl VaultView {
                         (
                             reload,
                             Some(VaultEvent::ToastRequested(Toast::success(
-                                "Item saved",
+                                fl!("vault-toast-item-saved"),
                                 None,
                             ))),
                         )
@@ -478,8 +479,8 @@ impl VaultView {
                         (
                             Task::none(),
                             Some(VaultEvent::ToastRequested(Toast::error(
-                                "Couldn't save the item. Try again.",
-                                Some("Save failed"),
+                                fl!("vault-toast-save-failed-body"),
+                                Some(&fl!("vault-toast-save-failed-title")),
                             ))),
                         )
                     }
@@ -554,8 +555,8 @@ impl VaultView {
                         (
                             Task::none(),
                             Some(VaultEvent::ToastRequested(Toast::error(
-                                "Couldn't load the item. Try again.",
-                                Some("Decrypt failed"),
+                                fl!("vault-toast-decrypt-failed-body"),
+                                Some(&fl!("vault-toast-decrypt-failed-title")),
                             ))),
                         )
                     }
@@ -673,14 +674,15 @@ fn cipher_list_view_type_to_type(t: &CipherListViewType) -> bitwarden_vault::Cip
 impl VaultView {
     pub fn view<'a>(
         &'a self,
-        active_user: Option<&UserId>,
+        active_user: &UserId,
         active_email: &'a str,
         accounts: &'a [AccountEntry],
         colors: &'a AppColors,
         window_width: f32,
     ) -> Element<'a, VaultMessage, AppTheme> {
-        let cached_items: &[Arc<CipherListView>] = active_user
-            .and_then(|uid| self.items.get(uid))
+        let cached_items: &[Arc<CipherListView>] = self
+            .items
+            .get(active_user)
             .map(|ic| ic.cached.as_slice())
             .unwrap_or(&[]);
 
@@ -795,7 +797,7 @@ impl VaultView {
         accounts: &'a [AccountEntry],
         colors: &'a AppColors,
     ) -> Element<'a, VaultMessage, AppTheme> {
-        let title = text("Vault")
+        let title = text(fl!("vault-title"))
             .size(28)
             .color(colors.text_primary)
             .font(crate::APP_FONT_BOLD);
@@ -803,7 +805,7 @@ impl VaultView {
         let new_button = buttons::primary(
             row![
                 icons::PLUS.render(14.0, colors.card_bg),
-                text("New").size(14),
+                text(fl!("vault-new-button")).size(14),
             ]
             .spacing(6)
             .align_y(Alignment::Center),
@@ -818,7 +820,7 @@ impl VaultView {
 
         let avatar_trigger = account_switcher::avatar_trigger(active_email, colors)
             .map(VaultMessage::AccountSwitcher);
-        let dd_panel = account_switcher::dropdown(active_email, accounts, colors)
+        let dd_panel = account_switcher::dropdown(Some(active_email), accounts, colors)
             .map(VaultMessage::AccountSwitcher);
         let avatar: Element<'a, VaultMessage, AppTheme> =
             crate::components::drop_down::DropDown::new(

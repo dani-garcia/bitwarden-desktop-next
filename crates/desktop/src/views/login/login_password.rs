@@ -5,6 +5,7 @@ use iced::{
 
 use crate::{
     components::{buttons, inputs::reveal_text_field_with_submit},
+    fl,
     theme::{AppColors, AppTheme},
 };
 
@@ -21,7 +22,9 @@ pub fn view<'a>(
         .width(64)
         .height(60);
 
-    let title = text("Welcome back").size(28).color(colors.text_primary);
+    let title = text(fl!("login-password-title"))
+        .size(28)
+        .color(colors.text_primary);
 
     let email_label = text(email).size(16).color(colors.text_secondary);
 
@@ -38,7 +41,7 @@ fn card_content<'a>(
     colors: &'a AppColors,
 ) -> Element<'a, LoginMessage, AppTheme> {
     let password_field = reveal_text_field_with_submit(
-        "Master password (required)",
+        fl!("login-password-placeholder"),
         password,
         LoginMessage::LoginPasswordChanged,
         LoginMessage::LoginWithPassword,
@@ -48,7 +51,7 @@ fn card_content<'a>(
 
     // TODO: "Get master password hint" navigates to hint request flow (not yet implemented)
     let hint_link = buttons::transparent(
-        text("Get master password hint")
+        text(fl!("login-password-get-hint"))
             .size(14)
             .color(colors.accent),
     )
@@ -56,7 +59,7 @@ fn card_content<'a>(
     .padding(0);
 
     let login_button = buttons::primary(
-        container(text("Log in with master password").size(16))
+        container(text(fl!("login-password-submit")).size(16))
             .center_x(Fill)
             .padding([4, 8]),
     )
@@ -64,7 +67,7 @@ fn card_content<'a>(
     .width(Fill);
 
     let back_button = buttons::secondary(
-        container(text("Back").size(16))
+        container(text(fl!("login-password-back")).size(16))
             .center_x(Fill)
             .padding([4, 8]),
     )

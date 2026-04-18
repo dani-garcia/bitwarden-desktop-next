@@ -255,6 +255,53 @@ Style closures on the row widgets capture an `Rc<Cell<ToastVisuals>>` at constru
 
 **Tradeoff**: Password-history tracking that `CipherEditRequestInternal` normally performs inside `.edit()` is skipped — those types are `pub(super)` and can't be reused from outside the SDK. Acceptable until a backend is wired up.
 
+## Localization: `i18n-embed` + Fluent
+
+**Decision**: Use `i18n-embed` (+ `i18n-embed-fl` + `rust-embed`) with Mozilla's Fluent `.ftl` file format. Translation assets live under `assets/i18n/{lang}/{crate}.ftl` alongside the other binary resources (fonts, SVGs, icons) and are embedded into the binary at compile time. A `fl!` convenience macro at the crate root wraps `i18n_embed_fl::fl!` so call sites don't repeat the static loader argument.
+
+**Alternatives considered**:
+
+- **`rust-i18n`** (~190k downloads/month, v4.0.0 released 2026-04-11): the smallest dependency, `t!("key")` macro with minimal boilerplate, loads YAML/TOML/JSON at compile time with runtime locale switching via `set_locale`. Ruled out because its formats aren't supported natively by Poedit (translators' default tool), and its flat key→string model can't express Fluent's plurals / gender / select-expressions — migrating later would mean rewriting every translation.
+- **`gettext-rs`** (~137k/month): gold-standard `.po` / `.mo` format with ubiquitous external tooling (Poedit, Crowdin, Weblate, Transifex, Lokalise). Ruled out because it's an FFI to libintl, which complicates the Windows MSI packaging in `tools/packager/` — our target platform is Windows-first.
+- **`rosetta-i18n`**: last released June 2023 (~34 months stale). Effectively abandoned. Skipped.
+- **Own keyed-lookup system**: not considered seriously. Handling plural rules, gender, and locale-specific formatting correctly is what the libraries exist for.
+
+**Rationale**:
+
+- **Fluent format chosen for future-proofing**. `.ftl` is the only format here that natively expresses plurals, gender, and CLDR-style select-expressions without escape-hatching to code. Starting on a limited format (key→string) and migrating later would cost more than the small upfront complexity.
+- **Tooling**: Fluent is supported by Crowdin, Weblate, Pontoon, and a Poedit plugin — enough for a real translation workflow.
+- **`i18n-embed-fl` is the differentiator** over raw `fluent-bundle`: the `fl!` macro validates message IDs and argument names at **compile time** against the `.ftl` files. A typo is a build error, not a silent blank string on a screen no one opens in CI.
+- **Runtime locale switch** is trivial: `DesktopLanguageRequester` auto-detects the OS locale at startup via `i18n::init()`. A future settings dropdown that calls `i18n_embed::select(...)` re-renders all views on iced's next frame with no extra plumbing — this works because `view()` reads the live loader each frame, not a cached snapshot.
+
+**Structure**:
+
+- Translation files under `assets/i18n/{lang}/bitwarden_desktop_next.ftl` — colocated with other binary resources (fonts, SVGs) because they're assets, not source code.
+- `crates/desktop/i18n.toml` points at `assets_dir = "../../assets/i18n"`; the `#[derive(RustEmbed)] #[folder = "../../assets/i18n"]` struct mirrors the same path. Both macros resolve relative to `CARGO_MANIFEST_DIR`. The compile-time `fl!` check reads `i18n.toml` + the `.ftl` files via the same resolution, verified in `i18n-embed-fl/src/lib.rs`.
+- File stem must match the crate identifier with underscores (`bitwarden_desktop_next.ftl`, not `bitwarden-desktop-next.ftl`) — `i18n-embed-fl` converts hyphens in the crate name but reads the file by the converted name.
+- Static loader at `crate::i18n::LANGUAGE_LOADER` (`std::sync::LazyLock<FluentLanguageLoader>`), initialized once from `main()` via `i18n::init()` before `iced::daemon` starts.
+
+**Convenience `fl!` macro** at the crate root (`main.rs`):
+
+```rust
+#[macro_export]
+macro_rules! fl {
+    ($message_id:literal) => {{
+        i18n_embed_fl::fl!($crate::i18n::LANGUAGE_LOADER, $message_id)
+    }};
+    ($message_id:literal, $($args:expr),*) => {{
+        i18n_embed_fl::fl!($crate::i18n::LANGUAGE_LOADER, $message_id, $($args),*)
+    }};
+}
+```
+
+Import per-module: `use crate::fl;`. Call: `fl!("login-unlock-title")` or `fl!("login-server-accessing", server = name)`. Returns `String`.
+
+**API ripple: `impl Into<String>` on label parameters**. Label parameters in `components::inputs` (`field_frame`, `text_field`, `reveal_text_field_with_submit`, etc.) previously took `&'a str` — which works fine for `'static` literals but fails when the caller passes `&fl!(...)` because the `String` temporary drops before the returned `Element<'a>` does. Widened to `impl Into<String>` so both forms pass transparently; the widget owns the label internally instead of borrowing it.
+
+**Pilot**: the login view (`views/login/*`) was converted first — the smallest string set in the app (~25 keys), and the one new users see before any vault state exists. Other views will migrate opportunistically as they're touched.
+
+**Kill-switch criteria**: revisit if (a) translation teams push back on `.ftl` tooling (unlikely given Pontoon / Crowdin / Weblate support), or (b) compile times grow meaningfully from the per-file compile-time validation — currently negligible for one `.ftl` file, but worth re-measuring past ~10 languages.
+
 ## Organizations & Collections: Seeded from `mock.json`
 
 **Decision**: Orgs and collections are stored in `mock.json` per-user (not in SQLite) and exposed via app-level `ClientManager::list_organizations` / `list_collections`. Org symmetric keys are generated by `fake-data`, wrapped with the user's public key into an `UnsignedSharedKey`, stored in `mock.json`, and replayed on `unlock` via `initialize_org_crypto`.

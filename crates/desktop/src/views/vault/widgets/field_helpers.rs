@@ -12,20 +12,25 @@ use crate::{
     theme::{AppColors, AppTheme},
 };
 
-/// Section label (14 px, primary text color). Sits above a card.
-pub fn section_label<'a, M: 'a>(label: &'a str, colors: &AppColors) -> Element<'a, M, AppTheme> {
-    text(label).size(14).color(colors.text_primary).into()
+/// Section label (14 px, primary text color). Sits above a card. Accepts
+/// `impl Into<String>` so either a static literal or an owned `fl!()` value
+/// can be passed — the resulting widget owns the label.
+pub fn section_label<'a, M: 'a>(
+    label: impl Into<String>,
+    colors: &AppColors,
+) -> Element<'a, M, AppTheme> {
+    text(label.into()).size(14).color(colors.text_primary).into()
 }
 
 /// Read-only `{label, value}` stacked pair. Used for displayed-only fields
 /// (card fingerprints, SSH keys, notes, etc.) inside both panes.
 pub fn field_readonly<'a, M: 'a>(
-    label: &'a str,
+    label: impl Into<String>,
     value: impl iced::widget::text::IntoFragment<'a>,
     colors: &AppColors,
 ) -> Element<'a, M, AppTheme> {
     iced::widget::column![
-        text(label).size(12).color(colors.text_muted),
+        text(label.into()).size(12).color(colors.text_muted),
         text(value).size(14).color(colors.text_primary),
     ]
     .spacing(2)

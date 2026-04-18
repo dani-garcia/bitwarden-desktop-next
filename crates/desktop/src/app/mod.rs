@@ -252,8 +252,8 @@ impl App {
 
     pub fn title(&self, window_id: iced::window::Id) -> String {
         match self.windows.get(&window_id).map(|w| w.kind) {
-            Some(WindowKind::About) => "About Bitwarden".to_string(),
-            _ => "Bitwarden [Next]".to_string(),
+            Some(WindowKind::About) => crate::fl!("about-window-title"),
+            _ => crate::fl!("app-title"),
         }
     }
 
@@ -265,7 +265,7 @@ impl App {
         let colors = &self.theme.current.colors;
 
         let active = self.active_account_entry();
-        let email = active.map(|a| a.email.as_str()).unwrap_or("No account");
+        let email = active.map(|a| a.email.as_str());
         let server = active.map(|a| a.server_url.as_str()).unwrap_or("");
 
         let main_window_width = self
@@ -292,8 +292,13 @@ impl App {
             Screen::Vault => self
                 .vault_view
                 .view(
-                    self.active_user.as_ref(),
-                    email,
+                    // Invariant: `screen == Vault` implies an active user is set
+                    // (we never flip to Vault without one). The unwraps here
+                    // make that contract explicit to the view.
+                    self.active_user
+                        .as_ref()
+                        .expect("Screen::Vault without active_user"),
+                    email.expect("Screen::Vault without active email"),
                     &self.cache.accounts,
                     colors,
                     main_window_width,

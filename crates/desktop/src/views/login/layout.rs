@@ -21,7 +21,7 @@ use super::LoginMessage;
 pub fn auth_page_shell<'a>(
     center_content: Element<'a, LoginMessage, AppTheme>,
     status_bar: Element<'a, LoginMessage, AppTheme>,
-    active_email: &'a str,
+    active_email: Option<&'a str>,
     accounts: &'a [AccountEntry],
     dropdown_open: bool,
     colors: &'a AppColors,

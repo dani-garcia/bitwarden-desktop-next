@@ -187,9 +187,13 @@ impl TitleBarState {
         let menu_items: Vec<Element<'_, TitleBarMessage, AppTheme>> = menu::MENUS
             .iter()
             .enumerate()
-            .map(|(i, (label, entries))| {
+            .map(|(i, (label_key, entries))| {
                 let is_open = open_menu == Some(i);
-                let btn = button(text(*label).size(14).color(Color::WHITE))
+                let btn = button(
+                    text(crate::i18n::lookup(label_key))
+                        .size(14)
+                        .color(Color::WHITE),
+                )
                     .on_press(TitleBarMessage::TopLevelClicked(i))
                     .padding([4, 10])
                     .style(move |theme: &AppTheme, status| {

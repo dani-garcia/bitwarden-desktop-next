@@ -3,7 +3,7 @@ use iced::{
     widget::{self, container, text_input},
 };
 
-use crate::{components::icons, theme::AppTheme};
+use crate::{components::icons, fl, theme::AppTheme};
 
 /// Widget ID for the vault search input. Shared with the focus operation in
 /// the menu action handler and the Cmd/Ctrl-F shortcut path.
@@ -15,7 +15,7 @@ pub enum SearchMessage {
 }
 
 pub fn view<'a>(query: &'a str) -> Element<'a, SearchMessage, AppTheme> {
-    let input = text_input("Search", query)
+    let input = text_input(&fl!("vault-search-placeholder"), query)
         .id(SEARCH_ID)
         .on_input(SearchMessage::QueryChanged)
         .icon(icons::SEARCH.input_icon(14.0, text_input::Side::Left))

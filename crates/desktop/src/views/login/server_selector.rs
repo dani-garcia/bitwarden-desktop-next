@@ -5,6 +5,7 @@ use iced::{
 
 use crate::{
     components::icons,
+    fl,
     theme::{AppColors, AppTheme},
 };
 
@@ -13,7 +14,7 @@ use super::{LoginMessage, ServerOption};
 /// Non-interactive status bar: "Accessing {server}" (used on unlock screens).
 pub fn simple_status<'a>(server: &str, colors: &AppColors) -> Element<'a, LoginMessage, AppTheme> {
     container(
-        text(format!("Accessing {server}"))
+        text(fl!("login-server-accessing", server = server))
             .size(14)
             .color(colors.text_secondary),
     )
@@ -65,7 +66,9 @@ pub fn view<'a>(
 
     container(
         row![
-            text("Accessing: ").size(14).color(colors.text_secondary),
+            text(format!("{} ", fl!("login-server-accessing-label")))
+                .size(14)
+                .color(colors.text_secondary),
             dropdown,
         ]
         .align_y(Alignment::Center),
@@ -88,12 +91,12 @@ fn server_panel<'a>(
         ("bitwarden.com".into(), ServerOption::Bitwarden),
         ("bitwarden.eu".into(), ServerOption::BitwardenEu),
         (
-            "Self-hosted".into(),
+            fl!("login-server-self-hosted"),
             ServerOption::SelfHosted(String::new()),
         ),
     ];
 
-    let current_name = current.display_name().to_string();
+    let current_name = current.display_name();
     let accent = colors.accent;
     let text_primary = colors.text_primary;
 

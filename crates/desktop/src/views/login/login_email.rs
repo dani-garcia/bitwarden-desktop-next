@@ -5,6 +5,7 @@ use iced::{
 
 use crate::{
     components::{buttons, icons, inputs::text_field},
+    fl,
     theme::{AppColors, AppTheme},
 };
 
@@ -22,7 +23,7 @@ pub fn view<'a>(
         .width(64)
         .height(60);
 
-    let title = text("Log in to Bitwarden")
+    let title = text(fl!("login-email-title"))
         .size(28)
         .color(colors.text_primary);
 
@@ -31,10 +32,12 @@ pub fn view<'a>(
     // "New to Bitwarden? Create account" link below card
     // TODO: Create account navigates to registration view (not yet implemented)
     let create_account_link = row![
-        text("New to Bitwarden? ")
+        text(format!("{} ", fl!("login-email-new-prompt")))
             .size(14)
             .color(colors.text_secondary),
-        text("Create account").size(14).color(colors.accent),
+        text(fl!("login-email-create-account"))
+            .size(14)
+            .color(colors.accent),
     ]
     .align_y(Alignment::Center);
 
@@ -57,7 +60,7 @@ fn card_content<'a>(
     colors: &'a AppColors,
 ) -> Element<'a, LoginMessage, AppTheme> {
     let email_field = text_field(
-        "Email address (required)",
+        fl!("login-email-placeholder"),
         email,
         LoginMessage::EmailChanged,
         Some(LoginMessage::ContinueWithEmail),
@@ -66,26 +69,29 @@ fn card_content<'a>(
     );
 
     let remember_checkbox = checkbox(remember_email)
-        .label("Remember email")
+        .label(fl!("login-email-remember"))
         .on_toggle(LoginMessage::ToggleRememberEmail)
         .size(18)
         .spacing(8);
 
     let continue_button = buttons::primary(
-        container(text("Continue").size(16))
+        container(text(fl!("login-email-continue")).size(16))
             .center_x(Fill)
             .padding([4, 8]),
     )
     .on_press(LoginMessage::ContinueWithEmail)
     .width(Fill);
 
-    let or_text = text("Or").size(14).color(colors.text_primary).center();
+    let or_text = text(fl!("login-email-or"))
+        .size(14)
+        .color(colors.text_primary)
+        .center();
 
     let sso_button = buttons::secondary(
         container(
             row![
                 icons::BWI_HANDSHAKE.render(16.0, colors.accent),
-                text("Use single sign-on").size(16),
+                text(fl!("login-email-sso")).size(16),
             ]
             .spacing(8)
             .align_y(Alignment::Center),

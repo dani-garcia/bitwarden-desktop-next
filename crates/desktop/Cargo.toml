@@ -40,7 +40,10 @@ iced = { workspace = true, features = [
                   # result. Revisit if the feature disappears.
 ] }
 image = "0.25"
+i18n-embed = { version = "0.16", features = ["fluent-system", "desktop-requester"] }
+i18n-embed-fl = "0.10"
 muda = "0.18"
+rust-embed = "8"
 serde = { workspace = true }
 serde_json = { workspace = true }
 system-theme = "0.3"

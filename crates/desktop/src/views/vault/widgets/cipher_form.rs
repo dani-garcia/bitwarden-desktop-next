@@ -30,6 +30,7 @@ use crate::{
             multi_select_field, reveal_text_field, search_select_field, select_field, text_field,
         },
     },
+    fl,
     sdk::{Collection, Organization},
     theme::{AppColors, AppTheme, RADIUS_SM},
 };
@@ -588,42 +589,42 @@ pub fn view<'a>(
     let header = header_row(form, colors);
 
     let mut sections: Vec<Element<'a, CipherFormMessage, AppTheme>> = vec![
-        section_label("Item details", colors),
+        section_label(fl!("form-section-item-details"), colors),
         item_details_card(form, colors),
     ];
 
     match form.modified.r#type {
         CipherType::Login => {
-            sections.push(section_label("Login credentials", colors));
+            sections.push(section_label(fl!("form-section-login-credentials"), colors));
             sections.push(login_card(form, colors));
-            sections.push(section_label("Autofill options", colors));
+            sections.push(section_label(fl!("form-section-autofill-options"), colors));
             sections.push(autofill_card(form, colors));
         }
         CipherType::Card => {
-            sections.push(section_label("Card details", colors));
+            sections.push(section_label(fl!("form-section-card-details"), colors));
             sections.push(card_details_card(form, colors));
         }
         CipherType::Identity => {
-            sections.push(section_label("Personal details", colors));
+            sections.push(section_label(fl!("form-section-personal-details"), colors));
             sections.push(identity_personal_card(form, colors));
-            sections.push(section_label("Identification", colors));
+            sections.push(section_label(fl!("form-section-identification"), colors));
             sections.push(identity_identification_card(form, colors));
-            sections.push(section_label("Contact info", colors));
+            sections.push(section_label(fl!("form-section-contact-info"), colors));
             sections.push(identity_contact_card(form, colors));
-            sections.push(section_label("Address", colors));
+            sections.push(section_label(fl!("form-section-address"), colors));
             sections.push(identity_address_card(form, colors));
         }
         CipherType::SecureNote => { /* notes live in the shared "Additional options" card below */ }
         CipherType::SshKey => {
-            sections.push(section_label("SSH key", colors));
+            sections.push(section_label(fl!("form-section-ssh-key"), colors));
             sections.push(ssh_key_card(form, colors));
         }
     }
 
-    sections.push(section_label("Additional options", colors));
+    sections.push(section_label(fl!("form-section-additional-options"), colors));
     sections.push(additional_options_card(form, colors));
 
-    sections.push(section_label("Custom fields", colors));
+    sections.push(section_label(fl!("form-section-custom-fields"), colors));
     sections.push(custom_fields_card(form, colors));
 
     let body = scrollable(column(sections).spacing(4).padding([12, 20])).height(Fill);
@@ -651,14 +652,14 @@ fn header_row<'a>(
 ) -> Element<'a, CipherFormMessage, AppTheme> {
     let title_text = if form.original.is_some() {
         match form.modified.r#type {
-            CipherType::Login => "Edit login",
-            CipherType::Card => "Edit card",
-            CipherType::Identity => "Edit identity",
-            CipherType::SecureNote => "Edit note",
-            CipherType::SshKey => "Edit SSH key",
+            CipherType::Login => fl!("form-title-edit-login"),
+            CipherType::Card => fl!("form-title-edit-card"),
+            CipherType::Identity => fl!("form-title-edit-identity"),
+            CipherType::SecureNote => fl!("form-title-edit-note"),
+            CipherType::SshKey => fl!("form-title-edit-ssh-key"),
         }
     } else {
-        "New item"
+        fl!("form-title-new-item")
     };
 
     let title = text(title_text).size(18).color(colors.text_primary);
@@ -681,13 +682,13 @@ fn bottom_bar<'a>(
     form: &'a CipherForm,
     _colors: &AppColors,
 ) -> Element<'a, CipherFormMessage, AppTheme> {
-    let save_label = if form.saving { "Saving…" } else { "Save" };
+    let save_label = if form.saving { fl!("form-saving") } else { fl!("form-save") };
     let mut save_btn = buttons::primary(text(save_label).size(14)).padding([8, 20]);
     if !form.saving {
         save_btn = save_btn.on_press(CipherFormMessage::Save);
     }
 
-    let cancel_btn = buttons::secondary(text("Cancel").size(14))
+    let cancel_btn = buttons::secondary(text(fl!("form-cancel")).size(14))
         .on_press(CipherFormMessage::Cancel)
         .padding([8, 20]);
 
@@ -712,7 +713,7 @@ fn item_details_card<'a>(
     let mut rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = Vec::new();
 
     rows.push(text_field(
-        "Name (required)",
+        fl!("form-name"),
         &form.modified.name,
         CipherFormMessage::NameChanged,
         None,
@@ -722,7 +723,7 @@ fn item_details_card<'a>(
 
     // Favorite + reprompt toggles in a row so the card stays compact.
     let favorite_checkbox = checkbox(form.modified.favorite)
-        .label("Favorite")
+        .label(fl!("form-favorite"))
         .on_toggle(|_| CipherFormMessage::FavoriteToggled)
         .size(18)
         .spacing(8);
@@ -752,7 +753,7 @@ fn login_card<'a>(
 
     let rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = vec![
         text_field(
-            "Username",
+            fl!("form-username"),
             login.username.as_deref().unwrap_or(""),
             CipherFormMessage::UsernameChanged,
             None,
@@ -760,14 +761,14 @@ fn login_card<'a>(
             colors,
         ),
         reveal_text_field(
-            "Password",
+            fl!("form-password"),
             login.password.as_deref().unwrap_or(""),
             CipherFormMessage::PasswordChanged,
             form.saving,
             colors,
         ),
         text_field(
-            "Authenticator key (TOTP)",
+            fl!("form-totp"),
             login.totp.as_deref().unwrap_or(""),
             CipherFormMessage::TotpChanged,
             None,
@@ -794,7 +795,7 @@ fn autofill_card<'a>(
 
     if uris.is_empty() {
         rows.push(
-            text("No websites yet")
+            text(fl!("form-uri-empty"))
                 .size(14)
                 .color(colors.text_muted)
                 .into(),
@@ -803,7 +804,7 @@ fn autofill_card<'a>(
         for (idx, uri) in uris.iter().enumerate() {
             let value = uri.uri.as_deref().unwrap_or("");
             let input = text_field(
-                "Website (URI)",
+                fl!("form-uri"),
                 value,
                 move |s| CipherFormMessage::UriChanged(idx, s),
                 None,
@@ -829,7 +830,7 @@ fn autofill_card<'a>(
     let add_btn = buttons::secondary(
         row![
             icons::PLUS.render(14.0, colors.accent),
-            text("Add website").size(14),
+            text(fl!("form-add-website")).size(14),
         ]
         .spacing(6)
         .align_y(Alignment::Center),
@@ -849,7 +850,7 @@ fn card_details_card<'a>(
 
     let rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = vec![
         text_field(
-            "Cardholder name",
+            fl!("form-card-cardholder"),
             c.cardholder_name.as_deref().unwrap_or(""),
             CipherFormMessage::CardCardholderChanged,
             None,
@@ -858,7 +859,7 @@ fn card_details_card<'a>(
         ),
         brand_selector(form, colors),
         text_field(
-            "Number",
+            fl!("form-card-number"),
             c.number.as_deref().unwrap_or(""),
             CipherFormMessage::CardNumberChanged,
             None,
@@ -867,7 +868,7 @@ fn card_details_card<'a>(
         ),
         exp_month_selector(form, colors),
         text_field(
-            "Expiration year",
+            fl!("form-card-exp-year"),
             c.exp_year.as_deref().unwrap_or(""),
             CipherFormMessage::CardExpYearChanged,
             None,
@@ -875,7 +876,7 @@ fn card_details_card<'a>(
             colors,
         ),
         reveal_text_field(
-            "Security code",
+            fl!("form-card-code"),
             c.code.as_deref().unwrap_or(""),
             CipherFormMessage::CardCodeChanged,
             form.saving,
@@ -894,7 +895,7 @@ fn identity_personal_card<'a>(
     let rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = vec![
         title_selector(form, colors),
         text_field(
-            "First name",
+            fl!("form-identity-first-name"),
             i.first_name.as_deref().unwrap_or(""),
             CipherFormMessage::IdentityFirstNameChanged,
             None,
@@ -902,7 +903,7 @@ fn identity_personal_card<'a>(
             colors,
         ),
         text_field(
-            "Middle name",
+            fl!("form-identity-middle-name"),
             i.middle_name.as_deref().unwrap_or(""),
             CipherFormMessage::IdentityMiddleNameChanged,
             None,
@@ -910,7 +911,7 @@ fn identity_personal_card<'a>(
             colors,
         ),
         text_field(
-            "Last name",
+            fl!("form-identity-last-name"),
             i.last_name.as_deref().unwrap_or(""),
             CipherFormMessage::IdentityLastNameChanged,
             None,
@@ -918,7 +919,7 @@ fn identity_personal_card<'a>(
             colors,
         ),
         text_field(
-            "Username",
+            fl!("form-identity-username"),
             i.username.as_deref().unwrap_or(""),
             CipherFormMessage::IdentityUsernameChanged,
             None,
@@ -926,7 +927,7 @@ fn identity_personal_card<'a>(
             colors,
         ),
         text_field(
-            "Company",
+            fl!("form-identity-company"),
             i.company.as_deref().unwrap_or(""),
             CipherFormMessage::IdentityCompanyChanged,
             None,
@@ -944,21 +945,21 @@ fn identity_identification_card<'a>(
     let i = form.modified.identity.as_ref().expect("ensure_sub_structs");
     let rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = vec![
         reveal_text_field(
-            "Social Security number",
+            fl!("form-identity-ssn"),
             i.ssn.as_deref().unwrap_or(""),
             CipherFormMessage::IdentitySsnChanged,
             form.saving,
             colors,
         ),
         reveal_text_field(
-            "Passport number",
+            fl!("form-identity-passport"),
             i.passport_number.as_deref().unwrap_or(""),
             CipherFormMessage::IdentityPassportChanged,
             form.saving,
             colors,
         ),
         text_field(
-            "License number",
+            fl!("form-identity-license"),
             i.license_number.as_deref().unwrap_or(""),
             CipherFormMessage::IdentityLicenseChanged,
             None,
@@ -976,7 +977,7 @@ fn identity_contact_card<'a>(
     let i = form.modified.identity.as_ref().expect("ensure_sub_structs");
     let rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = vec![
         text_field(
-            "Email",
+            fl!("form-identity-email"),
             i.email.as_deref().unwrap_or(""),
             CipherFormMessage::IdentityEmailChanged,
             None,
@@ -984,7 +985,7 @@ fn identity_contact_card<'a>(
             colors,
         ),
         text_field(
-            "Phone",
+            fl!("form-identity-phone"),
             i.phone.as_deref().unwrap_or(""),
             CipherFormMessage::IdentityPhoneChanged,
             None,
@@ -1002,7 +1003,7 @@ fn identity_address_card<'a>(
     let i = form.modified.identity.as_ref().expect("ensure_sub_structs");
     let rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = vec![
         text_field(
-            "Address line 1",
+            fl!("form-identity-address1"),
             i.address1.as_deref().unwrap_or(""),
             CipherFormMessage::IdentityAddress1Changed,
             None,
@@ -1010,7 +1011,7 @@ fn identity_address_card<'a>(
             colors,
         ),
         text_field(
-            "Address line 2",
+            fl!("form-identity-address2"),
             i.address2.as_deref().unwrap_or(""),
             CipherFormMessage::IdentityAddress2Changed,
             None,
@@ -1018,7 +1019,7 @@ fn identity_address_card<'a>(
             colors,
         ),
         text_field(
-            "Address line 3",
+            fl!("form-identity-address3"),
             i.address3.as_deref().unwrap_or(""),
             CipherFormMessage::IdentityAddress3Changed,
             None,
@@ -1026,7 +1027,7 @@ fn identity_address_card<'a>(
             colors,
         ),
         text_field(
-            "City / town",
+            fl!("form-identity-city"),
             i.city.as_deref().unwrap_or(""),
             CipherFormMessage::IdentityCityChanged,
             None,
@@ -1034,7 +1035,7 @@ fn identity_address_card<'a>(
             colors,
         ),
         text_field(
-            "State / province",
+            fl!("form-identity-state"),
             i.state.as_deref().unwrap_or(""),
             CipherFormMessage::IdentityStateChanged,
             None,
@@ -1042,7 +1043,7 @@ fn identity_address_card<'a>(
             colors,
         ),
         text_field(
-            "Zip / postal code",
+            fl!("form-identity-postal"),
             i.postal_code.as_deref().unwrap_or(""),
             CipherFormMessage::IdentityPostalCodeChanged,
             None,
@@ -1050,7 +1051,7 @@ fn identity_address_card<'a>(
             colors,
         ),
         text_field(
-            "Country",
+            fl!("form-identity-country"),
             i.country.as_deref().unwrap_or(""),
             CipherFormMessage::IdentityCountryChanged,
             None,
@@ -1073,9 +1074,9 @@ fn ssh_key_card<'a>(
     };
     let k = form.modified.ssh_key.as_ref().unwrap_or(&default_key);
     let rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = vec![
-        field_readonly("Public key", k.public_key.clone(), colors),
-        field_readonly("Private key", k.private_key.clone(), colors),
-        field_readonly("Fingerprint", k.fingerprint.clone(), colors),
+        field_readonly(fl!("form-ssh-public-key"), k.public_key.clone(), colors),
+        field_readonly(fl!("form-ssh-private-key"), k.private_key.clone(), colors),
+        field_readonly(fl!("form-ssh-fingerprint"), k.fingerprint.clone(), colors),
     ];
     card_with_margin(styled_card(column(rows).spacing(12).into()))
 }
@@ -1096,13 +1097,14 @@ fn additional_options_card<'a>(
     if !form.saving {
         notes_editor = notes_editor.on_action(CipherFormMessage::NotesAction);
     }
-    let notes = crate::components::inputs::field_frame("Notes", notes_editor.into(), colors);
+    let notes =
+        crate::components::inputs::field_frame(fl!("form-notes"), notes_editor.into(), colors);
 
     let reprompt_checkbox = checkbox(matches!(
         form.modified.reprompt,
         CipherRepromptType::Password
     ))
-    .label("Master password re-prompt")
+    .label(fl!("form-reprompt"))
     .on_toggle(|_| CipherFormMessage::RepromptToggled)
     .size(18)
     .spacing(8);
@@ -1122,7 +1124,7 @@ fn custom_fields_card<'a>(
 
     if fields.is_empty() {
         rows.push(
-            text("No custom fields yet")
+            text(fl!("form-custom-field-empty"))
                 .size(14)
                 .color(colors.text_muted)
                 .into(),
@@ -1136,7 +1138,7 @@ fn custom_fields_card<'a>(
     let add_btn = buttons::secondary(
         row![
             icons::PLUS.render(14.0, colors.accent),
-            text("Add custom field").size(14),
+            text(fl!("form-add-custom-field")).size(14),
         ]
         .spacing(6)
         .align_y(Alignment::Center),
@@ -1155,17 +1157,14 @@ fn custom_field_row<'a>(
     colors: &'a AppColors,
 ) -> Element<'a, CipherFormMessage, AppTheme> {
     let type_picker: Element<'a, CipherFormMessage, AppTheme> = container(select_field(
-        "Type",
+        fl!("form-custom-field-type"),
         Some(f.r#type),
         vec![FieldType::Text, FieldType::Hidden, FieldType::Boolean],
-        |ty: &FieldType| {
-            match ty {
-                FieldType::Text => "Text",
-                FieldType::Hidden => "Hidden",
-                FieldType::Boolean => "Boolean",
-                FieldType::Linked => "Linked",
-            }
-            .to_string()
+        |ty: &FieldType| match ty {
+            FieldType::Text => fl!("form-custom-field-type-text"),
+            FieldType::Hidden => fl!("form-custom-field-type-hidden"),
+            FieldType::Boolean => fl!("form-custom-field-type-boolean"),
+            FieldType::Linked => fl!("form-custom-field-type-linked"),
         },
         move |ty| CipherFormMessage::CustomFieldTypeSelected(idx, ty),
         colors,
@@ -1174,7 +1173,7 @@ fn custom_field_row<'a>(
     .into();
 
     let name_input = text_field(
-        "Name",
+        fl!("form-custom-field-name"),
         f.name.as_deref().unwrap_or(""),
         move |s| CipherFormMessage::CustomFieldNameChanged(idx, s),
         None,
@@ -1184,7 +1183,7 @@ fn custom_field_row<'a>(
 
     let value_widget: Element<'a, CipherFormMessage, AppTheme> = match f.r#type {
         FieldType::Text => text_field(
-            "Value",
+            fl!("form-custom-field-value"),
             f.value.as_deref().unwrap_or(""),
             move |s| CipherFormMessage::CustomFieldValueChanged(idx, s),
             None,
@@ -1192,7 +1191,7 @@ fn custom_field_row<'a>(
             colors,
         ),
         FieldType::Hidden => reveal_text_field(
-            "Value",
+            fl!("form-custom-field-value"),
             f.value.as_deref().unwrap_or(""),
             move |s| CipherFormMessage::CustomFieldValueChanged(idx, s),
             form.saving,
@@ -1201,13 +1200,13 @@ fn custom_field_row<'a>(
         FieldType::Boolean => {
             let checked = matches!(f.value.as_deref(), Some("true"));
             checkbox(checked)
-                .label("Enabled")
+                .label(fl!("form-custom-field-enabled"))
                 .on_toggle(move |_| CipherFormMessage::CustomFieldBoolToggled(idx))
                 .size(18)
                 .spacing(8)
                 .into()
         }
-        FieldType::Linked => text("Linked fields not yet supported")
+        FieldType::Linked => text(fl!("form-custom-field-linked-unsupported"))
             .size(12)
             .color(colors.text_muted)
             .into(),
@@ -1251,7 +1250,7 @@ fn folder_selector<'a>(
 
     search_select_field(
         &form.folder_combo_state,
-        "Folder",
+        fl!("form-folder"),
         placeholder,
         Some(selected),
         |choice: FolderChoice| CipherFormMessage::FolderSelected(choice.id()),
@@ -1278,7 +1277,7 @@ fn org_selector<'a>(
 
     search_select_field(
         &form.org_combo_state,
-        "Organization",
+        fl!("form-organization"),
         placeholder,
         Some(selected),
         |choice: OrgChoice| CipherFormMessage::OrgSelected(choice.id()),
@@ -1299,10 +1298,10 @@ fn collections_selector<'a>(
         .collect();
 
     let summary = if form.modified.collection_ids.is_empty() {
-        "No collections".to_string()
+        fl!("form-collections-none")
     } else {
         let count = form.modified.collection_ids.len();
-        format!("{count} selected")
+        fl!("form-collections-selected", count = count)
     };
 
     let trigger = bordered_dropdown_trigger(&summary, colors, || {
@@ -1314,7 +1313,7 @@ fn collections_selector<'a>(
     if scoped.is_empty() {
         options.push(
             container(
-                text("No collections in this org")
+                text(fl!("form-collections-empty-in-org"))
                     .size(12)
                     .color(colors.text_muted),
             )
@@ -1362,7 +1361,7 @@ fn collections_selector<'a>(
         .into();
 
     multi_select_field(
-        "Collections",
+        fl!("form-collections"),
         trigger,
         panel,
         form.collections_dropdown_open,
@@ -1396,11 +1395,11 @@ fn brand_selector<'a>(
     let selected = form.modified.card.as_ref().map(|c| c.brand.clone());
 
     select_field(
-        "Brand",
+        fl!("form-card-brand"),
         selected,
         options,
         |choice: &Option<String>| match choice {
-            None => "-- Select --".to_string(),
+            None => fl!("form-card-brand-placeholder"),
             Some(s) => s.clone(),
         },
         CipherFormMessage::CardBrandSelected,
@@ -1418,11 +1417,11 @@ fn exp_month_selector<'a>(
     let selected = form.modified.card.as_ref().map(|c| c.exp_month.clone());
 
     select_field(
-        "Expiration month",
+        fl!("form-card-exp-month"),
         selected,
         options,
         |choice: &Option<String>| match choice {
-            None => "-- Month --".to_string(),
+            None => fl!("form-card-month-placeholder"),
             Some(s) => s.clone(),
         },
         CipherFormMessage::CardExpMonthSelected,
@@ -1440,11 +1439,11 @@ fn title_selector<'a>(
     let selected = form.modified.identity.as_ref().map(|i| i.title.clone());
 
     select_field(
-        "Title",
+        fl!("form-identity-title"),
         selected,
         options,
         |choice: &Option<String>| match choice {
-            None => "-- Title --".to_string(),
+            None => fl!("form-identity-title-placeholder"),
             Some(s) => s.clone(),
         },
         CipherFormMessage::IdentityTitleSelected,

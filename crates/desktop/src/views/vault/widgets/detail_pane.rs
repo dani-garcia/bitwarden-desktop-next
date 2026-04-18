@@ -9,6 +9,7 @@ use super::field_helpers::{
 };
 use crate::{
     components::{self, buttons, icons, inputs::reveal_field},
+    fl,
     theme::{AppColors, AppTheme},
 };
 
@@ -31,37 +32,37 @@ pub fn view<'a>(
     let header = header_row(item, colors);
 
     let mut sections: Vec<Element<'a, DetailPaneMessage, AppTheme>> = vec![
-        section_label("Item details", colors),
+        section_label(fl!("detail-section-item-details"), colors),
         item_details_card(item, colors),
     ];
 
     match item.r#type {
         CipherType::Login => {
             if let Some(login) = item.login.as_ref() {
-                sections.push(section_label("Login credentials", colors));
+                sections.push(section_label(fl!("detail-section-login-credentials"), colors));
                 sections.push(login_card(login, colors));
 
                 if let Some(uri) = first_login_uri(login) {
-                    sections.push(section_label("Autofill options", colors));
+                    sections.push(section_label(fl!("detail-section-autofill-options"), colors));
                     sections.push(autofill_card(uri, colors));
                 }
             }
         }
         CipherType::Card => {
             if let Some(card) = item.card.as_ref() {
-                sections.push(section_label("Card details", colors));
+                sections.push(section_label(fl!("detail-section-card-details"), colors));
                 sections.push(card_details_card(card, colors));
             }
         }
         CipherType::Identity => {
             if let Some(identity) = item.identity.as_ref() {
-                sections.push(section_label("Personal details", colors));
+                sections.push(section_label(fl!("detail-section-personal-details"), colors));
                 sections.push(identity_card(identity, colors));
             }
         }
         CipherType::SecureNote => {
             if let Some(notes) = item.notes.as_deref() {
-                sections.push(section_label("Note", colors));
+                sections.push(section_label(fl!("detail-section-note"), colors));
                 sections.push(card_with_margin(styled_card(
                     text(notes).size(14).color(colors.text_primary).into(),
                 )));
@@ -69,7 +70,7 @@ pub fn view<'a>(
         }
         CipherType::SshKey => {
             if let Some(key) = item.ssh_key.as_ref() {
-                sections.push(section_label("SSH key", colors));
+                sections.push(section_label(fl!("detail-section-ssh-key"), colors));
                 sections.push(ssh_key_card(key, colors));
             }
         }
@@ -101,11 +102,11 @@ fn header_row<'a>(
     colors: &AppColors,
 ) -> Element<'a, DetailPaneMessage, AppTheme> {
     let category_label = match item.r#type {
-        CipherType::Login => "View login",
-        CipherType::Card => "View card",
-        CipherType::Identity => "View identity",
-        CipherType::SecureNote => "View note",
-        CipherType::SshKey => "View SSH key",
+        CipherType::Login => fl!("detail-header-login"),
+        CipherType::Card => fl!("detail-header-card"),
+        CipherType::Identity => fl!("detail-header-identity"),
+        CipherType::SecureNote => fl!("detail-header-note"),
+        CipherType::SshKey => fl!("detail-header-ssh-key"),
     };
 
     let title = text(category_label).size(18).color(colors.text_primary);
@@ -136,11 +137,11 @@ fn item_details_card<'a>(
     colors: &AppColors,
 ) -> Element<'a, DetailPaneMessage, AppTheme> {
     let mut fields: Vec<Element<'a, DetailPaneMessage, AppTheme>> =
-        vec![field_readonly("Name", &item.name, colors)];
+        vec![field_readonly(fl!("detail-field-name"), &item.name, colors)];
     if let Some(notes) = item.notes.as_deref()
         && !matches!(item.r#type, CipherType::SecureNote)
     {
-        fields.push(field_readonly("Notes", notes, colors));
+        fields.push(field_readonly(fl!("detail-field-notes"), notes, colors));
     }
     card_with_margin(styled_card(column(fields).spacing(12).into()))
 }
@@ -157,7 +158,7 @@ fn login_card<'a>(
 
     if let Some(username) = login.username.as_deref() {
         fields.push(field_with_action(
-            "Username",
+            fl!("detail-field-username"),
             username,
             &[icons::BWI_COPY],
             &[DetailPaneMessage::CopyUsername],
@@ -167,7 +168,7 @@ fn login_card<'a>(
 
     if let Some(password) = login.password.as_deref() {
         fields.push(reveal_field(
-            "Password",
+            fl!("detail-field-password"),
             password,
             Some(DetailPaneMessage::CopyPassword),
             colors,
@@ -176,7 +177,7 @@ fn login_card<'a>(
 
     if fields.is_empty() {
         fields.push(
-            text("No credentials")
+            text(fl!("detail-empty-credentials"))
                 .size(14)
                 .color(colors.text_muted)
                 .into(),
@@ -205,12 +206,12 @@ fn card_details_card<'a>(
     let mut fields: Vec<Element<'a, DetailPaneMessage, AppTheme>> = Vec::new();
     push_optional_field(
         &mut fields,
-        "Cardholder name",
+        fl!("detail-field-cardholder-name"),
         card.cardholder_name.as_deref(),
         colors,
     );
-    push_optional_field(&mut fields, "Brand", card.brand.as_deref(), colors);
-    push_optional_field(&mut fields, "Number", card.number.as_deref(), colors);
+    push_optional_field(&mut fields, fl!("detail-field-brand"), card.brand.as_deref(), colors);
+    push_optional_field(&mut fields, fl!("detail-field-number"), card.number.as_deref(), colors);
 
     let expiration = match (card.exp_month.as_deref(), card.exp_year.as_deref()) {
         (Some(m), Some(y)) => Some(format!("{m}/{y}")),
@@ -219,16 +220,16 @@ fn card_details_card<'a>(
         (None, None) => None,
     };
     if let Some(exp) = expiration {
-        fields.push(field_readonly("Expiration", exp, colors));
+        fields.push(field_readonly(fl!("detail-field-expiration"), exp, colors));
     }
 
     if let Some(code) = card.code.as_deref() {
-        fields.push(reveal_field("Security code", code, None, colors));
+        fields.push(reveal_field(fl!("detail-field-security-code"), code, None, colors));
     }
 
     if fields.is_empty() {
         fields.push(
-            text("No card details")
+            text(fl!("detail-empty-card"))
                 .size(14)
                 .color(colors.text_muted)
                 .into(),
@@ -258,12 +259,12 @@ fn identity_card<'a>(
     .collect::<Vec<_>>()
     .join(" ");
     if !full_name.is_empty() {
-        fields.push(field_readonly("Name", full_name, colors));
+        fields.push(field_readonly(fl!("detail-field-name"), full_name, colors));
     }
 
-    push_optional_field(&mut fields, "Email", identity.email.as_deref(), colors);
-    push_optional_field(&mut fields, "Phone", identity.phone.as_deref(), colors);
-    push_optional_field(&mut fields, "Company", identity.company.as_deref(), colors);
+    push_optional_field(&mut fields, fl!("detail-field-email"), identity.email.as_deref(), colors);
+    push_optional_field(&mut fields, fl!("detail-field-phone"), identity.phone.as_deref(), colors);
+    push_optional_field(&mut fields, fl!("detail-field-company"), identity.company.as_deref(), colors);
 
     let address_lines = [
         identity.address1.as_deref(),
@@ -275,7 +276,7 @@ fn identity_card<'a>(
     .collect::<Vec<_>>()
     .join(", ");
     if !address_lines.is_empty() {
-        fields.push(field_readonly("Address", address_lines, colors));
+        fields.push(field_readonly(fl!("detail-field-address"), address_lines, colors));
     }
 
     let locality = [
@@ -289,12 +290,12 @@ fn identity_card<'a>(
     .collect::<Vec<_>>()
     .join(", ");
     if !locality.is_empty() {
-        fields.push(field_readonly("City / region", locality, colors));
+        fields.push(field_readonly(fl!("detail-field-city-region"), locality, colors));
     }
 
     if fields.is_empty() {
         fields.push(
-            text("No identity details")
+            text(fl!("detail-empty-identity"))
                 .size(14)
                 .color(colors.text_muted)
                 .into(),
@@ -312,9 +313,9 @@ fn ssh_key_card<'a>(
     colors: &'a AppColors,
 ) -> Element<'a, DetailPaneMessage, AppTheme> {
     let fields = vec![
-        field_readonly("Public key", &key.public_key, colors),
-        reveal_field("Private key", &key.private_key, None, colors),
-        field_readonly("Fingerprint", &key.fingerprint, colors),
+        field_readonly(fl!("detail-field-public-key"), &key.public_key, colors),
+        reveal_field(fl!("detail-field-private-key"), &key.private_key, None, colors),
+        field_readonly(fl!("detail-field-fingerprint"), &key.fingerprint, colors),
     ];
     card_with_margin(styled_card(column(fields).spacing(12).into()))
 }
@@ -324,7 +325,9 @@ fn ssh_key_card<'a>(
 // ---------------------------------------------------------------------------
 
 fn autofill_card<'a>(uri: &'a str, colors: &AppColors) -> Element<'a, DetailPaneMessage, AppTheme> {
-    let label = text("Website").size(12).color(colors.text_muted);
+    let label = text(fl!("detail-field-website"))
+        .size(12)
+        .color(colors.text_muted);
     let value = text(uri).size(14).color(colors.text_primary);
 
     let copy_btn = icon_button(icons::BWI_COPY, DetailPaneMessage::CopyUrl, colors);
@@ -346,7 +349,7 @@ fn autofill_card<'a>(uri: &'a str, colors: &AppColors) -> Element<'a, DetailPane
 // ---------------------------------------------------------------------------
 
 fn bottom_bar<'a>(colors: &AppColors) -> Element<'a, DetailPaneMessage, AppTheme> {
-    let edit_btn = buttons::primary(text("Edit").size(14))
+    let edit_btn = buttons::primary(text(fl!("detail-edit-button")).size(14))
         .on_press(DetailPaneMessage::Edit)
         .padding([8, 20]);
 
@@ -373,7 +376,7 @@ fn bottom_bar<'a>(colors: &AppColors) -> Element<'a, DetailPaneMessage, AppTheme
 
 fn push_optional_field<'a>(
     fields: &mut Vec<Element<'a, DetailPaneMessage, AppTheme>>,
-    label: &'a str,
+    label: impl Into<String>,
     value: Option<&'a str>,
     colors: &AppColors,
 ) {
@@ -383,7 +386,7 @@ fn push_optional_field<'a>(
 }
 
 fn field_with_action<'a>(
-    label: &'a str,
+    label: impl Into<String>,
     value: &'a str,
     icons_list: &[icons::BwiIcon],
     msgs: &[DetailPaneMessage],
@@ -399,7 +402,7 @@ fn field_with_action<'a>(
 
     row![
         column![
-            text(label).size(12).color(colors.text_muted),
+            text(label.into()).size(12).color(colors.text_muted),
             text(value).size(14).color(colors.text_primary),
         ]
         .spacing(2)

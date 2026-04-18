@@ -116,7 +116,9 @@ fn render_entry<'a>(
         colors.text_muted
     };
 
-    let label_text = text(entry.label).size(14).color(label_color);
+    let label_text = text(crate::i18n::lookup(entry.label))
+        .size(14)
+        .color(label_color);
 
     let content: Element<'_, TitleBarMessage, AppTheme> = if is_sub {
         row![
@@ -200,7 +202,9 @@ fn render_submenu_item<'a>(
         colors.text_muted
     };
 
-    let label_text = text(entry.label).size(14).color(label_color);
+    let label_text = text(crate::i18n::lookup(entry.label))
+        .size(14)
+        .color(label_color);
 
     let content: Element<'_, TitleBarMessage, AppTheme> =
         if let Some(shortcut_text) = entry.shortcut_display() {

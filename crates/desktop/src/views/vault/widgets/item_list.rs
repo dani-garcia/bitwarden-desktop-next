@@ -8,6 +8,7 @@ use iced::{
 
 use crate::{
     components::{self, buttons, icons, virtual_list},
+    fl,
     theme::{AppColors, AppTheme, RADIUS_MD},
 };
 
@@ -62,13 +63,13 @@ pub fn view<'a>(
     // Table header
     let table_header = container(
         row![
-            text("Name")
+            text(fl!("vault-column-name"))
                 .size(14)
                 .color(colors.table_header)
                 .font(crate::APP_FONT_BOLD),
             icons::ARROW_DOWN_UP.render(11.0, colors.table_header),
             Space::new().width(Fill),
-            text("Options")
+            text(fl!("vault-column-options"))
                 .size(14)
                 .color(colors.table_header)
                 .font(crate::APP_FONT_BOLD),

@@ -45,12 +45,16 @@ pub fn bare_text_input<'a, M: Clone + 'a>(value: &'a str) -> TextInput<'a, M, Ap
 /// Wrap any content in the floating-label frame: a bordered container with
 /// a small label chip stacked on top of the border. The chip has a
 /// background matching the page, so the border visually breaks behind it.
+///
+/// `label` takes `impl Into<String>` so call sites can pass either a static
+/// `&str` literal or an owned `String` from [`crate::fl!`] — the frame
+/// owns the label text so its lifetime isn't tied to the returned Element.
 pub fn field_frame<'a, M: 'a>(
-    label: &'a str,
+    label: impl Into<String>,
     content: Element<'a, M, AppTheme>,
     colors: &'a AppColors,
 ) -> Element<'a, M, AppTheme> {
-    let floating_label = container(text(label).size(14).color(colors.text_secondary))
+    let floating_label = container(text(label.into()).size(14).color(colors.text_secondary))
         .padding([0, 4])
         .style(|theme: &AppTheme| container::Style::default().background(theme.colors.background));
 
@@ -72,7 +76,7 @@ pub fn field_frame<'a, M: 'a>(
 
 /// Reusable labeled text input.
 pub fn text_field<'a, M>(
-    label: &'a str,
+    label: impl Into<String>,
     value: &'a str,
     on_input: impl Fn(String) -> M + 'a,
     on_submit: Option<M>,
@@ -103,7 +107,7 @@ where
 /// we null it out and let [`field_frame`] own the border — that's what makes
 /// the label chip cleanly "cut" the top edge.
 pub fn select_field<'a, T, M>(
-    label: &'a str,
+    label: impl Into<String>,
     selected: Option<T>,
     options: Vec<T>,
     to_string: impl Fn(&T) -> String + 'a,
@@ -143,7 +147,7 @@ where
 /// leaving it populated would re-filter on the next open.
 pub fn search_select_field<'a, T, M>(
     state: &'a combo_box::State<T>,
-    label: &'a str,
+    label: impl Into<String>,
     placeholder: String,
     selected: Option<T>,
     on_selected: impl Fn(T) -> M + 'a,
@@ -156,7 +160,7 @@ where
 {
     component(SearchSelectField {
         state,
-        label,
+        label: label.into(),
         placeholder,
         selected,
         on_selected: Box::new(on_selected),
@@ -167,7 +171,7 @@ where
 
 struct SearchSelectField<'a, T, M> {
     state: &'a combo_box::State<T>,
-    label: &'a str,
+    label: String,
     placeholder: String,
     selected: Option<T>,
     on_selected: Box<dyn Fn(T) -> M + 'a>,
@@ -237,7 +241,7 @@ where
             selection: theme.colors.accent,
         });
 
-        field_frame(self.label, picker.into(), self.colors)
+        field_frame(self.label.clone(), picker.into(), self.colors)
     }
 }
 
@@ -245,7 +249,7 @@ where
 /// (e.g. collections) or any dropdown whose trigger/panel callers want to
 /// render themselves.
 pub fn multi_select_field<'a, M: Clone + 'a>(
-    label: &'a str,
+    label: impl Into<String>,
     trigger: Element<'a, M, AppTheme>,
     panel: Element<'a, M, AppTheme>,
     open: bool,
@@ -280,7 +284,7 @@ pub fn multi_select_field<'a, M: Clone + 'a>(
 /// fired on every keystroke. `disabled=true` makes the text input read-only
 /// and the toggle inert.
 pub fn reveal_text_field<'a, Message>(
-    label: &'a str,
+    label: impl Into<String>,
     value: &'a str,
     on_input: impl Fn(String) -> Message + 'a,
     disabled: bool,
@@ -290,7 +294,7 @@ where
     Message: Clone + 'a,
 {
     component(RevealTextField {
-        label,
+        label: label.into(),
         value,
         on_input: Box::new(on_input),
         on_submit: None,
@@ -302,7 +306,7 @@ where
 /// Variant of [`reveal_text_field`] that also fires `on_submit` when the user
 /// presses Enter inside the field.
 pub fn reveal_text_field_with_submit<'a, Message>(
-    label: &'a str,
+    label: impl Into<String>,
     value: &'a str,
     on_input: impl Fn(String) -> Message + 'a,
     on_submit: Message,
@@ -313,7 +317,7 @@ where
     Message: Clone + 'a,
 {
     component(RevealTextField {
-        label,
+        label: label.into(),
         value,
         on_input: Box::new(on_input),
         on_submit: Some(on_submit),
@@ -323,7 +327,7 @@ where
 }
 
 struct RevealTextField<'a, Message> {
-    label: &'a str,
+    label: String,
     value: &'a str,
     on_input: Box<dyn Fn(String) -> Message + 'a>,
     on_submit: Option<Message>,
@@ -384,7 +388,7 @@ impl<'a, Message: Clone + 'a> Component<Message, AppTheme> for RevealTextField<'
         }
 
         let input_row = row![input, toggle_button].align_y(Alignment::Center);
-        field_frame(self.label, input_row.into(), self.colors)
+        field_frame(self.label.clone(), input_row.into(), self.colors)
     }
 }
 
@@ -396,7 +400,7 @@ impl<'a, Message: Clone + 'a> Component<Message, AppTheme> for RevealTextField<'
 /// `text_input`) — intended for the detail pane where fields are not
 /// editable but still secret.
 pub fn reveal_field<'a, Message>(
-    label: &'a str,
+    label: impl Into<String>,
     value: &'a str,
     on_copy: Option<Message>,
     colors: &'a AppColors,
@@ -405,7 +409,7 @@ where
     Message: Clone + 'a,
 {
     component(RevealField {
-        label,
+        label: label.into(),
         value,
         on_copy,
         colors,
@@ -413,7 +417,7 @@ where
 }
 
 struct RevealField<'a, Message> {
-    label: &'a str,
+    label: String,
     value: &'a str,
     on_copy: Option<Message>,
     colors: &'a AppColors,
@@ -476,7 +480,9 @@ impl<'a, Message: Clone + 'a> Component<Message, AppTheme> for RevealField<'a, M
 
         row![
             column![
-                text(self.label).size(12).color(self.colors.text_muted),
+                text(self.label.clone())
+                    .size(12)
+                    .color(self.colors.text_muted),
                 text(display).size(14).color(self.colors.text_primary),
             ]
             .spacing(2)

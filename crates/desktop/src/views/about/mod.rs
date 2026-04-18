@@ -5,6 +5,7 @@ use iced::{
 
 use crate::{
     components::buttons,
+    fl,
     theme::{AppColors, AppTheme},
 };
 
@@ -31,12 +32,13 @@ pub fn info_string() -> String {
 }
 
 pub fn view(colors: &AppColors) -> Element<'_, AboutMessage, AppTheme> {
+    // "Bitwarden" is the product name — kept untranslated.
     let title = text("Bitwarden")
         .size(28)
         .color(colors.text_primary)
         .font(crate::APP_FONT_BOLD);
 
-    let info_line = |label: &'static str, value: String| -> Element<'_, AboutMessage, AppTheme> {
+    let info_line = |label: String, value: String| -> Element<'_, AboutMessage, AppTheme> {
         row![
             text(label).size(14).color(colors.text_secondary),
             Space::new().width(Fill),
@@ -48,17 +50,17 @@ pub fn view(colors: &AppColors) -> Element<'_, AboutMessage, AppTheme> {
     };
 
     let info = column![
-        info_line("Version", env!("CARGO_PKG_VERSION").to_string()),
-        info_line("SDK version", SDK_REV_SHORT.to_string()),
-        info_line("OS", std::env::consts::OS.to_string()),
-        info_line("Architecture", std::env::consts::ARCH.to_string()),
+        info_line(fl!("about-version-label"), env!("CARGO_PKG_VERSION").to_string()),
+        info_line(fl!("about-sdk-version-label"), SDK_REV_SHORT.to_string()),
+        info_line(fl!("about-os-label"), std::env::consts::OS.to_string()),
+        info_line(fl!("about-architecture-label"), std::env::consts::ARCH.to_string()),
     ]
     .spacing(6);
 
-    let copy_button = buttons::secondary(text("Copy").size(14))
+    let copy_button = buttons::secondary(text(fl!("about-copy-button")).size(14))
         .on_press(AboutMessage::CopyInfo)
         .padding([8, 16]);
-    let close_button = buttons::primary(text("Close").size(14))
+    let close_button = buttons::primary(text(fl!("about-close-button")).size(14))
         .on_press(AboutMessage::Close)
         .padding([8, 16]);
 

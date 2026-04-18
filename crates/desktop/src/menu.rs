@@ -265,108 +265,114 @@ impl MenuEntry {
 use EnabledWhen::*;
 use MenuAction::*;
 
+// Menu labels are Fluent message IDs (e.g. "menu-file-new-login"), resolved at
+// render time via `crate::i18n::lookup()`. Brand names and social/platform
+// names are stored as plain strings because they don't need translation.
+// Unlike `fl!()`, these keys aren't compile-time-checked against the .ftl —
+// the test below in `tests/menu_labels.rs` validates them at test time.
 pub const MENUS: &[(&str, &[MenuEntry])] = &[
     (
-        "File",
+        "menu-file",
         &[
-            E("New login").key(cmd('n')).when(Unlocked),
-            E("New item").when(Unlocked).sub(&[
-                E("Login").key(cmd_shift('l')),
-                E("Card").key(cmd_shift('c')),
-                E("Identity").key(cmd_shift('i')),
-                E("Secure note").key(cmd_shift('s')),
-                E("SSH key").key(cmd_shift('k')),
+            E("menu-file-new-login").key(cmd('n')).when(Unlocked),
+            E("menu-file-new-item").when(Unlocked).sub(&[
+                E("menu-file-new-item-login").key(cmd_shift('l')),
+                E("menu-file-new-item-card").key(cmd_shift('c')),
+                E("menu-file-new-item-identity").key(cmd_shift('i')),
+                E("menu-file-new-item-secure-note").key(cmd_shift('s')),
+                E("menu-file-new-item-ssh-key").key(cmd_shift('k')),
             ]),
-            E("New folder").when(Unlocked),
+            E("menu-file-new-folder").when(Unlocked),
             SEP,
-            E("Sync now").when(HasAccounts).action(SyncNow),
-            E("Import").when(Unlocked),
-            E("Export").when(Unlocked),
+            E("menu-file-sync-now").when(HasAccounts).action(SyncNow),
+            E("menu-file-import").when(Unlocked),
+            E("menu-file-export").when(Unlocked),
             SEP,
-            E("Settings").key(cmd(',')).when(Unlocked),
+            E("menu-file-settings").key(cmd(',')).when(Unlocked),
             // Lock/Log out submenus: dynamically populated with account emails at runtime
-            E("Lock vault").when(HasLockable).sub(&[]),
-            E("Lock all vaults")
+            E("menu-file-lock-vault").when(HasLockable).sub(&[]),
+            E("menu-file-lock-all-vaults")
                 .key(cmd('l'))
                 .when(HasAccounts)
                 .action(LockAllVaults),
-            E("Log out").when(HasAccounts).sub(&[]),
+            E("menu-file-log-out").when(HasAccounts).sub(&[]),
             SEP,
-            E("Quit Bitwarden").action(Quit),
+            E("menu-file-quit").action(Quit),
         ],
     ),
     (
-        "Edit",
+        "menu-edit",
         &[
-            E("Undo").key(cmd('z')),
-            E("Redo").key(cmd('y')),
+            E("menu-edit-undo").key(cmd('z')),
+            E("menu-edit-redo").key(cmd('y')),
             SEP,
-            E("Cut").key(cmd('x')),
-            E("Copy").key(cmd('c')),
-            E("Paste").key(cmd('v')),
+            E("menu-edit-cut").key(cmd('x')),
+            E("menu-edit-copy").key(cmd('c')),
+            E("menu-edit-paste").key(cmd('v')),
             SEP,
-            E("Select all").key(cmd('a')),
+            E("menu-edit-select-all").key(cmd('a')),
             SEP,
-            E("Copy username").key(cmd('u')).when(Unlocked),
-            E("Copy password").key(cmd('p')).when(Unlocked),
-            E("Copy verification code (TOTP)")
-                .key(cmd('t'))
-                .when(Unlocked),
+            E("menu-edit-copy-username").key(cmd('u')).when(Unlocked),
+            E("menu-edit-copy-password").key(cmd('p')).when(Unlocked),
+            E("menu-edit-copy-totp").key(cmd('t')).when(Unlocked),
         ],
     ),
     (
-        "View",
+        "menu-view",
         &[
-            E("Search vault")
+            E("menu-view-search")
                 .key(cmd('f'))
                 .when(Unlocked)
                 .action(SearchVault),
             SEP,
-            E("Generator").key(cmd('g')).when(Unlocked),
-            E("Generator history").when(Unlocked),
+            E("menu-view-generator").key(cmd('g')).when(Unlocked),
+            E("menu-view-generator-history").when(Unlocked),
             SEP,
-            E("Zoom in").key(cmd('+')),
-            E("Zoom out").key(cmd('-')),
-            E("Reset zoom").key(cmd('0')),
+            E("menu-view-zoom-in").key(cmd('+')),
+            E("menu-view-zoom-out").key(cmd('-')),
+            E("menu-view-reset-zoom").key(cmd('0')),
             SEP,
-            E("Toggle full screen")
+            E("menu-view-toggle-fullscreen")
                 .key(fkey(11))
                 .action(ToggleFullScreen),
             SEP,
-            E("Reload").key(cmd_shift('r')).action(Reload),
+            E("menu-view-reload").key(cmd_shift('r')).action(Reload),
         ],
     ),
     (
-        "Account",
+        "menu-account",
         &[
-            E("Premium membership").when(Unlocked),
-            E("Change master password").when(Unlocked),
-            E("Two-step login").when(Unlocked),
-            E("Fingerprint phrase").when(Unlocked),
+            E("menu-account-premium").when(Unlocked),
+            E("menu-account-change-password").when(Unlocked),
+            E("menu-account-two-step").when(Unlocked),
+            E("menu-account-fingerprint").when(Unlocked),
             SEP,
-            E("Delete account").when(Unlocked),
+            E("menu-account-delete").when(Unlocked),
         ],
     ),
     (
-        "Window",
+        "menu-window",
         &[
-            E("Minimize").key(cmd('m')).action(Minimize),
-            E("Hide to tray").key(cmd_shift('m')).action(HideToTray),
-            E("Always on top")
+            E("menu-window-minimize").key(cmd('m')).action(Minimize),
+            E("menu-window-hide-to-tray")
+                .key(cmd_shift('m'))
+                .action(HideToTray),
+            E("menu-window-always-on-top")
                 .key(cmd_shift('t'))
                 .action(ToggleAlwaysOnTop),
             SEP,
-            E("Close").key(cmd('w')).action(Close),
+            E("menu-window-close").key(cmd('w')).action(Close),
         ],
     ),
     (
-        "Help",
+        "menu-help",
         &[
-            E("Help & feedback"),
-            E("File a bug report"),
-            E("Legal").sub(&[E("Terms of service"), E("Privacy policy")]),
+            E("menu-help-feedback"),
+            E("menu-help-bug"),
+            E("menu-help-legal").sub(&[E("menu-help-legal-tos"), E("menu-help-legal-privacy")]),
             SEP,
-            E("Follow us").sub(&[
+            // Social platform names: brand names, not localized
+            E("menu-help-follow").sub(&[
                 E("Blog"),
                 E("Twitter"),
                 E("Facebook"),
@@ -374,10 +380,11 @@ pub const MENUS: &[(&str, &[MenuEntry])] = &[
                 E("Mastodon"),
             ]),
             SEP,
-            E("Go to web vault"),
+            E("menu-help-web-vault"),
             SEP,
-            E("Get mobile app").sub(&[E("iOS"), E("Android")]),
-            E("Get browser extension").sub(&[
+            // Mobile / browser names: not localized
+            E("menu-help-mobile-app").sub(&[E("iOS"), E("Android")]),
+            E("menu-help-browser-extension").sub(&[
                 E("Chrome"),
                 E("Firefox"),
                 E("Opera"),
@@ -385,9 +392,9 @@ pub const MENUS: &[(&str, &[MenuEntry])] = &[
                 E("Safari"),
             ]),
             SEP,
-            E("Troubleshooting").sub(&[E("Toggle hardware acceleration")]),
+            E("menu-help-troubleshooting").sub(&[E("menu-help-troubleshooting-gpu")]),
             SEP,
-            E("About Bitwarden").action(About),
+            E("menu-help-about").action(About),
         ],
     ),
 ];
@@ -473,7 +480,8 @@ pub fn attach_menu(raw_id: u64) -> Option<NativeMenuHandle> {
     let mut items = Vec::new();
 
     let menu = Menu::new();
-    for (label, entries) in MENUS {
+    for (label_key, entries) in MENUS {
+        let label = crate::i18n::lookup(label_key);
         let submenu = Submenu::new(format!("&{label}"), true);
         append_entries_to_submenu(&submenu, entries, &mut actions, &mut items);
         let _ = menu.append(&submenu);
@@ -530,12 +538,12 @@ fn append_entries_to_submenu(
             if entry.is_separator() {
                 Box::new(PredefinedMenuItem::separator())
             } else if !entry.children.is_empty() {
-                let sub = Submenu::new(entry.label, true);
+                let sub = Submenu::new(crate::i18n::lookup(entry.label), true);
                 append_entries_to_submenu(&sub, entry.children, actions, items);
                 Box::new(sub)
             } else {
                 let accel = entry.shortcut.and_then(|s| s.to_accelerator());
-                let item = MudaMenuItem::new(entry.label, true, accel);
+                let item = MudaMenuItem::new(crate::i18n::lookup(entry.label), true, accel);
                 if let Some(action) = entry.action {
                     actions.insert(item.id().clone(), action);
                 }
