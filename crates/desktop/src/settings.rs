@@ -11,7 +11,7 @@ use std::io::BufReader;
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Copy, Default, Deserialize)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default)]
 pub struct Settings {
     /// Master switch: keep the tray icon visible even when the app is
     /// in the foreground.

@@ -9,11 +9,8 @@ use crate::{
 use super::{App, Message, WindowKind};
 
 impl App {
-    pub(super) fn main_window_id(&self) -> Option<iced::window::Id> {
-        self.windows
-            .iter()
-            .find(|(_, w)| w.kind == WindowKind::Main)
-            .map(|(id, _)| *id)
+    pub(super) fn main_window_id(&self) -> iced::window::Id {
+        self.main_window
     }
 
     pub(super) fn about_window_id(&self) -> Option<iced::window::Id> {
@@ -24,8 +21,8 @@ impl App {
     }
 
     pub(super) fn main_window_maximized(&self) -> bool {
-        self.main_window_id()
-            .and_then(|id| self.windows.get(&id))
+        self.windows
+            .get(&self.main_window)
             .is_some_and(|w| w.maximized)
     }
 

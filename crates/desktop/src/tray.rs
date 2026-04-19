@@ -65,20 +65,18 @@ pub fn build() -> Option<TrayHandle> {
         }
     };
 
-    let menu = Menu::new();
     let show_hide = MenuItem::new(crate::fl!("tray-show-hide"), true, None);
     let lock_vault = MenuItem::new(crate::fl!("tray-lock-vault"), true, None);
     let exit = MenuItem::new(crate::fl!("tray-exit"), true, None);
     let sep = tray_icon::menu::PredefinedMenuItem::separator();
 
-    if menu.append(&show_hide).is_err()
-        || menu.append(&sep).is_err()
-        || menu.append(&lock_vault).is_err()
-        || menu.append(&exit).is_err()
-    {
-        tracing::warn!("failed to assemble tray menu");
-        return None;
-    }
+    let menu = match Menu::with_items(&[&show_hide, &sep, &lock_vault, &exit]) {
+        Ok(m) => m,
+        Err(e) => {
+            tracing::warn!(error = %e, "failed to assemble tray menu");
+            return None;
+        }
+    };
 
     let mut actions = HashMap::new();
     actions.insert(show_hide.id().clone(), TrayAction::ToggleShowHide);
@@ -109,19 +107,25 @@ pub fn build() -> Option<TrayHandle> {
     })
 }
 
-/// Drain one pending tray-icon click event. Left-click (released) toggles
-/// window visibility; right-click opens the context menu natively on all
-/// platforms so we don't need to handle it.
-pub fn poll_click_action() -> Option<TrayAction> {
+/// Drain every pending tray-icon click event, returning the actions the
+/// matching ones produce. Left-click (released) toggles window visibility;
+/// right-click opens the context menu natively on all platforms so we
+/// don't handle it here. Non-matching events are swallowed to keep the
+/// channel from backing up.
+pub fn drain_click_actions() -> Vec<TrayAction> {
     use tray_icon::{MouseButton, MouseButtonState, TrayIconEvent};
-    match TrayIconEvent::receiver().try_recv().ok()? {
-        TrayIconEvent::Click {
+    let mut out = Vec::new();
+    while let Ok(event) = TrayIconEvent::receiver().try_recv() {
+        if let TrayIconEvent::Click {
             button: MouseButton::Left,
             button_state: MouseButtonState::Up,
             ..
-        } => Some(TrayAction::ToggleShowHide),
-        _ => None,
+        } = event
+        {
+            out.push(TrayAction::ToggleShowHide);
+        }
     }
+    out
 }
 
 fn decode_icon() -> Result<tray_icon::Icon, Box<dyn std::error::Error>> {
