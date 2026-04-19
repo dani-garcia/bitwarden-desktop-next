@@ -194,25 +194,25 @@ impl TitleBarState {
                         .size(14)
                         .color(Color::WHITE),
                 )
-                    .on_press(TitleBarMessage::TopLevelClicked(i))
-                    .padding([4, 10])
-                    .style(move |theme: &AppTheme, status| {
-                        let bg = if is_open {
-                            theme.colors.titlebar_btn_hover
-                        } else {
-                            match status {
-                                button::Status::Hovered => theme.colors.titlebar_btn_hover,
-                                _ => Color::TRANSPARENT,
-                            }
-                        };
-                        button::Style {
-                            background: Some(Background::Color(bg)),
-                            text_color: Color::WHITE,
-                            border: Border::default(),
-                            shadow: Shadow::default(),
-                            snap: false,
+                .on_press(TitleBarMessage::TopLevelClicked(i))
+                .padding([4, 10])
+                .style(move |theme: &AppTheme, status| {
+                    let bg = if is_open {
+                        theme.colors.titlebar_btn_hover
+                    } else {
+                        match status {
+                            button::Status::Hovered => theme.colors.titlebar_btn_hover,
+                            _ => Color::TRANSPARENT,
                         }
-                    });
+                    };
+                    button::Style {
+                        background: Some(Background::Color(bg)),
+                        text_color: Color::WHITE,
+                        border: Border::default(),
+                        shadow: Shadow::default(),
+                        snap: false,
+                    }
+                });
 
                 let panel = dropdown::menu_panel(entries, i, open_submenu, menu_state, colors);
                 let dd: Element<'_, TitleBarMessage, AppTheme> =

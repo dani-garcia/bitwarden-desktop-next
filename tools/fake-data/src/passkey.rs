@@ -22,7 +22,9 @@ use bitwarden_fido::{
     CheckUserOptions, CheckUserResult, ClientData, Fido2Authenticator, Fido2CallbackError,
     Fido2Client, Fido2CredentialStore, Fido2UserInterface, Origin, UiHint,
 };
-use bitwarden_vault::{Cipher, CipherListView, CipherView, EncryptionContext, Fido2CredentialNewView};
+use bitwarden_vault::{
+    Cipher, CipherListView, CipherView, EncryptionContext, Fido2CredentialNewView,
+};
 use rand::RngCore;
 use serde_json::json;
 
@@ -122,10 +124,7 @@ impl Fido2CredentialStore for CapturingStore {
     }
 
     async fn save_credential(&self, cred: EncryptionContext) -> Result<(), Fido2CallbackError> {
-        *self
-            .saved
-            .lock()
-            .expect("saved mutex is not poisoned") = Some(cred.cipher);
+        *self.saved.lock().expect("saved mutex is not poisoned") = Some(cred.cipher);
         Ok(())
     }
 }

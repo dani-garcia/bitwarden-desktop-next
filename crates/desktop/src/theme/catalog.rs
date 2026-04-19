@@ -279,10 +279,7 @@ impl widget::pick_list::Catalog for AppTheme {
                 background: Background::Color(Color::TRANSPARENT),
                 placeholder_color: theme.colors.text_secondary,
                 handle_color: theme.colors.text_secondary,
-                border: Border::default()
-                    .color(border_color)
-                    .width(1.0)
-                    .rounded(4),
+                border: Border::default().color(border_color).width(1.0).rounded(4),
             }
         })
     }
@@ -319,7 +316,10 @@ impl iced::overlay::menu::Catalog for AppTheme {
         })
     }
 
-    fn style(&self, class: &<Self as iced::overlay::menu::Catalog>::Class<'_>) -> iced::overlay::menu::Style {
+    fn style(
+        &self,
+        class: &<Self as iced::overlay::menu::Catalog>::Class<'_>,
+    ) -> iced::overlay::menu::Style {
         class(self)
     }
 }

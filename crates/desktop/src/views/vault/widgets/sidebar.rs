@@ -350,9 +350,12 @@ fn standalone_item<'a>(
     let color = colors.nav_text;
 
     buttons::ghost(
-        row![icon.render(17.0, color), text(label.into()).size(16).color(color)]
-            .spacing(8)
-            .align_y(Alignment::Center),
+        row![
+            icon.render(17.0, color),
+            text(label.into()).size(16).color(color)
+        ]
+        .spacing(8)
+        .align_y(Alignment::Center),
         is_active,
         colors.sidebar_selected,
         colors.nav_item_hover,

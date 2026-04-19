@@ -633,7 +633,10 @@ pub fn view<'a>(
         }
     }
 
-    sections.push(section_label(fl!("form-section-additional-options"), colors));
+    sections.push(section_label(
+        fl!("form-section-additional-options"),
+        colors,
+    ));
     sections.push(additional_options_card(form, colors));
 
     sections.push(section_label(fl!("form-section-custom-fields"), colors));
@@ -694,7 +697,11 @@ fn bottom_bar<'a>(
     form: &'a CipherForm,
     _colors: &AppColors,
 ) -> Element<'a, CipherFormMessage, AppTheme> {
-    let save_label = if form.saving { fl!("form-saving") } else { fl!("form-save") };
+    let save_label = if form.saving {
+        fl!("form-saving")
+    } else {
+        fl!("form-save")
+    };
     let mut save_btn = buttons::primary(text(save_label).size(14)).padding([8, 20]);
     if !form.saving {
         save_btn = save_btn.on_press(CipherFormMessage::Save);
@@ -794,7 +801,10 @@ fn login_card<'a>(
         for (idx, cred) in creds.iter().enumerate() {
             let info = field_readonly(
                 fl!("detail-field-passkey"),
-                fl!("detail-field-passkey-created", date = format_passkey_date(cred.creation_date)),
+                fl!(
+                    "detail-field-passkey-created",
+                    date = format_passkey_date(cred.creation_date)
+                ),
                 colors,
             );
             let remove_btn = buttons::ghost_icon(
@@ -1538,4 +1548,3 @@ fn bordered_dropdown_trigger<'a, M: Clone + 'a>(
     })
     .into()
 }
-

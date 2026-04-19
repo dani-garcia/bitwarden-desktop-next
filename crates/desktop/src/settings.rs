@@ -51,9 +51,6 @@ impl Settings {
     /// Whether *any* tray feature is active — used to decide if the tray
     /// should exist at startup.
     pub fn wants_tray(&self) -> bool {
-        self.show_tray_icon
-            || self.minimize_to_tray
-            || self.close_to_tray
-            || self.start_to_tray
+        self.show_tray_icon || self.minimize_to_tray || self.close_to_tray || self.start_to_tray
     }
 }

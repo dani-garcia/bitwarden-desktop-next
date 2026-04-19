@@ -51,12 +51,18 @@ pub fn view<'a>(
     match item.r#type {
         CipherType::Login => {
             if let Some(login) = item.login.as_ref() {
-                sections.push(section_label(fl!("detail-section-login-credentials"), colors));
+                sections.push(section_label(
+                    fl!("detail-section-login-credentials"),
+                    colors,
+                ));
                 sections.push(login_card(login, colors));
 
                 let uris = collect_login_uris(login);
                 if !uris.is_empty() {
-                    sections.push(section_label(fl!("detail-section-autofill-options"), colors));
+                    sections.push(section_label(
+                        fl!("detail-section-autofill-options"),
+                        colors,
+                    ));
                     sections.push(autofill_card(&uris, colors));
                 }
             }
@@ -69,7 +75,10 @@ pub fn view<'a>(
         }
         CipherType::Identity => {
             if let Some(identity) = item.identity.as_ref() {
-                sections.push(section_label(fl!("detail-section-personal-details"), colors));
+                sections.push(section_label(
+                    fl!("detail-section-personal-details"),
+                    colors,
+                ));
                 sections.push(identity_card(identity, colors));
             }
         }
@@ -209,7 +218,10 @@ fn login_card<'a>(
         for cred in creds {
             fields.push(field_readonly(
                 fl!("detail-field-passkey"),
-                fl!("detail-field-passkey-created", date = format_passkey_date(cred.creation_date)),
+                fl!(
+                    "detail-field-passkey-created",
+                    date = format_passkey_date(cred.creation_date)
+                ),
                 colors,
             ));
         }
@@ -267,8 +279,18 @@ fn card_details_card<'a>(
         card.cardholder_name.as_deref(),
         colors,
     );
-    push_optional_field(&mut fields, fl!("detail-field-brand"), card.brand.as_deref(), colors);
-    push_optional_field(&mut fields, fl!("detail-field-number"), card.number.as_deref(), colors);
+    push_optional_field(
+        &mut fields,
+        fl!("detail-field-brand"),
+        card.brand.as_deref(),
+        colors,
+    );
+    push_optional_field(
+        &mut fields,
+        fl!("detail-field-number"),
+        card.number.as_deref(),
+        colors,
+    );
 
     let expiration = match (card.exp_month.as_deref(), card.exp_year.as_deref()) {
         (Some(m), Some(y)) => Some(format!("{m}/{y}")),
@@ -281,7 +303,12 @@ fn card_details_card<'a>(
     }
 
     if let Some(code) = card.code.as_deref() {
-        fields.push(reveal_field(fl!("detail-field-security-code"), code, None, colors));
+        fields.push(reveal_field(
+            fl!("detail-field-security-code"),
+            code,
+            None,
+            colors,
+        ));
     }
 
     if fields.is_empty() {
@@ -319,9 +346,24 @@ fn identity_card<'a>(
         fields.push(field_readonly(fl!("detail-field-name"), full_name, colors));
     }
 
-    push_optional_field(&mut fields, fl!("detail-field-email"), identity.email.as_deref(), colors);
-    push_optional_field(&mut fields, fl!("detail-field-phone"), identity.phone.as_deref(), colors);
-    push_optional_field(&mut fields, fl!("detail-field-company"), identity.company.as_deref(), colors);
+    push_optional_field(
+        &mut fields,
+        fl!("detail-field-email"),
+        identity.email.as_deref(),
+        colors,
+    );
+    push_optional_field(
+        &mut fields,
+        fl!("detail-field-phone"),
+        identity.phone.as_deref(),
+        colors,
+    );
+    push_optional_field(
+        &mut fields,
+        fl!("detail-field-company"),
+        identity.company.as_deref(),
+        colors,
+    );
 
     let address_lines = [
         identity.address1.as_deref(),
@@ -333,7 +375,11 @@ fn identity_card<'a>(
     .collect::<Vec<_>>()
     .join(", ");
     if !address_lines.is_empty() {
-        fields.push(field_readonly(fl!("detail-field-address"), address_lines, colors));
+        fields.push(field_readonly(
+            fl!("detail-field-address"),
+            address_lines,
+            colors,
+        ));
     }
 
     let locality = [
@@ -347,7 +393,11 @@ fn identity_card<'a>(
     .collect::<Vec<_>>()
     .join(", ");
     if !locality.is_empty() {
-        fields.push(field_readonly(fl!("detail-field-city-region"), locality, colors));
+        fields.push(field_readonly(
+            fl!("detail-field-city-region"),
+            locality,
+            colors,
+        ));
     }
 
     if fields.is_empty() {
@@ -371,7 +421,12 @@ fn ssh_key_card<'a>(
 ) -> Element<'a, DetailPaneMessage, AppTheme> {
     let fields = vec![
         field_readonly(fl!("detail-field-public-key"), &key.public_key, colors),
-        reveal_field(fl!("detail-field-private-key"), &key.private_key, None, colors),
+        reveal_field(
+            fl!("detail-field-private-key"),
+            &key.private_key,
+            None,
+            colors,
+        ),
         field_readonly(fl!("detail-field-fingerprint"), &key.fingerprint, colors),
     ];
     card_with_margin(styled_card(column(fields).spacing(12).width(Fill).into()))
@@ -467,7 +522,11 @@ fn autofill_row<'a>(
         .ellipsis(iced::widget::text::Ellipsis::End);
 
     let copy_btn = icon_button(icons::BWI_COPY, DetailPaneMessage::CopyUrl(idx), colors);
-    let open_btn = icon_button(icons::BWI_EXTERNAL_LINK, DetailPaneMessage::OpenUrl(idx), colors);
+    let open_btn = icon_button(
+        icons::BWI_EXTERNAL_LINK,
+        DetailPaneMessage::OpenUrl(idx),
+        colors,
+    );
 
     row![
         column![label, value].spacing(2).width(Fill),

@@ -26,12 +26,12 @@ use bitwarden_core::{
 };
 use bitwarden_crypto::{SymmetricCryptoKey, UnsignedSharedKey};
 use bitwarden_pm::PasswordManagerClient;
+use bitwarden_ssh::generator::{KeyAlgorithm, generate_sshkey};
 use bitwarden_state::{
     DatabaseConfiguration,
     registry::StateRegistry,
     repository::{Repository, RepositoryError, RepositoryItem},
 };
-use bitwarden_ssh::generator::{KeyAlgorithm, generate_sshkey};
 use bitwarden_vault::{
     CardView, Cipher, CipherRepromptType, CipherType, CipherView, Folder, FolderView, IdentityView,
     LoginUriView, LoginView, SshKeyView, UriMatchType,
@@ -628,7 +628,13 @@ fn personal_ciphers() -> Vec<CipherEntry> {
         login("Bluesky", Some("alice.bsky.social"), Some("bsky.app")),
         login("Facebook", Some("alice.johnson.94"), Some("facebook.com")),
         // Dev
-        login_with_passkey("GitHub", "alice-dev", "github.com", "GitHub", "Alice Johnson"),
+        login_with_passkey(
+            "GitHub",
+            "alice-dev",
+            "github.com",
+            "GitHub",
+            "Alice Johnson",
+        ),
         login("GitLab", Some("alice-dev"), Some("gitlab.com")),
         login(
             "Stack Overflow",

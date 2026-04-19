@@ -14,9 +14,10 @@ use std::fmt::Display;
 use iced::{
     Alignment, Background, Border, Color, Element, Fill, Length,
     widget::{
-        Component, Space, column, combo_box, component, container, pick_list, row, stack, text,
+        Component, Space, TextInput, column, combo_box, component, container, pick_list, row,
+        stack, text,
         text::{Ellipsis, Wrapping},
-        text_input, TextInput,
+        text_input,
     },
 };
 
@@ -123,15 +124,13 @@ where
         .on_select(on_select)
         .width(Fill)
         .padding([8, 12])
-        .style(
-            |theme: &AppTheme, _status| iced::widget::pick_list::Style {
-                text_color: theme.colors.text_primary,
-                background: Background::Color(Color::TRANSPARENT),
-                placeholder_color: theme.colors.text_secondary,
-                handle_color: theme.colors.text_secondary,
-                border: Border::default(),
-            },
-        );
+        .style(|theme: &AppTheme, _status| iced::widget::pick_list::Style {
+            text_color: theme.colors.text_primary,
+            background: Background::Color(Color::TRANSPARENT),
+            placeholder_color: theme.colors.text_secondary,
+            handle_color: theme.colors.text_secondary,
+            border: Border::default(),
+        });
 
     field_frame(label, picker.into(), colors)
 }
@@ -463,10 +462,12 @@ impl<'a, Message: Clone + 'a> Component<Message, AppTheme> for RevealField<'a, M
         } else {
             icons::BWI_EYE
         };
-        let eye_button =
-            buttons::ghost_icon(eye_icon.render(18.0, self.colors.text_primary), self.colors.item_hover)
-                .padding([6, 6])
-                .on_press(RevealFieldEvent::Toggle);
+        let eye_button = buttons::ghost_icon(
+            eye_icon.render(18.0, self.colors.text_primary),
+            self.colors.item_hover,
+        )
+        .padding([6, 6])
+        .on_press(RevealFieldEvent::Toggle);
 
         let mut buttons_row: Vec<Element<'_, RevealFieldEvent, AppTheme>> = vec![eye_button.into()];
         if self.on_copy.is_some() {

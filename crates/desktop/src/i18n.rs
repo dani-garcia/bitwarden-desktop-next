@@ -64,7 +64,11 @@ pub fn init() {
 /// matching `.ftl` file under `assets/i18n/`.
 #[expect(dead_code)] // Wired up once the settings view with a language picker lands.
 pub fn set_language(lang: LanguageIdentifier) {
-    if let Err(e) = i18n_embed::select(&*LANGUAGE_LOADER, &Localizations, std::slice::from_ref(&lang)) {
+    if let Err(e) = i18n_embed::select(
+        &*LANGUAGE_LOADER,
+        &Localizations,
+        std::slice::from_ref(&lang),
+    ) {
         tracing::warn!(%e, %lang, "set_language failed; current language unchanged");
     }
 }

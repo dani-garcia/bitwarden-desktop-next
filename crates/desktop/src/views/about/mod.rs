@@ -50,10 +50,16 @@ pub fn view(colors: &AppColors) -> Element<'_, AboutMessage, AppTheme> {
     };
 
     let info = column![
-        info_line(fl!("about-version-label"), env!("CARGO_PKG_VERSION").to_string()),
+        info_line(
+            fl!("about-version-label"),
+            env!("CARGO_PKG_VERSION").to_string()
+        ),
         info_line(fl!("about-sdk-version-label"), SDK_REV_SHORT.to_string()),
         info_line(fl!("about-os-label"), std::env::consts::OS.to_string()),
-        info_line(fl!("about-architecture-label"), std::env::consts::ARCH.to_string()),
+        info_line(
+            fl!("about-architecture-label"),
+            std::env::consts::ARCH.to_string()
+        ),
     ]
     .spacing(6);
 

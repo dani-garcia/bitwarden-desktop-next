@@ -504,11 +504,9 @@ impl VaultView {
                         .and_then(|c| c.login.as_ref())
                         .and_then(|l| l.totp.as_deref())
                         .map(str::to_owned);
-                    match secret.and_then(|s| {
-                        bitwarden_vault::generate_totp(s, None)
-                            .ok()
-                            .map(|r| r.code)
-                    }) {
+                    match secret
+                        .and_then(|s| bitwarden_vault::generate_totp(s, None).ok().map(|r| r.code))
+                    {
                         Some(code) => (
                             Task::none(),
                             Some(VaultEvent::ClipboardCopyRequested {

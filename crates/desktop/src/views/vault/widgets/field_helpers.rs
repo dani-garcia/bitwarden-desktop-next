@@ -19,7 +19,10 @@ pub fn section_label<'a, M: 'a>(
     label: impl Into<String>,
     colors: &AppColors,
 ) -> Element<'a, M, AppTheme> {
-    text(label.into()).size(14).color(colors.text_primary).into()
+    text(label.into())
+        .size(14)
+        .color(colors.text_primary)
+        .into()
 }
 
 /// Read-only `{label, value}` stacked pair. Used for displayed-only fields
