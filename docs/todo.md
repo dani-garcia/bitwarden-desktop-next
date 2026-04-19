@@ -44,6 +44,12 @@ Features that complete the happy paths users expect. No architectural work requi
 - **Self-hosted server URL modal** — server selector's "Self-hosted" option should open a modal to input custom server URL. (Depends on the modal framework work in Tier 3.)
 - **SSO login flow** — "Use single sign-on" button on login email screen. Needs SSO provider selection + browser redirect.
 
+### `App::main_window_id` should return `window::Id`, not `Option`
+
+Since `App::new` now always opens the main window (hidden when `start_to_tray` is on, not skipped) and closing the main window triggers `iced::exit()`, the invariant "the main window exists for the entire app lifetime" holds. The `Option` return on [`App::main_window_id`](../crates/desktop/src/app/helpers.rs) and the `let Some(id) = ... else { return Task::none() }` / `is_some_and` checks scattered across [`handlers.rs`](../crates/desktop/src/app/handlers.rs) are dead defensive branches.
+
+Shape: cache the id on `App` as a plain `iced::window::Id` field set at construction; remove the `HashMap` scan; update every call site. About-window id stays `Option` — that one really is absent until the user opens About.
+
 ### Account switcher polish
 
 - **Avatar color auto-generation** — generate the avatar background color from a username/email hash (matches the official app).

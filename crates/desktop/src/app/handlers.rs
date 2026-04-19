@@ -121,14 +121,28 @@ impl App {
             return Task::none();
         };
         match cmd {
-            WindowCommand::Minimize => iced::window::minimize(id, true),
+            WindowCommand::Minimize => {
+                if self.settings.minimize_to_tray {
+                    self.ensure_tray();
+                    self.hide_main_window()
+                } else {
+                    iced::window::minimize(id, true)
+                }
+            }
             WindowCommand::Maximize => {
                 if let Some(info) = self.windows.get_mut(&id) {
                     info.maximized = !info.maximized;
                 }
                 iced::window::toggle_maximize(id)
             }
-            WindowCommand::Close => iced::window::close(id),
+            WindowCommand::Close => {
+                if self.settings.close_to_tray {
+                    self.ensure_tray();
+                    self.hide_main_window()
+                } else {
+                    iced::window::close(id)
+                }
+            }
             WindowCommand::Drag => iced::window::drag(id),
             WindowCommand::ResizeEdge(dir) => iced::window::drag_resize(id, dir),
         }
@@ -148,6 +162,17 @@ impl App {
             WindowMessage::GotRawId(_id, raw_id) => {
                 self.native_menu = crate::menu::attach_menu(raw_id);
                 Task::none()
+            }
+            WindowMessage::CloseRequested(id) => {
+                // OS-native close (Alt+F4, macOS red button, native title-bar
+                // X) — route to the same handler as the custom title-bar X
+                // so close-to-tray applies uniformly. Other windows (About)
+                // close normally.
+                if Some(id) == self.main_window_id() {
+                    self.handle_window_command(WindowCommand::Close)
+                } else {
+                    iced::window::close(id)
+                }
             }
             WindowMessage::Closed(id) => {
                 let was_main = Some(id) == self.main_window_id();
@@ -182,11 +207,27 @@ impl App {
 
     pub(super) fn handle_system_message(&mut self, msg: SystemMessage) -> Task<Message> {
         match msg {
-            SystemMessage::PollNativeMenu => {
-                if let Some(ref handle) = self.native_menu
-                    && let Some(action) = crate::menu::poll_native_event(handle)
+            SystemMessage::PollMudaAndTray => {
+                // Drain one muda event. The receiver is global (shared by the
+                // native app menu and the tray menu) so we resolve the id
+                // against both action maps.
+                if let Ok(event) = muda::MenuEvent::receiver().try_recv() {
+                    if let Some(ref handle) = self.native_menu
+                        && let Some(action) = handle.resolve(&event.id)
+                    {
+                        return self.handle_menu_action(action);
+                    }
+                    if let Some(ref handle) = self.tray
+                        && let Some(action) = handle.resolve(&event.id)
+                    {
+                        return self.handle_tray_action(action);
+                    }
+                }
+                // Drain one tray-icon click event (separate receiver).
+                if self.tray.is_some()
+                    && let Some(action) = crate::tray::poll_click_action()
                 {
-                    return self.handle_menu_action(action);
+                    return self.handle_tray_action(action);
                 }
                 Task::none()
             }
@@ -208,6 +249,7 @@ impl App {
                 self.screen = Screen::Login;
                 Task::none()
             }
+            SystemMessage::InstanceWakeRequested => self.show_main_window(),
         }
     }
 
@@ -259,7 +301,11 @@ impl App {
             MenuAction::SyncNow | MenuAction::Reload => {
                 self.refresh_cache();
             }
-            MenuAction::HideToTray | MenuAction::ToggleAlwaysOnTop => {}
+            MenuAction::HideToTray => {
+                self.ensure_tray();
+                return self.hide_main_window();
+            }
+            MenuAction::ToggleAlwaysOnTop => {}
             MenuAction::About => {
                 // Re-focus existing About window if already open.
                 if let Some(id) = self.about_window_id() {
@@ -288,5 +334,66 @@ impl App {
             }
         }
         Task::none()
+    }
+
+    // ── Tray action handler ────────────────────────────────────────────────
+
+    pub(super) fn handle_tray_action(&mut self, action: crate::tray::TrayAction) -> Task<Message> {
+        use crate::tray::TrayAction;
+        match action {
+            TrayAction::ToggleShowHide => self.toggle_main_window_visibility(),
+            TrayAction::LockVault => {
+                self.handle_menu_action(crate::menu::MenuAction::LockAllVaults)
+            }
+            TrayAction::Exit => iced::exit(),
+        }
+    }
+
+    // ── Window visibility helpers (tray + IPC wake) ────────────────────────
+
+    pub(super) fn hide_main_window(&mut self) -> Task<Message> {
+        match self.main_window_id() {
+            Some(id) => iced::window::set_mode(id, iced::window::Mode::Hidden),
+            None => Task::none(),
+        }
+    }
+
+    pub(super) fn show_main_window(&mut self) -> Task<Message> {
+        let Some(id) = self.main_window_id() else {
+            return Task::none();
+        };
+        Task::batch([
+            iced::window::set_mode(id, iced::window::Mode::Windowed),
+            iced::window::gain_focus(id),
+        ])
+    }
+
+    /// Ask iced for the current mode and flip it. `Task::then` defers the
+    /// decision until the mode resolves — one message round-trip slower than
+    /// reading a local bool would be, imperceptible for a tray click. Iced
+    /// is the single source of truth, so we can't drift out of sync with
+    /// the OS-level window state. `Fullscreen` counts as visible.
+    pub(super) fn toggle_main_window_visibility(&mut self) -> Task<Message> {
+        let Some(id) = self.main_window_id() else {
+            return Task::none();
+        };
+        iced::window::mode(id).then(move |mode| match mode {
+            iced::window::Mode::Hidden => Task::batch([
+                iced::window::set_mode(id, iced::window::Mode::Windowed),
+                iced::window::gain_focus(id),
+            ]),
+            iced::window::Mode::Windowed | iced::window::Mode::Fullscreen => {
+                iced::window::set_mode(id, iced::window::Mode::Hidden)
+            }
+        })
+    }
+
+    pub(super) fn ensure_tray(&mut self) {
+        if self.tray.is_none() {
+            self.tray = crate::tray::build();
+            if self.tray.is_none() {
+                tracing::warn!("tray requested but failed to initialise; continuing without tray");
+            }
+        }
     }
 }

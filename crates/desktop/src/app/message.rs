@@ -31,6 +31,12 @@ pub enum Message {
 pub enum WindowMessage {
     Opened(iced::window::Id),
     GotRawId(iced::window::Id, u64),
+    /// OS emitted a close request (X button on native title bar, Alt+F4,
+    /// window-list "Close", etc.). Funnels into the same `WindowCommand::Close`
+    /// path the custom title-bar X-button uses, so close-to-tray applies
+    /// uniformly. `exit_on_close_request: false` on the main window defers
+    /// the real close to our handler.
+    CloseRequested(iced::window::Id),
     Closed(iced::window::Id),
     KeyPressed(iced::window::Id, iced::keyboard::Event),
     Resized(iced::window::Id, iced::Size),
@@ -39,9 +45,10 @@ pub enum WindowMessage {
 /// Global signals that aren't tied to a specific window.
 #[derive(Debug, Clone)]
 pub enum SystemMessage {
-    /// 16ms tick driving the muda native menu poll. Only emitted when a
-    /// native menu handle is attached.
-    PollNativeMenu,
+    /// 16ms tick draining muda's `MenuEvent` queue (app menu + tray menu
+    /// share one global receiver) and tray-icon click events. Emitted
+    /// whenever a native menu handle or a tray handle exists.
+    PollMudaAndTray,
     /// OS-level light/dark theme changed. `ThemePreference::System` follows
     /// this; explicit Light/Dark preferences ignore it.
     ThemeChanged,
@@ -51,6 +58,9 @@ pub enum SystemMessage {
     /// `ClientManager::empty()` for the fully-populated one and transitions out
     /// of `Screen::Loading`.
     ClientManagerLoaded(Arc<ClientManager>),
+    /// A second launch of the app was attempted; the single-instance listener
+    /// forwarded a "show" signal. Surface the main window.
+    InstanceWakeRequested,
 }
 
 /// Per-window metadata. Keyed by `iced::window::Id` in a `HashMap` on `App`.

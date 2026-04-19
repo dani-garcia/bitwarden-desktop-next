@@ -453,19 +453,20 @@ pub struct NativeMenuHandle {
     pub items: Vec<(MudaMenuItem, EnabledWhen)>,
 }
 
-/// Try to receive a native menu event and resolve it to a MenuAction.
-pub fn poll_native_event(handle: &NativeMenuHandle) -> Option<MenuAction> {
-    if let Ok(event) = muda::MenuEvent::receiver().try_recv() {
-        handle.actions.get(&event.id).copied()
-    } else {
-        None
+impl NativeMenuHandle {
+    /// Resolve a muda `MenuId` to a `MenuAction` if it belongs to the native
+    /// app menu. Returns `None` for unrelated ids (e.g. tray menu events).
+    /// The caller is responsible for draining `muda::MenuEvent::receiver()` —
+    /// a global singleton shared with the tray menu — and dispatching by id.
+    pub fn resolve(&self, id: &muda::MenuId) -> Option<MenuAction> {
+        self.actions.get(id).copied()
     }
-}
 
-/// Sync enabled states of native menu items to match current app state.
-pub fn sync_native_enabled(handle: &NativeMenuHandle, state: &MenuState) {
-    for (item, when) in &handle.items {
-        item.set_enabled(when.check(state));
+    /// Sync enabled states of native menu items to match current app state.
+    pub fn sync_enabled(&self, state: &MenuState) {
+        for (item, when) in &self.items {
+            item.set_enabled(when.check(state));
+        }
     }
 }
 

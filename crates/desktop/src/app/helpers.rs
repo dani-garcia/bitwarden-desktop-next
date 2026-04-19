@@ -77,7 +77,7 @@ impl App {
             };
 
         if let Some(ref handle) = self.native_menu {
-            crate::menu::sync_native_enabled(handle, &self.menu_state());
+            handle.sync_enabled(&self.menu_state());
         }
     }
 

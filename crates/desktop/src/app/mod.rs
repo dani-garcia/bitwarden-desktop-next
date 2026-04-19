@@ -16,8 +16,10 @@ use crate::{
         toast::{self, Toast},
     },
     sdk::ClientManager,
+    settings::Settings,
     state::{Screen, UnlockMethod, UserId},
     theme::{AppTheme, ThemePreference},
+    tray::TrayHandle,
     views::{
         login,
         title_bar::{self, TitleBarMessage},
@@ -51,6 +53,14 @@ pub struct App {
     pub(super) theme: ThemeState,
     pub(super) windows: HashMap<iced::window::Id, WindowInfo>,
     pub(super) native_menu: Option<crate::menu::NativeMenuHandle>,
+
+    // ── Tray + user settings ───────────────────────────────────────────────
+    // `settings` is read once at startup from `data/settings.json`. A future
+    // settings view mutates fields directly; all tray / lifecycle branches
+    // re-read `self.settings.<field>` at event time (never cached), so live
+    // changes apply without a restart.
+    pub(super) settings: Settings,
+    pub(super) tray: Option<TrayHandle>,
 
     // ── Cross-cutting UI overlay queue ─────────────────────────────────────
     pub(super) toasts: Vec<Toast>,
@@ -101,28 +111,58 @@ impl ThemeState {
 
 // ── Construction + iced daemon callbacks ───────────────────────────────────
 
+pub(super) const MAIN_WINDOW_SIZE: iced::Size = iced::Size::new(1024.0, 800.0);
+
+/// Open the main window with the app's standard settings. `visible=false`
+/// is the clean path for `start_to_tray`: iced plumbs it through winit's
+/// `with_visible(false)` so the window never flashes on screen, while iced
+/// still owns the `window::Id` and keeps firing `view()`. Toggling to
+/// visible later is a cheap `Mode::Windowed` / `gain_focus`.
+fn open_main_window_inner(visible: bool) -> (iced::window::Id, Task<iced::window::Id>) {
+    iced::window::open(iced::window::Settings {
+        size: MAIN_WINDOW_SIZE,
+        min_size: Some(iced::Size::new(800.0, 750.0)),
+        decorations: crate::menu::should_use_native_title_bar(),
+        visible,
+        // Required for tray "close to tray": without this, the OS-sent
+        // `CloseRequested` event would close the window before our
+        // `WindowCommand::Close` handler can choose to hide instead.
+        // The About window keeps the default `true` (never hides).
+        exit_on_close_request: false,
+        platform_specific: main_window_platform_specific(),
+        icon: iced::window::icon::from_file_data(
+            crate::assets::ICON_PNG,
+            Some(image::ImageFormat::Png),
+        )
+        .ok(),
+        ..Default::default()
+    })
+}
+
 impl App {
     pub fn new() -> (Self, Task<Message>) {
         let user_theme = ThemePreference::Light;
+        let settings = Settings::load();
 
-        // Open the main window via `window::open` — daemon mode doesn't
-        // create a window automatically (unlike `iced::application`).
-        let main_size = iced::Size::new(1024.0, 800.0);
-        let (main_id, open_task) = iced::window::open(iced::window::Settings {
-            size: main_size,
-            min_size: Some(iced::Size::new(800.0, 750.0)),
-            decorations: crate::menu::should_use_native_title_bar(),
-            platform_specific: main_window_platform_specific(),
-            icon: iced::window::icon::from_file_data(
-                crate::assets::ICON_PNG,
-                Some(image::ImageFormat::Png),
-            )
-            .ok(),
-            ..Default::default()
-        });
+        // Build the tray up-front if any tray-related setting is on, so
+        // `start_to_tray` has something to live in and user clicks find it
+        // immediately. Tray build failure → log + fall through without.
+        let mut tray = None;
+        if settings.wants_tray() {
+            tray = crate::tray::build();
+            if tray.is_none() {
+                tracing::warn!("tray requested by settings but failed to initialise");
+            }
+        }
 
+        // Always open the main window; when `start_to_tray` is on (and the
+        // tray actually initialised), open it hidden so the user sees only
+        // the tray. Toggling later is a cheap `set_mode` flip instead of a
+        // full `window::open`.
+        let visible = !(settings.start_to_tray && tray.is_some());
+        let (main_id, open_task) = open_main_window_inner(visible);
         let mut windows = HashMap::new();
-        windows.insert(main_id, WindowInfo::new(WindowKind::Main, main_size));
+        windows.insert(main_id, WindowInfo::new(WindowKind::Main, MAIN_WINDOW_SIZE));
 
         // Discover users in `<workspace-root>/data/` and open one SQLite DB
         // per user. Runs as a regular async task on iced's tokio multi-thread
@@ -142,6 +182,8 @@ impl App {
             theme: ThemeState::new(user_theme),
             windows,
             native_menu: None,
+            settings,
+            tray,
             toasts: Vec::new(),
             clipboard: ClipboardManager::new(),
         };
@@ -168,18 +210,25 @@ impl App {
         // closure (iced enforces this at const-eval time), and we need
         // the id bound into the emitted message for daemon-readiness.
         // The same listener also forwards `window::Event::Resized` so the
-        // app can drive a responsive layout (vault detail pane vs sheet).
+        // app can drive a responsive layout, and `CloseRequested` so
+        // close-to-tray can intercept OS-native close actions.
         let event_sub = iced::event::listen_with(|event, _status, id| match event {
             iced::Event::Keyboard(ev) => Some(Message::Window(WindowMessage::KeyPressed(id, ev))),
             iced::Event::Window(iced::window::Event::Resized(size)) => {
                 Some(Message::Window(WindowMessage::Resized(id, size)))
             }
+            iced::Event::Window(iced::window::Event::CloseRequested) => {
+                Some(Message::Window(WindowMessage::CloseRequested(id)))
+            }
             _ => None,
         });
 
-        let native_menu_sub = if self.native_menu.is_some() {
+        // muda's `MenuEvent::receiver()` is global — both the native app
+        // menu and the tray menu dispatch to it. Tray clicks come through
+        // `TrayIconEvent::receiver()` but we poll both on the same tick.
+        let muda_sub = if self.native_menu.is_some() || self.tray.is_some() {
             time::every(std::time::Duration::from_millis(16))
-                .map(|_| Message::System(SystemMessage::PollNativeMenu))
+                .map(|_| Message::System(SystemMessage::PollMudaAndTray))
         } else {
             Subscription::none()
         };
@@ -196,7 +245,15 @@ impl App {
             Subscription::none()
         };
 
-        Subscription::batch([close_sub, event_sub, native_menu_sub, theme_sub, totp_sub])
+        // Second-launch wake-up: the listener is bound once, inside this
+        // stream, and kept alive across `update()` cycles because iced
+        // hashes the subscription identity from the `fn` pointer.
+        let wake_sub = Subscription::run(crate::instance_lock::wake_stream)
+            .map(|_| Message::System(SystemMessage::InstanceWakeRequested));
+
+        Subscription::batch([
+            close_sub, event_sub, muda_sub, theme_sub, totp_sub, wake_sub,
+        ])
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
