@@ -18,3 +18,13 @@ pub const WAVE_ICON: &[u8] = include_bytes!("../../../assets/wave-icon.svg");
 pub const BITWARDEN_SHIELD: &[u8] = include_bytes!("../../../assets/bitwarden-shield.svg");
 pub const PASSWORD_MANAGER_LOGO: &[u8] =
     include_bytes!("../../../assets/password-manager-logo.svg");
+
+// Tray icon — vendored from `clients/apps/desktop/src/images/`. Per-OS so we
+// get the best asset (ICO on Windows for multi-res, template PNG on macOS for
+// menubar theming, regular PNG on Linux).
+#[cfg(target_os = "windows")]
+pub const TRAY_ICON: &[u8] = include_bytes!("../../../assets/tray/icon.ico");
+#[cfg(target_os = "macos")]
+pub const TRAY_ICON: &[u8] = include_bytes!("../../../assets/tray/icon-template.png");
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
+pub const TRAY_ICON: &[u8] = include_bytes!("../../../assets/tray/icon.png");

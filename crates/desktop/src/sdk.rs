@@ -18,7 +18,7 @@
 use std::{
     collections::HashMap,
     io::BufReader,
-    path::{Path, PathBuf},
+    path::Path,
     str::FromStr,
     sync::{Arc, Mutex},
 };
@@ -161,13 +161,7 @@ impl ClientExt for PasswordManagerClient {
     }
 }
 
-/// Workspace-root `data/` folder. Resolved from cwd — the app is expected to be
-/// launched from the workspace root (`cargo run`).
-fn data_dir() -> PathBuf {
-    std::env::current_dir()
-        .expect("cwd is readable")
-        .join("data")
-}
+use crate::paths::data_dir;
 
 impl ClientManager {
     /// Placeholder manager with no users. Used as the initial value while

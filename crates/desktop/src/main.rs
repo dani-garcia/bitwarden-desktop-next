@@ -5,10 +5,14 @@ mod assets;
 mod clipboard;
 mod components;
 mod i18n;
+mod instance_lock;
 mod menu;
+mod paths;
 mod sdk;
+mod settings;
 mod state;
 mod theme;
+mod tray;
 mod views;
 
 /// Convenience wrapper around [`i18n_embed_fl::fl!`] that passes our static
@@ -55,6 +59,15 @@ pub const APP_FONT_BOLD: Font = Font {
 fn main() -> iced::Result {
     init_tracing();
     i18n::init();
+
+    // Single-instance guard: if another process is already running, tell it
+    // to surface its window and exit. Otherwise take over as the primary —
+    // `wake_stream` will bind the listener once iced's tokio runtime is up.
+    if instance_lock::notify_primary_if_running() {
+        tracing::info!("Bitwarden Desktop already running; signalled primary. Exiting.");
+        return Ok(());
+    }
+    instance_lock::cleanup_stale_socket();
 
     sdk::ClientManager::verify_data_dir();
 

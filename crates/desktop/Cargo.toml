@@ -46,13 +46,14 @@ i18n-embed = { version = "0.16", features = [
     "desktop-requester",
 ] }
 i18n-embed-fl = "0.10"
-muda = "0.18"
+muda = "0.17"
 open = "5"
 rust-embed = "8"
 serde = { workspace = true }
 serde_json = { workspace = true }
 system-theme = "0.3"
-tokio = { workspace = true, features = ["rt"] }
+tokio = { workspace = true, features = ["rt", "net", "io-util"] }
+tray-icon = "0.22"
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 url = "2"

@@ -325,3 +325,8 @@ menu-help-browser-extension = Obtener extensión del navegador
 menu-help-troubleshooting = Solución de problemas
 menu-help-troubleshooting-gpu = Alternar aceleración por hardware
 menu-help-about = Acerca de Bitwarden
+
+## Bandeja
+tray-show-hide = Mostrar / Ocultar
+tray-lock-vault = Bloquear caja fuerte
+tray-exit = Salir

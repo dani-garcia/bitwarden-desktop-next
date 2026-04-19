@@ -327,3 +327,8 @@ menu-help-browser-extension = Get browser extension
 menu-help-troubleshooting = Troubleshooting
 menu-help-troubleshooting-gpu = Toggle hardware acceleration
 menu-help-about = About Bitwarden
+
+## Tray
+tray-show-hide = Show / Hide
+tray-lock-vault = Lock vault
+tray-exit = Exit

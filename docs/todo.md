@@ -50,11 +50,15 @@ Features that complete the happy paths users expect. No architectural work requi
 - **Account switcher dropdown visual update** — match 2025 Figma (Lock/Logout buttons, Options section).
 - **Shared behavioral helper** — `AccountSwitcherMessage` handling is ~15 lines duplicated in `LoginView::update` and `VaultView::update`. Extract a `handle_switcher_msg(msg, &mut open) -> SwitcherOutcome` free function in `components/account_switcher.rs` that returns a small outcome enum each view maps to its own event type. Only worth doing when a third caller appears or when the logic diverges.
 
-### Tray icon
+### Tray icon — Linux packaging
 
-Use the `tray-icon` crate (sister to `muda`, same raw window handle approach). Show the Bitwarden shield icon with a right-click context menu (Lock / Quit). Handle tray-icon click to show/hide the main window.
+The tray itself ships as of this change (see `crates/desktop/src/tray.rs`, four tray-adjacent settings in `data/settings.json`, single-instance wake-up). Residual Linux work:
 
-**Note:** iced [PR #3021](https://github.com/iced-rs/iced/pull/3021) adds native tray support but is still open (targeting 1.0), so use the `tray-icon` crate directly for now.
+- Add `libayatana-appindicator3-1` as a runtime dep in the `.deb` / `.rpm` produced by `cargo run --bin packager`.
+- Note the requirement in the Linux install README (without it or an SNI host, `tray::build()` returns `None` and tray settings become no-ops; this is intentional but should be documented).
+- Verify GNOME + AppIndicator extension, KDE Plasma, and sway + waybar behaviour on a test VM.
+
+**Note:** iced [PR #3021](https://github.com/iced-rs/iced/pull/3021) adds native tray support but is still open (targeting 1.0). If it lands on our pin, re-evaluate swapping our `tray-icon` dep for the native path.
 
 ### Right-click context menu for text inputs
 
