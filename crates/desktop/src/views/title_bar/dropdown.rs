@@ -116,7 +116,7 @@ fn render_entry<'a>(
         colors.text_muted
     };
 
-    let label_text = text(crate::i18n::lookup(entry.label))
+    let label_text = text(entry.display_label())
         .size(14)
         .color(label_color);
 
@@ -202,7 +202,7 @@ fn render_submenu_item<'a>(
         colors.text_muted
     };
 
-    let label_text = text(crate::i18n::lookup(entry.label))
+    let label_text = text(entry.display_label())
         .size(14)
         .color(label_color);
 

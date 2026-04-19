@@ -190,6 +190,10 @@ pub struct MenuEntry {
     pub enabled: EnabledWhen,
     pub action: Option<MenuAction>,
     pub children: &'static [MenuEntry],
+    /// When `true`, `label` is rendered verbatim instead of being looked up
+    /// as a Fluent key. Use `L()` instead of `E()` for brand names and
+    /// platform names ("Chrome", "iOS", …) that shouldn't be translated.
+    pub literal: bool,
 }
 
 /// Separator constant.
@@ -199,9 +203,10 @@ const SEP: MenuEntry = MenuEntry {
     enabled: EnabledWhen::Always,
     action: None,
     children: &[],
+    literal: false,
 };
 
-/// Start building a menu entry.
+/// Start building a menu entry. `label` is a Fluent message ID.
 #[allow(non_snake_case)]
 const fn E(label: &'static str) -> MenuEntry {
     MenuEntry {
@@ -210,6 +215,22 @@ const fn E(label: &'static str) -> MenuEntry {
         enabled: EnabledWhen::Always,
         action: None,
         children: &[],
+        literal: false,
+    }
+}
+
+/// Start building a menu entry with a **literal** label — rendered verbatim,
+/// no Fluent lookup. Use for brand names and platform names that shouldn't
+/// be translated (Chrome, Firefox, iOS, Android, …).
+#[allow(non_snake_case)]
+const fn L(label: &'static str) -> MenuEntry {
+    MenuEntry {
+        label,
+        shortcut: None,
+        enabled: EnabledWhen::Always,
+        action: None,
+        children: &[],
+        literal: true,
     }
 }
 
@@ -255,6 +276,16 @@ impl MenuEntry {
 
     pub fn shortcut_display(&self) -> Option<String> {
         self.shortcut.map(|s| s.display())
+    }
+
+    /// Display string for this entry — either the literal label or the
+    /// resolved Fluent translation.
+    pub fn display_label(&self) -> String {
+        if self.literal {
+            self.label.to_string()
+        } else {
+            crate::i18n::lookup(self.label)
+        }
     }
 }
 
@@ -371,25 +402,25 @@ pub const MENUS: &[(&str, &[MenuEntry])] = &[
             E("menu-help-bug"),
             E("menu-help-legal").sub(&[E("menu-help-legal-tos"), E("menu-help-legal-privacy")]),
             SEP,
-            // Social platform names: brand names, not localized
+            // Social platform names: brand names, not localized — see `L()`
             E("menu-help-follow").sub(&[
-                E("Blog"),
-                E("Twitter"),
-                E("Facebook"),
-                E("GitHub"),
-                E("Mastodon"),
+                L("Blog"),
+                L("Twitter"),
+                L("Facebook"),
+                L("GitHub"),
+                L("Mastodon"),
             ]),
             SEP,
             E("menu-help-web-vault"),
             SEP,
-            // Mobile / browser names: not localized
-            E("menu-help-mobile-app").sub(&[E("iOS"), E("Android")]),
+            // Mobile / browser names: not localized — see `L()` constructor
+            E("menu-help-mobile-app").sub(&[L("iOS"), L("Android")]),
             E("menu-help-browser-extension").sub(&[
-                E("Chrome"),
-                E("Firefox"),
-                E("Opera"),
-                E("Edge"),
-                E("Safari"),
+                L("Chrome"),
+                L("Firefox"),
+                L("Opera"),
+                L("Edge"),
+                L("Safari"),
             ]),
             SEP,
             E("menu-help-troubleshooting").sub(&[E("menu-help-troubleshooting-gpu")]),
@@ -539,12 +570,12 @@ fn append_entries_to_submenu(
             if entry.is_separator() {
                 Box::new(PredefinedMenuItem::separator())
             } else if !entry.children.is_empty() {
-                let sub = Submenu::new(crate::i18n::lookup(entry.label), true);
+                let sub = Submenu::new(entry.display_label(), true);
                 append_entries_to_submenu(&sub, entry.children, actions, items);
                 Box::new(sub)
             } else {
                 let accel = entry.shortcut.and_then(|s| s.to_accelerator());
-                let item = MudaMenuItem::new(crate::i18n::lookup(entry.label), true, accel);
+                let item = MudaMenuItem::new(entry.display_label(), true, accel);
                 if let Some(action) = entry.action {
                     actions.insert(item.id().clone(), action);
                 }
