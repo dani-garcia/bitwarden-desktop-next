@@ -4,8 +4,10 @@ pub mod buttons;
 pub mod drop_down;
 pub mod icons;
 pub mod inputs;
+pub mod modal;
 pub mod spinner;
 pub mod toast;
+pub mod totp;
 pub mod virtual_list;
 
 use iced::{

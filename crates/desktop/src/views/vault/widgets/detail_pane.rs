@@ -19,8 +19,11 @@ pub enum DetailPaneMessage {
     CopyUsername,
     CopyPassword,
     CopyUrl,
+    CopyTotp,
     OpenUrl,
     Edit,
+    /// Trash icon pressed — opens the confirm modal (handled at the vault
+    /// view layer). Does not actually delete by itself.
     Delete,
 }
 
@@ -171,6 +174,14 @@ fn login_card<'a>(
             fl!("detail-field-password"),
             password,
             Some(DetailPaneMessage::CopyPassword),
+            colors,
+        ));
+    }
+
+    if let Some(totp) = login.totp.as_deref().filter(|s| !s.is_empty()) {
+        fields.push(components::totp::view(
+            totp,
+            DetailPaneMessage::CopyTotp,
             colors,
         ));
     }

@@ -4,6 +4,10 @@ Tasks are organized into four rough tiers by priority. Within a tier, pick what'
 most unblocking or most interesting — the tiers are not a strict ordering. Completed
 work isn't tracked here; check `git log` or [docs/decisions.md](./decisions.md) for context.
 
+**Keep this file in sync.** When you finish (or partially finish) a task, update or
+remove its entry in the same change — don't leave it for later. Reduced scope is fine
+(shrink the entry to what's still left) as long as the remaining work is still correct.
+
 ## Contents
 
 - [Tier 1 — Do Next](#tier-1--do-next)
@@ -17,40 +21,20 @@ work isn't tracked here; check `git log` or [docs/decisions.md](./decisions.md) 
 
 These are the highest-value tasks with no architectural prerequisites. Doing them soon unblocks everything else or closes UX gaps users would notice immediately.
 
-### Wire copy buttons in detail pane to clipboard
-
-Use `arboard` crate or iced clipboard API. The detail pane buttons exist but are stubs today — this is the most-noticed missing feature when manually testing.
-
-### Mask SSH private keys and card CVVs in the detail pane
-
-The edit form (`cipher_form`) already hides these behind a self-toggling reveal via `components::reveal_input`. The read-only **detail pane** (`views/vault/widgets/detail_pane.rs`) still renders `key.private_key` and `card.code` as plaintext. Match the official app: default to masked (bullets), show a reveal toggle per field. Factor out a `reveal_field(label, value, revealed, on_toggle)` helper if a second field wants it — or see if `reveal_input` can be adapted to a read-only variant.
-
-### Consistent naming for input primitives
-
-Today `components::inputs` exposes `floating_label_input`, `floating_label_pick_list`, and `floating_label_frame`, while the same visual idiom is also wrapped by `components::reveal_input::reveal_input` / `reveal_input_with_submit` and cipher_form's `labeled_dropdown` (the collections multi-select). Settle on one scheme so readers don't have to guess — candidates: everything under `components::inputs::{floating_label_*}`, or everything `{primitive}_input` / `{primitive}_frame`. Whichever wins, rename the stragglers and add a one-line convention note at the top of `components/inputs.rs`.
-
-### Try `combo_box` for folder / organization / collection pickers
-
-iced's `combo_box` is a searchable dropdown (text filter + option list). With 50+ folders or collections in a real vault, `pick_list` becomes scrollable-only — a combo_box would let users type to filter. Add a `floating_label_combo_box` alongside `floating_label_pick_list` in `components::inputs`, and try it for the folder selector first. Worth evaluating visually + keyboard-wise before converting the others.
-
 ### Sanitize remaining SDK error echoes into toasts
 
 `LoginMessage::UnlockCompleted` now shows "Check your master password and try again" instead of the raw SDK error. Apply the same treatment to any future toast paths that surface SDK errors. Rule: raw `e.to_string()` goes to `tracing::warn!`/`error!`, the user sees a short sanitized string.
 
-### Migrate remaining views to `fl!`
+### Finish `fl!` migration stragglers in `cipher_form.rs`
 
-The i18n infrastructure landed — `i18n-embed` + `i18n-embed-fl` with Fluent `.ftl` files under `assets/i18n/`, convenience `fl!` macro at the crate root, and the **login view** fully converted as the pilot. See [decisions.md → Localization](./decisions.md#localization-i18n-embed--fluent) for the architecture.
+Almost every view is on Fluent now (`assets/i18n/en/bitwarden_desktop_next.ftl` has ~240 keys). The holdouts are all hardcoded constant strings in [crates/desktop/src/views/vault/widgets/cipher_form.rs](../crates/desktop/src/views/vault/widgets/cipher_form.rs):
 
-Remaining work is mechanical — each view gets a `use crate::fl;` import and `"literal"` → `fl!("key")` substitutions, with new keys added to `assets/i18n/en/bitwarden_desktop_next.ftl`:
+- Card brand literals ("Visa", "Mastercard", "Amex", …) in the card-brand pick list (~line 1380).
+- Identity title literals ("Mr", "Mrs", "Ms", "Mx", "Dr") (~line 1437).
+- `FolderChoice::None` display "No folder" (~line 82).
+- `OrgChoice::Personal` display "Personal (me)" (~line 108).
 
-- **Vault view** — sidebar labels ("All items", "Favorites", "Trash"), item list placeholders, empty-state text, search bar placeholder, TOTP label.
-- **Cipher form** (`cipher_form.rs`) — the largest string set: 30+ field labels ("Name", "Username", "Notes", "URI", card fields, identity fields, SSH key fields, etc.), the new-field dropdown, the dialogs / empty states.
-- **Detail pane** — section headings, copy-button tooltips, "No folder" placeholder, history, attachments.
-- **Account switcher** — "Lock", "Log out", "Add account", "Options".
-- **Toasts across the app** — any `Toast::*("literal body", Some("literal title"))` still using English literals (already done in login).
-- **About dialog**, **menu labels**, **window titles**.
-
-When touching a view for other reasons, migrate its strings opportunistically — avoid a single mega-PR. Bonus task: add a `settings` view with a language dropdown that calls `i18n_embed::select(...)` on change (re-renders automatically on iced's next frame).
+Bonus task: add a `settings` view with a language dropdown that calls `i18n_embed::select(...)` on change (re-renders automatically on iced's next frame).
 
 ---
 
@@ -64,11 +48,6 @@ Features that complete the happy paths users expect. No architectural work requi
 - **Master password hint request** — "Get master password hint" link on login password screen sends a hint request to the server.
 - **Self-hosted server URL modal** — server selector's "Self-hosted" option should open a modal to input custom server URL. (Depends on the modal framework work in Tier 3.)
 - **SSO login flow** — "Use single sign-on" button on login email screen. Needs SSO provider selection + browser redirect.
-
-### Detail pane completion
-
-- **Wire delete button** — Edit already flips the pane to `cipher_form` (save encrypts via `ClientManager::save_cipher` and writes to the per-user SQLite repo). Delete is still a stub; should confirm then call the SDK.
-- **TOTP circular timer** — currently placeholder text.
 
 ### Account switcher polish
 

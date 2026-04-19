@@ -4,7 +4,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use bitwarden_vault::{CipherId, CipherListView, CipherListViewType, CipherView};
 use iced::{
-    Alignment, Border, Element, Fill, Padding, Task,
+    Alignment, Border, Element, Fill, Length, Padding, Task,
     widget::{Space, column, container, pane_grid, row, text},
 };
 
@@ -52,6 +52,12 @@ pub enum VaultMessage {
     CloseDetailPane,
     PaneResized(pane_grid::ResizeEvent),
     NewItem,
+    /// User confirmed the delete in the modal — fire the SDK soft-delete.
+    ConfirmDeleteSelected,
+    /// User dismissed the delete modal (Cancel, backdrop click, etc.).
+    CancelDeleteSelected,
+    /// 1 Hz subscription tick — refreshes the TOTP code + countdown ring.
+    TotpTick,
     /// Fires when the async `ClientManager::list_ciphers` task completes.
     ListLoaded(UserId, Result<Vec<Arc<CipherListView>>, String>),
     /// Fires when the async `ClientManager::full_cipher` task completes.
@@ -66,6 +72,8 @@ pub enum VaultMessage {
     CollectionsLoaded(UserId, Vec<Collection>),
     /// Fires when `ClientManager::save_cipher` finishes.
     SaveCompleted(UserId, Result<Box<CipherView>, String>),
+    /// Fires when `ClientManager::soft_delete_cipher` finishes.
+    DeleteCompleted(UserId, CipherId, Result<(), String>),
 }
 
 // iced debug-formats every update Message and warns if it takes >1ms. The
@@ -87,6 +95,9 @@ impl std::fmt::Debug for VaultMessage {
             Self::CloseDetailPane => f.write_str("CloseDetailPane"),
             Self::PaneResized(e) => f.debug_tuple("PaneResized").field(e).finish(),
             Self::NewItem => f.write_str("NewItem"),
+            Self::ConfirmDeleteSelected => f.write_str("ConfirmDeleteSelected"),
+            Self::CancelDeleteSelected => f.write_str("CancelDeleteSelected"),
+            Self::TotpTick => f.write_str("TotpTick"),
             Self::ListLoaded(uid, result) => {
                 let mut t = f.debug_tuple("ListLoaded");
                 t.field(uid);
@@ -134,6 +145,12 @@ impl std::fmt::Debug for VaultMessage {
                 };
                 t.finish()
             }
+            Self::DeleteCompleted(uid, id, result) => f
+                .debug_tuple("DeleteCompleted")
+                .field(uid)
+                .field(id)
+                .field(result)
+                .finish(),
         }
     }
 }
@@ -184,6 +201,10 @@ pub struct Selection {
     pub id: Option<CipherId>,
     pub detail: Option<CipherView>,
     pub form: Option<CipherForm>,
+    /// Armed-delete state for the detail pane's inline confirm row.
+    /// Reset when selection changes (via `clear()`), when the user cancels,
+    /// or when any non-delete detail-pane message arrives.
+    pub confirm_delete: bool,
 }
 
 impl Selection {
@@ -473,9 +494,68 @@ impl VaultView {
                         None => (Task::none(), None),
                     }
                 }
-                // Delete stays unhandled for this pass.
-                DetailPaneMessage::Delete | DetailPaneMessage::Close => (Task::none(), None),
+                DetailPaneMessage::CopyTotp => {
+                    // Recompute the code at the moment of copy so the
+                    // clipboard holds a value that's still valid for ~30 s.
+                    let secret = self
+                        .selection
+                        .detail
+                        .as_ref()
+                        .and_then(|c| c.login.as_ref())
+                        .and_then(|l| l.totp.as_deref())
+                        .map(str::to_owned);
+                    match secret.and_then(|s| {
+                        bitwarden_vault::generate_totp(s, None)
+                            .ok()
+                            .map(|r| r.code)
+                    }) {
+                        Some(code) => (
+                            Task::none(),
+                            Some(VaultEvent::ClipboardCopyRequested {
+                                value: code,
+                                sensitivity: Sensitivity::Sensitive,
+                                toast_label: fl!("vault-toast-copied-totp"),
+                            }),
+                        ),
+                        None => (Task::none(), None),
+                    }
+                }
+                DetailPaneMessage::Delete => {
+                    // Open the confirm modal. Actual delete waits for the
+                    // user to press Confirm (`ConfirmDeleteSelected`).
+                    self.selection.confirm_delete = true;
+                    (Task::none(), None)
+                }
+                // Close is intercepted at the caller's `.map()` and never
+                // reaches this match — kept for exhaustiveness.
+                DetailPaneMessage::Close => (Task::none(), None),
             },
+            VaultMessage::CancelDeleteSelected => {
+                self.selection.confirm_delete = false;
+                (Task::none(), None)
+            }
+            VaultMessage::TotpTick => {
+                // No state to mutate — the detail pane recomputes the TOTP
+                // code and countdown from the current clock on each render,
+                // so we just need the message to flow through `update()` to
+                // trigger an iced redraw.
+                (Task::none(), None)
+            }
+            VaultMessage::ConfirmDeleteSelected => {
+                self.selection.confirm_delete = false;
+                let Some(cipher_id) = self.selection.id else {
+                    return (Task::none(), None);
+                };
+                let Some(uid) = active_user.copied() else {
+                    return (Task::none(), None);
+                };
+                let mgr = client_manager.clone();
+                let task = Task::perform(
+                    async move { mgr.soft_delete_cipher(&uid, cipher_id).await },
+                    move |res| VaultMessage::DeleteCompleted(uid, cipher_id, res),
+                );
+                (task, None)
+            }
             VaultMessage::CipherForm(form_msg) => {
                 let Some(form) = self.selection.form.as_mut() else {
                     return (Task::none(), None);
@@ -570,6 +650,34 @@ impl VaultView {
                     }
                 }
             }
+            VaultMessage::DeleteCompleted(msg_uid, cipher_id, result) => {
+                if active_user != Some(&msg_uid) {
+                    return (Task::none(), None);
+                }
+                match result {
+                    Ok(()) => {
+                        self.selection.clear();
+                        let reload = Self::load_list_task(msg_uid, client_manager);
+                        (
+                            reload,
+                            Some(VaultEvent::ToastRequested(Toast::success(
+                                fl!("vault-toast-item-deleted"),
+                                None,
+                            ))),
+                        )
+                    }
+                    Err(err) => {
+                        tracing::error!(cipher_id = %cipher_id, %err, "soft_delete_cipher failed");
+                        (
+                            Task::none(),
+                            Some(VaultEvent::ToastRequested(Toast::error(
+                                fl!("vault-toast-delete-failed-body"),
+                                Some(&fl!("vault-toast-delete-failed-title")),
+                            ))),
+                        )
+                    }
+                }
+            }
             VaultMessage::AccountSwitcher(asm) => match asm {
                 AccountSwitcherMessage::ToggleDropdown => {
                     self.account_switcher_open = !self.account_switcher_open;
@@ -657,6 +765,18 @@ impl VaultView {
         if let Some(form) = self.selection.form.as_mut() {
             form.dismiss_dropdowns();
         }
+    }
+
+    /// `true` when the currently-selected cipher is a login with a
+    /// non-empty `totp` field. Drives the 1 Hz subscription that refreshes
+    /// the detail pane's TOTP code + countdown ring.
+    pub fn has_totp_selected(&self) -> bool {
+        self.selection
+            .detail
+            .as_ref()
+            .and_then(|c| c.login.as_ref())
+            .and_then(|l| l.totp.as_deref())
+            .is_some_and(|s| !s.is_empty())
     }
 
     /// Recompute the filtered item list for a specific user. Uses the
@@ -848,6 +968,62 @@ impl VaultView {
             pane,
             SHEET_TOP_INSET_PX,
             Some(VaultMessage::CloseDetailPane),
+        ))
+    }
+
+    /// Returns the delete-confirmation modal when armed, `None` otherwise.
+    /// Composed by the App on top of the vault view so the backdrop covers
+    /// the sidebar and title bar.
+    pub fn modal_view<'a>(
+        &'a self,
+        colors: &'a AppColors,
+    ) -> Option<Element<'a, VaultMessage, AppTheme>> {
+        if !self.selection.confirm_delete {
+            return None;
+        }
+        let item_name = self
+            .selection
+            .detail
+            .as_ref()
+            .map(|c| c.name.as_str())
+            .unwrap_or("");
+
+        let title = text(fl!("vault-delete-modal-title"))
+            .size(18)
+            .color(colors.text_primary)
+            .font(crate::APP_FONT_BOLD);
+        let body = text(fl!("vault-delete-modal-body", name = item_name))
+            .size(14)
+            .color(colors.text_primary);
+
+        let cancel_btn = buttons::secondary(text(fl!("vault-delete-modal-cancel")).size(14))
+            .on_press(VaultMessage::CancelDeleteSelected)
+            .padding([8, 20]);
+        let confirm_btn = buttons::primary(text(fl!("vault-delete-modal-confirm")).size(14))
+            .on_press(VaultMessage::ConfirmDeleteSelected)
+            .padding([8, 20]);
+
+        let dialog_inner: Element<'_, VaultMessage, AppTheme> = column![
+            title,
+            body,
+            row![Space::new().width(Fill), cancel_btn, confirm_btn]
+                .spacing(8)
+                .align_y(Alignment::Center),
+        ]
+        .spacing(12)
+        .padding(Padding::from([16, 20]))
+        .width(Length::Fixed(380.0))
+        .into();
+
+        let dialog = container(dialog_inner).style(|theme: &AppTheme| {
+            container::Style::default()
+                .background(theme.colors.card_bg)
+                .border(Border::default().rounded(crate::theme::RADIUS_LG))
+        });
+
+        Some(crate::components::modal::view(
+            dialog.into(),
+            VaultMessage::CancelDeleteSelected,
         ))
     }
 

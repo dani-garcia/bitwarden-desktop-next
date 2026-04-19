@@ -80,6 +80,14 @@ vault-toast-decrypt-failed-body = No se pudo cargar el elemento. Inténtalo de n
 vault-toast-copied-username = Usuario copiado
 vault-toast-copied-password = Contraseña copiada
 vault-toast-copied-website = Sitio web copiado
+vault-toast-copied-totp = Código de verificación copiado
+vault-toast-item-deleted = Elemento movido a la papelera
+vault-toast-delete-failed-title = Fallo al eliminar
+vault-toast-delete-failed-body = No se pudo eliminar el elemento. Inténtalo de nuevo.
+vault-delete-modal-title = ¿Eliminar elemento?
+vault-delete-modal-body = "{ $name }" se moverá a la papelera.
+vault-delete-modal-cancel = Cancelar
+vault-delete-modal-confirm = Eliminar
 
 ## Account switcher
 account-switcher-locked-suffix = (bloqueada)
@@ -106,6 +114,8 @@ detail-field-name = Nombre
 detail-field-notes = Notas
 detail-field-username = Nombre de usuario
 detail-field-password = Contraseña
+detail-field-totp = Código de verificación (TOTP)
+detail-totp-invalid = Semilla TOTP no válida
 detail-field-website = Sitio web
 detail-field-cardholder-name = Titular de la tarjeta
 detail-field-brand = Marca

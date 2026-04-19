@@ -343,13 +343,16 @@ impl ClientManager {
             .map_err(|e| e.to_string())?;
         let ciphers = repo.list().await.map_err(|e| e.to_string())?;
 
-        entry
+        let mut list: Vec<CipherListView> = entry
             .client
             .vault()
             .ciphers()
             .decrypt_list(ciphers)
             .await
-            .map_err(|e| e.to_string())
+            .map_err(|e| e.to_string())?;
+
+        list.sort_by(|a, b| a.name.cmp(&b.name));
+        Ok(list)
     }
 
     /// Fully decrypt a single cipher (including secrets like passwords). Used when the user
@@ -433,6 +436,36 @@ impl ClientManager {
             .decrypt(cipher)
             .await
             .map_err(|e| e.to_string())
+    }
+
+    /// Soft-delete a cipher by marking `deleted_date` and writing it back to
+    /// the local SQLite repo. Skips the server PUT in
+    /// `CiphersClient::soft_delete()` since the app runs without a backend.
+    pub async fn soft_delete_cipher(
+        &self,
+        user_id: &UserId,
+        cipher_id: CipherId,
+    ) -> Result<(), String> {
+        let entry = self
+            .users
+            .get(user_id)
+            .ok_or_else(|| format!("unknown user {user_id}"))?;
+
+        let repo = entry
+            .client
+            .platform()
+            .state()
+            .get::<Cipher>()
+            .map_err(|e| e.to_string())?;
+        let mut cipher = repo
+            .get(cipher_id)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("cipher {cipher_id} not found"))?;
+        // `Cipher::soft_delete()` is `pub(crate)` in bitwarden-vault, but
+        // `deleted_date` is a public field so we can set it directly.
+        cipher.deleted_date = Some(chrono::Utc::now());
+        repo.set(cipher_id, cipher).await.map_err(|e| e.to_string())
     }
 
     /// Decrypt the user's folders for the edit form's folder selector.

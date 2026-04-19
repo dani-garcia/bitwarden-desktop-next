@@ -80,6 +80,14 @@ vault-toast-decrypt-failed-body = Couldn't load the item. Try again.
 vault-toast-copied-username = Username copied
 vault-toast-copied-password = Password copied
 vault-toast-copied-website = Website copied
+vault-toast-copied-totp = Verification code copied
+vault-toast-item-deleted = Item moved to trash
+vault-toast-delete-failed-title = Delete failed
+vault-toast-delete-failed-body = Couldn't delete the item. Try again.
+vault-delete-modal-title = Delete item?
+vault-delete-modal-body = "{ $name }" will be moved to the trash.
+vault-delete-modal-cancel = Cancel
+vault-delete-modal-confirm = Delete
 
 ## Account switcher
 account-switcher-locked-suffix = (locked)
@@ -106,6 +114,8 @@ detail-field-name = Name
 detail-field-notes = Notes
 detail-field-username = Username
 detail-field-password = Password
+detail-field-totp = Verification code (TOTP)
+detail-totp-invalid = Invalid TOTP seed
 detail-field-website = Website
 detail-field-cardholder-name = Cardholder name
 detail-field-brand = Brand

@@ -187,7 +187,16 @@ impl App {
         let theme_sub = Subscription::run_with(self.theme.system.clone(), |st| st.subscribe())
             .map(|_| Message::System(SystemMessage::ThemeChanged));
 
-        Subscription::batch([close_sub, event_sub, native_menu_sub, theme_sub])
+        // 1 Hz tick — only active while the detail pane shows a login with
+        // a TOTP secret, so the code + countdown ring refresh live.
+        let totp_sub = if self.screen == Screen::Vault && self.vault_view.has_totp_selected() {
+            time::every(std::time::Duration::from_secs(1))
+                .map(|_| Message::Vault(vault::VaultMessage::TotpTick))
+        } else {
+            Subscription::none()
+        };
+
+        Subscription::batch([close_sub, event_sub, native_menu_sub, theme_sub, totp_sub])
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -325,6 +334,15 @@ impl App {
             None
         };
 
+        // Delete-confirmation modal — same hoisting rule as the sheet.
+        let modal: Option<Element<'_, Message, AppTheme>> = if self.screen == Screen::Vault {
+            self.vault_view
+                .modal_view(colors)
+                .map(|el| el.map(Message::Vault))
+        } else {
+            None
+        };
+
         if crate::menu::should_use_custom_menu_bar() {
             let menu_state = self.menu_state();
             let tb = self
@@ -337,8 +355,12 @@ impl App {
                 Some(sheet) => iced::widget::stack![main_column, sheet].into(),
                 None => main_column,
             };
+            let with_modal: Element<'_, Message, AppTheme> = match modal {
+                Some(modal) => iced::widget::stack![with_sheet, modal].into(),
+                None => with_sheet,
+            };
             let with_toasts: Element<'_, Message, AppTheme> =
-                toast::Manager::new(with_sheet, &self.toasts, close_toast).into();
+                toast::Manager::new(with_modal, &self.toasts, close_toast).into();
 
             title_bar::resize_wrapper(with_toasts, |dir| {
                 Message::TitleBar(TitleBarMessage::ResizeEdge(dir))
@@ -351,7 +373,11 @@ impl App {
                 Some(sheet) => iced::widget::stack![main_column, sheet].into(),
                 None => main_column,
             };
-            toast::Manager::new(with_sheet, &self.toasts, close_toast).into()
+            let with_modal: Element<'_, Message, AppTheme> = match modal {
+                Some(modal) => iced::widget::stack![with_sheet, modal].into(),
+                None => with_sheet,
+            };
+            toast::Manager::new(with_modal, &self.toasts, close_toast).into()
         }
     }
 }

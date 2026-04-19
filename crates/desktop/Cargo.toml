@@ -5,7 +5,7 @@ edition = "2024"
 license-file = "LICENSE.txt"
 
 [features]
-default = []
+default = ["gpu"]
 
 # Debug overlay with layout bounds, render time, widget IDs. Toggle with F12.
 # Usage: cargo run --features dev
@@ -26,6 +26,7 @@ iced = { workspace = true, features = [
     "tokio",
     "tiny-skia",
     "advanced",   # custom widgets (DropDown, toast)
+    "canvas",     # vector drawing (TOTP countdown ring)
     "svg",
     "image",
     "crisp",      # pixel-snapping for sharp edges on form UI
@@ -38,6 +39,7 @@ iced = { workspace = true, features = [
 arboard = { version = "3.6", default-features = false, features = [
     "wayland-data-control",
 ] }
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 image = "0.25"
 i18n-embed = { version = "0.16", features = [
     "fluent-system",
