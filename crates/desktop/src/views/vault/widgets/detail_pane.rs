@@ -7,7 +7,7 @@ use iced::{
 };
 
 use super::field_helpers::{
-    card_with_margin, field_readonly, icon_button, section_label, styled_card,
+    card_with_margin, field_readonly, format_passkey_date, icon_button, section_label, styled_card,
 };
 use crate::{
     components::{self, buttons, icons, inputs::reveal_field},
@@ -58,16 +58,6 @@ pub fn view<'a>(
                 if !uris.is_empty() {
                     sections.push(section_label(fl!("detail-section-autofill-options"), colors));
                     sections.push(autofill_card(&uris, colors));
-                }
-
-                if let Some(passkey_count) = login
-                    .fido2_credentials
-                    .as_ref()
-                    .map(|c| c.len())
-                    .filter(|n| *n > 0)
-                {
-                    sections.push(section_label(fl!("detail-section-passkeys"), colors));
-                    sections.push(passkeys_card(passkey_count, colors));
                 }
             }
         }
@@ -209,6 +199,20 @@ fn login_card<'a>(
             DetailPaneMessage::CopyTotp,
             colors,
         ));
+    }
+
+    // `fido2_credentials` holds the still-encrypted `Fido2Credential` (the
+    // SDK keeps this field opaque on the view — see the upstream TODO on
+    // `LoginView`). The only plaintext field is `creation_date`, so that's
+    // all we surface here.
+    if let Some(creds) = login.fido2_credentials.as_deref() {
+        for cred in creds {
+            fields.push(field_readonly(
+                fl!("detail-field-passkey"),
+                fl!("detail-field-passkey-created", date = format_passkey_date(cred.creation_date)),
+                colors,
+            ));
+        }
     }
 
     if fields.is_empty() {
@@ -428,25 +432,6 @@ fn custom_field<'a>(
         // target property name, matching the stance in `cipher_form`.
         FieldType::Linked => field_readonly(label, raw_value, colors),
     }
-}
-
-// ---------------------------------------------------------------------------
-// Passkeys
-// ---------------------------------------------------------------------------
-
-fn passkeys_card<'a>(
-    count: usize,
-    colors: &'a AppColors,
-) -> Element<'a, DetailPaneMessage, AppTheme> {
-    // `LoginView::fido2_credentials` is still the encrypted `Fido2Credential`
-    // type in the SDK (see the `TODO: Remove this once the SDK supports state`
-    // comment upstream), so we can only surface presence/count here — no
-    // rp_id, user_name, or creation date is available without a secondary
-    // decrypt call.
-    let rows: Vec<Element<'a, DetailPaneMessage, AppTheme>> = (0..count)
-        .map(|_| field_readonly(fl!("detail-field-passkey"), "●●●●●●●●●●", colors))
-        .collect();
-    card_with_margin(styled_card(column(rows).spacing(12).width(Fill).into()))
 }
 
 // ---------------------------------------------------------------------------

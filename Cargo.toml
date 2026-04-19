@@ -16,8 +16,10 @@ bitwarden-auth = { git = "https://github.com/bitwarden/sdk-internal", rev = "e35
 bitwarden-collections = { git = "https://github.com/bitwarden/sdk-internal", rev = "e352a06cdfc9e179b21d4b7b502b545fcc68b341" }
 bitwarden-core = { git = "https://github.com/bitwarden/sdk-internal", rev = "e352a06cdfc9e179b21d4b7b502b545fcc68b341" }
 bitwarden-crypto = { git = "https://github.com/bitwarden/sdk-internal", rev = "e352a06cdfc9e179b21d4b7b502b545fcc68b341" }
+bitwarden-fido = { git = "https://github.com/bitwarden/sdk-internal", rev = "e352a06cdfc9e179b21d4b7b502b545fcc68b341" }
 bitwarden-logging = { git = "https://github.com/bitwarden/sdk-internal", rev = "e352a06cdfc9e179b21d4b7b502b545fcc68b341" }
 bitwarden-pm = { git = "https://github.com/bitwarden/sdk-internal", rev = "e352a06cdfc9e179b21d4b7b502b545fcc68b341" }
+bitwarden-ssh = { git = "https://github.com/bitwarden/sdk-internal", rev = "e352a06cdfc9e179b21d4b7b502b545fcc68b341" }
 bitwarden-state = { git = "https://github.com/bitwarden/sdk-internal", rev = "e352a06cdfc9e179b21d4b7b502b545fcc68b341" }
 bitwarden-vault = { git = "https://github.com/bitwarden/sdk-internal", rev = "e352a06cdfc9e179b21d4b7b502b545fcc68b341" }
 

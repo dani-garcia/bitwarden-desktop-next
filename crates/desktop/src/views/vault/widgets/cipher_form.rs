@@ -22,7 +22,9 @@ use iced::{
     widget::{Space, checkbox, column, combo_box, container, row, scrollable, text, text_editor},
 };
 
-use super::field_helpers::{card_with_margin, field_readonly, section_label, styled_card};
+use super::field_helpers::{
+    card_with_margin, field_readonly, format_passkey_date, section_label, styled_card,
+};
 use crate::{
     components::{
         self, buttons, icons,
@@ -282,6 +284,8 @@ pub enum CipherFormMessage {
     UriChanged(usize, String),
     UriAdded,
     UriRemoved(usize),
+    /// Remove the passkey at the given index in `login.fido2_credentials`.
+    PasskeyRemoved(usize),
 
     // Card
     CardCardholderChanged(String),
@@ -433,6 +437,14 @@ impl CipherForm {
                     && idx < uris.len()
                 {
                     uris.remove(idx);
+                }
+            }
+            PasskeyRemoved(idx) => {
+                if let Some(l) = self.modified.login.as_mut()
+                    && let Some(creds) = l.fido2_credentials.as_mut()
+                    && idx < creds.len()
+                {
+                    creds.remove(idx);
                 }
             }
 
@@ -751,7 +763,7 @@ fn login_card<'a>(
 ) -> Element<'a, CipherFormMessage, AppTheme> {
     let login = form.modified.login.as_ref().expect("ensure_sub_structs");
 
-    let rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = vec![
+    let mut rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = vec![
         text_field(
             fl!("form-username"),
             login.username.as_deref().unwrap_or(""),
@@ -776,6 +788,30 @@ fn login_card<'a>(
             colors,
         ),
     ];
+
+    // Passkey rows — read-only display of creation date plus a delete
+    if let Some(creds) = login.fido2_credentials.as_deref() {
+        for (idx, cred) in creds.iter().enumerate() {
+            let info = field_readonly(
+                fl!("detail-field-passkey"),
+                fl!("detail-field-passkey-created", date = format_passkey_date(cred.creation_date)),
+                colors,
+            );
+            let remove_btn = buttons::ghost_icon(
+                icons::BWI_TRASH.render(18.0, colors.titlebar_close_hover),
+                colors.item_hover,
+            )
+            .on_press(CipherFormMessage::PasskeyRemoved(idx))
+            .padding([6, 6]);
+
+            rows.push(
+                row![container(info).width(Fill), remove_btn]
+                    .spacing(6)
+                    .align_y(Alignment::Center)
+                    .into(),
+            );
+        }
+    }
 
     card_with_margin(styled_card(column(rows).spacing(16).into()))
 }

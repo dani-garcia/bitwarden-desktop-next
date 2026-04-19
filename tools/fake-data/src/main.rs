@@ -4,6 +4,8 @@
 //!
 //! Run with `cargo run -p fake-data` from the workspace root.
 
+mod passkey;
+
 use std::{
     collections::HashMap,
     error::Error,
@@ -29,10 +31,19 @@ use bitwarden_state::{
     registry::StateRegistry,
     repository::{Repository, RepositoryError, RepositoryItem},
 };
+use bitwarden_ssh::generator::{KeyAlgorithm, generate_sshkey};
 use bitwarden_vault::{
     CardView, Cipher, CipherRepromptType, CipherType, CipherView, Folder, FolderView, IdentityView,
     LoginUriView, LoginView, SshKeyView, UriMatchType,
 };
+
+use crate::passkey::PasskeySpec;
+
+/// An entry in the output of a `ciphers()` closure: the cipher view plus an
+/// optional passkey to register onto it. Logins that have a passkey go
+/// through `Fido2Client::register` instead of the normal encrypt path; every
+/// other kind carries `None`.
+type CipherEntry = (CipherView, Option<PasskeySpec>);
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
@@ -101,7 +112,7 @@ struct UserSpec {
     server_url: &'static str,
     password: &'static str,
     unlock_methods: UnlockMethodsCfg,
-    ciphers: fn() -> Vec<CipherView>,
+    ciphers: fn() -> Vec<CipherEntry>,
     folders: fn() -> Vec<FolderView>,
     /// Organizations + collections the user belongs to. Produces
     /// `(orgs, collections)` at build time so names can share closures.
@@ -110,7 +121,7 @@ struct UserSpec {
     /// generated. Passed (ciphers, orgs, collections) and mutates in place.
     /// Lets the work user have some org-owned items without baking the IDs
     /// into every cipher builder.
-    assign_ownership: fn(&mut [CipherView], &[MockOrganization], &[MockCollection]),
+    assign_ownership: fn(&mut [CipherEntry], &[MockOrganization], &[MockCollection]),
 }
 
 // User IDs are generated as fresh UUIDv4s per `build_user` call, matching how
@@ -301,17 +312,26 @@ async fn build_user(spec: &UserSpec, data_dir: &Path) -> Result<MockUserMeta, Bo
             .await?;
     }
 
-    let mut cipher_views = (spec.ciphers)();
-    (spec.assign_ownership)(&mut cipher_views, &organizations, &collections);
+    let mut cipher_entries = (spec.ciphers)();
+    (spec.assign_ownership)(&mut cipher_entries, &organizations, &collections);
 
-    let total = cipher_views.len();
+    let total = cipher_entries.len();
     if total > 1_000 {
         println!("  encrypting {} ciphers for {}…", total, spec.email);
     }
     let mut ciphers = Vec::with_capacity(total);
-    for (i, view) in cipher_views.into_iter().enumerate() {
-        let ctx = client.vault().ciphers().encrypt(view).await?;
-        ciphers.push(ctx.cipher);
+    for (i, (view, passkey_spec)) in cipher_entries.into_iter().enumerate() {
+        let cipher = match passkey_spec {
+            // `register_passkey` drives `Fido2Client::register`, which
+            // generates a P-256 keypair, attaches it to the cipher view,
+            // and encrypts the full cipher via the user's key store — so
+            // we skip the normal `encrypt(view)` path.
+            Some(spec) => passkey::register_passkey(&client.0, view, &spec)
+                .await
+                .map_err(|e| -> Box<dyn Error> { e })?,
+            None => client.vault().ciphers().encrypt(view).await?.cipher,
+        };
+        ciphers.push(cipher);
         if total > 1_000 && (i + 1) % 5_000 == 0 {
             println!("    {} / {}", i + 1, total);
         }
@@ -367,7 +387,31 @@ fn register_empty_repo<T: RepositoryItem + Clone>(client: &PasswordManagerClient
 
 // ── Cipher view builders ───────────────────────────────────────────────────
 
-fn login(name: &str, username: Option<&str>, uri: Option<&str>) -> CipherView {
+fn login(name: &str, username: Option<&str>, uri: Option<&str>) -> CipherEntry {
+    (build_login(name, username, uri), None)
+}
+
+/// Build a login that will also get a real passkey registered on it via
+/// `Fido2Client::register` later in the pipeline. `rp_id` should be the
+/// registrable domain (matches the `uri` here so autofill lines up).
+fn login_with_passkey(
+    name: &str,
+    username: &str,
+    rp_id: &str,
+    rp_name: &str,
+    user_display_name: &str,
+) -> CipherEntry {
+    let view = build_login(name, Some(username), Some(rp_id));
+    let spec = PasskeySpec {
+        rp_id: rp_id.to_string(),
+        rp_name: rp_name.to_string(),
+        user_name: username.to_string(),
+        user_display_name: user_display_name.to_string(),
+    };
+    (view, Some(spec))
+}
+
+fn build_login(name: &str, username: Option<&str>, uri: Option<&str>) -> CipherView {
     cipher_with(
         name,
         None,
@@ -449,11 +493,14 @@ enum CipherKind {
     SshKey(Box<SshKeyView>),
 }
 
-fn note(name: &str) -> CipherView {
-    cipher_with(
-        name,
-        Some(format!("Notes for {name}")),
-        CipherKind::SecureNote,
+fn note(name: &str) -> CipherEntry {
+    (
+        cipher_with(
+            name,
+            Some(format!("Notes for {name}")),
+            CipherKind::SecureNote,
+        ),
+        None,
     )
 }
 
@@ -465,18 +512,21 @@ fn card(
     exp_month: &str,
     exp_year: &str,
     code: &str,
-) -> CipherView {
-    cipher_with(
-        name,
+) -> CipherEntry {
+    (
+        cipher_with(
+            name,
+            None,
+            CipherKind::Card(Box::new(CardView {
+                cardholder_name: Some(cardholder.to_string()),
+                exp_month: Some(exp_month.to_string()),
+                exp_year: Some(exp_year.to_string()),
+                code: Some(code.to_string()),
+                brand: Some(brand.to_string()),
+                number: Some(number.to_string()),
+            })),
+        ),
         None,
-        CipherKind::Card(Box::new(CardView {
-            cardholder_name: Some(cardholder.to_string()),
-            exp_month: Some(exp_month.to_string()),
-            exp_year: Some(exp_year.to_string()),
-            code: Some(code.to_string()),
-            brand: Some(brand.to_string()),
-            number: Some(number.to_string()),
-        })),
     )
 }
 
@@ -487,42 +537,52 @@ fn identity(
     last: &str,
     email: &str,
     phone: &str,
-) -> CipherView {
-    cipher_with(
-        name,
+) -> CipherEntry {
+    (
+        cipher_with(
+            name,
+            None,
+            CipherKind::Identity(Box::new(IdentityView {
+                title: Some(title.to_string()),
+                first_name: Some(first.to_string()),
+                middle_name: None,
+                last_name: Some(last.to_string()),
+                address1: Some("742 Evergreen Terrace".to_string()),
+                address2: None,
+                address3: None,
+                city: Some("Springfield".to_string()),
+                state: Some("IL".to_string()),
+                postal_code: Some("62704".to_string()),
+                country: Some("USA".to_string()),
+                company: None,
+                email: Some(email.to_string()),
+                phone: Some(phone.to_string()),
+                ssn: None,
+                username: None,
+                passport_number: None,
+                license_number: None,
+            })),
+        ),
         None,
-        CipherKind::Identity(Box::new(IdentityView {
-            title: Some(title.to_string()),
-            first_name: Some(first.to_string()),
-            middle_name: None,
-            last_name: Some(last.to_string()),
-            address1: Some("742 Evergreen Terrace".to_string()),
-            address2: None,
-            address3: None,
-            city: Some("Springfield".to_string()),
-            state: Some("IL".to_string()),
-            postal_code: Some("62704".to_string()),
-            country: Some("USA".to_string()),
-            company: None,
-            email: Some(email.to_string()),
-            phone: Some(phone.to_string()),
-            ssn: None,
-            username: None,
-            passport_number: None,
-            license_number: None,
-        })),
     )
 }
 
-fn ssh_key(name: &str, public_key: &str, private_key: &str, fingerprint: &str) -> CipherView {
-    cipher_with(
-        name,
+/// Generate a real Ed25519 SSH key pair via the SDK so the desktop app's
+/// detail pane shows parseable OpenSSH data (public key + SHA-256
+/// fingerprint). Ed25519 is the fastest algorithm in `bitwarden_ssh`
+/// (~sub-millisecond), which keeps load-test generation snappy even at
+/// several hundred keys. `comment` is appended to the public key so the
+/// trailing `user@host` field looks realistic, but isn't otherwise used.
+fn ssh_key(name: &str, comment: &str) -> CipherEntry {
+    let mut view = generate_sshkey(KeyAlgorithm::Ed25519)
+        .expect("Ed25519 key generation is infallible on a working RNG");
+    // `ssh-ed25519 <base64>` — append a comment so the public key renders
+    // as `ssh-ed25519 <base64> <comment>`, matching real `ssh-keygen -C`
+    // output.
+    view.public_key = format!("{} {comment}", view.public_key);
+    (
+        cipher_with(name, None, CipherKind::SshKey(Box::new(view))),
         None,
-        CipherKind::SshKey(Box::new(SshKeyView {
-            private_key: private_key.to_string(),
-            public_key: public_key.to_string(),
-            fingerprint: fingerprint.to_string(),
-        })),
     )
 }
 
@@ -534,7 +594,7 @@ fn folder(name: &str) -> FolderView {
     }
 }
 
-fn personal_ciphers() -> Vec<CipherView> {
+fn personal_ciphers() -> Vec<CipherEntry> {
     vec![
         // Email / comms
         login("Gmail", Some("alice@example.com"), Some("mail.google.com")),
@@ -568,7 +628,7 @@ fn personal_ciphers() -> Vec<CipherView> {
         login("Bluesky", Some("alice.bsky.social"), Some("bsky.app")),
         login("Facebook", Some("alice.johnson.94"), Some("facebook.com")),
         // Dev
-        login("GitHub", Some("alice-dev"), Some("github.com")),
+        login_with_passkey("GitHub", "alice-dev", "github.com", "GitHub", "Alice Johnson"),
         login("GitLab", Some("alice-dev"), Some("gitlab.com")),
         login(
             "Stack Overflow",
@@ -662,18 +722,8 @@ fn personal_ciphers() -> Vec<CipherView> {
         note("Passport info"),
         note("Emergency contacts"),
         // SSH
-        ssh_key(
-            "GitHub SSH Key",
-            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleAlicePublicKey alice@desktop",
-            "-----BEGIN OPENSSH PRIVATE KEY-----\nfake-private-key-bytes\n-----END OPENSSH PRIVATE KEY-----\n",
-            "SHA256:abc123ExampleFingerprintAliceDesktop",
-        ),
-        ssh_key(
-            "Home Server",
-            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleAliceHomePublicKey alice@homelab",
-            "-----BEGIN OPENSSH PRIVATE KEY-----\nfake-homelab-private\n-----END OPENSSH PRIVATE KEY-----\n",
-            "SHA256:homeAlice123",
-        ),
+        ssh_key("GitHub SSH Key", "alice@desktop"),
+        ssh_key("Home Server", "alice@homelab"),
     ]
 }
 
@@ -681,7 +731,7 @@ fn personal_folders() -> Vec<FolderView> {
     vec![folder("Personal"), folder("Finance")]
 }
 
-fn work_ciphers() -> Vec<CipherView> {
+fn work_ciphers() -> Vec<CipherEntry> {
     vec![
         // Core work tools
         login(
@@ -712,10 +762,12 @@ fn work_ciphers() -> Vec<CipherView> {
             Some("ajohnson@acmecorp.com"),
             Some("acmecorp.zoom.us"),
         ),
-        login(
+        login_with_passkey(
             "Google Workspace",
-            Some("ajohnson@acmecorp.com"),
-            Some("workspace.google.com"),
+            "ajohnson@acmecorp.com",
+            "google.com",
+            "Google",
+            "Alice (Work)",
         ),
         login(
             "Office 365",
@@ -871,18 +923,8 @@ fn work_ciphers() -> Vec<CipherView> {
         note("Release Process Checklist"),
         note("VPN Config"),
         // SSH
-        ssh_key(
-            "Deploy SSH Key",
-            "ssh-rsa AAAAB3NzaC1yc2EExampleDeployKey deploy@acmecorp",
-            "-----BEGIN OPENSSH PRIVATE KEY-----\nfake-deploy-private-bytes\n-----END OPENSSH PRIVATE KEY-----\n",
-            "SHA256:def456ExampleFingerprintDeploy",
-        ),
-        ssh_key(
-            "Staging Bastion",
-            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleStaging alice@staging",
-            "-----BEGIN OPENSSH PRIVATE KEY-----\nfake-staging-private\n-----END OPENSSH PRIVATE KEY-----\n",
-            "SHA256:staging456",
-        ),
+        ssh_key("Deploy SSH Key", "deploy@acmecorp"),
+        ssh_key("Staging Bastion", "alice@staging"),
     ]
 }
 
@@ -896,7 +938,7 @@ fn no_orgs() -> (Vec<MockOrganization>, Vec<MockCollection>) {
     (vec![], vec![])
 }
 
-fn no_ownership(_: &mut [CipherView], _: &[MockOrganization], _: &[MockCollection]) {}
+fn no_ownership(_: &mut [CipherEntry], _: &[MockOrganization], _: &[MockCollection]) {}
 
 fn work_orgs_and_collections() -> (Vec<MockOrganization>, Vec<MockCollection>) {
     let org = MockOrganization {
@@ -929,7 +971,7 @@ fn work_orgs_and_collections() -> (Vec<MockOrganization>, Vec<MockCollection>) {
 /// on `build_user` having called `initialize_org_crypto` first so the org
 /// key is in the keystore by the time we encrypt these views.
 fn assign_work_ownership(
-    ciphers: &mut [CipherView],
+    entries: &mut [CipherEntry],
     orgs: &[MockOrganization],
     collections: &[MockCollection],
 ) {
@@ -937,7 +979,7 @@ fn assign_work_ownership(
     let Some(eng) = collections.iter().find(|c| c.name == "Engineering") else {
         return;
     };
-    for cipher in ciphers.iter_mut().take(2) {
+    for (cipher, _) in entries.iter_mut().take(2) {
         cipher.organization_id = Some(org.id);
         cipher.collection_ids = vec![eng.id];
     }
@@ -1079,9 +1121,9 @@ const LOAD_TEST_LAST_NAMES: &[&str] = &[
     "Walker", "Wright", "Robinson",
 ];
 
-fn load_test_ciphers() -> Vec<CipherView> {
+fn load_test_ciphers() -> Vec<CipherEntry> {
     let mut prng = Prng::new(LOAD_TEST_SEED);
-    let mut out: Vec<CipherView> = Vec::with_capacity(LOAD_TEST_CIPHER_COUNT);
+    let mut out: Vec<CipherEntry> = Vec::with_capacity(LOAD_TEST_CIPHER_COUNT);
 
     // Type distribution: 80% logins, 10% notes, 5% cards, 3% identities, 2% ssh keys.
     // We derive each cipher's type from its index rather than rolling PRNG for
@@ -1138,18 +1180,13 @@ fn load_test_ciphers() -> Vec<CipherView> {
             let phone = format!("+1 555 {:04}", prng.range(10000));
             identity(&name, "Ms", first, last, &email, &phone)
         } else {
-            // SSH key
+            // SSH key — real Ed25519 pair via the SDK. Ed25519 is fast
+            // enough that generating a few hundred in a batch is fine.
             let company = prng.pick(LOAD_TEST_COMPANIES);
             let slug = company.to_ascii_lowercase().replace(' ', "-");
             let name = format!("{company} Deploy Key #{i}");
-            let public_key = format!(
-                "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI{slug}FakePublicKey{i} deploy@{slug}"
-            );
-            let private_key = format!(
-                "-----BEGIN OPENSSH PRIVATE KEY-----\nfake-private-key-{slug}-{i}\n-----END OPENSSH PRIVATE KEY-----\n"
-            );
-            let fingerprint = format!("SHA256:loadtest-{slug}-{i:08x}");
-            ssh_key(&name, &public_key, &private_key, &fingerprint)
+            let comment = format!("deploy@{slug}");
+            ssh_key(&name, &comment)
         };
         out.push(cipher);
     }

@@ -2646,14 +2646,18 @@ name = "fake-data"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "base64",
  "bitwarden-auth",
  "bitwarden-collections",
  "bitwarden-core",
  "bitwarden-crypto",
+ "bitwarden-fido",
  "bitwarden-pm",
+ "bitwarden-ssh",
  "bitwarden-state",
  "bitwarden-vault",
  "chrono",
+ "rand 0.9.4",
  "serde",
  "serde_json",
  "tokio",

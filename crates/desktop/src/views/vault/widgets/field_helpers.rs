@@ -69,3 +69,13 @@ pub fn card_with_margin<'a, M: 'a>(card: Element<'a, M, AppTheme>) -> Element<'a
 pub fn styled_card<'a, M: 'a>(content: Element<'a, M, AppTheme>) -> Element<'a, M, AppTheme> {
     components::styled_card(content)
 }
+
+/// Format a passkey's creation timestamp in local time using a short,
+/// US-style date + 12-hour clock ("1/29/26, 9:26 PM") — matches the
+/// convention the official Bitwarden clients use. Shared by both the
+/// detail pane (readonly row) and the cipher form (editable row).
+pub fn format_passkey_date(dt: chrono::DateTime<chrono::Utc>) -> String {
+    dt.with_timezone(&chrono::Local)
+        .format("%-m/%-d/%y, %-I:%M %p")
+        .to_string()
+}
