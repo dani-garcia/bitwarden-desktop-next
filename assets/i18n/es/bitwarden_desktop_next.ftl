@@ -77,6 +77,9 @@ vault-toast-save-failed-title = Fallo al guardar
 vault-toast-save-failed-body = No se pudo guardar el elemento. Inténtalo de nuevo.
 vault-toast-decrypt-failed-title = Fallo al descifrar
 vault-toast-decrypt-failed-body = No se pudo cargar el elemento. Inténtalo de nuevo.
+vault-toast-copied-username = Usuario copiado
+vault-toast-copied-password = Contraseña copiada
+vault-toast-copied-website = Sitio web copiado
 
 ## Account switcher
 account-switcher-locked-suffix = (bloqueada)

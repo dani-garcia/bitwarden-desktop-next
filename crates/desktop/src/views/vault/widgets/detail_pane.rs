@@ -187,7 +187,7 @@ fn login_card<'a>(
     card_with_margin(styled_card(column(fields).spacing(16).into()))
 }
 
-fn first_login_uri(login: &LoginView) -> Option<&str> {
+pub(crate) fn first_login_uri(login: &LoginView) -> Option<&str> {
     login
         .uris
         .as_ref()

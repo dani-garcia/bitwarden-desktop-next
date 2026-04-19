@@ -10,6 +10,7 @@ use std::{collections::HashMap, sync::Arc};
 use iced::{Element, Subscription, Task, time};
 
 use crate::{
+    clipboard::ClipboardManager,
     components::{
         account_switcher::AccountEntry,
         toast::{self, Toast},
@@ -53,6 +54,11 @@ pub struct App {
 
     // ── Cross-cutting UI overlay queue ─────────────────────────────────────
     pub(super) toasts: Vec<Toast>,
+
+    // ── Clipboard manager ──────────────────────────────────────────────────
+    // Single writer: every clipboard `set` flows through here so the 30 s
+    // auto-clear bookkeeping sees every write. See `clipboard.rs`.
+    pub(super) clipboard: ClipboardManager,
 }
 
 /// Derived data cached across `view()` rebuilds. Recomputed by
@@ -137,6 +143,7 @@ impl App {
             windows,
             native_menu: None,
             toasts: Vec::new(),
+            clipboard: ClipboardManager::new(),
         };
 
         (

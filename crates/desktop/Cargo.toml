@@ -33,16 +33,19 @@ iced = { workspace = true, features = [
     "web-colors", # sRGB blending to match Bitwarden web app colors
     "x11",        # Linux X11 display backend
     "wayland",    # Linux Wayland display backend
-    "lazy",       # `iced::widget::component` — encapsulated local widget
-                  # state (reveal toggle for password fields). Component is
-                  # upstream-deprecated; the replacement is "implement a
-                  # full custom Widget", which is ~3x the code for the same
-                  # result. Revisit if the feature disappears.
+    "lazy",
+] }
+arboard = { version = "3.6", default-features = false, features = [
+    "wayland-data-control",
 ] }
 image = "0.25"
-i18n-embed = { version = "0.16", features = ["fluent-system", "desktop-requester"] }
+i18n-embed = { version = "0.16", features = [
+    "fluent-system",
+    "desktop-requester",
+] }
 i18n-embed-fl = "0.10"
 muda = "0.18"
+open = "5"
 rust-embed = "8"
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -50,6 +53,7 @@ system-theme = "0.3"
 tokio = { workspace = true, features = ["rt"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+url = "2"
 uuid = { workspace = true }
 
 bitwarden-auth = { workspace = true }

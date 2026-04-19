@@ -1,6 +1,7 @@
 use iced::Task;
 
 use crate::{
+    clipboard::{self, Sensitivity},
     state::Screen,
     views::{
         about::AboutMessage,
@@ -73,6 +74,19 @@ impl App {
                 self.push_toast(t);
                 Task::none()
             }
+            VaultEvent::ClipboardCopyRequested {
+                value,
+                sensitivity,
+                toast_label,
+            } => {
+                self.clipboard.copy(value, sensitivity);
+                self.push_toast(crate::components::toast::Toast::success(toast_label, None));
+                Task::none()
+            }
+            VaultEvent::LaunchUrlRequested { uri } => {
+                clipboard::launch_url(&uri);
+                Task::none()
+            }
         }
     }
 
@@ -86,7 +100,9 @@ impl App {
     pub(super) fn handle_about_message(&mut self, msg: AboutMessage) -> Task<Message> {
         match msg {
             AboutMessage::CopyInfo => {
-                iced::clipboard::write(crate::views::about::info_string()).discard()
+                self.clipboard
+                    .copy(crate::views::about::info_string(), Sensitivity::Normal);
+                Task::none()
             }
             AboutMessage::Close => {
                 if let Some(id) = self.about_window_id() {

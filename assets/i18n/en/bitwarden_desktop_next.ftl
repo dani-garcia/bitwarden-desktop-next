@@ -77,6 +77,9 @@ vault-toast-save-failed-title = Save failed
 vault-toast-save-failed-body = Couldn't save the item. Try again.
 vault-toast-decrypt-failed-title = Decrypt failed
 vault-toast-decrypt-failed-body = Couldn't load the item. Try again.
+vault-toast-copied-username = Username copied
+vault-toast-copied-password = Password copied
+vault-toast-copied-website = Website copied
 
 ## Account switcher
 account-switcher-locked-suffix = (locked)

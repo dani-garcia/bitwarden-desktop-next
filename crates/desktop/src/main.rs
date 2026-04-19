@@ -2,6 +2,7 @@
 
 mod app;
 mod assets;
+mod clipboard;
 mod components;
 mod i18n;
 mod menu;

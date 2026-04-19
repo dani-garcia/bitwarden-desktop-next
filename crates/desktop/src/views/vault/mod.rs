@@ -9,6 +9,7 @@ use iced::{
 };
 
 use crate::{
+    clipboard::Sensitivity,
     components::{
         account_switcher::{self, AccountEntry, AccountSwitcherMessage},
         bottom_sheet, buttons, icons, separator_v,
@@ -214,6 +215,17 @@ pub enum VaultEvent {
     AddAccountRequested,
     /// VaultView wants to show a cross-cutting toast notification.
     ToastRequested(Toast),
+    /// User clicked a copy-to-clipboard button on the detail pane.
+    /// Routed to `ClipboardManager::copy`; the handler also pushes a
+    /// success toast with `toast_label` as the body.
+    ClipboardCopyRequested {
+        value: String,
+        sensitivity: Sensitivity,
+        toast_label: String,
+    },
+    /// User clicked the launch button on a login's URI.
+    /// Routed to `clipboard::launch_url` which enforces scheme allowlist.
+    LaunchUrlRequested { uri: String },
 }
 
 pub struct VaultView {
@@ -388,9 +400,81 @@ impl VaultView {
                     let cols_task = Task::done(VaultMessage::CollectionsLoaded(uid, cols));
                     (Task::batch([folders_task, orgs_task, cols_task]), None)
                 }
-                // Other detail messages (copy, delete, open URL, reveal) stay
-                // unhandled for this pass.
-                _ => (Task::none(), None),
+                DetailPaneMessage::CopyUsername => {
+                    let value = self
+                        .selection
+                        .detail
+                        .as_ref()
+                        .and_then(|c| c.login.as_ref())
+                        .and_then(|l| l.username.as_deref())
+                        .map(str::to_owned);
+                    match value {
+                        Some(v) => (
+                            Task::none(),
+                            Some(VaultEvent::ClipboardCopyRequested {
+                                value: v,
+                                sensitivity: Sensitivity::Normal,
+                                toast_label: fl!("vault-toast-copied-username"),
+                            }),
+                        ),
+                        None => (Task::none(), None),
+                    }
+                }
+                DetailPaneMessage::CopyPassword => {
+                    let value = self
+                        .selection
+                        .detail
+                        .as_ref()
+                        .and_then(|c| c.login.as_ref())
+                        .and_then(|l| l.password.as_deref())
+                        .map(str::to_owned);
+                    match value {
+                        Some(v) => (
+                            Task::none(),
+                            Some(VaultEvent::ClipboardCopyRequested {
+                                value: v,
+                                sensitivity: Sensitivity::Sensitive,
+                                toast_label: fl!("vault-toast-copied-password"),
+                            }),
+                        ),
+                        None => (Task::none(), None),
+                    }
+                }
+                DetailPaneMessage::CopyUrl => {
+                    let value = self
+                        .selection
+                        .detail
+                        .as_ref()
+                        .and_then(|c| c.login.as_ref())
+                        .and_then(|l| detail_pane::first_login_uri(l))
+                        .map(str::to_owned);
+                    match value {
+                        Some(v) => (
+                            Task::none(),
+                            Some(VaultEvent::ClipboardCopyRequested {
+                                value: v,
+                                sensitivity: Sensitivity::Normal,
+                                toast_label: fl!("vault-toast-copied-website"),
+                            }),
+                        ),
+                        None => (Task::none(), None),
+                    }
+                }
+                DetailPaneMessage::OpenUrl => {
+                    let uri = self
+                        .selection
+                        .detail
+                        .as_ref()
+                        .and_then(|c| c.login.as_ref())
+                        .and_then(|l| detail_pane::first_login_uri(l))
+                        .map(str::to_owned);
+                    match uri {
+                        Some(uri) => (Task::none(), Some(VaultEvent::LaunchUrlRequested { uri })),
+                        None => (Task::none(), None),
+                    }
+                }
+                // Delete stays unhandled for this pass.
+                DetailPaneMessage::Delete | DetailPaneMessage::Close => (Task::none(), None),
             },
             VaultMessage::CipherForm(form_msg) => {
                 let Some(form) = self.selection.form.as_mut() else {
