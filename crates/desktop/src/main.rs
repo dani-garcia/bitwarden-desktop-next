@@ -56,6 +56,8 @@ fn main() -> iced::Result {
     init_tracing();
     i18n::init();
 
+    sdk::ClientManager::verify_data_dir();
+
     // Default to tiny-skia (CPU) renderer to avoid ~500 ms wgpu GPU init on
     // startup. For a form-based UI this is fast enough, and the instant
     // window appearance is a better UX trade-off. The `gpu` Cargo feature
@@ -91,14 +93,25 @@ fn main() -> iced::Result {
 /// this runs they become visible for free under e.g.
 /// `RUST_LOG=bitwarden_desktop_next=debug,bitwarden_core=debug cargo run`.
 fn init_tracing() {
-    use tracing_subscriber::{EnvFilter, fmt};
+    use tracing_subscriber::{
+        EnvFilter, Layer, fmt, layer::SubscriberExt, util::SubscriberInitExt,
+    };
 
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("bitwarden_desktop_next=debug,warn"));
+    // Flight-recorder layer keeps the most recent events in an in-memory
+    // circular buffer that `bitwarden_logging::read_flight_recorder()` can
+    // dump for diagnostics — independent of the stderr filter below.
+    let flight_recorder =
+        bitwarden_logging::init_flight_recorder(bitwarden_logging::FlightRecorderConfig::default());
 
-    fmt()
-        .with_env_filter(filter)
+    let filter = EnvFilter::from_default_env();
+
+    let fmt_layer = fmt::layer()
         .with_target(true)
         .with_writer(std::io::stderr)
+        .with_filter(filter);
+
+    tracing_subscriber::registry()
+        .with(flight_recorder)
+        .with(fmt_layer)
         .init();
 }

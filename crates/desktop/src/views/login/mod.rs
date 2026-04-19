@@ -350,11 +350,14 @@ impl LoginView {
                 match result {
                     Ok(()) => (Task::none(), Some(LoginEvent::LoggedIn { uid: msg_uid })),
                     Err(err) => {
+                        // Log the raw SDK error for debugging, but show a
+                        // sanitized message to the user — see the matching
+                        // treatment in `UnlockCompleted`.
                         tracing::warn!(uid = %msg_uid, %err, "SDK login failed");
                         (
                             Task::none(),
                             Some(LoginEvent::ToastRequested(Toast::error(
-                                err,
+                                crate::fl!("login-toast-login-failed-body"),
                                 Some(&crate::fl!("login-toast-login-failed-title")),
                             ))),
                         )

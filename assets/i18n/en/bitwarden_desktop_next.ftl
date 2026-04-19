@@ -39,6 +39,7 @@ login-server-self-hosted = Self-hosted
 login-toast-unlock-failed-title = Unlock failed
 login-toast-unlock-failed-body = Check your master password and try again.
 login-toast-login-failed-title = Login failed
+login-toast-login-failed-body = Check your email and password and try again.
 login-toast-pin-unsupported = PIN unlock is not yet supported
 login-toast-biometrics-unsupported = Biometric unlock is not yet supported
 
@@ -81,6 +82,7 @@ vault-toast-copied-username = Username copied
 vault-toast-copied-password = Password copied
 vault-toast-copied-website = Website copied
 vault-toast-copied-totp = Verification code copied
+vault-toast-copied-field = Field copied
 vault-toast-item-deleted = Item moved to trash
 vault-toast-delete-failed-title = Delete failed
 vault-toast-delete-failed-body = Couldn't delete the item. Try again.
@@ -133,6 +135,11 @@ detail-field-fingerprint = Fingerprint
 detail-empty-credentials = No credentials
 detail-empty-card = No card details
 detail-empty-identity = No identity details
+detail-section-custom-fields = Custom fields
+detail-section-passkeys = Passkeys
+detail-field-passkey = Passkey
+detail-field-boolean-true = Yes
+detail-field-boolean-false = No
 detail-edit-button = Edit
 
 ## Cipher form — header titles
@@ -167,7 +174,9 @@ form-favorite = Favorite
 form-reprompt = Master password re-prompt
 form-notes = Notes
 form-folder = Folder
+form-folder-none = No folder
 form-organization = Organization
+form-organization-personal = Personal (me)
 form-collections = Collections
 form-collections-none = No collections
 form-collections-selected = { $count } selected
@@ -196,6 +205,13 @@ form-card-month-placeholder = -- Month --
 ## Cipher form — identity
 form-identity-title = Title
 form-identity-title-placeholder = -- Title --
+# Identity title labels. Same convention as card brands — the stored value
+# is the canonical English string; these keys only localize the display.
+form-identity-title-mr = Mr
+form-identity-title-mrs = Mrs
+form-identity-title-ms = Ms
+form-identity-title-mx = Mx
+form-identity-title-dr = Dr
 form-identity-first-name = First name
 form-identity-middle-name = Middle name
 form-identity-last-name = Last name

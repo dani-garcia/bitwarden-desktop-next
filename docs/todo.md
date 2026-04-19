@@ -23,18 +23,13 @@ These are the highest-value tasks with no architectural prerequisites. Doing the
 
 ### Sanitize remaining SDK error echoes into toasts
 
-`LoginMessage::UnlockCompleted` now shows "Check your master password and try again" instead of the raw SDK error. Apply the same treatment to any future toast paths that surface SDK errors. Rule: raw `e.to_string()` goes to `tracing::warn!`/`error!`, the user sees a short sanitized string.
+Rule for future toast paths that surface SDK errors: raw `e.to_string()` goes to `tracing::warn!`/`error!`, the user sees a short sanitized string. `UnlockCompleted` and `LoginCompleted` both follow this pattern today.
 
-### Finish `fl!` migration stragglers in `cipher_form.rs`
+### Settings view with a language dropdown
 
-Almost every view is on Fluent now (`assets/i18n/en/bitwarden_desktop_next.ftl` has ~240 keys). The holdouts are all hardcoded constant strings in [crates/desktop/src/views/vault/widgets/cipher_form.rs](../crates/desktop/src/views/vault/widgets/cipher_form.rs):
+Call `i18n_embed::select(...)` on change (re-renders automatically on iced's next frame). Design question: where the settings screen lives in the nav (titlebar menu item, gear icon in sidebar, etc.) and whether it's a window/modal/view.
 
-- Card brand literals ("Visa", "Mastercard", "Amex", …) in the card-brand pick list (~line 1380).
-- Identity title literals ("Mr", "Mrs", "Ms", "Mx", "Dr") (~line 1437).
-- `FolderChoice::None` display "No folder" (~line 82).
-- `OrgChoice::Personal` display "Personal (me)" (~line 108).
-
-Bonus task: add a `settings` view with a language dropdown that calls `i18n_embed::select(...)` on change (re-renders automatically on iced's next frame).
+Card-brand pick-list strings in `cipher_form.rs` are intentionally left untranslated — the canonical brand names ("Visa", "Mastercard", …) are not localized.
 
 ---
 

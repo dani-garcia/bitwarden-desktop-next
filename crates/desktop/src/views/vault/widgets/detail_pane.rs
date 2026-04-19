@@ -1,4 +1,6 @@
-use bitwarden_vault::{CardView, CipherType, CipherView, IdentityView, LoginView, SshKeyView};
+use bitwarden_vault::{
+    CardView, CipherType, CipherView, FieldType, FieldView, IdentityView, LoginView, SshKeyView,
+};
 use iced::{
     Alignment, Element, Fill,
     widget::{Space, column, container, row, scrollable, text},
@@ -18,9 +20,16 @@ pub enum DetailPaneMessage {
     Close,
     CopyUsername,
     CopyPassword,
-    CopyUrl,
+    /// Copy the URI at the given index in `login.uris`. A login may have
+    /// multiple URIs; the autofill section renders one button row per URI.
+    CopyUrl(usize),
     CopyTotp,
-    OpenUrl,
+    /// Open the URI at the given index in `login.uris`. See `CopyUrl`.
+    OpenUrl(usize),
+    /// Copy the value of the custom field at the given index in
+    /// `cipher.fields`. Only wired for hidden-type fields today; plain
+    /// text fields can still be selected and copied manually.
+    CopyCustomField(usize),
     Edit,
     /// Trash icon pressed — opens the confirm modal (handled at the vault
     /// view layer). Does not actually delete by itself.
@@ -45,9 +54,20 @@ pub fn view<'a>(
                 sections.push(section_label(fl!("detail-section-login-credentials"), colors));
                 sections.push(login_card(login, colors));
 
-                if let Some(uri) = first_login_uri(login) {
+                let uris = collect_login_uris(login);
+                if !uris.is_empty() {
                     sections.push(section_label(fl!("detail-section-autofill-options"), colors));
-                    sections.push(autofill_card(uri, colors));
+                    sections.push(autofill_card(&uris, colors));
+                }
+
+                if let Some(passkey_count) = login
+                    .fido2_credentials
+                    .as_ref()
+                    .map(|c| c.len())
+                    .filter(|n| *n > 0)
+                {
+                    sections.push(section_label(fl!("detail-section-passkeys"), colors));
+                    sections.push(passkeys_card(passkey_count, colors));
                 }
             }
         }
@@ -77,6 +97,11 @@ pub fn view<'a>(
                 sections.push(ssh_key_card(key, colors));
             }
         }
+    }
+
+    if let Some(fields) = item.fields.as_deref().filter(|f| !f.is_empty()) {
+        sections.push(section_label(fl!("detail-section-custom-fields"), colors));
+        sections.push(custom_fields_card(fields, colors));
     }
 
     let body = scrollable(column(sections).spacing(4).padding([12, 20])).height(Fill);
@@ -146,7 +171,7 @@ fn item_details_card<'a>(
     {
         fields.push(field_readonly(fl!("detail-field-notes"), notes, colors));
     }
-    card_with_margin(styled_card(column(fields).spacing(12).into()))
+    card_with_margin(styled_card(column(fields).spacing(12).width(Fill).into()))
 }
 
 // ---------------------------------------------------------------------------
@@ -195,14 +220,31 @@ fn login_card<'a>(
         );
     }
 
-    card_with_margin(styled_card(column(fields).spacing(16).into()))
+    card_with_margin(styled_card(column(fields).spacing(16).width(Fill).into()))
 }
 
-pub(crate) fn first_login_uri(login: &LoginView) -> Option<&str> {
+/// Non-empty URIs on a login, paired with their original index in
+/// `login.uris`. The index is the stable key used by the `CopyUrl` /
+/// `OpenUrl` messages, so we must preserve position — callers should
+/// not sort or re-index this.
+pub(crate) fn collect_login_uris(login: &LoginView) -> Vec<(usize, &str)> {
     login
         .uris
-        .as_ref()
-        .and_then(|uris| uris.first())
+        .as_deref()
+        .unwrap_or(&[])
+        .iter()
+        .enumerate()
+        .filter_map(|(i, u)| u.uri.as_deref().map(|s| (i, s)))
+        .collect()
+}
+
+/// Convenience used by handlers that only care about a single URI by its
+/// position in `login.uris`.
+pub(crate) fn login_uri_at(login: &LoginView, index: usize) -> Option<&str> {
+    login
+        .uris
+        .as_deref()?
+        .get(index)
         .and_then(|u| u.uri.as_deref())
 }
 
@@ -246,7 +288,7 @@ fn card_details_card<'a>(
                 .into(),
         );
     }
-    card_with_margin(styled_card(column(fields).spacing(12).into()))
+    card_with_margin(styled_card(column(fields).spacing(12).width(Fill).into()))
 }
 
 // ---------------------------------------------------------------------------
@@ -312,7 +354,7 @@ fn identity_card<'a>(
                 .into(),
         );
     }
-    card_with_margin(styled_card(column(fields).spacing(12).into()))
+    card_with_margin(styled_card(column(fields).spacing(12).width(Fill).into()))
 }
 
 // ---------------------------------------------------------------------------
@@ -328,31 +370,128 @@ fn ssh_key_card<'a>(
         reveal_field(fl!("detail-field-private-key"), &key.private_key, None, colors),
         field_readonly(fl!("detail-field-fingerprint"), &key.fingerprint, colors),
     ];
-    card_with_margin(styled_card(column(fields).spacing(12).into()))
+    card_with_margin(styled_card(column(fields).spacing(12).width(Fill).into()))
+}
+
+// ---------------------------------------------------------------------------
+// Custom fields
+// ---------------------------------------------------------------------------
+
+fn custom_fields_card<'a>(
+    fields: &'a [FieldView],
+    colors: &'a AppColors,
+) -> Element<'a, DetailPaneMessage, AppTheme> {
+    let rows: Vec<Element<'a, DetailPaneMessage, AppTheme>> = fields
+        .iter()
+        .enumerate()
+        .map(|(idx, f)| custom_field(idx, f, colors))
+        .collect();
+    card_with_margin(styled_card(column(rows).spacing(12).width(Fill).into()))
+}
+
+fn custom_field<'a>(
+    idx: usize,
+    field: &'a FieldView,
+    colors: &'a AppColors,
+) -> Element<'a, DetailPaneMessage, AppTheme> {
+    let label = field.name.as_deref().unwrap_or("").to_string();
+    let raw_value = field.value.as_deref().unwrap_or("");
+    match field.r#type {
+        FieldType::Hidden => reveal_field(
+            label,
+            raw_value,
+            Some(DetailPaneMessage::CopyCustomField(idx)),
+            colors,
+        ),
+        FieldType::Boolean => {
+            let v = if matches!(raw_value, "true") {
+                fl!("detail-field-boolean-true")
+            } else {
+                fl!("detail-field-boolean-false")
+            };
+            field_with_action(
+                label,
+                v,
+                &[icons::BWI_COPY],
+                &[DetailPaneMessage::CopyCustomField(idx)],
+                colors,
+            )
+        }
+        FieldType::Text => field_with_action(
+            label,
+            raw_value,
+            &[icons::BWI_COPY],
+            &[DetailPaneMessage::CopyCustomField(idx)],
+            colors,
+        ),
+        // Linked fields aren't usefully renderable without resolving the
+        // target property name, matching the stance in `cipher_form`.
+        FieldType::Linked => field_readonly(label, raw_value, colors),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Passkeys
+// ---------------------------------------------------------------------------
+
+fn passkeys_card<'a>(
+    count: usize,
+    colors: &'a AppColors,
+) -> Element<'a, DetailPaneMessage, AppTheme> {
+    // `LoginView::fido2_credentials` is still the encrypted `Fido2Credential`
+    // type in the SDK (see the `TODO: Remove this once the SDK supports state`
+    // comment upstream), so we can only surface presence/count here — no
+    // rp_id, user_name, or creation date is available without a secondary
+    // decrypt call.
+    let rows: Vec<Element<'a, DetailPaneMessage, AppTheme>> = (0..count)
+        .map(|_| field_readonly(fl!("detail-field-passkey"), "●●●●●●●●●●", colors))
+        .collect();
+    card_with_margin(styled_card(column(rows).spacing(12).width(Fill).into()))
 }
 
 // ---------------------------------------------------------------------------
 // Autofill card
 // ---------------------------------------------------------------------------
 
-fn autofill_card<'a>(uri: &'a str, colors: &AppColors) -> Element<'a, DetailPaneMessage, AppTheme> {
+fn autofill_card<'a>(
+    uris: &[(usize, &'a str)],
+    colors: &'a AppColors,
+) -> Element<'a, DetailPaneMessage, AppTheme> {
+    let rows: Vec<Element<'a, DetailPaneMessage, AppTheme>> = uris
+        .iter()
+        .copied()
+        .map(|(idx, uri)| autofill_row(idx, uri, colors))
+        .collect();
+    card_with_margin(styled_card(column(rows).spacing(12).width(Fill).into()))
+}
+
+fn autofill_row<'a>(
+    idx: usize,
+    uri: &'a str,
+    colors: &'a AppColors,
+) -> Element<'a, DetailPaneMessage, AppTheme> {
     let label = text(fl!("detail-field-website"))
         .size(12)
         .color(colors.text_muted);
-    let value = text(uri).size(14).color(colors.text_primary);
+    // Same pattern as other detail fields: avoid wrapping so the buttons
+    // stay aligned with the label row for long URIs.
+    let value = text(uri)
+        .size(14)
+        .color(colors.text_primary)
+        .wrapping(iced::widget::text::Wrapping::None)
+        .ellipsis(iced::widget::text::Ellipsis::End);
 
-    let copy_btn = icon_button(icons::BWI_COPY, DetailPaneMessage::CopyUrl, colors);
-    let open_btn = icon_button(icons::BWI_EXTERNAL_LINK, DetailPaneMessage::OpenUrl, colors);
+    let copy_btn = icon_button(icons::BWI_COPY, DetailPaneMessage::CopyUrl(idx), colors);
+    let open_btn = icon_button(icons::BWI_EXTERNAL_LINK, DetailPaneMessage::OpenUrl(idx), colors);
 
-    let field_row = row![
+    row![
         column![label, value].spacing(2).width(Fill),
         copy_btn,
         open_btn,
     ]
     .spacing(4)
-    .align_y(Alignment::Center);
-
-    card_with_margin(styled_card(field_row.into()))
+    .align_y(Alignment::Center)
+    .into()
 }
 
 // ---------------------------------------------------------------------------
@@ -398,11 +537,13 @@ fn push_optional_field<'a>(
 
 fn field_with_action<'a>(
     label: impl Into<String>,
-    value: &'a str,
+    value: impl iced::widget::text::IntoFragment<'a>,
     icons_list: &[icons::BwiIcon],
     msgs: &[DetailPaneMessage],
     colors: &AppColors,
 ) -> Element<'a, DetailPaneMessage, AppTheme> {
+    use iced::widget::text::{Ellipsis, Wrapping};
+
     let buttons: Vec<Element<'a, DetailPaneMessage, AppTheme>> = icons_list
         .iter()
         .zip(msgs.iter())
@@ -414,13 +555,18 @@ fn field_with_action<'a>(
     row![
         column![
             text(label.into()).size(12).color(colors.text_muted),
-            text(value).size(14).color(colors.text_primary),
+            text(value)
+                .size(14)
+                .color(colors.text_primary)
+                .wrapping(Wrapping::None)
+                .ellipsis(Ellipsis::End),
         ]
         .spacing(2)
         .width(Fill),
         buttons_row,
     ]
     .spacing(4)
+    .width(Fill)
     .align_y(Alignment::Center)
     .into()
 }

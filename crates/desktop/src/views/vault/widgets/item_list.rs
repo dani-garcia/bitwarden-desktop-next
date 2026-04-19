@@ -3,7 +3,10 @@ use std::sync::Arc;
 use bitwarden_vault::{CipherListView, CipherListViewType};
 use iced::{
     Alignment, Background, Border, Color, Element, Fill, Shadow,
-    widget::{Space, column, container, row, scrollable, text},
+    widget::{
+        Space, column, container, row, scrollable, text,
+        text::{Ellipsis, Wrapping},
+    },
 };
 
 use crate::{
@@ -170,10 +173,19 @@ fn row_element<'a>(
         });
 
     let info = column![
-        text(&item.name).size(14).color(colors.text_primary),
-        text(subtitle).size(14).color(colors.text_secondary),
+        text(&item.name)
+            .size(14)
+            .color(colors.text_primary)
+            .wrapping(Wrapping::None)
+            .ellipsis(Ellipsis::End),
+        text(subtitle)
+            .size(14)
+            .color(colors.text_secondary)
+            .wrapping(Wrapping::None)
+            .ellipsis(Ellipsis::End),
     ]
-    .spacing(2);
+    .spacing(2)
+    .width(Fill);
 
     // Action icons
     let mut actions: Vec<Element<'a, ItemListMessage, AppTheme>> = Vec::new();
@@ -199,7 +211,7 @@ fn row_element<'a>(
 
     let actions_row = row(actions).spacing(2).align_y(Alignment::Center);
 
-    let content = row![icon_circle, info, Space::new().width(Fill), actions_row]
+    let content = row![icon_circle, info, actions_row]
         .spacing(12)
         .align_y(Alignment::Center);
 

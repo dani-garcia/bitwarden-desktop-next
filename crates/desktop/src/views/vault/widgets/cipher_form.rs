@@ -79,7 +79,7 @@ impl FolderChoice {
 impl std::fmt::Display for FolderChoice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::None => f.write_str("No folder"),
+            Self::None => f.write_str(&fl!("form-folder-none")),
             Self::Folder(fo) => f.write_str(&fo.name),
         }
     }
@@ -105,7 +105,7 @@ impl OrgChoice {
 impl std::fmt::Display for OrgChoice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::None => f.write_str("Personal (me)"),
+            Self::None => f.write_str(&fl!("form-organization-personal")),
             Self::Org(o) => f.write_str(&o.name),
         }
     }
@@ -1434,7 +1434,7 @@ fn title_selector<'a>(
     colors: &'a AppColors,
 ) -> Element<'a, CipherFormMessage, AppTheme> {
     let mut options: Vec<Option<String>> = vec![None];
-    options.extend(["Mr", "Mrs", "Ms", "Mx", "Dr"].into_iter().map(|t| Some(t.to_string())));
+    options.extend(IDENTITY_TITLES.iter().map(|t| Some((*t).to_string())));
 
     let selected = form.modified.identity.as_ref().map(|i| i.title.clone());
 
@@ -1444,11 +1444,27 @@ fn title_selector<'a>(
         options,
         |choice: &Option<String>| match choice {
             None => fl!("form-identity-title-placeholder"),
-            Some(s) => s.clone(),
+            Some(s) => identity_title_label(s),
         },
         CipherFormMessage::IdentityTitleSelected,
         colors,
     )
+}
+
+/// Canonical identity title values, stored on `IdentityView::title` as-is.
+/// Localized for display via [`identity_title_label`]; the stored value is
+/// always one of these English strings so sync with other clients matches.
+const IDENTITY_TITLES: &[&str] = &["Mr", "Mrs", "Ms", "Mx", "Dr"];
+
+fn identity_title_label(value: &str) -> String {
+    match value {
+        "Mr" => fl!("form-identity-title-mr"),
+        "Mrs" => fl!("form-identity-title-mrs"),
+        "Ms" => fl!("form-identity-title-ms"),
+        "Mx" => fl!("form-identity-title-mx"),
+        "Dr" => fl!("form-identity-title-dr"),
+        other => other.to_owned(),
+    }
 }
 
 // ── Generic dropdown primitives ────────────────────────────────────────────

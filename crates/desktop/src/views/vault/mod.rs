@@ -461,13 +461,13 @@ impl VaultView {
                         None => (Task::none(), None),
                     }
                 }
-                DetailPaneMessage::CopyUrl => {
+                DetailPaneMessage::CopyUrl(idx) => {
                     let value = self
                         .selection
                         .detail
                         .as_ref()
                         .and_then(|c| c.login.as_ref())
-                        .and_then(|l| detail_pane::first_login_uri(l))
+                        .and_then(|l| detail_pane::login_uri_at(l, idx))
                         .map(str::to_owned);
                     match value {
                         Some(v) => (
@@ -481,13 +481,13 @@ impl VaultView {
                         None => (Task::none(), None),
                     }
                 }
-                DetailPaneMessage::OpenUrl => {
+                DetailPaneMessage::OpenUrl(idx) => {
                     let uri = self
                         .selection
                         .detail
                         .as_ref()
                         .and_then(|c| c.login.as_ref())
-                        .and_then(|l| detail_pane::first_login_uri(l))
+                        .and_then(|l| detail_pane::login_uri_at(l, idx))
                         .map(str::to_owned);
                     match uri {
                         Some(uri) => (Task::none(), Some(VaultEvent::LaunchUrlRequested { uri })),
@@ -519,6 +519,35 @@ impl VaultView {
                         ),
                         None => (Task::none(), None),
                     }
+                }
+                DetailPaneMessage::CopyCustomField(idx) => {
+                    let field = self
+                        .selection
+                        .detail
+                        .as_ref()
+                        .and_then(|c| c.fields.as_deref())
+                        .and_then(|fs| fs.get(idx));
+                    let Some(field) = field else {
+                        return (Task::none(), None);
+                    };
+                    let Some(value) = field.value.as_deref().map(str::to_owned) else {
+                        return (Task::none(), None);
+                    };
+                    // Only hidden fields go through the sensitive path
+                    // (clipboard gets cleared after a timeout); plain text
+                    // and boolean fields are treated like a copied username.
+                    let sensitivity = match field.r#type {
+                        bitwarden_vault::FieldType::Hidden => Sensitivity::Sensitive,
+                        _ => Sensitivity::Normal,
+                    };
+                    (
+                        Task::none(),
+                        Some(VaultEvent::ClipboardCopyRequested {
+                            value,
+                            sensitivity,
+                            toast_label: fl!("vault-toast-copied-field"),
+                        }),
+                    )
                 }
                 DetailPaneMessage::Delete => {
                     // Open the confirm modal. Actual delete waits for the

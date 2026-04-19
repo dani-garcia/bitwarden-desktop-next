@@ -15,6 +15,7 @@ use iced::{
     Alignment, Background, Border, Color, Element, Fill, Length,
     widget::{
         Component, Space, column, combo_box, component, container, pick_list, row, stack, text,
+        text::{Ellipsis, Wrapping},
         text_input, TextInput,
     },
 };
@@ -483,13 +484,18 @@ impl<'a, Message: Clone + 'a> Component<Message, AppTheme> for RevealField<'a, M
                 text(self.label.clone())
                     .size(12)
                     .color(self.colors.text_muted),
-                text(display).size(14).color(self.colors.text_primary),
+                text(display)
+                    .size(14)
+                    .color(self.colors.text_primary)
+                    .wrapping(Wrapping::None)
+                    .ellipsis(Ellipsis::End),
             ]
             .spacing(2)
             .width(Fill),
             row(buttons_row).spacing(2).align_y(Alignment::Center),
         ]
         .spacing(4)
+        .width(Fill)
         .align_y(Alignment::Center)
         .into()
     }

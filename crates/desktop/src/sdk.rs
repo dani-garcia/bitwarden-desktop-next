@@ -179,6 +179,18 @@ impl ClientManager {
         }
     }
 
+    pub fn verify_data_dir() {
+        let data_dir = data_dir();
+        let meta_path = data_dir.join("mock.json");
+        if !meta_path.is_file() {
+            tracing::error!(
+                path = %meta_path.display(),
+                "mock.json not found; regenerate via `cargo run -p fake-data`"
+            );
+            std::process::exit(0);
+        }
+    }
+
     /// Discover users by listing `*.sqlite` files under `<workspace-root>/data/`
     /// and pairing them with metadata from `data/mock.json`. Each user gets a
     /// `PasswordManagerClient` whose state registry is initialized against that
@@ -186,12 +198,8 @@ impl ClientManager {
     pub async fn load() -> Self {
         let data_dir = data_dir();
         let meta_path = data_dir.join("mock.json");
-        let file = std::fs::File::open(&meta_path).unwrap_or_else(|e| {
-            panic!(
-                "failed to open {}: {e}; regenerate via `cargo run -p fake-data`",
-                meta_path.display()
-            )
-        });
+        let file = std::fs::File::open(&meta_path)
+            .expect("failed to open mock data directory; regenerate via `cargo run -p fake-data`");
         let meta: MockVaultMeta = serde_json::from_reader(BufReader::new(file))
             .expect("mock.json is malformed; regenerate via `cargo run -p fake-data`");
 
