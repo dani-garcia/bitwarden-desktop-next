@@ -30,9 +30,13 @@ opt-level = 3
 
 [profile.release]
 codegen-units = 1
+strip = "debuginfo"
+# `lto = "fat"` trims another ~5% but roughly doubles link time.
 lto = "thin"
-# strip = true
+# ~30% smaller binary. But worse performance when not using GPU acceleration.
 # opt-level = "z"
+# ~20% smaller binary, but turns every `std::panic::catch_unwind` into a hard process abort.
+# panic = "abort"
 
 # Enable optimization for the bitwarden-crypto crate. This will increase the binary size slightly (~0.1MB),
 # but it will more aggressively inline functions. This will help us avoid extra stack copies of keys and
