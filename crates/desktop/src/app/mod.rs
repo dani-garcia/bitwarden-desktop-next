@@ -231,12 +231,23 @@ impl App {
             _ => None,
         });
 
-        // muda's `MenuEvent::receiver()` is global — both the native app
-        // menu and the tray menu dispatch to it. Tray clicks come through
-        // `TrayIconEvent::receiver()` but we poll both on the same tick.
+        // muda's `MenuEvent::receiver()` is global — the native app menu and
+        // the tray context menu both dispatch to it. A single pump thread
+        // (bound inside the stream) forwards events here; the handler filters
+        // by `MenuId` to decide whether it's an app-menu or tray-menu click.
         let muda_sub = if self.native_menu.is_some() || self.tray.is_some() {
-            time::every(std::time::Duration::from_millis(16))
-                .map(|_| Message::System(SystemMessage::PollMudaAndTray))
+            Subscription::run(crate::menu::muda_event_stream)
+                .map(|ev| Message::System(SystemMessage::MudaEvent(ev)))
+        } else {
+            Subscription::none()
+        };
+
+        // Tray icon left-click events come through a separate receiver. The
+        // stream filters to the click-to-toggle case before emitting, so the
+        // handler just runs the action.
+        let tray_sub = if self.tray.is_some() {
+            Subscription::run(crate::tray::click_stream)
+                .map(|action| Message::System(SystemMessage::TrayClick(action)))
         } else {
             Subscription::none()
         };
@@ -260,7 +271,7 @@ impl App {
             .map(|_| Message::System(SystemMessage::InstanceWakeRequested));
 
         Subscription::batch([
-            close_sub, event_sub, muda_sub, theme_sub, totp_sub, wake_sub,
+            close_sub, event_sub, muda_sub, tray_sub, theme_sub, totp_sub, wake_sub,
         ])
     }
 

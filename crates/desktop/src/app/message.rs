@@ -47,10 +47,15 @@ pub enum WindowMessage {
 /// Global signals that aren't tied to a specific window.
 #[derive(Debug, Clone)]
 pub enum SystemMessage {
-    /// 16ms tick draining muda's `MenuEvent` queue (app menu + tray menu
-    /// share one global receiver) and tray-icon click events. Emitted
-    /// whenever a native menu handle or a tray handle exists.
-    PollMudaAndTray,
+    /// A muda-managed menu item was activated — either from the native app
+    /// menu or the tray context menu (they share one global receiver). The
+    /// handler looks the id up on `NativeMenuHandle` / `TrayHandle` to
+    /// decide which action to run.
+    MudaEvent(muda::MenuEvent),
+    /// Left-click released on the tray icon — emitted by the pump in
+    /// [`crate::tray::click_stream`] which already filters to the
+    /// click-to-toggle case.
+    TrayClick(crate::tray::TrayAction),
     /// OS-level light/dark theme changed. `ThemePreference::System` follows
     /// this; explicit Light/Dark preferences ignore it.
     ThemeChanged,

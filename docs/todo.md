@@ -149,10 +149,6 @@ Before we grow many more call sites (unlock failure, copy-to-clipboard, sync err
 
 **Prereq for useful measurement**: benchmark both before and after with the loadtest account active and native menus attached.
 
-### Event-driven muda bridge
-
-`PollNativeMenu` subscription fires every 16 ms when `native_menu.is_some()` — a continuous update churn even when no menu event happened. Replace with a channel-backed `Subscription::run` wired to `muda::MenuEvent::receiver()` so only real menu events wake `update`. Architectural change; low ROI until perf measurement actually flags it.
-
 ### Precompute lowercase search keys
 
 `VaultView::filter_items` re-lowercases `name`, `subtitle`, and URI per item per keystroke. On the 20 k loadtest account that's ~60 k allocations per keystroke. Wrap `CipherListView` in a `CipherRow { inner: Arc<CipherListView>, name_lc: String, subtitle_lc: String, uri_lc: Option<String> }` populated once on `ListLoaded`. Filter against pre-lowered strings. Pairs well with the `Arc<[CipherListView]>` micro-optimization in Tier 4.

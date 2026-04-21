@@ -78,7 +78,7 @@ pub fn cleanup_stale_socket() {
 /// iced can hash the subscription identity and keep the listener alive
 /// across `update()` cycles.
 pub fn wake_stream() -> impl Stream<Item = ()> {
-    iced::stream::channel(1, |out: mpsc::Sender<()>| async move {
+    iced::stream::channel(16, |out: mpsc::Sender<()>| async move {
         #[cfg(unix)]
         {
             use tokio::net::UnixListener;

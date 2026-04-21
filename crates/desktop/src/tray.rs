@@ -21,6 +21,7 @@
 
 use std::collections::HashMap;
 
+use iced::futures::{SinkExt, Stream};
 use tray_icon::{
     TrayIcon, TrayIconBuilder,
     menu::{Menu, MenuId, MenuItem},
@@ -107,25 +108,43 @@ pub fn build() -> Option<TrayHandle> {
     })
 }
 
-/// Drain every pending tray-icon click event, returning the actions the
-/// matching ones produce. Left-click (released) toggles window visibility;
-/// right-click opens the context menu natively on all platforms so we
-/// don't handle it here. Non-matching events are swallowed to keep the
-/// channel from backing up.
-pub fn drain_click_actions() -> Vec<TrayAction> {
+/// Iced-compatible stream that yields one [`TrayAction`] per qualifying
+/// left-click on the tray icon. Non-matching tray events (right-click,
+/// button-down, mouse-enter, …) are swallowed in the pump thread so they
+/// never reach the subscription.
+///
+/// Bridges `tray-icon`'s global blocking receiver into iced via a dedicated
+/// std thread + tokio channel, same shape as [`crate::menu::muda_event_stream`].
+/// Use with [`iced::Subscription::run`] as a `fn` pointer.
+pub fn click_stream() -> impl Stream<Item = TrayAction> {
+    use iced::futures::channel::mpsc;
     use tray_icon::{MouseButton, MouseButtonState, TrayIconEvent};
-    let mut out = Vec::new();
-    while let Ok(event) = TrayIconEvent::receiver().try_recv() {
-        if let TrayIconEvent::Click {
-            button: MouseButton::Left,
-            button_state: MouseButtonState::Up,
-            ..
-        } = event
-        {
-            out.push(TrayAction::ToggleShowHide);
+
+    iced::stream::channel(16, |mut out: mpsc::Sender<_>| async move {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        std::thread::Builder::new()
+            .name("tray-pump".into())
+            .spawn(move || {
+                while let Ok(event) = TrayIconEvent::receiver().recv() {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                        && tx.send(TrayAction::ToggleShowHide).is_err()
+                    {
+                        break;
+                    }
+                }
+            })
+            .expect("spawn tray pump thread");
+
+        while let Some(action) = rx.recv().await {
+            if out.send(action).await.is_err() {
+                break;
+            }
         }
-    }
-    out
+    })
 }
 
 fn decode_icon() -> Result<tray_icon::Icon, Box<dyn std::error::Error>> {

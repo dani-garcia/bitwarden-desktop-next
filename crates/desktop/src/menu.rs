@@ -1,3 +1,4 @@
+use iced::futures::{SinkExt, Stream};
 use muda::{Menu, MenuItem as MudaMenuItem, PredefinedMenuItem, Submenu};
 
 // ---------------------------------------------------------------------------
@@ -433,6 +434,46 @@ pub const MENUS: &[(&str, &[MenuEntry])] = &[
         ],
     ),
 ];
+
+// ---------------------------------------------------------------------------
+// Event stream (subscription-driven muda pump)
+// ---------------------------------------------------------------------------
+
+/// Iced-compatible stream that yields one [`muda::MenuEvent`] per click on a
+/// muda-managed menu item. Bridges `muda`'s global blocking receiver into
+/// iced's async subscription world: a dedicated std thread owns the
+/// `recv()` side and forwards through a tokio channel that the subscription
+/// awaits.
+///
+/// Use as a `fn` pointer with [`iced::Subscription::run`] — iced hashes the
+/// function identity, so returning this from `subscription()` keeps a single
+/// long-lived pump across update cycles instead of recreating it.
+///
+/// The muda receiver is shared between the native app menu and the tray
+/// menu, so one pump covers both; callers filter by `MenuId` on the App
+/// side.
+pub fn muda_event_stream() -> impl Stream<Item = muda::MenuEvent> {
+    use iced::futures::channel::mpsc;
+    iced::stream::channel(16, |mut out: mpsc::Sender<_>| async move {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        std::thread::Builder::new()
+            .name("muda-pump".into())
+            .spawn(move || {
+                while let Ok(ev) = muda::MenuEvent::receiver().recv() {
+                    if tx.send(ev).is_err() {
+                        break;
+                    }
+                }
+            })
+            .expect("spawn muda pump thread");
+
+        while let Some(ev) = rx.recv().await {
+            if out.send(ev).await.is_err() {
+                break;
+            }
+        }
+    })
+}
 
 // ---------------------------------------------------------------------------
 // Shortcut → action lookup (for keyboard handling)

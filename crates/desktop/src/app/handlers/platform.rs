@@ -148,32 +148,23 @@ impl App {
 
     pub(in crate::app) fn handle_system_message(&mut self, msg: SystemMessage) -> Task<Message> {
         match msg {
-            SystemMessage::PollMudaAndTray => {
-                // Drain both receivers fully per tick — muda's channel is
-                // unbounded and the caller is responsible for emptying it.
+            SystemMessage::MudaEvent(event) => {
                 // The muda receiver is shared between the native app menu
-                // and the tray menu, so every event resolves against both.
-                let mut tasks: Vec<Task<Message>> = Vec::new();
-                while let Ok(event) = muda::MenuEvent::receiver().try_recv() {
-                    if let Some(ref handle) = self.native_menu
-                        && let Some(action) = handle.resolve(&event.id)
-                    {
-                        tasks.push(self.handle_menu_action(action));
-                        continue;
-                    }
-                    if let Some(ref handle) = self.tray
-                        && let Some(action) = handle.resolve(&event.id)
-                    {
-                        tasks.push(self.handle_tray_action(action));
-                    }
+                // and the tray context menu — resolve against both. Native
+                // menu matches always win; tray menu is the fallback.
+                if let Some(handle) = &self.native_menu
+                    && let Some(action) = handle.resolve(&event.id)
+                {
+                    return self.handle_menu_action(action);
                 }
-                if self.tray.is_some() {
-                    for action in crate::tray::drain_click_actions() {
-                        tasks.push(self.handle_tray_action(action));
-                    }
+                if let Some(handle) = &self.tray
+                    && let Some(action) = handle.resolve(&event.id)
+                {
+                    return self.handle_tray_action(action);
                 }
-                Task::batch(tasks)
+                Task::none()
             }
+            SystemMessage::TrayClick(action) => self.handle_tray_action(action),
             SystemMessage::ThemeChanged => {
                 self.theme.refresh();
                 Task::none()
