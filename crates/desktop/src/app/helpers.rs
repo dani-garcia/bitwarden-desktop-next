@@ -34,6 +34,16 @@ impl App {
         self.toasts.push(toast);
     }
 
+    /// Close every overlay owned by a sub-view or the title bar. Distinct
+    /// from the router's cross-view dismissal arms, which only close the
+    /// *other* view's overlays — this one is for "opening something on top
+    /// of everything" cases like the settings modal.
+    pub(super) fn dismiss_all_overlays(&mut self) {
+        self.title_bar.dismiss_menu();
+        self.login_view.dismiss_dropdowns();
+        self.vault_view.dismiss_dropdowns();
+    }
+
     pub(super) fn active_account_entry(&self) -> Option<&AccountEntry> {
         self.active_user
             .as_ref()
@@ -84,6 +94,11 @@ impl App {
     pub(super) fn handle_user_switch(&mut self, uid: UserId) -> Task<Message> {
         self.active_user = Some(uid);
         self.vault_view.reset(&uid);
+        // Re-apply the new user's clipboard clear delay so the app-global
+        // clipboard manager matches their preference.
+        let delay = self.settings.preferences_for(&uid).clear_clipboard;
+        self.clipboard.set_timeout(delay.as_duration());
+
         if !self.client_manager.is_unlocked(&uid) {
             self.screen = Screen::Login;
             self.login_view

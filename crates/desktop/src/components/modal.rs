@@ -11,7 +11,7 @@
 
 use iced::{
     Color, Element, Fill, Length,
-    widget::{Space, center, container, mouse_area, stack},
+    widget::{Space, center, container, mouse_area, opaque, stack},
 };
 
 use crate::theme::AppTheme;
@@ -23,6 +23,10 @@ const BACKDROP: Color = Color::from_rgba(0.0, 0.0, 0.0, 0.45);
 /// Clicks on the exposed backdrop fire `on_dismiss`; clicks on the dialog
 /// itself are absorbed by z-order. The caller's `dialog` is responsible
 /// for its own background, padding, and border radius.
+///
+/// The whole overlay is wrapped in [`opaque`] so mouse moves and hovers
+/// can't reach widgets beneath — otherwise buttons below would still light
+/// up under the scrim, suggesting they're interactive.
 pub fn view<'a, Message: Clone + 'a>(
     dialog: Element<'a, Message, AppTheme>,
     on_dismiss: Message,
@@ -37,5 +41,5 @@ pub fn view<'a, Message: Clone + 'a>(
 
     let centered = center(dialog).width(Length::Fill).height(Length::Fill);
 
-    stack![backdrop, centered].width(Fill).height(Fill).into()
+    opaque(stack![backdrop, centered].width(Fill).height(Fill))
 }

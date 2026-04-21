@@ -1,0 +1,111 @@
+use iced::Task;
+
+use crate::views::settings::{SettingChange, SettingsEvent};
+
+use super::super::{App, Message};
+
+impl App {
+    pub(in crate::app) fn handle_settings_event(
+        &mut self,
+        event: SettingsEvent,
+    ) -> Task<Message> {
+        match event {
+            SettingsEvent::Applied(change) => self.apply_setting_change(change),
+        }
+    }
+
+    /// Pull the view's working snapshot back into the persisted
+    /// [`Settings`][crate::settings::Settings] (the view is the source of
+    /// truth during the modal's lifetime), then run any runtime side effect
+    /// that the change requires — a theme refresh, a language switch,
+    /// clipboard-timeout push, tray respawn — or emit the generic
+    /// "not supported yet" toast for stubbed fields.
+    //
+    // TODO: `self.settings.save()` below is a blocking `fs::File::create` +
+    // `serde_json::to_writer_pretty` on the iced update thread. Small writes
+    // are imperceptible on local disks, but on slow / network-mapped volumes
+    // they stall the frame. Offload via `Task::perform` on a cloned `Settings`
+    // or debounce dirty writes through a flush task.
+    fn apply_setting_change(&mut self, change: SettingChange) -> Task<Message> {
+        // Copy every field the view just mutated back into App state. The
+        // view's snapshot holds the fresh `Settings` (including the full
+        // `user_preferences` map from open time) plus the active user's
+        // freshly-edited `UserPreferences`; overwrite the active slot so
+        // other users' prefs stay intact.
+        self.settings = self.settings_view.snapshot.settings.clone();
+        if let Some(uid) = self.active_user {
+            self.settings
+                .user_preferences
+                .insert(uid, self.settings_view.snapshot.prefs);
+        }
+        self.settings.save(); // TODO: offload, see note above
+
+        // Side effects: live-wired changes need a nudge, stubs get a toast.
+        match change {
+            SettingChange::Theme(p) => {
+                self.theme.preference = p;
+                self.theme.current = p.resolve(self.theme.system.get_scheme());
+            }
+            SettingChange::Language(tag) => {
+                if tag.is_empty() {
+                    // Empty = follow OS locale. Re-run the initial selection
+                    // so the next `fl!()` call picks up the OS preference.
+                    crate::i18n::init();
+                } else if let Ok(lang_id) = tag.parse() {
+                    crate::i18n::set_language(lang_id);
+                } else {
+                    tracing::warn!(%tag, "unparseable language tag; ignoring");
+                }
+            }
+            SettingChange::ClearClipboard(delay) => {
+                self.clipboard.set_timeout(delay.as_duration());
+            }
+            SettingChange::TrayEnabled(_)
+            | SettingChange::MinimizeToTray(_)
+            | SettingChange::CloseToTray(_)
+            | SettingChange::StartToTray(_) => self.refresh_tray(),
+
+            // Every remaining variant is currently unwired — the value was
+            // persisted above, but the feature doesn't react yet. Let the
+            // user know with a toast.
+            SettingChange::OpenAtLogin(_)
+            | SettingChange::PinUnlock(_)
+            | SettingChange::TouchIdUnlock(_)
+            | SettingChange::LockAfter(_)
+            | SettingChange::LogoutAfter(_)
+            | SettingChange::BrowserIntegration(_)
+            | SettingChange::BrowserIntegrationFingerprint(_)
+            | SettingChange::SshAgent(_)
+            | SettingChange::SshPromptBehavior(_)
+            | SettingChange::DuckDuckGo(_)
+            | SettingChange::AutotypeEnabled(_)
+            | SettingChange::MinimizeOnCopy(_)
+            | SettingChange::ShowFavicons(_)
+            | SettingChange::AlwaysShowDock(_)
+            | SettingChange::HardwareAcceleration(_)
+            | SettingChange::AllowScreenshots(_) => {
+                self.push_toast(crate::views::settings::not_supported_toast());
+            }
+        }
+        Task::none()
+    }
+
+    /// Ensure the tray reflects `self.settings.wants_tray()` — create one on
+    /// enable, drop it on full disable. Called after any tray-related
+    /// setting change.
+    fn refresh_tray(&mut self) {
+        let wants = self.settings.wants_tray();
+        match (wants, self.tray.is_some()) {
+            (true, false) => {
+                self.tray = crate::tray::build();
+                if self.tray.is_none() {
+                    tracing::warn!("tray requested via settings but failed to initialise");
+                }
+            }
+            (false, true) => {
+                self.tray = None;
+            }
+            _ => {}
+        }
+    }
+}

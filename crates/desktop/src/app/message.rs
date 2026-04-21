@@ -3,7 +3,8 @@ use std::sync::Arc;
 use crate::{
     sdk::ClientManager,
     views::{
-        about::AboutMessage, login::LoginMessage, title_bar::TitleBarMessage, vault::VaultMessage,
+        about::AboutMessage, login::LoginMessage, settings::SettingsMessage,
+        title_bar::TitleBarMessage, vault::VaultMessage,
     },
 };
 
@@ -21,6 +22,7 @@ pub enum Message {
     Vault(VaultMessage),
     TitleBar(TitleBarMessage),
     About(AboutMessage),
+    Settings(SettingsMessage),
     Window(WindowMessage),
     System(SystemMessage),
 }

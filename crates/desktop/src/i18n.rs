@@ -62,7 +62,6 @@ pub fn init() {
 ///
 /// Falls back to English (with a warning log) if the requested language has no
 /// matching `.ftl` file under `assets/i18n/`.
-#[expect(dead_code)] // Wired up once the settings view with a language picker lands.
 pub fn set_language(lang: LanguageIdentifier) {
     if let Err(e) = i18n_embed::select(
         &*LANGUAGE_LOADER,
@@ -74,12 +73,28 @@ pub fn set_language(lang: LanguageIdentifier) {
 }
 
 /// Languages with at least one `.ftl` file under `assets/i18n/`. Useful for
-/// populating a language picker.
-#[expect(dead_code)] // Wired up once the settings view with a language picker lands.
+/// populating a language picker. The list is computed from the embedded
+/// assets, so dropping a new `assets/i18n/<tag>/` directory is enough to
+/// surface a new language in the UI — no code changes.
 pub fn available_languages() -> Vec<LanguageIdentifier> {
     LANGUAGE_LOADER
         .available_languages(&Localizations)
         .unwrap_or_default()
+}
+
+/// Human-readable label for a language tag, shown in the settings language
+/// picker. All native names live in the English FTL file under
+/// `language-name-<tag>` keys (marked "do not translate") — they always
+/// render in their own script regardless of the active locale. Falls back to
+/// the raw tag when no entry exists so a new locale still appears in the
+/// picker until someone adds its name to the English file.
+pub fn language_label(tag: &str) -> String {
+    let key = format!("language-name-{tag}");
+    if LANGUAGE_LOADER.has(&key) {
+        LANGUAGE_LOADER.get(&key)
+    } else {
+        tag.to_string()
+    }
 }
 
 /// Runtime key lookup. Prefer the [`fl!`][crate::fl] macro when the key is a

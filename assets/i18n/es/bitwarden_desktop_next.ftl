@@ -330,3 +330,80 @@ menu-help-about = Acerca de Bitwarden
 tray-show-hide = Mostrar / Ocultar
 tray-lock-vault = Bloquear caja fuerte
 tray-exit = Salir
+
+## Modal de ajustes
+settings-title = Ajustes
+settings-tab-security = Seguridad
+settings-tab-integrations = Integraciones
+settings-tab-autotype = Autocompletado y portapapeles
+settings-tab-appearance = Apariencia
+settings-tab-advanced = Avanzado
+
+settings-toast-not-supported = Esta opción aún no está disponible.
+
+# Pestaña Seguridad
+settings-security-access-options = Opciones de acceso
+settings-security-open-at-login = Abrir Bitwarden al iniciar sesión
+settings-security-unlock-pin = Desbloquear con PIN
+settings-security-unlock-touch = Desbloquear con Touch ID
+settings-security-session-timeout = Tiempo de sesión
+settings-security-lock-after = Bloquear tras
+settings-security-logout-after = Cerrar sesión tras
+
+# Cadenas de duración compartidas entre los desplegables de tiempo (bloquear,
+# cerrar sesión, borrar portapapeles). Los plurales los resuelve Fluent.
+settings-duration-seconds = { $n ->
+    [one] { $n } segundo
+   *[other] { $n } segundos
+  }
+settings-duration-minutes = { $n ->
+    [one] { $n } minuto
+   *[other] { $n } minutos
+  }
+settings-duration-hours = { $n ->
+    [one] { $n } hora
+   *[other] { $n } horas
+  }
+settings-duration-never = Nunca
+
+# Pestaña Integraciones
+settings-integrations-browser = Integración con el navegador
+settings-integrations-browser-enable = Activar integración con el navegador
+settings-integrations-browser-fingerprint = Requerir huella de verificación
+settings-integrations-ssh = Agente SSH
+settings-integrations-ssh-enable = Activar agente SSH
+settings-integrations-ssh-prompt = Comportamiento de la solicitud
+settings-ssh-prompt-always = Siempre
+settings-ssh-prompt-never = Nunca
+settings-ssh-prompt-remember = Recordar hasta bloquear
+settings-integrations-other = Otros
+settings-integrations-duckduckgo = Activar integración con DuckDuckGo
+
+# Pestaña Autocompletado y portapapeles
+settings-autotype-heading = Autocompletado
+settings-autotype-enable = Activar autocompletado
+settings-clipboard-heading = Portapapeles
+settings-clipboard-clear-after = Borrar portapapeles tras
+settings-clipboard-minimize-on-copy = Minimizar al copiar
+
+# Pestaña Apariencia
+settings-appearance-theme-heading = Tema
+settings-appearance-theme = Tema
+settings-appearance-theme-system = Sistema
+settings-appearance-theme-light = Claro
+settings-appearance-theme-dark = Oscuro
+settings-appearance-language = Idioma
+settings-appearance-language-system = Sistema
+settings-appearance-display-heading = Visualización
+settings-appearance-show-favicons = Mostrar iconos de URL
+
+# Pestaña Avanzado
+settings-advanced-tray = Bandeja
+settings-advanced-tray-enable = Mostrar icono en la bandeja
+settings-advanced-minimize-to-tray = Minimizar a la bandeja
+settings-advanced-close-to-tray = Cerrar a la bandeja
+settings-advanced-start-to-tray = Iniciar en la bandeja
+settings-advanced-platform = Plataforma
+settings-advanced-always-show-dock = Mostrar siempre el icono del Dock
+settings-advanced-hardware-acceleration = Activar aceleración por hardware
+settings-advanced-allow-screenshots = Permitir capturas de pantalla

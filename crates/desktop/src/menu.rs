@@ -177,6 +177,7 @@ pub enum MenuAction {
     ToggleAlwaysOnTop,
     Close,
     About,
+    Settings,
 }
 
 // ---------------------------------------------------------------------------
@@ -319,7 +320,10 @@ pub const MENUS: &[(&str, &[MenuEntry])] = &[
             E("menu-file-import").when(Unlocked),
             E("menu-file-export").when(Unlocked),
             SEP,
-            E("menu-file-settings").key(cmd(',')).when(Unlocked),
+            E("menu-file-settings")
+                .key(cmd(','))
+                .when(Unlocked)
+                .action(Settings),
             // Lock/Log out submenus: dynamically populated with account emails at runtime
             E("menu-file-lock-vault").when(HasLockable).sub(&[]),
             E("menu-file-lock-all-vaults")

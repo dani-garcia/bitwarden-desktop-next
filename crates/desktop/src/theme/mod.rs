@@ -19,9 +19,10 @@ pub struct AppTheme {
 }
 
 /// User preference for which theme to use.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[expect(dead_code)] // Light/Dark used when settings UI is wired
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum ThemePreference {
+    #[default]
     System,
     Light,
     Dark,
@@ -114,6 +115,11 @@ pub struct AppColors {
     pub border: Color,
     /// Sidebar selected item background
     pub sidebar_selected: Color,
+    /// Selected row background in light-surface contexts (e.g. the settings
+    /// modal sidebar). A darker gray than `item_hover` so the selection
+    /// reads as distinct from mere hover. Separate from `sidebar_selected`
+    /// which is tuned for dark navy nav rails.
+    pub surface_selected: Color,
     /// Primary action button background
     pub button_primary: Color,
     /// Primary action button hover

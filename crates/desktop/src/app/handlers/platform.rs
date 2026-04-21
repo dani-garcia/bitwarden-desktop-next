@@ -1,107 +1,41 @@
+//! Platform / OS integration handlers — window chrome, system events, menu
+//! dispatch, and tray actions. Kept together because menu/tray actions
+//! frequently manipulate the window (minimize to tray, hide-to-tray on close,
+//! show on IPC wake), and the window-message handler dispatches menu actions
+//! on keyboard shortcuts.
+
 use iced::Task;
 
 use crate::{
-    clipboard::{self, Sensitivity},
+    clipboard::Sensitivity,
     state::Screen,
     views::{
-        about::AboutMessage,
-        login::LoginEvent,
+        about::{self, AboutMessage},
+        settings::SettingsSnapshot,
         title_bar::{TitleBarEvent, WindowCommand},
-        vault::{VaultEvent, widgets::search_bar},
+        vault::widgets::search_bar,
     },
 };
 
-use super::{App, Message, SystemMessage, WindowInfo, WindowKind, WindowMessage};
+use super::super::{App, Message, SystemMessage, WindowInfo, WindowKind, WindowMessage};
 
 impl App {
     // ── Sub-view event handlers ────────────────────────────────────────────
-    //
-    // One `handle_*_event` per sub-view. Each handler receives a declarative
-    // event from its view's `update()` and translates it into App-level side
-    // effects (state mutation, screen switches, follow-on async tasks).
 
-    pub(super) fn handle_login_event(&mut self, event: LoginEvent) -> Task<Message> {
-        match event {
-            LoginEvent::Unlocked { uid } | LoginEvent::LoggedIn { uid } => {
-                if self.active_user != Some(uid) {
-                    tracing::debug!(
-                        %uid,
-                        "unlock event dropped: active user changed while in flight"
-                    );
-                    return Task::none();
-                }
-                self.screen = Screen::Vault;
-                tracing::info!(%uid, "unlock succeeded; loading vault list");
-                self.load_vault_list_task(uid)
-            }
-            LoginEvent::SignOutRequested => {
-                if let Some(ref uid) = self.active_user {
-                    self.vault_view.remove_user_items(uid);
-                    // TODO: remove user from ClientManager (requires interior mutability)
-                }
-                let next_uid = self
-                    .client_manager
-                    .user_ids()
-                    .find(|id| self.active_user.as_ref() != Some(id))
-                    .cloned();
-                match next_uid {
-                    Some(uid) => self.handle_user_switch(uid),
-                    None => {
-                        self.active_user = None;
-                        self.screen = Screen::Login;
-                        self.login_view.reset_to_email_entry();
-                        Task::none()
-                    }
-                }
-            }
-            LoginEvent::UserSelected { uid } => self.handle_user_switch(uid),
-            LoginEvent::ToastRequested(t) => {
-                self.push_toast(t);
-                Task::none()
-            }
-        }
-    }
-
-    pub(super) fn handle_vault_event(&mut self, event: VaultEvent) -> Task<Message> {
-        match event {
-            VaultEvent::UserSelected { uid } => self.handle_user_switch(uid),
-            VaultEvent::AddAccountRequested => {
-                self.screen = Screen::Login;
-                self.login_view.reset_to_email_entry();
-                Task::none()
-            }
-            VaultEvent::ToastRequested(t) => {
-                self.push_toast(t);
-                Task::none()
-            }
-            VaultEvent::ClipboardCopyRequested {
-                value,
-                sensitivity,
-                toast_label,
-            } => {
-                self.clipboard.copy(value, sensitivity);
-                self.push_toast(crate::components::toast::Toast::success(toast_label, None));
-                Task::none()
-            }
-            VaultEvent::LaunchUrlRequested { uri } => {
-                clipboard::launch_url(&uri);
-                Task::none()
-            }
-        }
-    }
-
-    pub(super) fn handle_titlebar_event(&mut self, event: TitleBarEvent) -> Task<Message> {
+    pub(in crate::app) fn handle_titlebar_event(
+        &mut self,
+        event: TitleBarEvent,
+    ) -> Task<Message> {
         match event {
             TitleBarEvent::MenuInvoked(menu_action) => self.handle_menu_action(menu_action),
             TitleBarEvent::Window(cmd) => self.handle_window_command(cmd),
         }
     }
 
-    pub(super) fn handle_about_message(&mut self, msg: AboutMessage) -> Task<Message> {
+    pub(in crate::app) fn handle_about_message(&mut self, msg: AboutMessage) -> Task<Message> {
         match msg {
             AboutMessage::CopyInfo => {
-                self.clipboard
-                    .copy(crate::views::about::info_string(), Sensitivity::Normal);
+                self.clipboard.copy(about::info_string(), Sensitivity::Normal);
                 Task::none()
             }
             AboutMessage::Close => {
@@ -114,9 +48,9 @@ impl App {
         }
     }
 
-    // ── Window + system handlers ───────────────────────────────────────────
+    // ── Window lifecycle ───────────────────────────────────────────────────
 
-    pub(super) fn handle_window_command(&mut self, cmd: WindowCommand) -> Task<Message> {
+    fn handle_window_command(&mut self, cmd: WindowCommand) -> Task<Message> {
         let id = self.main_window_id();
         match cmd {
             WindowCommand::Minimize => {
@@ -144,7 +78,7 @@ impl App {
         }
     }
 
-    pub(super) fn handle_window_message(&mut self, msg: WindowMessage) -> Task<Message> {
+    pub(in crate::app) fn handle_window_message(&mut self, msg: WindowMessage) -> Task<Message> {
         match msg {
             WindowMessage::Opened(id) => {
                 // Native menu only attaches to the main window.
@@ -190,6 +124,15 @@ impl App {
                 let iced::keyboard::Event::KeyPressed { key, modifiers, .. } = ev else {
                     return Task::none();
                 };
+                // Escape closes the settings modal before any menu shortcut
+                // lookup — otherwise the user's Escape press would fall
+                // through to widgets behind the modal.
+                if matches!(key, iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape))
+                    && self.settings_view.open
+                {
+                    self.settings_view.close();
+                    return Task::none();
+                }
                 let state = self.menu_state();
                 let Some(action) = crate::menu::find_shortcut_action(&key, modifiers, &state)
                 else {
@@ -201,7 +144,9 @@ impl App {
         }
     }
 
-    pub(super) fn handle_system_message(&mut self, msg: SystemMessage) -> Task<Message> {
+    // ── System signals ─────────────────────────────────────────────────────
+
+    pub(in crate::app) fn handle_system_message(&mut self, msg: SystemMessage) -> Task<Message> {
         match msg {
             SystemMessage::PollMudaAndTray => {
                 // Drain both receivers fully per tick — muda's channel is
@@ -251,9 +196,9 @@ impl App {
         }
     }
 
-    // ── Menu action handler ────────────────────────────────────────────────
+    // ── Menu + tray dispatch ───────────────────────────────────────────────
 
-    pub(super) fn handle_menu_action(&mut self, action: crate::menu::MenuAction) -> Task<Message> {
+    fn handle_menu_action(&mut self, action: crate::menu::MenuAction) -> Task<Message> {
         use crate::menu::MenuAction;
         match action {
             MenuAction::Quit => {
@@ -300,6 +245,20 @@ impl App {
                 }
             }
             MenuAction::ToggleAlwaysOnTop => {}
+            MenuAction::Settings => {
+                if let Some(uid) = self.active_user {
+                    // The caller paths (muda poll, Ctrl+,) don't pass
+                    // through the router dismiss block, so close any open
+                    // dropdowns here before the modal appears on top.
+                    self.dismiss_all_overlays();
+
+                    let snap = SettingsSnapshot {
+                        settings: self.settings.clone(),
+                        prefs: self.settings.preferences_for(&uid),
+                    };
+                    self.settings_view.open_with(snap);
+                }
+            }
             MenuAction::About => {
                 // Re-focus existing About window if already open.
                 if let Some(id) = self.about_window_id() {
@@ -330,9 +289,7 @@ impl App {
         Task::none()
     }
 
-    // ── Tray action handler ────────────────────────────────────────────────
-
-    pub(super) fn handle_tray_action(&mut self, action: crate::tray::TrayAction) -> Task<Message> {
+    fn handle_tray_action(&mut self, action: crate::tray::TrayAction) -> Task<Message> {
         use crate::tray::TrayAction;
         match action {
             TrayAction::ToggleShowHide => self.toggle_main_window_visibility(),
@@ -345,11 +302,11 @@ impl App {
 
     // ── Window visibility helpers (tray + IPC wake) ────────────────────────
 
-    pub(super) fn hide_main_window(&mut self) -> Task<Message> {
+    fn hide_main_window(&mut self) -> Task<Message> {
         iced::window::set_mode(self.main_window_id(), iced::window::Mode::Hidden)
     }
 
-    pub(super) fn show_main_window(&mut self) -> Task<Message> {
+    fn show_main_window(&mut self) -> Task<Message> {
         let id = self.main_window_id();
         Task::batch([
             iced::window::set_mode(id, iced::window::Mode::Windowed),
@@ -362,7 +319,7 @@ impl App {
     /// reading a local bool would be, imperceptible for a tray click. Iced
     /// is the single source of truth, so we can't drift out of sync with
     /// the OS-level window state. `Fullscreen` counts as visible.
-    pub(super) fn toggle_main_window_visibility(&mut self) -> Task<Message> {
+    fn toggle_main_window_visibility(&mut self) -> Task<Message> {
         let id = self.main_window_id();
         iced::window::mode(id).then(move |mode| match mode {
             iced::window::Mode::Hidden => Task::batch([
@@ -379,7 +336,7 @@ impl App {
     /// after the call — callers that would hide the window to the tray must
     /// check this and fall through to a normal minimize/close on `false`,
     /// otherwise the window becomes unrecoverable (hidden with no tray icon).
-    pub(super) fn ensure_tray(&mut self) -> bool {
+    fn ensure_tray(&mut self) -> bool {
         if self.tray.is_none() {
             self.tray = crate::tray::build();
             if self.tray.is_none() {

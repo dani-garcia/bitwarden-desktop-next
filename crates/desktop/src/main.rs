@@ -8,6 +8,7 @@ mod i18n;
 mod instance_lock;
 mod menu;
 mod paths;
+mod preferences;
 mod sdk;
 mod settings;
 mod state;

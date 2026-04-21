@@ -21,7 +21,7 @@ use crate::{
     theme::{AppTheme, ThemePreference},
     tray::TrayHandle,
     views::{
-        login,
+        login, settings as settings_view,
         title_bar::{self, TitleBarMessage},
         vault,
     },
@@ -36,6 +36,7 @@ pub struct App {
     // ── Sub-views (each owns its own state + async lifecycle) ──────────────
     pub(super) login_view: login::LoginView,
     pub(super) vault_view: vault::VaultView,
+    pub(super) settings_view: settings_view::SettingsView,
     pub(super) title_bar: title_bar::TitleBarState,
 
     // ── External dependencies ──────────────────────────────────────────────
@@ -118,8 +119,17 @@ pub(super) const MAIN_WINDOW_SIZE: iced::Size = iced::Size::new(1024.0, 800.0);
 
 impl App {
     pub fn new() -> (Self, Task<Message>) {
-        let user_theme = ThemePreference::Light;
         let settings = Settings::load();
+        let user_theme = settings.theme;
+
+        // Apply the persisted language preference before any `fl!()` call
+        // resolves user-visible strings. Empty string = "follow OS locale"
+        // which the `i18n::init()` earlier in `main` already honoured.
+        if !settings.language.is_empty()
+            && let Ok(tag) = settings.language.parse()
+        {
+            crate::i18n::set_language(tag);
+        }
 
         // Build the tray up-front if any tray-related setting is on, so
         // `start_to_tray` has something to live in and user clicks find it
@@ -172,6 +182,7 @@ impl App {
             screen: Screen::Loading,
             login_view: login::LoginView::new(),
             vault_view: vault::VaultView::new(),
+            settings_view: settings_view::SettingsView::new(),
             title_bar: title_bar::TitleBarState::new(),
             client_manager: Arc::new(ClientManager::empty()),
             cache: ViewCache::default(),
@@ -266,6 +277,10 @@ impl App {
                 self.login_view.dismiss_dropdowns();
                 self.vault_view.dismiss_dropdowns();
             }
+            // Interacting with the settings modal should close any other
+            // overlays (title-bar menus, account-switcher dropdown) that
+            // would otherwise paint beside the modal.
+            Message::Settings(_) => self.dismiss_all_overlays(),
             Message::About(_) | Message::Window(_) | Message::System(_) => {}
         }
 
@@ -299,6 +314,14 @@ impl App {
                 Task::batch([task, ev_task])
             }
             Message::About(m) => self.handle_about_message(m),
+            Message::Settings(m) => {
+                let (task, ev) = self.settings_view.update(m);
+                let task = task.map(Message::Settings);
+                let ev_task = ev
+                    .map(|e| self.handle_settings_event(e))
+                    .unwrap_or_else(Task::none);
+                Task::batch([task, ev_task])
+            }
             Message::Window(m) => self.handle_window_message(m),
             Message::System(m) => self.handle_system_message(m),
         };
@@ -397,6 +420,13 @@ impl App {
             None
         };
 
+        // Settings modal — composed above the vault modal so it sits on top
+        // of any other overlays.
+        let settings_modal: Option<Element<'_, Message, AppTheme>> = self
+            .settings_view
+            .modal_view(colors)
+            .map(|el| el.map(Message::Settings));
+
         if crate::menu::should_use_custom_menu_bar() {
             let menu_state = self.menu_state();
             let tb = self
@@ -413,8 +443,12 @@ impl App {
                 Some(modal) => iced::widget::stack![with_sheet, modal].into(),
                 None => with_sheet,
             };
+            let with_settings: Element<'_, Message, AppTheme> = match settings_modal {
+                Some(m) => iced::widget::stack![with_modal, m].into(),
+                None => with_modal,
+            };
             let with_toasts: Element<'_, Message, AppTheme> =
-                toast::Manager::new(with_modal, &self.toasts, close_toast).into();
+                toast::Manager::new(with_settings, &self.toasts, close_toast).into();
 
             title_bar::resize_wrapper(with_toasts, |dir| {
                 Message::TitleBar(TitleBarMessage::ResizeEdge(dir))
@@ -431,7 +465,11 @@ impl App {
                 Some(modal) => iced::widget::stack![with_sheet, modal].into(),
                 None => with_sheet,
             };
-            toast::Manager::new(with_modal, &self.toasts, close_toast).into()
+            let with_settings: Element<'_, Message, AppTheme> = match settings_modal {
+                Some(m) => iced::widget::stack![with_modal, m].into(),
+                None => with_modal,
+            };
+            toast::Manager::new(with_settings, &self.toasts, close_toast).into()
         }
     }
 }

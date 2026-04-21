@@ -81,10 +81,6 @@ impl ClipboardManager {
     /// Passing `Some` re-enables tracking for future copies; a copy that
     /// was already in the clipboard before this call is not retroactively
     /// tracked.
-    #[expect(
-        dead_code,
-        reason = "wired awaiting per-user clear-clipboard-delay setting"
-    )]
     pub fn set_timeout(&self, timeout: Option<Duration>) {
         self.send(Command::SetTimeout(timeout));
     }

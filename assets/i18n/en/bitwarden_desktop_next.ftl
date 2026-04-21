@@ -332,3 +332,89 @@ menu-help-about = About Bitwarden
 tray-show-hide = Show / Hide
 tray-lock-vault = Lock vault
 tray-exit = Exit
+
+# Native names shown in the Appearance tab's language picker. DO NOT
+# TRANSLATE — each value should always be the language's own endonym
+# (English, Español, 日本語, …) regardless of the active locale. Defined
+# only here so translators of other .ftl files never accidentally rewrite
+# them; the runtime looks `language-name-<tag>` up against this file directly.
+language-name-en = English
+language-name-es = Español
+
+## Settings modal
+settings-title = Settings
+settings-tab-security = Security
+settings-tab-integrations = Integrations
+settings-tab-autotype = Autotype and copy
+settings-tab-appearance = Appearance
+settings-tab-advanced = Advanced
+
+settings-toast-not-supported = This setting isn't supported yet.
+
+# Security tab
+settings-security-access-options = Access options
+settings-security-open-at-login = Open Bitwarden at device login
+settings-security-unlock-pin = Unlock with PIN
+settings-security-unlock-touch = Unlock with Touch ID
+settings-security-session-timeout = Session timeout
+settings-security-lock-after = Lock after
+settings-security-logout-after = Log out after
+
+# Shared duration strings used by all the time-based dropdowns (lock after,
+# log out after, clear clipboard after). Plurals come from Fluent selectors
+# so every language can pick the right variant for the supplied number.
+settings-duration-seconds = { $n ->
+    [one] { $n } second
+   *[other] { $n } seconds
+  }
+settings-duration-minutes = { $n ->
+    [one] { $n } minute
+   *[other] { $n } minutes
+  }
+settings-duration-hours = { $n ->
+    [one] { $n } hour
+   *[other] { $n } hours
+  }
+settings-duration-never = Never
+
+# Integrations tab
+settings-integrations-browser = Browser integration
+settings-integrations-browser-enable = Enable browser integration
+settings-integrations-browser-fingerprint = Require verification fingerprint
+settings-integrations-ssh = SSH agent
+settings-integrations-ssh-enable = Enable SSH agent
+settings-integrations-ssh-prompt = Prompt behavior
+settings-ssh-prompt-always = Always
+settings-ssh-prompt-never = Never
+settings-ssh-prompt-remember = Remember until lock
+settings-integrations-other = Other
+settings-integrations-duckduckgo = Enable DuckDuckGo browser integration
+
+# Autotype and copy tab
+settings-autotype-heading = Autotype
+settings-autotype-enable = Enable autotype
+settings-clipboard-heading = Clipboard
+settings-clipboard-clear-after = Clear clipboard after
+settings-clipboard-minimize-on-copy = Minimize on copy
+
+# Appearance tab
+settings-appearance-theme-heading = Theme
+settings-appearance-theme = Theme
+settings-appearance-theme-system = System
+settings-appearance-theme-light = Light
+settings-appearance-theme-dark = Dark
+settings-appearance-language = Language
+settings-appearance-language-system = System
+settings-appearance-display-heading = Display
+settings-appearance-show-favicons = Show icons for URLs
+
+# Advanced tab
+settings-advanced-tray = Tray
+settings-advanced-tray-enable = Show tray icon
+settings-advanced-minimize-to-tray = Minimize to tray
+settings-advanced-close-to-tray = Close to tray
+settings-advanced-start-to-tray = Start to tray
+settings-advanced-platform = Platform
+settings-advanced-always-show-dock = Always show dock icon
+settings-advanced-hardware-acceleration = Enable hardware acceleration
+settings-advanced-allow-screenshots = Allow screenshots

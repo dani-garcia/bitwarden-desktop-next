@@ -25,13 +25,7 @@ These are the highest-value tasks with no architectural prerequisites. Doing the
 
 Rule for future toast paths that surface SDK errors: raw `e.to_string()` goes to `tracing::warn!`/`error!`, the user sees a short sanitized string. `UnlockCompleted` and `LoginCompleted` both follow this pattern today.
 
-### Settings view with a language dropdown
-
-Call `i18n_embed::select(...)` on change (re-renders automatically on iced's next frame). Design question: where the settings screen lives in the nav (titlebar menu item, gear icon in sidebar, etc.) and whether it's a window/modal/view.
-
 Card-brand pick-list strings in `cipher_form.rs` are intentionally left untranslated — the canonical brand names ("Visa", "Mastercard", …) are not localized.
-
----
 
 ## Tier 2 — User-Visible Features
 
