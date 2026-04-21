@@ -20,12 +20,6 @@ impl App {
     /// that the change requires — a theme refresh, a language switch,
     /// clipboard-timeout push, tray respawn — or emit the generic
     /// "not supported yet" toast for stubbed fields.
-    //
-    // TODO: `self.settings.save()` below is a blocking `fs::File::create` +
-    // `serde_json::to_writer_pretty` on the iced update thread. Small writes
-    // are imperceptible on local disks, but on slow / network-mapped volumes
-    // they stall the frame. Offload via `Task::perform` on a cloned `Settings`
-    // or debounce dirty writes through a flush task.
     fn apply_setting_change(&mut self, change: SettingChange) -> Task<Message> {
         // Copy every field the view just mutated back into App state. The
         // view's snapshot holds the fresh `Settings` (including the full
@@ -38,7 +32,7 @@ impl App {
                 .user_preferences
                 .insert(uid, self.settings_view.snapshot.prefs);
         }
-        self.settings.save(); // TODO: offload, see note above
+        self.settings.save();
 
         // Side effects: live-wired changes need a nudge, stubs get a toast.
         match change {

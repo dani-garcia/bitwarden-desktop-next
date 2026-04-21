@@ -19,13 +19,54 @@ remove its entry in the same change — don't leave it for later. Reduced scope 
 
 ## Tier 1 — Do Next
 
-These are the highest-value tasks with no architectural prerequisites. Doing them soon unblocks everything else or closes UX gaps users would notice immediately.
+These are the highest-value tasks with no architectural prerequisites. Roughly ordered by importance × ease — quick-wins first, research tasks last.
 
-### Sanitize remaining SDK error echoes into toasts
+### Account switcher polish — match 2025 Figma
 
-Rule for future toast paths that surface SDK errors: raw `e.to_string()` goes to `tracing::warn!`/`error!`, the user sees a short sanitized string. `UnlockCompleted` and `LoginCompleted` both follow this pattern today.
+The dropdown is functional but visually still the pre-redesign shape. Bring it to the [Desktop 2025 designs](../designs/Desktop%202025):
 
-Card-brand pick-list strings in `cipher_form.rs` are intentionally left untranslated — the canonical brand names ("Visa", "Mastercard", …) are not localized.
+- **Per-account Lock / Log out buttons** — currently only a global "Sign out" on the active account.
+- **Options section** — "Add account", "Settings" entry, divider rules.
+- **Avatar colour auto-generation** — hash the user's email to a stable colour, matching the Angular client (`color-from-hash` helper in `clients/libs/angular/src/utils/`).
+- **Shared behavioural helper** (opportunistic) — `AccountSwitcherMessage` handling is ~15 lines duplicated between `LoginView::update` and `VaultView::update`. If we're in there anyway, lift to a `handle_switcher_msg(msg, &mut open) -> SwitcherOutcome` free function in `components/account_switcher.rs`.
+
+### Implement the login command
+
+The login-email flow in [crates/desktop/src/views/login/login_email.rs](../crates/desktop/src/views/login/login_email.rs) presently stubs after `ContinueWithEmail` — no network call, no session creation. Wire it to the real SDK login path so a user with an email + master password can actually authenticate (not just unlock an existing SQLite DB populated by `fake-data`).
+
+- Plumb `bitwarden_auth`'s password-login API through `ClientManager`.
+- Handle CAPTCHA / device-verification responses (surface as toast + retry).
+- Error sanitisation per the toast rule above.
+- The 2FA screens that gate many real accounts are out of scope here — tracked separately under Tier 2 "Auth flow completion".
+
+### Study `desktop_native` for SSH agent + biometrics (plan mode)
+
+Before wiring the many SDK/OS-backed stubs below, produce a written plan for whether and how to pull in the `desktop_native` core modules from `clients/apps/desktop/desktop_native/`. Scoped under the "Integrate `desktop_native`" entry in Tier 3 — see that section for the full investigation questions. This Tier 1 slot is just *doing* the study; the implementation follows.
+
+### Wire up the stubbed settings
+
+All 24 settings in the Appearance / Security / Integrations / Autotype / Advanced tabs now persist to `data/settings.json`, but most are UI-only stubs that emit `settings-toast-not-supported` when toggled. Grouped roughly by blocker:
+
+- **Zero SDK work — OS/wiring glue**
+  - Open at device login — write to platform autostart (registry on Windows, LaunchAgent on macOS, `.desktop` file on Linux).
+  - Minimize on copy — flip a flag read by `ClipboardManager::copy` call-sites.
+  - Always show dock (macOS) — `NSApplication.setActivationPolicy`.
+  - Enable hardware acceleration — read on startup before `ICED_BACKEND` selection; requires app restart (surface in UI).
+  - Allow screenshots — Windows `SetWindowDisplayAffinity`; macOS / Linux set at window creation, so also restart-required.
+  - Show favicons — wire into the detail-pane icon rendering.
+
+- **SDK integration**
+  - PIN unlock — per-user PIN state via `bitwarden_auth` + keystore wrapping.
+  - Session timeout (Lock after / Log out after) — background timer driven by `iced::time::every`, locks the active user on expiry.
+  - Browser integration (+ fingerprint) — native-messaging host registration.
+  - DuckDuckGo browser integration (macOS only).
+  - Enable autotype (Windows Premium) — the autotype engine itself is a whole feature.
+
+- **Depends on `desktop_native` study above**
+  - Touch ID / Windows Hello / polkit biometrics unlock.
+  - SSH agent (+ prompt behaviour) — the named-pipe / Unix-socket server serving keys from the unlocked vault.
+
+---
 
 ## Tier 2 — User-Visible Features
 
@@ -33,16 +74,13 @@ Features that complete the happy paths users expect. No architectural work requi
 
 ### Auth flow completion
 
+The login command itself is promoted to Tier 1 — these are the screens / flows that surround it.
+
+- **Two-factor authentication screens** — after a successful `ContinueWithEmail` the server may demand TOTP / Duo / WebAuthn / email code. Each is its own `AuthPage` variant under `LoginView`. Not required to land Tier 1's login command, but any account with 2FA enabled can't actually finish logging in until these exist.
 - **Registration view** — "Create account" link on login email screen navigates here. Needs email, password, hint fields. New sub-view under `views/register/` plus a new `Register` screen variant or inlined into `LoginView`.
 - **Master password hint request** — "Get master password hint" link on login password screen sends a hint request to the server.
-- **Self-hosted server URL modal** — server selector's "Self-hosted" option should open a modal to input custom server URL. (Depends on the modal framework work in Tier 3.)
+- **Self-hosted server URL modal** — server selector's "Self-hosted" option should open a modal to input custom server URL.
 - **SSO login flow** — "Use single sign-on" button on login email screen. Needs SSO provider selection + browser redirect.
-
-### Account switcher polish
-
-- **Avatar color auto-generation** — generate the avatar background color from a username/email hash (matches the official app).
-- **Account switcher dropdown visual update** — match 2025 Figma (Lock/Logout buttons, Options section).
-- **Shared behavioral helper** — `AccountSwitcherMessage` handling is ~15 lines duplicated in `LoginView::update` and `VaultView::update`. Extract a `handle_switcher_msg(msg, &mut open) -> SwitcherOutcome` free function in `components/account_switcher.rs` that returns a small outcome enum each view maps to its own event type. Only worth doing when a third caller appears or when the logic diverges.
 
 ### Tray icon — Linux packaging
 
@@ -93,31 +131,6 @@ There's also a standalone `ssh_agent` binary crate at `clients/apps/desktop/desk
 
 **Deliverable:** a plan document with a recommendation for (integration path) × (biometrics in scope?) × (ssh_agent in scope?).
 
-### Modal framework
-
-For item editor, password generator, settings forms, confirmations, and the self-hosted server URL modal in Tier 2. Iced's official [modal example](https://github.com/iced-rs/iced/blob/master/examples/modal/src/main.rs) shows a clean pattern:
-
-- `modal(base, content, on_blur)` helper using `stack!` to layer: base → `opaque()` dark overlay → centered modal content. `mouse_area` on the overlay detects click-outside and fires `on_blur`.
-- Escape key handled separately in `update()` via `keyboard::Event::KeyPressed { key: Named(Escape) }`.
-- Conditional rendering: `if self.show_modal { modal(content, dialog, Msg::Hide) } else { content.into() }`.
-
-**Pros over popup windows:** no window lifecycle complexity, works on all platforms identically, simpler state.
-**Cons:** can't drag the modal out, limited to one overlay level (iced constraint — same as our DropDown fork).
-
-**When to use which:** modal for item editor / password generator / settings / confirmations. Popup window for side-by-side vault item comparison.
-
-**Deliverable:** a `components::modal` helper + ADR in `decisions.md`.
-
-### Multi-Window Support (already daemon-ready)
-
-Architecture is already on `iced::daemon`; `WindowMessage` variants carry `window::Id` already. Migration to real multi-window use would:
-
-- Open additional windows via `iced::window::open` in whichever handler fires the open request (like the About window does today).
-- `view(&self, window::Id) -> Element` already branches on the id.
-- Any per-window state (per-window scroll, per-window selection) needs to live in the `windows: HashMap<window::Id, WindowInfo>` entry.
-
-**Blocker:** no concrete use case yet. Modal framework above covers most needs and is cheaper. Flagged in [Zulip](https://iced.zulipchat.com/#narrow/channel/213316-discussions/topic/.E2.9C.94.20Support.20for.20per-window.20views/with/577450159).
-
 ### Toast API review
 
 Before we grow many more call sites (unlock failure, copy-to-clipboard, sync errors, etc.), validate the API:
@@ -143,10 +156,6 @@ Before we grow many more call sites (unlock failure, copy-to-clipboard, sync err
 ### Precompute lowercase search keys
 
 `VaultView::filter_items` re-lowercases `name`, `subtitle`, and URI per item per keystroke. On the 20 k loadtest account that's ~60 k allocations per keystroke. Wrap `CipherListView` in a `CipherRow { inner: Arc<CipherListView>, name_lc: String, subtitle_lc: String, uri_lc: Option<String> }` populated once on `ListLoaded`. Filter against pre-lowered strings. Pairs well with the `Arc<[CipherListView]>` micro-optimization in Tier 4.
-
-### Shared `mock-vault.json` schema crate
-
-`MockVaultFile` / `MockUser` / `UnlockMethodsCfg` are defined independently in `crates/desktop/src/sdk.rs` and `tools/fake-data/src/main.rs`, with comments instructing the reader to keep both in sync. Extract into `tools/mock-schema` with `Serialize + Deserialize`; both crates add it as a path dep. Closes the silent-drift risk on the 24 MB committed artifact.
 
 ### Testing infrastructure
 

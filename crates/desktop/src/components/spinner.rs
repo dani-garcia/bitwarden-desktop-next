@@ -4,10 +4,10 @@
 //! give the illusion of smooth motion. Drives its own redraws — same pattern as
 //! the toast overlay in [`components::toast`] — by intercepting
 //! [`window::Event::RedrawRequested`] in `update` and calling
-//! `shell.request_redraw_at(...)` for the next frame. No app-level subscription
-//! or dummy message is involved.
+//! `shell.request_redraw()` to ask for the next frame. No app-level
+//! subscription or dummy message is involved.
 
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use iced::{
     Background, Border, Color, Element, Event, Length, Rectangle, Renderer, Shadow, Size,
@@ -26,9 +26,6 @@ use crate::theme::AppTheme;
 const N_DOTS: usize = 6;
 /// Full revolutions per second.
 const REV_PER_SEC: f32 = 1.0;
-/// ~60fps — matches the existing `PollNativeMenu` cadence, so we don't add a
-/// faster poll than anything else already in the app.
-const TICK: Duration = Duration::from_millis(16);
 
 pub fn spinner<Message>(size: f32, color: Color) -> Element<'static, Message, AppTheme>
 where
@@ -66,8 +63,8 @@ impl<Message> Widget<Message, AppTheme, Renderer> for Spinner {
         shell: &mut Shell<'_, Message>,
         _viewport: &Rectangle,
     ) {
-        if let Event::Window(window::Event::RedrawRequested(now)) = event {
-            shell.request_redraw_at(*now + TICK);
+        if let Event::Window(window::Event::RedrawRequested(_)) = event {
+            shell.request_redraw();
         }
     }
 
