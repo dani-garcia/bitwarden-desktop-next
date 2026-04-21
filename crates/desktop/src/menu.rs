@@ -1,5 +1,8 @@
+use std::sync::OnceLock;
+
 use iced::futures::{SinkExt, Stream};
 use muda::{Menu, MenuItem as MudaMenuItem, PredefinedMenuItem, Submenu};
+use tokio::sync::broadcast;
 
 // ---------------------------------------------------------------------------
 // Shortcut
@@ -436,41 +439,54 @@ pub const MENUS: &[(&str, &[MenuEntry])] = &[
 ];
 
 // ---------------------------------------------------------------------------
-// Event stream (subscription-driven muda pump)
+// Event forwarding (push callback → broadcast → iced subscription)
 // ---------------------------------------------------------------------------
 
-/// Iced-compatible stream that yields one [`muda::MenuEvent`] per click on a
-/// muda-managed menu item. Bridges `muda`'s global blocking receiver into
-/// iced's async subscription world: a dedicated std thread owns the
-/// `recv()` side and forwards through a tokio channel that the subscription
-/// awaits.
+/// Broadcast fan-out for muda events. Installed once at startup by
+/// [`install_event_handler`]; every `MenuEvent` (from the native app menu
+/// and the tray context menu — muda shares one receiver for both) is pushed
+/// into this channel. [`muda_event_stream`] calls `.subscribe()` to get a
+/// fresh receiver per subscription instance.
+static MUDA_EVENTS: OnceLock<broadcast::Receiver<muda::MenuEvent>> = OnceLock::new();
+
+/// Register muda's global event handler. Call once at startup, before any
+/// menu is built. Subsequent calls are ignored (both `OnceLock::set` and
+/// muda's own `OnceCell`-backed `set_event_handler` silently no-op after
+/// the first).
+pub fn install_event_handler() {
+    let (tx, rx) = broadcast::channel(16);
+    let _ = MUDA_EVENTS.set(rx);
+    muda::MenuEvent::set_event_handler(Some(move |event: muda::MenuEvent| {
+        let _ = tx.send(event);
+    }));
+}
+
+/// Iced-compatible stream of [`muda::MenuEvent`] values, one per muda-managed
+/// menu click. Subscribes to the static broadcast channel populated by the
+/// handler installed in [`install_event_handler`].
 ///
-/// Use as a `fn` pointer with [`iced::Subscription::run`] — iced hashes the
-/// function identity, so returning this from `subscription()` keeps a single
-/// long-lived pump across update cycles instead of recreating it.
-///
-/// The muda receiver is shared between the native app menu and the tray
-/// menu, so one pump covers both; callers filter by `MenuId` on the App
-/// side.
+/// Use as a `fn` pointer with [`iced::Subscription::run`]; iced hashes the
+/// function identity so returning this across ticks keeps the same receiver
+/// alive. When iced drops the subscription the receiver drops cleanly — no
+/// stranded threads or stuck blocking calls.
 pub fn muda_event_stream() -> impl Stream<Item = muda::MenuEvent> {
     use iced::futures::channel::mpsc;
     iced::stream::channel(16, |mut out: mpsc::Sender<_>| async move {
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-        
-        std::thread::Builder::new()
-            .name("muda-pump".into())
-            .spawn(move || {
-                while let Ok(ev) = muda::MenuEvent::receiver().recv() {
-                    if tx.send(ev).is_err() {
+        let mut rx = MUDA_EVENTS
+            .get()
+            .expect("menu::install_event_handler must run before subscribing")
+            .resubscribe();
+        loop {
+            match rx.recv().await {
+                Ok(ev) => {
+                    if out.send(ev).await.is_err() {
                         break;
                     }
                 }
-            })
-            .expect("spawn muda pump thread");
-
-        while let Some(ev) = rx.recv().await {
-            if out.send(ev).await.is_err() {
-                break;
+                Err(broadcast::error::RecvError::Lagged(n)) => {
+                    tracing::warn!(dropped = n, "muda event subscriber lagged");
+                }
+                Err(broadcast::error::RecvError::Closed) => break,
             }
         }
     })

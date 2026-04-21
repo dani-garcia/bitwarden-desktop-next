@@ -409,7 +409,7 @@ Plus (if the view needs its own screen): one `Screen::Settings` variant and one 
 Single `MENUS` static drives both custom and native menus:
 
 - **Custom title bar** (Windows/Linux): renders labels, dropdowns, shortcuts, submenus via `views/title_bar/`.
-- **Native muda** (macOS, or `DEV_BOTH_MENUS=1`): `Shortcut::to_accelerator()` adds shortcuts, `NativeMenuHandle` bridges events through `menu::muda_event_stream()` (a dedicated `muda-pump` thread blocking on `muda::MenuEvent::receiver().recv()` and forwarding into an iced `Subscription::run`), `sync_native_enabled()` syncs enabled states.
+- **Native muda** (macOS, or `DEV_BOTH_MENUS=1`): `Shortcut::to_accelerator()` adds shortcuts, `NativeMenuHandle` bridges events through `menu::muda_event_stream()`. A push callback registered once at startup via `muda::MenuEvent::set_event_handler` fans events out through a `tokio::sync::broadcast::Sender`; each subscription run calls `.subscribe()` for a fresh receiver. No pump thread — `set_event_handler` is one-shot per process and lives in a `OnceLock`. `sync_native_enabled()` syncs enabled states.
 - `MenuState { is_locked, has_accounts, has_lockable_accounts }` — three bools driving `EnabledWhen::Always / Unlocked / HasAccounts / HasLockable`.
 
 ## Icon System

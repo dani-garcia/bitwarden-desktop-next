@@ -19,9 +19,10 @@
 //! recolour it for light and dark menubar modes. We flip the `icon_is_template`
 //! builder flag accordingly.
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::OnceLock};
 
 use iced::futures::{SinkExt, Stream};
+use tokio::sync::broadcast;
 use tray_icon::{
     TrayIcon, TrayIconBuilder,
     menu::{Menu, MenuId, MenuItem},
@@ -108,41 +109,58 @@ pub fn build() -> Option<TrayHandle> {
     })
 }
 
-/// Iced-compatible stream that yields one [`TrayAction`] per qualifying
-/// left-click on the tray icon. Non-matching tray events (right-click,
-/// button-down, mouse-enter, …) are swallowed in the pump thread so they
-/// never reach the subscription.
-///
-/// Bridges `tray-icon`'s global blocking receiver into iced via a dedicated
-/// std thread + tokio channel, same shape as [`crate::menu::muda_event_stream`].
-/// Use with [`iced::Subscription::run`] as a `fn` pointer.
-pub fn click_stream() -> impl Stream<Item = TrayAction> {
-    use iced::futures::channel::mpsc;
+/// Broadcast fan-out for filtered tray-icon clicks. Installed once by
+/// [`install_event_handler`]; a click that matches the "left button released"
+/// filter is published as a [`TrayAction::ToggleShowHide`] for subscribers to
+/// pick up. Non-matching events (right-click, enter/leave, button-down) are
+/// dropped in the handler.
+static TRAY_EVENTS: OnceLock<broadcast::Receiver<TrayAction>> = OnceLock::new();
+
+/// Register `tray-icon`'s global event handler. Call once at startup, before
+/// any tray icon is built. Subsequent calls are ignored (both `OnceLock::set`
+/// and `tray-icon`'s own `OnceCell`-backed `set_event_handler` silently
+/// no-op after the first).
+pub fn install_event_handler() {
     use tray_icon::{MouseButton, MouseButtonState, TrayIconEvent};
 
-    iced::stream::channel(16, |mut out: mpsc::Sender<_>| async move {
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let (tx, rx) = broadcast::channel(16);
+    let _ = TRAY_EVENTS.set(rx);
+    TrayIconEvent::set_event_handler(Some(move |event: TrayIconEvent| {
+        if let TrayIconEvent::Click {
+            button: MouseButton::Left,
+            button_state: MouseButtonState::Up,
+            ..
+        } = event
+        {
+            let _ = tx.send(TrayAction::ToggleShowHide);
+        }
+    }));
+}
 
-        std::thread::Builder::new()
-            .name("tray-pump".into())
-            .spawn(move || {
-                while let Ok(event) = TrayIconEvent::receiver().recv() {
-                    if let TrayIconEvent::Click {
-                        button: MouseButton::Left,
-                        button_state: MouseButtonState::Up,
-                        ..
-                    } = event
-                        && tx.send(TrayAction::ToggleShowHide).is_err()
-                    {
+/// Iced-compatible stream of [`TrayAction`]s derived from tray-icon clicks.
+/// Subscribes to the static broadcast channel populated by the handler
+/// installed in [`install_event_handler`].
+///
+/// Use as a `fn` pointer with [`iced::Subscription::run`]; when iced drops
+/// the subscription the receiver drops cleanly — no stranded threads.
+pub fn click_stream() -> impl Stream<Item = TrayAction> {
+    use iced::futures::channel::mpsc;
+    iced::stream::channel(16, |mut out: mpsc::Sender<_>| async move {
+        let mut rx = TRAY_EVENTS
+            .get()
+            .expect("tray::install_event_handler must run before subscribing")
+            .resubscribe();
+        loop {
+            match rx.recv().await {
+                Ok(action) => {
+                    if out.send(action).await.is_err() {
                         break;
                     }
                 }
-            })
-            .expect("spawn tray pump thread");
-
-        while let Some(action) = rx.recv().await {
-            if out.send(action).await.is_err() {
-                break;
+                Err(broadcast::error::RecvError::Lagged(n)) => {
+                    tracing::warn!(dropped = n, "tray event subscriber lagged");
+                }
+                Err(broadcast::error::RecvError::Closed) => break,
             }
         }
     })

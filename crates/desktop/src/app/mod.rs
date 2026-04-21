@@ -131,6 +131,12 @@ impl App {
             crate::i18n::set_language(tag);
         }
 
+        // Register muda + tray-icon event handlers into their global
+        // broadcast channels. Must run *before* any menu or tray icon is
+        // built — both crates' `set_event_handler` are one-shot.
+        crate::menu::install_event_handler();
+        crate::tray::install_event_handler();
+
         // Build the tray up-front if any tray-related setting is on, so
         // `start_to_tray` has something to live in and user clicks find it
         // immediately. Tray build failure → log + fall through without.
