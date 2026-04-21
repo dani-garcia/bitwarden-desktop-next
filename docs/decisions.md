@@ -52,7 +52,7 @@
 - `Task::perform` wraps `tokio::task::spawn_blocking(ClientManager::load)` so the JSON parse is scheduled on tokio's dedicated blocking thread pool, not on an async worker. Iced's `tokio` feature already initializes a multi-threaded runtime with `rt-multi-thread` + `time`, so our crate only needs the `rt` feature of tokio for `spawn_blocking`.
 - `SystemMessage::ClientManagerLoaded` arrives, handler swaps the Arc, computes `active_user` from `user_ids().next()`, calls `login_view.show_unlock_for(active_user, &client_manager)`, sets `screen = Screen::Login`.
 
-**Spinner component** (`components/spinner.rs`): self-animating 8-dot ring widget. Intercepts `Event::Window(window::Event::RedrawRequested(now))` in `Widget::update` and calls `shell.request_redraw_at(now + 16ms)` to schedule the next frame. No app-level subscription, no dummy animation message. Same pattern as the toast overlay.
+**Spinner component** (`components/spinner.rs`): self-animating 8-dot ring widget. Intercepts `Event::Window(window::Event::RedrawRequested(_))` in `Widget::update` and calls `shell.request_redraw()` to ask for the display's next frame. No app-level subscription, no dummy animation message. Same pattern as the toast overlay, which uses the explicit-instant variant `request_redraw_at` because its fade animation has a known cadence.
 
 **Per-user lazy cipher parsing (landed via SQLite)**: ciphers now live in per-user `<user_id>.sqlite` files under `data/` and are read through the SDK state registry only when `list_ciphers` / `full_cipher` runs. The original "parse all ciphers at startup" bottleneck is gone.
 
@@ -156,11 +156,14 @@
 
 ## Self-Animating Widgets via RedrawRequested
 
-**Decision**: Widgets that need continuous animation (spinner, toast fade) drive their own redraws by intercepting `Event::Window(window::Event::RedrawRequested(now))` in `Widget::update` and calling `shell.request_redraw_at(now + delta)`. No app-level subscription or dummy animation message.
+**Decision**: Widgets that need continuous animation (spinner, toast fade) drive their own redraws by intercepting `Event::Window(window::Event::RedrawRequested(now))` in `Widget::update` and calling `shell.request_redraw()` or `shell.request_redraw_at(now + delta)`. No app-level subscription or dummy animation message.
+
+- `request_redraw()` — next display frame; simplest; used by the spinner.
+- `request_redraw_at(instant)` — explicit schedule, caps the rate regardless of display Hz. Used by the toast overlay because its fade animation has a known cadence and hover-pause needs precise `Instant::now()` timing.
 
 **Prior art**: The toast overlay predates the spinner and established the pattern.
 
-**Rationale**: Subscriptions create every-tick updates that run the whole app `update` cycle even when nothing changed; the `request_redraw_at` approach only redraws the widget tree without running `update`, so the cost stays bounded to the widget that needs the animation.
+**Rationale**: Subscriptions create every-tick updates that run the whole app `update` cycle even when nothing changed; the redraw-request path only redraws the widget tree without running `update`, so the cost stays bounded to the widget that needs the animation.
 
 ## Component Library
 
@@ -318,7 +321,7 @@ Import per-module: `use crate::fl;`. Call: `fl!("login-unlock-title")` or `fl!("
 
 **macOS template image**: the tray icon is set via `.with_icon_as_template(true)` so NSStatusBar recolours it for light and dark menubar modes. The PNG asset is monochrome (black) with alpha — vendored from the Electron client's `icon-template.png`.
 
-**macOS native minimize limitation**: the yellow traffic-light button is handled by AppKit and doesn't route through our `WindowCommand::Minimize` handler, so `minimize_to_tray` doesn't apply to it. Accepted limitation; would need platform-specific NSWindow subclassing to override.
+**macOS native minimize limitation**: the yellow traffic-light button is handled by AppKit and doesn't route through our `WindowAction::Minimize` handler, so `minimize_to_tray` doesn't apply to it. Accepted limitation; would need platform-specific NSWindow subclassing to override.
 
 ## Tray Lifecycle Settings: `data/settings.json`
 

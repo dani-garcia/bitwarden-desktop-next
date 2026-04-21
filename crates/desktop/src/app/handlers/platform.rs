@@ -12,7 +12,7 @@ use crate::{
     views::{
         about::{self, AboutMessage},
         settings::SettingsSnapshot,
-        title_bar::{TitleBarEvent, WindowCommand},
+        title_bar::{TitleBarEvent, WindowAction},
         vault::widgets::search_bar,
     },
 };
@@ -28,7 +28,7 @@ impl App {
     ) -> Task<Message> {
         match event {
             TitleBarEvent::MenuInvoked(menu_action) => self.handle_menu_action(menu_action),
-            TitleBarEvent::Window(cmd) => self.handle_window_command(cmd),
+            TitleBarEvent::Window(action) => self.handle_window_action(action),
         }
     }
 
@@ -50,31 +50,31 @@ impl App {
 
     // ── Window lifecycle ───────────────────────────────────────────────────
 
-    fn handle_window_command(&mut self, cmd: WindowCommand) -> Task<Message> {
+    fn handle_window_action(&mut self, action: WindowAction) -> Task<Message> {
         let id = self.main_window_id();
-        match cmd {
-            WindowCommand::Minimize => {
+        match action {
+            WindowAction::Minimize => {
                 if self.settings.minimize_to_tray && self.ensure_tray() {
                     self.hide_main_window()
                 } else {
                     iced::window::minimize(id, true)
                 }
             }
-            WindowCommand::Maximize => {
+            WindowAction::Maximize => {
                 if let Some(info) = self.windows.get_mut(&id) {
                     info.maximized = !info.maximized;
                 }
                 iced::window::toggle_maximize(id)
             }
-            WindowCommand::Close => {
+            WindowAction::Close => {
                 if self.settings.close_to_tray && self.ensure_tray() {
                     self.hide_main_window()
                 } else {
                     iced::window::close(id)
                 }
             }
-            WindowCommand::Drag => iced::window::drag(id),
-            WindowCommand::ResizeEdge(dir) => iced::window::drag_resize(id, dir),
+            WindowAction::Drag => iced::window::drag(id),
+            WindowAction::ResizeEdge(dir) => iced::window::drag_resize(id, dir),
         }
     }
 
@@ -99,7 +99,7 @@ impl App {
                 // so close-to-tray applies uniformly. Other windows (About)
                 // close normally.
                 if id == self.main_window_id() {
-                    self.handle_window_command(WindowCommand::Close)
+                    self.handle_window_action(WindowAction::Close)
                 } else {
                     iced::window::close(id)
                 }

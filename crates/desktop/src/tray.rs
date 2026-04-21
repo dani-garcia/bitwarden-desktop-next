@@ -122,6 +122,7 @@ pub fn click_stream() -> impl Stream<Item = TrayAction> {
 
     iced::stream::channel(16, |mut out: mpsc::Sender<_>| async move {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+
         std::thread::Builder::new()
             .name("tray-pump".into())
             .spawn(move || {

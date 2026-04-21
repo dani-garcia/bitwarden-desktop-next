@@ -48,7 +48,7 @@ pub enum TitleBarMessage {
 // to concrete window operations or menu actions.
 
 #[derive(Debug, Clone, Copy)]
-pub enum WindowCommand {
+pub enum WindowAction {
     Minimize,
     Maximize,
     Close,
@@ -61,7 +61,7 @@ pub enum TitleBarEvent {
     /// User invoked a menu entry mapping to a global `MenuAction`.
     MenuInvoked(crate::menu::MenuAction),
     /// User clicked a window-chrome button or started a drag/resize.
-    Window(WindowCommand),
+    Window(WindowAction),
 }
 
 pub struct TitleBarState {
@@ -132,23 +132,23 @@ impl TitleBarState {
             }
             TitleBarMessage::MinimizeClicked => (
                 Task::none(),
-                Some(TitleBarEvent::Window(WindowCommand::Minimize)),
+                Some(TitleBarEvent::Window(WindowAction::Minimize)),
             ),
             TitleBarMessage::MaximizeClicked => (
                 Task::none(),
-                Some(TitleBarEvent::Window(WindowCommand::Maximize)),
+                Some(TitleBarEvent::Window(WindowAction::Maximize)),
             ),
             TitleBarMessage::CloseClicked => (
                 Task::none(),
-                Some(TitleBarEvent::Window(WindowCommand::Close)),
+                Some(TitleBarEvent::Window(WindowAction::Close)),
             ),
             TitleBarMessage::DragStart => (
                 Task::none(),
-                Some(TitleBarEvent::Window(WindowCommand::Drag)),
+                Some(TitleBarEvent::Window(WindowAction::Drag)),
             ),
             TitleBarMessage::ResizeEdge(dir) => (
                 Task::none(),
-                Some(TitleBarEvent::Window(WindowCommand::ResizeEdge(dir))),
+                Some(TitleBarEvent::Window(WindowAction::ResizeEdge(dir))),
             ),
         }
     }

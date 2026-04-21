@@ -156,7 +156,7 @@ impl App {
             visible: !start_hidden,
             // Required for tray "close to tray": without this, the OS-sent
             // `CloseRequested` event would close the window before our
-            // `WindowCommand::Close` handler can choose to hide instead.
+            // `WindowAction::Close` handler can choose to hide instead.
             // The About window keeps the default `true` (never hides).
             exit_on_close_request: false,
             platform_specific: main_window_platform_specific(),

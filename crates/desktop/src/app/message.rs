@@ -34,7 +34,7 @@ pub enum WindowMessage {
     Opened(iced::window::Id),
     GotRawId(iced::window::Id, u64),
     /// OS emitted a close request (X button on native title bar, Alt+F4,
-    /// window-list "Close", etc.). Funnels into the same `WindowCommand::Close`
+    /// window-list "Close", etc.). Funnels into the same `WindowAction::Close`
     /// path the custom title-bar X-button uses, so close-to-tray applies
     /// uniformly. `exit_on_close_request: false` on the main window defers
     /// the real close to our handler.

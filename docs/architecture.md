@@ -70,7 +70,7 @@ crates/desktop/src/
 │   ├── icons.rs         # Icon type with render() / input_icon() / char()
 │   ├── account_switcher.rs  # avatar_trigger + dropdown panel
 │   ├── drop_down.rs     # Local fork of iced_aw DropDown with BelowLeft/BelowRight/AboveRight
-│   ├── spinner.rs       # Self-animating 8-dot ring via RedrawRequested+request_redraw_at
+│   ├── spinner.rs       # Self-animating 8-dot ring via RedrawRequested+request_redraw
 │   ├── toast.rs         # Manager widget + ToastOverlay: fade, hover-pause, progress, severities
 │   └── virtual_list.rs  # Viewport-windowed scrolling over uniform-height items
 └── views/
@@ -190,7 +190,7 @@ Events describe completed state transitions, not imperative commands:
 
 - `LoginEvent::Unlocked { uid }` / `LoggedIn { uid }` / `SignOutRequested` / `UserSelected { uid }` / `AddAccountRequested` / `ToastRequested(Toast)`
 - `VaultEvent::UserSelected { uid }` / `AddAccountRequested` / `ToastRequested(Toast)`
-- `TitleBarEvent::MenuInvoked(MenuAction)` / `Window(WindowCommand)`
+- `TitleBarEvent::MenuInvoked(MenuAction)` / `Window(WindowAction)`
 
 App's `handle_*_event` methods translate each event to concrete side effects: screen switches, user swaps, toast pushes, menu actions, follow-on tasks.
 
@@ -199,6 +199,16 @@ App's `handle_*_event` methods translate each event to concrete side effects: sc
 - `LoginMessage::UnlockCompleted(uid, Result)` — handled by `LoginView` (stale-check, clear `unlock_in_progress`, emit `LoginEvent::Unlocked` or sanitized error toast).
 - `VaultMessage::ListLoaded(uid, Result)` — handled by `VaultView` (stale-check, `set_items`, `recompute_filtered`).
 - `VaultMessage::DetailLoaded(uid, id, Result)` — handled by `VaultView` (stale-check against `selection.id`, populate or emit error toast).
+
+#### Naming conventions for enum types
+
+The suffix on an enum's name signals its role in the message flow. Follow these when adding new types:
+
+- **`*Message`** — inbound widget / OS / async input. The `update(msg)` argument. Both imperative widget events (`LoginMessage::Unlock`) and past-tense async completions (`VaultMessage::ListLoaded`) belong here.
+- **`*Event`** — outbound declarative fact a sub-view bubbles up via `update() -> (Task, Option<Event>)`. Describe what *happened*, not what to do next: `LoginEvent::Unlocked`, `SettingsEvent::Applied`, `VaultEvent::ToastRequested`.
+- **`*Action`** — a discriminant for an abstract operation that a dispatcher pattern-matches: `MenuAction::Quit`, `TrayAction::ToggleShowHide`, `WindowAction::Minimize`. Not carrying per-view state, just naming the thing to do. Use this for "requests" an `Event` carries as a payload.
+
+Private widget-internal enums under `components/` (e.g. `SearchSelectFieldEvent` inside an iced `Component`) don't participate in the App router's flow and follow whatever shape the widget needs — they aren't governed by the conventions above.
 
 ### Factory methods for cross-view tasks
 
@@ -220,17 +230,18 @@ pub enum Message {
     Vault(VaultMessage),        // wraps all vault-screen interaction + async callbacks
     TitleBar(TitleBarMessage),  // wraps menu + window chrome
     About(AboutMessage),        // stateless child window (CopyInfo, Close)
+    Settings(SettingsMessage),  // settings modal (per-field edits + tab switches)
     Window(WindowMessage),      // per-window OS events (Opened, GotRawId, Closed, KeyPressed)
-    System(SystemMessage),      // PollNativeMenu, ThemeChanged, CloseToast,
-                                // ClientManagerLoaded(Arc<ClientManager>)
+    System(SystemMessage),      // MudaEvent / TrayClick / ThemeChanged / CloseToast /
+                                // ClientManagerLoaded / InstanceWakeRequested
 }
 ```
 
-Six variants. `Window` already carries `window::Id` on every variant for multi-window dispatch.
+Seven variants. `Window` already carries `window::Id` on every variant for multi-window dispatch.
 
 ### Router + Cross-View Dismissal
 
-`App::update` is a pre-match cross-view dismissal block followed by a six-arm router. Every sub-view dispatch follows the same shape:
+`App::update` is a pre-match cross-view dismissal block followed by a seven-arm router. Every sub-view dispatch follows the same shape:
 
 ```rust
 Message::Vault(m) => {
@@ -398,7 +409,7 @@ Plus (if the view needs its own screen): one `Screen::Settings` variant and one 
 Single `MENUS` static drives both custom and native menus:
 
 - **Custom title bar** (Windows/Linux): renders labels, dropdowns, shortcuts, submenus via `views/title_bar/`.
-- **Native muda** (macOS, or `DEV_BOTH_MENUS=1`): `Shortcut::to_accelerator()` adds shortcuts, `NativeMenuHandle` bridges events via `muda::MenuEvent::receiver()` polled every 16 ms, `sync_native_enabled()` syncs enabled states.
+- **Native muda** (macOS, or `DEV_BOTH_MENUS=1`): `Shortcut::to_accelerator()` adds shortcuts, `NativeMenuHandle` bridges events through `menu::muda_event_stream()` (a dedicated `muda-pump` thread blocking on `muda::MenuEvent::receiver().recv()` and forwarding into an iced `Subscription::run`), `sync_native_enabled()` syncs enabled states.
 - `MenuState { is_locked, has_accounts, has_lockable_accounts }` — three bools driving `EnabledWhen::Always / Unlocked / HasAccounts / HasLockable`.
 
 ## Icon System
@@ -419,7 +430,12 @@ Two kinds of overlays, both via iced's native overlay system (window-level rende
 
 ## Self-Animating Widgets
 
-Pattern: in `Widget::update`, intercept `Event::Window(window::Event::RedrawRequested(now))` and call `shell.request_redraw_at(now + delta)` to schedule the next frame. The widget drives its own redraws without an app-level subscription or dummy message.
+Pattern: in `Widget::update`, intercept `Event::Window(window::Event::RedrawRequested(now))` and request the next frame via `shell`. The widget drives its own redraws without an app-level subscription or dummy message.
+
+Two variants of the "request next frame" call:
+
+- `shell.request_redraw()` — redraw on the display's next frame. Simplest; matches monitor refresh. Used by the spinner.
+- `shell.request_redraw_at(now + delta)` — redraw at an explicit instant, capping the rate regardless of display Hz. Used by the toast overlay where the fade animation has a known cadence and hover-pause requires precise timing against `Instant::now()`.
 
 Two consumers today:
 
