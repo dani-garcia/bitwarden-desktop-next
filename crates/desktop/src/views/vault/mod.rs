@@ -56,8 +56,6 @@ pub enum VaultMessage {
     ConfirmDeleteSelected,
     /// User dismissed the delete modal (Cancel, backdrop click, etc.).
     CancelDeleteSelected,
-    /// 1 Hz subscription tick — refreshes the TOTP code + countdown ring.
-    TotpTick,
     /// Fires when the async `ClientManager::list_ciphers` task completes.
     ListLoaded(UserId, Result<Vec<Arc<CipherListView>>, String>),
     /// Fires when the async `ClientManager::full_cipher` task completes.
@@ -97,7 +95,6 @@ impl std::fmt::Debug for VaultMessage {
             Self::NewItem => f.write_str("NewItem"),
             Self::ConfirmDeleteSelected => f.write_str("ConfirmDeleteSelected"),
             Self::CancelDeleteSelected => f.write_str("CancelDeleteSelected"),
-            Self::TotpTick => f.write_str("TotpTick"),
             Self::ListLoaded(uid, result) => {
                 let mut t = f.debug_tuple("ListLoaded");
                 t.field(uid);
@@ -569,13 +566,6 @@ impl VaultView {
                 self.selection.confirm_delete = false;
                 (Task::none(), None)
             }
-            VaultMessage::TotpTick => {
-                // No state to mutate — the detail pane recomputes the TOTP
-                // code and countdown from the current clock on each render,
-                // so we just need the message to flow through `update()` to
-                // trigger an iced redraw.
-                (Task::none(), None)
-            }
             VaultMessage::ConfirmDeleteSelected => {
                 self.selection.confirm_delete = false;
                 let Some(cipher_id) = self.selection.id else {
@@ -816,18 +806,6 @@ impl VaultView {
         if let Some(form) = self.selection.form.as_mut() {
             form.dismiss_dropdowns();
         }
-    }
-
-    /// `true` when the currently-selected cipher is a login with a
-    /// non-empty `totp` field. Drives the 1 Hz subscription that refreshes
-    /// the detail pane's TOTP code + countdown ring.
-    pub fn has_totp_selected(&self) -> bool {
-        self.selection
-            .detail
-            .as_ref()
-            .and_then(|c| c.login.as_ref())
-            .and_then(|l| l.totp.as_deref())
-            .is_some_and(|s| !s.is_empty())
     }
 
     /// Recompute the filtered item list for a specific user. Uses the

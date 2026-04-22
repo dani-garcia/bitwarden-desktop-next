@@ -7,7 +7,7 @@ use message::{WindowInfo, WindowKind};
 
 use std::{collections::HashMap, rc::Rc, sync::Arc};
 
-use iced::{Element, Subscription, Task, time};
+use iced::{Element, Subscription, Task};
 
 use crate::{
     clipboard::ClipboardManager,
@@ -269,15 +269,6 @@ impl App {
         let theme_sub = Subscription::run_with(self.theme.system.clone(), |st| st.subscribe())
             .map(|_| Message::System(SystemMessage::ThemeChanged));
 
-        // 1 Hz tick — only active while the detail pane shows a login with
-        // a TOTP secret, so the code + countdown ring refresh live.
-        let totp_sub = if self.screen == Screen::Vault && self.vault_view.has_totp_selected() {
-            time::every(std::time::Duration::from_secs(1))
-                .map(|_| Message::Vault(vault::VaultMessage::TotpTick))
-        } else {
-            Subscription::none()
-        };
-
         // Second-launch wake-up: the listener is bound once, inside this
         // stream, and kept alive across `update()` cycles because iced
         // hashes the subscription identity from the `fn` pointer.
@@ -295,7 +286,6 @@ impl App {
             muda_sub,
             tray_sub,
             theme_sub,
-            totp_sub,
             wake_sub,
             favicon_sub,
         ])
