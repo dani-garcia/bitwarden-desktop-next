@@ -92,8 +92,13 @@ vault-delete-modal-cancel = Cancelar
 vault-delete-modal-confirm = Eliminar
 
 ## Account switcher
-account-switcher-locked-suffix = (bloqueada)
-account-switcher-add = + Añadir cuenta
+account-switcher-other-accounts = Otras cuentas de Bitwarden
+account-switcher-options = Opciones
+account-switcher-lock-now = Bloquear ahora
+account-switcher-log-out = Cerrar sesión
+account-switcher-lock-all = Bloquear todas las cuentas
+account-switcher-settings = Configuración
+account-switcher-add = Añadir cuenta
 
 ## Detail pane — headers per cipher type
 detail-header-login = Ver inicio de sesión

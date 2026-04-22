@@ -5,7 +5,7 @@ mod message;
 pub use message::{Message, SystemMessage, WindowMessage};
 use message::{WindowInfo, WindowKind};
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, rc::Rc, sync::Arc};
 
 use iced::{Element, Subscription, Task, time};
 
@@ -90,12 +90,12 @@ pub(super) struct ViewCache {
 pub struct ThemeState {
     pub(super) preference: ThemePreference,
     pub current: AppTheme,
-    pub(super) system: Arc<system_theme::SystemTheme>,
+    pub(super) system: Rc<system_theme::SystemTheme>,
 }
 
 impl ThemeState {
     pub fn new(preference: ThemePreference) -> Self {
-        let system = Arc::new(
+        let system = Rc::new(
             system_theme::SystemTheme::new().expect("failed to initialize system theme observer"),
         );
         let current = preference.resolve(system.get_scheme());

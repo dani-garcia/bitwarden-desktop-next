@@ -1,10 +1,7 @@
 use iced::Task;
 
 use crate::{
-    clipboard,
-    components::toast::Toast,
-    state::Screen,
-    views::vault::VaultEvent,
+    clipboard, components::toast::Toast, menu::MenuAction, state::Screen, views::vault::VaultEvent,
 };
 
 use super::super::{App, Message};
@@ -18,6 +15,10 @@ impl App {
                 self.login_view.reset_to_email_entry();
                 Task::none()
             }
+            VaultEvent::LockAllRequested => self.handle_menu_action(MenuAction::LockAllVaults),
+            VaultEvent::SettingsRequested => self.handle_menu_action(MenuAction::Settings),
+            VaultEvent::LockActiveRequested => self.handle_lock_active(),
+            VaultEvent::SignOutRequested => self.handle_sign_out(),
             VaultEvent::ToastRequested(t) => {
                 self.push_toast(t);
                 Task::none()

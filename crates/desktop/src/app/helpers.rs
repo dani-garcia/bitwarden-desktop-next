@@ -54,20 +54,13 @@ impl App {
         self.cache.accounts = self
             .client_manager
             .user_ids()
+            .into_iter()
             .map(|uid| AccountEntry {
-                user_id: *uid,
-                email: self.client_manager.email(uid).unwrap_or("").to_string(),
-                display_name: self
-                    .client_manager
-                    .display_name(uid)
-                    .unwrap_or("")
-                    .to_string(),
-                server_url: self
-                    .client_manager
-                    .server_url(uid)
-                    .unwrap_or("")
-                    .to_string(),
-                locked: !self.client_manager.is_unlocked(uid),
+                user_id: uid,
+                email: self.client_manager.email(&uid).unwrap_or_default(),
+                display_name: self.client_manager.display_name(&uid).unwrap_or_default(),
+                server_url: self.client_manager.server_url(&uid).unwrap_or_default(),
+                locked: !self.client_manager.is_unlocked(&uid),
             })
             .collect();
 

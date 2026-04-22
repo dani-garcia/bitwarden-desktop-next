@@ -244,10 +244,7 @@ impl SettingsView {
         Some(modal::view(dialog.into(), SettingsMessage::Close))
     }
 
-    fn sidebar_view<'a>(
-        &'a self,
-        colors: &'a AppColors,
-    ) -> Element<'a, SettingsMessage, AppTheme> {
+    fn sidebar_view<'a>(&'a self, colors: &'a AppColors) -> Element<'a, SettingsMessage, AppTheme> {
         let mut items = column![
             text(fl!("settings-title"))
                 .size(28)
@@ -278,10 +275,7 @@ impl SettingsView {
             .into()
     }
 
-    fn content_pane<'a>(
-        &'a self,
-        colors: &'a AppColors,
-    ) -> Element<'a, SettingsMessage, AppTheme> {
+    fn content_pane<'a>(&'a self, colors: &'a AppColors) -> Element<'a, SettingsMessage, AppTheme> {
         let header = row![
             text(self.active.title())
                 .size(20)
@@ -289,7 +283,7 @@ impl SettingsView {
                 .color(colors.text_primary),
             Space::new().width(Fill),
             buttons::ghost_icon(
-                icons::X_LG.render(16.0,colors.text_primary),
+                icons::X_LG.render(16.0, colors.text_primary),
                 colors.item_hover,
             )
             .padding([6, 6])
@@ -341,13 +335,15 @@ fn category_item<'a>(
     let text_color = icon_color;
 
     let content = row![
-        kind.icon().render(16.0,icon_color),
+        kind.icon().render(16.0, icon_color),
         text(kind.title()).size(14).color(text_color),
     ]
     .spacing(10)
     .align_y(Alignment::Center);
 
-    let padded = container(content).padding(Padding::from([8, 10])).width(Fill);
+    let padded = container(content)
+        .padding(Padding::from([8, 10]))
+        .width(Fill);
 
     buttons::ghost(
         padded,

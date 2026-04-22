@@ -151,6 +151,12 @@ pub enum LoginEvent {
     SignOutRequested,
     /// User picked a different account from the switcher.
     UserSelected { uid: UserId },
+    /// User clicked "Lock now" on the active account card.
+    LockActiveRequested,
+    /// User clicked "Lock all accounts" in the account switcher options.
+    LockAllRequested,
+    /// User clicked "Settings" in the account switcher options.
+    SettingsRequested,
     /// LoginView wants to show a cross-cutting toast notification.
     ToastRequested(Toast),
 }
@@ -426,6 +432,22 @@ impl LoginView {
                     self.account_switcher_open = false;
                     self.reset_to_email_entry();
                     (Task::none(), None)
+                }
+                AccountSwitcherMessage::LockAll => {
+                    self.account_switcher_open = false;
+                    (Task::none(), Some(LoginEvent::LockAllRequested))
+                }
+                AccountSwitcherMessage::OpenSettings => {
+                    self.account_switcher_open = false;
+                    (Task::none(), Some(LoginEvent::SettingsRequested))
+                }
+                AccountSwitcherMessage::LockActive => {
+                    self.account_switcher_open = false;
+                    (Task::none(), Some(LoginEvent::LockActiveRequested))
+                }
+                AccountSwitcherMessage::LogOutActive => {
+                    self.account_switcher_open = false;
+                    (Task::none(), Some(LoginEvent::SignOutRequested))
                 }
             },
         }

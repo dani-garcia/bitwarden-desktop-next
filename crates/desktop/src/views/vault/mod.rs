@@ -234,6 +234,14 @@ pub enum VaultEvent {
     UserSelected { uid: UserId },
     /// User clicked Add Account — App switches to the login screen.
     AddAccountRequested,
+    /// User clicked "Lock now" on the active account card.
+    LockActiveRequested,
+    /// User clicked "Log out" on the active account card.
+    SignOutRequested,
+    /// User clicked "Lock all accounts" in the account switcher options.
+    LockAllRequested,
+    /// User clicked "Settings" in the account switcher options.
+    SettingsRequested,
     /// VaultView wants to show a cross-cutting toast notification.
     ToastRequested(Toast),
     /// User clicked a copy-to-clipboard button on the detail pane.
@@ -718,6 +726,22 @@ impl VaultView {
                     self.account_switcher_open = false;
                     (Task::none(), Some(VaultEvent::AddAccountRequested))
                 }
+                AccountSwitcherMessage::LockAll => {
+                    self.account_switcher_open = false;
+                    (Task::none(), Some(VaultEvent::LockAllRequested))
+                }
+                AccountSwitcherMessage::OpenSettings => {
+                    self.account_switcher_open = false;
+                    (Task::none(), Some(VaultEvent::SettingsRequested))
+                }
+                AccountSwitcherMessage::LockActive => {
+                    self.account_switcher_open = false;
+                    (Task::none(), Some(VaultEvent::LockActiveRequested))
+                }
+                AccountSwitcherMessage::LogOutActive => {
+                    self.account_switcher_open = false;
+                    (Task::none(), Some(VaultEvent::SignOutRequested))
+                }
             },
             VaultMessage::NewItem => (Task::none(), None),
             VaultMessage::ListLoaded(msg_uid, result) => {
@@ -1119,7 +1143,7 @@ impl VaultView {
                 AccountSwitcherMessage::ToggleDropdown,
             ))
             .alignment(crate::components::drop_down::Alignment::BelowRight)
-            .width(240.0)
+            .width(360.0)
             .offset(4.0)
             .into();
 

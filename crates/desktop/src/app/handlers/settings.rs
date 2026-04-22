@@ -5,10 +5,7 @@ use crate::views::settings::{SettingChange, SettingsEvent};
 use super::super::{App, Message};
 
 impl App {
-    pub(in crate::app) fn handle_settings_event(
-        &mut self,
-        event: SettingsEvent,
-    ) -> Task<Message> {
+    pub(in crate::app) fn handle_settings_event(&mut self, event: SettingsEvent) -> Task<Message> {
         match event {
             SettingsEvent::Applied(change) => self.apply_setting_change(change),
         }

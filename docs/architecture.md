@@ -68,7 +68,7 @@ crates/desktop/src/
 │   ├── buttons.rs       # primary, secondary, ghost(is_active, active_bg, hover_bg, radius),
 │   │                    # ghost_icon, transparent — all with snap: false
 │   ├── icons.rs         # Icon type with render() / input_icon() / char()
-│   ├── account_switcher.rs  # avatar_trigger + dropdown panel
+│   ├── account_switcher.rs  # avatar_trigger + three-section dropdown (active card, other accounts, options)
 │   ├── drop_down.rs     # Local fork of iced_aw DropDown with BelowLeft/BelowRight/AboveRight
 │   ├── spinner.rs       # Self-animating 8-dot ring via RedrawRequested+request_redraw
 │   ├── toast.rs         # Manager widget + ToastOverlay: fade, hover-pause, progress, severities
@@ -154,11 +154,14 @@ pub struct VaultView {
 ### Screen transitions
 
 ```
-Screen::Loading  ─ SystemMessage::ClientManagerLoaded ─►  Screen::Login
-Screen::Login    ─ LoginEvent::Unlocked / LoggedIn    ─►  Screen::Vault
-Screen::Vault    ─ LoginEvent::SignOutRequested +      ─►  Screen::Login  (if another user)
-                   VaultEvent::AddAccountRequested         no user → login with email-entry
+Screen::Loading  ─ SystemMessage::ClientManagerLoaded  ─►  Screen::Login
+Screen::Login    ─ LoginEvent::Unlocked / LoggedIn     ─►  Screen::Vault
+Screen::Vault    ─ *Event::SignOutRequested +          ─►  Screen::Login  (if another user)
+                   VaultEvent::AddAccountRequested          no user → login with email-entry
+Screen::Vault    ─ *Event::LockActiveRequested         ─►  Screen::Login  (unlock for same user)
 Screen::Vault    ─ MenuAction::LockAllVaults           ─►  Screen::Login
+                   (also reachable via *Event::LockAllRequested
+                    from the account switcher "Lock all accounts" row)
 ```
 
 ### SDK Integration
@@ -166,7 +169,10 @@ Screen::Vault    ─ MenuAction::LockAllVaults           ─►  Screen::Login
 - `ClientManager::empty()` — zero-user placeholder used during startup before the background load completes.
 - `ClientManager::load()` — discovers users by listing `data/*.sqlite` paired with `data/mock.json`, then for each user builds a `PasswordManagerClient` and calls `platform().state().initialize_database(Sqlite { db_name: <user_id>, folder_path: data/ }, get_sdk_managed_migrations())` so reads/writes hit that user's DB. Runs async on the tokio executor.
 - `ClientManager::unlock(uid, password)` — awaits `crypto().initialize_user_crypto(...)` (real KDF, real user-key unwrap).
+- `ClientManager::lock(uid)` / `lock_all()` — clear the per-user SDK keystore in memory; the `UserEntry` stays so the user reappears in the switcher as locked and can unlock again.
+- `ClientManager::log_out(uid)` — locks and *removes* the user. Sync today; intended to grow into an `async Result` once the SDK exposes a real logout path (see the doc comment on the method).
 - `ClientManager::list_ciphers(uid)` → `decrypt_list` over the repo. `full_cipher(uid, id)` → `decrypt` on a single `Cipher`.
+- **Interior mutability**: `users` is `RwLock<HashMap<UserId, Arc<UserEntry>>>`. `Arc<ClientManager>` is shared across async tasks and the UI thread; accessors take a brief read lock and return owned values, while async methods clone the `Arc<UserEntry>` out of the guard before `.await` so no lock is held across an await point.
 - `LocalUserDataKeyState` is the one exception: it isn't in `get_sdk_managed_migrations()` but `initialize_user_crypto` writes to it. A narrow `MemoryRepo` for just that type is registered per user so unlock works; everything else flows through the SDK-managed SQLite tables.
 - Vault data flows as SDK types end-to-end: `item_list.rs` reads `CipherListView.subtitle`, `detail_pane.rs` branches on `CipherView.r#type` and renders per-type cards (Login/Card/Identity/SecureNote/SshKey).
 

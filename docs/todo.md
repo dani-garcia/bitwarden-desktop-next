@@ -21,15 +21,6 @@ remove its entry in the same change — don't leave it for later. Reduced scope 
 
 These are the highest-value tasks with no architectural prerequisites. Roughly ordered by importance × ease — quick-wins first, research tasks last.
 
-### Account switcher polish — match 2025 Figma
-
-The dropdown is functional but visually still the pre-redesign shape. Bring it to the [Desktop 2025 designs](../designs/Desktop%202025):
-
-- **Per-account Lock / Log out buttons** — currently only a global "Sign out" on the active account.
-- **Options section** — "Add account", "Settings" entry, divider rules.
-- **Avatar colour auto-generation** — hash the user's email to a stable colour, matching the Angular client (`color-from-hash` helper in `clients/libs/angular/src/utils/`).
-- **Shared behavioural helper** (opportunistic) — `AccountSwitcherMessage` handling is ~15 lines duplicated between `LoginView::update` and `VaultView::update`. If we're in there anyway, lift to a `handle_switcher_msg(msg, &mut open) -> SwitcherOutcome` free function in `components/account_switcher.rs`.
-
 ### Implement the login command
 
 The login-email flow in [crates/desktop/src/views/login/login_email.rs](../crates/desktop/src/views/login/login_email.rs) presently stubs after `ContinueWithEmail` — no network call, no session creation. Wire it to the real SDK login path so a user with an email + master password can actually authenticate (not just unlock an existing SQLite DB populated by `fake-data`).

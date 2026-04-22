@@ -22,10 +22,7 @@ use super::super::{App, Message, SystemMessage, WindowInfo, WindowKind, WindowMe
 impl App {
     // ── Sub-view event handlers ────────────────────────────────────────────
 
-    pub(in crate::app) fn handle_titlebar_event(
-        &mut self,
-        event: TitleBarEvent,
-    ) -> Task<Message> {
+    pub(in crate::app) fn handle_titlebar_event(&mut self, event: TitleBarEvent) -> Task<Message> {
         match event {
             TitleBarEvent::MenuInvoked(menu_action) => self.handle_menu_action(menu_action),
             TitleBarEvent::Window(action) => self.handle_window_action(action),
@@ -35,7 +32,8 @@ impl App {
     pub(in crate::app) fn handle_about_message(&mut self, msg: AboutMessage) -> Task<Message> {
         match msg {
             AboutMessage::CopyInfo => {
-                self.clipboard.copy(about::info_string(), Sensitivity::Normal);
+                self.clipboard
+                    .copy(about::info_string(), Sensitivity::Normal);
                 Task::none()
             }
             AboutMessage::Close => {
@@ -127,8 +125,10 @@ impl App {
                 // Escape closes the settings modal before any menu shortcut
                 // lookup — otherwise the user's Escape press would fall
                 // through to widgets behind the modal.
-                if matches!(key, iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape))
-                    && self.settings_view.open
+                if matches!(
+                    key,
+                    iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape)
+                ) && self.settings_view.open
                 {
                     self.settings_view.close();
                     return Task::none();
@@ -177,7 +177,7 @@ impl App {
             }
             SystemMessage::ClientManagerLoaded(mgr) => {
                 self.client_manager = mgr;
-                self.active_user = self.client_manager.user_ids().next().cloned();
+                self.active_user = self.client_manager.user_ids().into_iter().next();
                 self.login_view
                     .show_unlock_for(self.active_user.as_ref(), &self.client_manager);
                 self.screen = Screen::Login;
@@ -189,7 +189,10 @@ impl App {
 
     // ── Menu + tray dispatch ───────────────────────────────────────────────
 
-    fn handle_menu_action(&mut self, action: crate::menu::MenuAction) -> Task<Message> {
+    pub(in crate::app) fn handle_menu_action(
+        &mut self,
+        action: crate::menu::MenuAction,
+    ) -> Task<Message> {
         use crate::menu::MenuAction;
         match action {
             MenuAction::Quit => {

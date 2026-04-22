@@ -91,7 +91,7 @@ pub fn auth_page_shell<'a>(
                 AccountSwitcherMessage::ToggleDropdown,
             ))
             .alignment(crate::components::drop_down::Alignment::BelowRight)
-            .width(240.0)
+            .width(360.0)
             .offset(4.0)
             .into();
 

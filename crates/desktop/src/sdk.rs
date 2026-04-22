@@ -20,7 +20,7 @@ use std::{
     io::BufReader,
     path::Path,
     str::FromStr,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, RwLock},
 };
 
 use bitwarden_collections::collection::CollectionId;
@@ -129,7 +129,12 @@ struct UserEntry {
 }
 
 pub struct ClientManager {
-    users: HashMap<UserId, UserEntry>,
+    /// Interior-mutable so `log_out(&self, uid)` can remove an entry while
+    /// the manager is shared via `Arc`. Entries are wrapped in `Arc` so
+    /// async methods can clone the handle out of the guard and drop the
+    /// lock before awaiting — holding a read guard across `.await` risks
+    /// deadlock with writers and is flagged by clippy.
+    users: RwLock<HashMap<UserId, Arc<UserEntry>>>,
 }
 
 // Needed so `Message` can derive `Debug` with the `ClientManagerLoaded(Arc<ClientManager>)`
@@ -137,7 +142,7 @@ pub struct ClientManager {
 impl std::fmt::Debug for ClientManager {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ClientManager")
-            .field("users", &self.users.len())
+            .field("users", &self.users.read().unwrap().len())
             .finish()
     }
 }
@@ -169,7 +174,7 @@ impl ClientManager {
     /// window can appear before the SQLite opens finish.
     pub fn empty() -> Self {
         Self {
-            users: HashMap::new(),
+            users: RwLock::new(HashMap::new()),
         }
     }
 
@@ -220,53 +225,104 @@ impl ClientManager {
                 continue;
             };
             tracing::debug!(user_id = %uid, email = %mu.email, "loading mock user");
-            users.insert(uid, build_user_entry(mu, &data_dir).await);
+            users.insert(uid, Arc::new(build_user_entry(mu, &data_dir).await));
         }
 
         tracing::info!(users = users.len(), "ClientManager loaded");
-        Self { users }
+        Self {
+            users: RwLock::new(users),
+        }
     }
 
     /// User IDs sorted by email. `HashMap` iteration order is non-deterministic, so
     /// callers that pick "the first user" (startup default, sign-out next-user) would
     /// otherwise land on a different account each launch.
-    pub fn user_ids(&self) -> impl Iterator<Item = &UserId> {
-        let mut ids: Vec<&UserId> = self.users.keys().collect();
-        ids.sort_by(|a, b| self.users[a].email.cmp(&self.users[b].email));
-        ids.into_iter()
+    pub fn user_ids(&self) -> Vec<UserId> {
+        let users = self.users.read().unwrap();
+        let mut ids: Vec<UserId> = users.keys().copied().collect();
+        ids.sort_by(|a, b| users[a].email.cmp(&users[b].email));
+        ids
     }
 
-    pub fn email(&self, uid: &UserId) -> Option<&str> {
-        self.users.get(uid).map(|e| e.email.as_str())
+    pub fn email(&self, uid: &UserId) -> Option<String> {
+        self.users.read().unwrap().get(uid).map(|e| e.email.clone())
     }
 
-    pub fn display_name(&self, uid: &UserId) -> Option<&str> {
-        self.users.get(uid).map(|e| e.display_name.as_str())
+    pub fn display_name(&self, uid: &UserId) -> Option<String> {
+        self.users
+            .read()
+            .unwrap()
+            .get(uid)
+            .map(|e| e.display_name.clone())
     }
 
-    pub fn server_url(&self, uid: &UserId) -> Option<&str> {
-        self.users.get(uid).map(|e| e.server_url.as_str())
+    pub fn server_url(&self, uid: &UserId) -> Option<String> {
+        self.users
+            .read()
+            .unwrap()
+            .get(uid)
+            .map(|e| e.server_url.clone())
     }
 
-    pub fn unlock_methods(&self, uid: &UserId) -> Option<&UnlockMethods> {
-        self.users.get(uid).map(|e| &e.unlock_methods)
+    pub fn unlock_methods(&self, uid: &UserId) -> Option<UnlockMethods> {
+        self.users
+            .read()
+            .unwrap()
+            .get(uid)
+            .map(|e| e.unlock_methods.clone())
     }
 
     pub fn is_unlocked(&self, uid: &UserId) -> bool {
-        self.users.get(uid).is_some_and(|e| e.client.is_unlocked())
+        self.users
+            .read()
+            .unwrap()
+            .get(uid)
+            .is_some_and(|e| e.client.is_unlocked())
     }
 
     pub fn has_users(&self) -> bool {
-        !self.users.is_empty()
+        !self.users.read().unwrap().is_empty()
     }
 
     pub fn has_unlocked_users(&self) -> bool {
-        self.users.values().any(|e| e.client.is_unlocked())
+        self.users
+            .read()
+            .unwrap()
+            .values()
+            .any(|e| e.client.is_unlocked())
+    }
+
+    /// Lock a single user's keystore. No-op if the user is unknown.
+    pub fn lock(&self, uid: &UserId) {
+        let users = self.users.read().unwrap();
+        if let Some(entry) = users.get(uid) {
+            entry.client.lock();
+        }
     }
 
     /// Lock all users by clearing their crypto keystores.
     pub fn lock_all(&self) {
-        for entry in self.users.values() {
+        let users = self.users.read().unwrap();
+        for entry in users.values() {
+            entry.client.lock();
+        }
+    }
+
+    /// Log a user out: clear their keystore and remove the entry from the
+    /// manager. Named `log_out` (not `remove`) because the SDK will want to
+    /// trigger side-effects on this transition in the future (server-side
+    /// token revocation, local SQLite cleanup, etc.).
+    ///
+    /// TODO: migrate to `async fn log_out(...) -> Result<(), _>` when the
+    /// SDK exposes a real logout path. Callers (`App::handle_sign_out`) will
+    /// need to `.await` and handle errors. The `Arc<UserEntry>` dropped here
+    /// may still be alive inside in-flight async tasks that cloned it —
+    /// acceptable today, but any future cleanup that requires synchronous
+    /// resource release (e.g. closing the SQLite handle) needs those tasks
+    /// to complete first.
+    pub fn log_out(&self, uid: &UserId) {
+        let mut users = self.users.write().unwrap();
+        if let Some(entry) = users.remove(uid) {
             entry.client.lock();
         }
     }
@@ -277,7 +333,10 @@ impl ClientManager {
     pub async fn unlock(&self, user_id: &UserId, password: String) -> Result<(), String> {
         let entry = self
             .users
+            .read()
+            .unwrap()
             .get(user_id)
+            .cloned()
             .ok_or_else(|| format!("unknown user {user_id}"))?;
 
         let req = InitUserCryptoRequest {
@@ -334,7 +393,10 @@ impl ClientManager {
     pub async fn list_ciphers(&self, user_id: &UserId) -> Result<Vec<CipherListView>, String> {
         let entry = self
             .users
+            .read()
+            .unwrap()
             .get(user_id)
+            .cloned()
             .ok_or_else(|| format!("unknown user {user_id}"))?;
 
         let repo = entry
@@ -366,7 +428,10 @@ impl ClientManager {
     ) -> Result<CipherView, String> {
         let entry = self
             .users
+            .read()
+            .unwrap()
             .get(user_id)
+            .cloned()
             .ok_or_else(|| format!("unknown user {user_id}"))?;
 
         let repo = entry
@@ -406,7 +471,10 @@ impl ClientManager {
     ) -> Result<CipherView, String> {
         let entry = self
             .users
+            .read()
+            .unwrap()
             .get(user_id)
+            .cloned()
             .ok_or_else(|| format!("unknown user {user_id}"))?;
 
         let ctx = entry
@@ -450,7 +518,10 @@ impl ClientManager {
     ) -> Result<(), String> {
         let entry = self
             .users
+            .read()
+            .unwrap()
             .get(user_id)
+            .cloned()
             .ok_or_else(|| format!("unknown user {user_id}"))?;
 
         let repo = entry
@@ -474,7 +545,10 @@ impl ClientManager {
     pub async fn list_folders(&self, user_id: &UserId) -> Result<Vec<FolderView>, String> {
         let entry = self
             .users
+            .read()
+            .unwrap()
             .get(user_id)
+            .cloned()
             .ok_or_else(|| format!("unknown user {user_id}"))?;
 
         let repo = entry
@@ -497,6 +571,8 @@ impl ClientManager {
     /// app has no sync path that would populate them from the server.
     pub fn list_organizations(&self, user_id: &UserId) -> Vec<Organization> {
         self.users
+            .read()
+            .unwrap()
             .get(user_id)
             .map(|e| e.organizations.clone())
             .unwrap_or_default()
@@ -507,6 +583,8 @@ impl ClientManager {
     /// collections in the edit form).
     pub fn list_collections(&self, user_id: &UserId) -> Vec<Collection> {
         self.users
+            .read()
+            .unwrap()
             .get(user_id)
             .map(|e| e.collections.clone())
             .unwrap_or_default()
