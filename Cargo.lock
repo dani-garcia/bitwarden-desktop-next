@@ -903,6 +903,7 @@ dependencies = [
  "image",
  "muda",
  "open",
+ "reqwest",
  "rust-embed",
  "serde",
  "serde_json",
@@ -3685,6 +3686,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tower-service",
+ "webpki-roots 1.0.7",
 ]
 
 [[package]]
@@ -6731,6 +6733,7 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+ "webpki-roots 1.0.7",
 ]
 
 [[package]]

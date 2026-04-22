@@ -54,9 +54,7 @@ pub enum Alignment {
 /// Represents an offset in a two-dimensional space.
 #[derive(Copy, Clone, Debug)]
 pub struct Offset {
-    /// Offset on the x-axis
     pub x: f32,
-    /// Offset on the y-axis
     pub y: f32,
 }
 

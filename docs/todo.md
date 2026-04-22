@@ -44,7 +44,23 @@ All 24 settings in the Appearance / Security / Integrations / Autotype / Advance
   - Always show dock (macOS) — `NSApplication.setActivationPolicy`.
   - Enable hardware acceleration — read on startup before `ICED_BACKEND` selection; requires app restart (surface in UI).
   - Allow screenshots — Windows `SetWindowDisplayAffinity`; macOS / Linux set at window creation, so also restart-required.
-  - Show favicons — wire into the detail-pane icon rendering.
+  - Show favicons — list renders real favicons via the lazy service in
+    [crates/desktop/src/favicon.rs](../crates/desktop/src/favicon.rs).
+    Remaining:
+    - Wire the same `favicon.get(uid, host)` lookup into the detail pane
+      (it still renders the initial-letter circle).
+    - **Per-user `icons_url` for self-hosted.** Today all users resolve to
+      `https://icons.bitwarden.net`. Add `icons_url: String` to `UserEntry`
+      in [sdk.rs](../crates/desktop/src/sdk.rs), populated from
+      `/api/config`'s `environment.icons` at login time (cloud defaults:
+      US → `icons.bitwarden.net`, EU → `icons.bitwarden.eu`, per the
+      Angular clients' `default-environment.service.ts`). Expose
+      `ClientManager::icons_url(&uid) -> Option<String>` and swap the
+      resolver closure in [app/mod.rs](../crates/desktop/src/app/mod.rs)
+      to consult it (fallback to US cloud default when `None`). Closure
+      runs per fetch so re-auth against a different server picks up the
+      new URL without restart. Blocked on the login command landing (or
+      the self-hosted URL modal in Tier 2) so a real `icons_url` exists.
 
 - **SDK integration**
   - PIN unlock — per-user PIN state via `bitwarden_auth` + keystore wrapping.

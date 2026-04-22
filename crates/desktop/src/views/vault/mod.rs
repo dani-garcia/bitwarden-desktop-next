@@ -927,13 +927,16 @@ fn cipher_list_view_type_to_type(t: &CipherListViewType) -> bitwarden_vault::Cip
 // ── View ───────────────────────────────────────────────────────────────────
 
 impl VaultView {
+    #[allow(clippy::too_many_arguments, reason = "view entry point threads session-wide context")]
     pub fn view<'a>(
         &'a self,
-        active_user: &UserId,
+        active_user: &'a UserId,
         active_email: &'a str,
         accounts: &'a [AccountEntry],
         colors: &'a AppColors,
         window_width: f32,
+        favicon: &'a crate::favicon::FaviconService,
+        show_favicons: bool,
     ) -> Element<'a, VaultMessage, AppTheme> {
         let cached_items: &[Arc<CipherListView>] = self
             .items
@@ -960,6 +963,9 @@ impl VaultView {
                         active_email,
                         accounts,
                         colors,
+                        favicon,
+                        active_user,
+                        show_favicons,
                     )),
                     PaneKind::Detail => {
                         let right_pane = self.detail_or_form_pane(colors, 0.0);
@@ -973,7 +979,15 @@ impl VaultView {
             .min_size(250)
             .into()
         } else {
-            self.list_content(cached_items, active_email, accounts, colors)
+            self.list_content(
+                cached_items,
+                active_email,
+                accounts,
+                colors,
+                favicon,
+                active_user,
+                show_favicons,
+            )
         };
 
         let content_area = container(content_area_inner)
@@ -1101,12 +1115,16 @@ impl VaultView {
     }
 
     /// Builds the list pane content (header + search + item list).
+    #[allow(clippy::too_many_arguments, reason = "threading favicon state + ids through")]
     fn list_content<'a>(
         &'a self,
         cached_items: &'a [Arc<CipherListView>],
         active_email: &'a str,
         accounts: &'a [AccountEntry],
         colors: &'a AppColors,
+        favicon: &'a crate::favicon::FaviconService,
+        active_user: &'a UserId,
+        show_favicons: bool,
     ) -> Element<'a, VaultMessage, AppTheme> {
         let title = text(fl!("vault-title"))
             .size(28)
@@ -1165,9 +1183,16 @@ impl VaultView {
             })
             .width(Fill);
 
-        let item_list =
-            item_list::view(cached_items, self.selection.item, self.list_scroll, colors)
-                .map(VaultMessage::ItemList);
+        let item_list = item_list::view(
+            cached_items,
+            self.selection.item,
+            self.list_scroll,
+            colors,
+            favicon,
+            active_user,
+            show_favicons,
+        )
+        .map(VaultMessage::ItemList);
 
         column![content_header, search_row, item_list]
             .width(Fill)
@@ -1175,3 +1200,4 @@ impl VaultView {
             .into()
     }
 }
+

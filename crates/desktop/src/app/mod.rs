@@ -41,6 +41,7 @@ pub struct App {
 
     // ── External dependencies ──────────────────────────────────────────────
     pub(super) client_manager: Arc<ClientManager>,
+    pub(super) favicon: crate::favicon::FaviconService,
 
     // ── Derived cache ──────────────────────────────────────────────────────
     // Exists because iced's `view()` returns an `Element<'_, ...>` that
@@ -183,6 +184,12 @@ impl App {
             Message::System(SystemMessage::ClientManagerLoaded(mgr))
         });
 
+        // Favicon service. Every user points at the cloud default for now;
+        // see `docs/todo.md` "Show favicons" for the per-user `icons_url` swap.
+        let favicon = crate::favicon::FaviconService::new(Arc::new(|_uid: &UserId| {
+            "https://icons.bitwarden.net".to_string()
+        }));
+
         let app = Self {
             active_user: None,
             screen: Screen::Loading,
@@ -191,6 +198,7 @@ impl App {
             settings_view: settings_view::SettingsView::new(),
             title_bar: title_bar::TitleBarState::new(),
             client_manager: Arc::new(ClientManager::empty()),
+            favicon,
             cache: ViewCache::default(),
             theme: ThemeState::new(user_theme),
             windows,
@@ -276,8 +284,20 @@ impl App {
         let wake_sub = Subscription::run(crate::instance_lock::wake_stream)
             .map(|_| Message::System(SystemMessage::InstanceWakeRequested));
 
+        // Favicon fetch completions. Each message flips one row from globe
+        // to real icon by virtue of arriving; the handler just logs.
+        let favicon_sub = Subscription::run(crate::favicon::favicon_event_stream)
+            .map(Message::Favicon);
+
         Subscription::batch([
-            close_sub, event_sub, muda_sub, tray_sub, theme_sub, totp_sub, wake_sub,
+            close_sub,
+            event_sub,
+            muda_sub,
+            tray_sub,
+            theme_sub,
+            totp_sub,
+            wake_sub,
+            favicon_sub,
         ])
     }
 
@@ -298,7 +318,10 @@ impl App {
             // overlays (title-bar menus, account-switcher dropdown) that
             // would otherwise paint beside the modal.
             Message::Settings(_) => self.dismiss_all_overlays(),
-            Message::About(_) | Message::Window(_) | Message::System(_) => {}
+            Message::About(_)
+            | Message::Window(_)
+            | Message::System(_)
+            | Message::Favicon(_) => {}
         }
 
         let task = match message {
@@ -341,6 +364,14 @@ impl App {
             }
             Message::Window(m) => self.handle_window_message(m),
             Message::System(m) => self.handle_system_message(m),
+            Message::Favicon(crate::favicon::FaviconMessage::IconResolved { uid, hostname }) => {
+                // Arrival of this message is what drives the redraw; the
+                // service has already mutated its in-memory cache by the
+                // time we see it here. Log at trace so a cold unlock with
+                // thousands of icons doesn't spam RUST_LOG=info users.
+                tracing::trace!(%uid, %hostname, "favicon resolved");
+                Task::none()
+            }
         };
 
         self.post_update();
@@ -412,6 +443,8 @@ impl App {
                     &self.cache.accounts,
                     colors,
                     main_window_width,
+                    &self.favicon,
+                    self.settings.show_favicons,
                 )
                 .map(Message::Vault),
         };

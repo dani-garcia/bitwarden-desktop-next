@@ -1,39 +1,12 @@
-//! Stacked toast notifications with fade in/out animations.
+//! Stacked toast notifications with fade in/out animations. Adapted from
+//! iced's official `examples/toast` and extended with per-toast opacity
+//! fades, a countdown progress bar, and hover-to-pause.
 //!
-//! Adapted from iced's official `examples/toast` example
-//! (https://github.com/iced-rs/iced/blob/master/examples/toast/src/main.rs)
-//! and extended with per-toast opacity that fades in on appearance and out
-//! when the timer expires, plus a countdown progress bar at the bottom and
-//! hover-to-pause behavior.
-//!
-//! `Manager` wraps the app's content `Element` and overlays a vertical stack of
-//! toasts in the lower-right corner. All animation timing and visuals state
-//! lives inside this module — call sites only push `Toast` values onto a `Vec`
-//! and let the manager handle the rest.
-//!
-//! ## How the animation pipeline works
-//!
-//! - **Persistent state** lives in the widget tree as `Vec<Option<ToastTimer>>`.
-//!   `ToastTimer` carries a creation timestamp, an optional dismissal start
-//!   timestamp, and a `hovered` flag. This vec survives across `view()` rebuilds
-//!   because iced's tree state outlives `Manager` instances.
-//! - **Per-frame animation values** live in a parallel `Vec<Rc<Cell<ToastVisuals>>>`
-//!   on `Manager`. Each cell holds an `alpha` and a `progress` (both f32, both
-//!   `Copy`). The cells are rebuilt every frame; the overlay refreshes them
-//!   from `ToastTimer` state on every `RedrawRequested` tick before the
-//!   children draw themselves.
-//! - **The bridge** is the cell: style closures capture an `Rc<Cell<ToastVisuals>>`
-//!   at construction time and read its current value at draw time. Updating the
-//!   cell from inside the overlay's `update` is enough to drive a re-render
-//!   without any layout invalidation.
-//! - **Auto-dismiss is two-phase**: first the timer expires and a `dismissing`
-//!   instant is recorded; once the fade-out completes, the manager publishes
-//!   `on_close(idx)` so `App` can drop the toast from its `Vec`. Manual close
-//!   (clicking the × button) bypasses the fade and publishes immediately.
-//! - **Hover pinning**: while the cursor is inside a toast's bounds, `compute_*`
-//!   short-circuit to "fully visible / full progress" and any in-flight
-//!   dismissal is cancelled. When the cursor leaves, the timer resumes counting
-//!   down from full.
+//! Animation pipeline: persistent `ToastTimer`s in widget-tree state drive
+//! per-frame `Rc<Cell<ToastVisuals>>` cells that style closures read at draw
+//! time — no layout invalidation. Auto-dismiss is two-phase (timer →
+//! fade-out → `on_close`); manual close publishes immediately. Hovering
+//! pins to full visibility and cancels any in-flight dismissal.
 
 use std::{
     cell::Cell,

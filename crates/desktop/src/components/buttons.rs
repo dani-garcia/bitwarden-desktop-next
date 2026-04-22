@@ -5,6 +5,20 @@ use iced::{
 
 use crate::theme::{AppTheme, RADIUS_PILL, RADIUS_SM};
 
+/// Shared builder for `button::Style`. Centralizes `shadow: Shadow::default()`
+/// and `snap: false` — the latter is a mandatory field whose omission produces
+/// a confusing compile error pointing at the struct literal instead of the
+/// missing field.
+fn style(bg: Color, text_color: Color, border: Border) -> button::Style {
+    button::Style {
+        background: Some(Background::Color(bg)),
+        text_color,
+        border,
+        shadow: Shadow::default(),
+        snap: false,
+    }
+}
+
 /// Filled primary action button — blue bg, dark text, pill shape.
 ///
 /// Returns a `Button` so callers can chain `.on_press()`, `.width()`, `.padding()`, etc.
@@ -14,13 +28,7 @@ pub fn primary<'a, M: 'a>(content: impl Into<Element<'a, M, AppTheme>>) -> Butto
             button::Status::Hovered | button::Status::Pressed => theme.colors.button_primary_hover,
             _ => theme.colors.button_primary,
         };
-        button::Style {
-            background: Some(Background::Color(bg)),
-            text_color: theme.colors.card_bg,
-            border: Border::default().rounded(RADIUS_PILL),
-            shadow: Shadow::default(),
-            snap: false,
-        }
+        style(bg, theme.colors.card_bg, Border::default().rounded(RADIUS_PILL))
     })
 }
 
@@ -33,16 +41,14 @@ pub fn secondary<'a, M: 'a>(
             button::Status::Hovered | button::Status::Pressed => theme.colors.button_hover_subtle,
             _ => Color::TRANSPARENT,
         };
-        button::Style {
-            background: Some(Background::Color(bg)),
-            text_color: theme.colors.accent,
-            border: Border::default()
+        style(
+            bg,
+            theme.colors.accent,
+            Border::default()
                 .color(theme.colors.accent)
                 .width(1.0)
                 .rounded(RADIUS_PILL),
-            shadow: Shadow::default(),
-            snap: false,
-        }
+        )
     })
 }
 
@@ -69,13 +75,7 @@ pub fn ghost<'a, M: 'a>(
                 _ => Color::TRANSPARENT,
             }
         };
-        button::Style {
-            background: Some(Background::Color(bg)),
-            text_color: theme.colors.text_primary,
-            border: Border::default().rounded(radius),
-            shadow: Shadow::default(),
-            snap: false,
-        }
+        style(bg, theme.colors.text_primary, Border::default().rounded(radius))
     })
 }
 
@@ -93,11 +93,7 @@ pub fn ghost_icon<'a, M: 'a>(
 pub fn transparent<'a, M: 'a>(
     content: impl Into<Element<'a, M, AppTheme>>,
 ) -> Button<'a, M, AppTheme> {
-    button(content).style(|theme: &AppTheme, _status| button::Style {
-        background: Some(Background::Color(Color::TRANSPARENT)),
-        text_color: theme.colors.text_primary,
-        border: Border::default(),
-        shadow: Shadow::default(),
-        snap: false,
+    button(content).style(|theme: &AppTheme, _status| {
+        style(Color::TRANSPARENT, theme.colors.text_primary, Border::default())
     })
 }

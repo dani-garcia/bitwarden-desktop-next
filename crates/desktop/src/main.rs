@@ -4,6 +4,7 @@ mod app;
 mod assets;
 mod clipboard;
 mod components;
+mod favicon;
 mod i18n;
 mod instance_lock;
 mod menu;
@@ -135,7 +136,13 @@ fn init_tracing() {
     let flight_recorder =
         bitwarden_logging::init_flight_recorder(bitwarden_logging::FlightRecorderConfig::default());
 
-    let filter = EnvFilter::from_default_env();
+    // `EnvFilter::from_default_env()` alone falls back to `LevelFilter::ERROR`
+    // when `RUST_LOG` is unset, which silences everything we `warn!` / `debug!`
+    // in this crate. Fall back to the filter described in the doc comment so
+    // the app is legibly chatty on a fresh clone without requiring the user
+    // to remember the env var.
+    const DEFAULT_FILTER: &str = "bitwarden_desktop_next=debug,warn";
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(DEFAULT_FILTER));
 
     let fmt_layer = fmt::layer()
         .with_target(true)

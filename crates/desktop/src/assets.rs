@@ -8,6 +8,11 @@ pub const BWI_FONT: &[u8] = include_bytes!("../../../assets/bwi-font.ttf");
 // App icon
 pub const ICON_PNG: &[u8] = include_bytes!("../../../assets/icon.png");
 
+// Favicon fallback — rendered when a login cipher has no URI, the fetch is
+// still pending, or the icon service returned an error. Vendored from
+// `clients/apps/desktop/src/images/bwi-globe.png`.
+pub const BWI_GLOBE_PNG: &[u8] = include_bytes!("../../../assets/bwi-globe.png");
+
 // SVGs
 pub const LOGO_WHITE: &[u8] = include_bytes!("../../../assets/logo-white.svg");
 pub const BG_LEFT: &[u8] = include_bytes!("../../../assets/bg-left.svg");

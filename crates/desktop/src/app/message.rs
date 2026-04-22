@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
+    favicon::FaviconMessage,
     sdk::ClientManager,
     views::{
         about::AboutMessage, login::LoginMessage, settings::SettingsMessage,
@@ -25,6 +26,9 @@ pub enum Message {
     Settings(SettingsMessage),
     Window(WindowMessage),
     System(SystemMessage),
+    /// Favicon service progress — one per completed fetch. Arrival alone
+    /// triggers the redraw; the handler only logs.
+    Favicon(FaviconMessage),
 }
 
 /// Per-window OS events. Every variant carries `window::Id` so the router

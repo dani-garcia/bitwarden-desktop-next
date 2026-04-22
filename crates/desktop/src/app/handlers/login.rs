@@ -51,6 +51,7 @@ impl App {
     pub(in crate::app) fn handle_sign_out(&mut self) -> Task<Message> {
         if let Some(uid) = self.active_user {
             self.vault_view.remove_user_items(&uid);
+            self.favicon.evict_user(&uid);
             self.client_manager.log_out(&uid);
         }
         let next_uid = self

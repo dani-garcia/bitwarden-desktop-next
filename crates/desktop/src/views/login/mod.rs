@@ -419,37 +419,36 @@ impl LoginView {
             }
 
             // ── Account switcher ───────────────────────────────────────────
-            LoginMessage::AccountSwitcher(asm) => match asm {
-                AccountSwitcherMessage::ToggleDropdown => {
-                    self.account_switcher_open = !self.account_switcher_open;
-                    (Task::none(), None)
+            LoginMessage::AccountSwitcher(AccountSwitcherMessage::ToggleDropdown) => {
+                self.account_switcher_open = !self.account_switcher_open;
+                (Task::none(), None)
+            }
+            LoginMessage::AccountSwitcher(asm) => {
+                // Every non-toggle action dismisses the dropdown.
+                self.account_switcher_open = false;
+                match asm {
+                    AccountSwitcherMessage::ToggleDropdown => unreachable!(),
+                    AccountSwitcherMessage::SwitchUser(uid) => {
+                        (Task::none(), Some(LoginEvent::UserSelected { uid }))
+                    }
+                    AccountSwitcherMessage::AddAccount => {
+                        self.reset_to_email_entry();
+                        (Task::none(), None)
+                    }
+                    AccountSwitcherMessage::LockAll => {
+                        (Task::none(), Some(LoginEvent::LockAllRequested))
+                    }
+                    AccountSwitcherMessage::OpenSettings => {
+                        (Task::none(), Some(LoginEvent::SettingsRequested))
+                    }
+                    AccountSwitcherMessage::LockActive => {
+                        (Task::none(), Some(LoginEvent::LockActiveRequested))
+                    }
+                    AccountSwitcherMessage::LogOutActive => {
+                        (Task::none(), Some(LoginEvent::SignOutRequested))
+                    }
                 }
-                AccountSwitcherMessage::SwitchUser(uid) => {
-                    self.account_switcher_open = false;
-                    (Task::none(), Some(LoginEvent::UserSelected { uid }))
-                }
-                AccountSwitcherMessage::AddAccount => {
-                    self.account_switcher_open = false;
-                    self.reset_to_email_entry();
-                    (Task::none(), None)
-                }
-                AccountSwitcherMessage::LockAll => {
-                    self.account_switcher_open = false;
-                    (Task::none(), Some(LoginEvent::LockAllRequested))
-                }
-                AccountSwitcherMessage::OpenSettings => {
-                    self.account_switcher_open = false;
-                    (Task::none(), Some(LoginEvent::SettingsRequested))
-                }
-                AccountSwitcherMessage::LockActive => {
-                    self.account_switcher_open = false;
-                    (Task::none(), Some(LoginEvent::LockActiveRequested))
-                }
-                AccountSwitcherMessage::LogOutActive => {
-                    self.account_switcher_open = false;
-                    (Task::none(), Some(LoginEvent::SignOutRequested))
-                }
-            },
+            }
         }
     }
 
