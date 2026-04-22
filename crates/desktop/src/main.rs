@@ -75,17 +75,35 @@ fn main() -> iced::Result {
     // Default to tiny-skia (CPU) renderer to avoid ~500 ms wgpu GPU init on
     // startup. For a form-based UI this is fast enough, and the instant
     // window appearance is a better UX trade-off. The `gpu` Cargo feature
-    // enables the wgpu backend; `--gpu` then opts into it at runtime.
-    // Without the feature, the flag is a no-op.
-    let backend = if cfg!(feature = "gpu") && std::env::args().any(|a| a == "--gpu") {
-        "wgpu"
-    } else {
-        "tiny-skia"
-    };
-
-    tracing::info!("Starting app with Iced backend: {}", backend);
-    // SAFETY: called at the very start of main, before any threads are spawned.
-    unsafe { std::env::set_var("ICED_BACKEND", backend) };
+    // enables the wgpu backend; `--gpu`, the persisted
+    // `hardware_acceleration` setting, or `ICED_BACKEND` in the environment
+    // then opt into it at runtime.
+    //
+    // Precedence (highest wins):
+    //   1. `ICED_BACKEND` already set in the environment — leave it alone.
+    //   2. `--gpu` CLI flag.
+    //   3. `hardware_acceleration = true` in `data/settings.json`.
+    //   4. Default: tiny-skia.
+    //
+    // Changing the persisted setting only takes effect on the next launch
+    match std::env::var_os("ICED_BACKEND") {
+        Some(backend) => {
+            tracing::info!("ICED_BACKEND already set in environment, honoring: {backend:?}");
+        }
+        None => {
+            let gpu_feature_enabled = cfg!(feature = "gpu");
+            let gpu_user_enabled = std::env::args().any(|a| a == "--gpu")
+                || crate::settings::Settings::load().hardware_acceleration;
+            let backend = if gpu_feature_enabled && gpu_user_enabled {
+                "wgpu"
+            } else {
+                "tiny-skia"
+            };
+            tracing::info!("Starting app with Iced backend: {}", backend);
+            // SAFETY: called at the very start of main, before any threads are spawned.
+            unsafe { std::env::set_var("ICED_BACKEND", backend) };
+        }
+    }
 
     iced::daemon(App::new, App::update, App::view)
         .subscription(App::subscription)

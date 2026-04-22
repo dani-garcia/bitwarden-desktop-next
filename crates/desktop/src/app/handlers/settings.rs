@@ -56,6 +56,15 @@ impl App {
             | SettingChange::CloseToTray(_)
             | SettingChange::StartToTray(_) => self.refresh_tray(),
 
+            // No runtime side-effect needed — the setting is read where it
+            // takes effect. `MinimizeOnCopy` is consumed in the vault
+            // clipboard handler; `ShowFavicons` is consumed by the item-list
+            // renderer; `HardwareAcceleration` is read once at startup (see
+            // `main.rs`) and only takes effect on restart.
+            SettingChange::MinimizeOnCopy(_)
+            | SettingChange::ShowFavicons(_)
+            | SettingChange::HardwareAcceleration(_) => {}
+
             // Every remaining variant is currently unwired — the value was
             // persisted above, but the feature doesn't react yet. Let the
             // user know with a toast.
@@ -70,10 +79,7 @@ impl App {
             | SettingChange::SshPromptBehavior(_)
             | SettingChange::DuckDuckGo(_)
             | SettingChange::AutotypeEnabled(_)
-            | SettingChange::MinimizeOnCopy(_)
-            | SettingChange::ShowFavicons(_)
             | SettingChange::AlwaysShowDock(_)
-            | SettingChange::HardwareAcceleration(_)
             | SettingChange::AllowScreenshots(_) => {
                 self.push_toast(crate::views::settings::not_supported_toast());
             }

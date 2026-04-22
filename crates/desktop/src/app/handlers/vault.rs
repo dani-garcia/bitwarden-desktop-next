@@ -30,7 +30,18 @@ impl App {
             } => {
                 self.clipboard.copy(value, sensitivity);
                 self.push_toast(Toast::success(toast_label, None));
-                Task::none()
+                // `minimize_on_copy` is a per-user preference — trigger it
+                // only when the active user has opted in.
+                let minimize = self
+                    .active_user
+                    .as_ref()
+                    .map(|uid| self.settings.preferences_for(uid).minimize_on_copy)
+                    .unwrap_or(false);
+                if minimize {
+                    iced::window::minimize(self.main_window_id(), true)
+                } else {
+                    Task::none()
+                }
             }
             VaultEvent::LaunchUrlRequested { uri } => {
                 clipboard::launch_url(&uri);
