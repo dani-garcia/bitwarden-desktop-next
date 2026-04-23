@@ -5,8 +5,8 @@ use iced::{
 
 use crate::{
     components::{self, buttons, icons},
+    domain::UserId,
     fl,
-    state::UserId,
     theme::{AppColors, AppTheme, RADIUS_LG},
 };
 

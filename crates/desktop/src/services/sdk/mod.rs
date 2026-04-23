@@ -42,7 +42,7 @@ use bitwarden_state::{
 use bitwarden_vault::{Cipher, CipherId, CipherListView, CipherView, Folder, FolderView};
 use serde::Deserialize;
 
-use crate::state::UnlockMethods;
+use crate::domain::UnlockMethods;
 
 // ── mock.json schema ───────────────────────────────────────────────────────
 //

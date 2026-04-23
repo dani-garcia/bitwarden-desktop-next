@@ -1,8 +1,8 @@
-pub mod advanced;
-pub mod appearance;
-pub mod autotype;
-pub mod integrations;
-pub mod security;
+pub(super) mod advanced;
+pub(super) mod appearance;
+pub(super) mod autotype;
+pub(super) mod integrations;
+pub(super) mod security;
 
 use iced::widget::{Checkbox, checkbox};
 

@@ -5,8 +5,8 @@ use iced::{
 
 use crate::{
     components::{buttons, inputs::reveal_text_field_with_submit, spinner},
+    domain::UnlockMethod,
     fl,
-    state::UnlockMethod,
     theme::{AppColors, AppTheme},
 };
 

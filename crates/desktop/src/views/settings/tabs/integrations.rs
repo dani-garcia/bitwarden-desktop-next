@@ -6,7 +6,7 @@ use iced::{
 use crate::{
     components::inputs,
     fl,
-    preferences::SshPromptBehavior,
+    services::preferences::SshPromptBehavior,
     theme::{AppColors, AppTheme},
 };
 

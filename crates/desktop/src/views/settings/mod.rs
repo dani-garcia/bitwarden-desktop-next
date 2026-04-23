@@ -9,6 +9,7 @@
 //! `settings-toast-not-supported` warning toast so the UI can be fleshed out
 //! ahead of the underlying SDK / OS wiring.
 
+mod handler;
 mod tabs;
 
 use iced::{
@@ -18,12 +19,15 @@ use iced::{
 };
 
 use crate::{
+    app::{Outcome, ViewTypes},
     components::{buttons, icons, modal, toast::Toast},
     fl,
-    preferences::{
-        ClearClipboardDelay, LockAfter, LogoutAfter, SshPromptBehavior, UserPreferences,
+    services::{
+        preferences::{
+            ClearClipboardDelay, LockAfter, LogoutAfter, SshPromptBehavior, UserPreferences,
+        },
+        settings::Settings,
     },
-    settings::Settings,
     theme::{AppColors, AppTheme, RADIUS_LG, RADIUS_MD, ThemePreference},
 };
 
@@ -37,6 +41,11 @@ pub struct SettingsView {
     /// copy it back into its persisted state and run any live side effect.
     /// Tabs render straight out of this snapshot — no intermediate form layer.
     pub snapshot: SettingsSnapshot,
+}
+
+impl ViewTypes for SettingsView {
+    type Message = SettingsMessage;
+    type Event = SettingsEvent;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -161,21 +170,17 @@ impl SettingsView {
     pub fn update(
         &mut self,
         msg: SettingsMessage,
-    ) -> (iced::Task<SettingsMessage>, Option<SettingsEvent>) {
+        _ctx: &crate::app::UpdateCtx,
+    ) -> Outcome<Self> {
         match msg {
-            SettingsMessage::Close => {
-                self.open = false;
-                (iced::Task::none(), None)
-            }
-            SettingsMessage::SelectCategory(kind) => {
-                self.active = kind;
-                (iced::Task::none(), None)
-            }
+            SettingsMessage::Close => self.open = false,
+            SettingsMessage::SelectCategory(kind) => self.active = kind,
             SettingsMessage::SettingChanged(change) => {
                 self.apply_to_snapshot(&change);
-                (iced::Task::none(), Some(SettingsEvent::Applied(change)))
+                return Outcome::event(SettingsEvent::Applied(change));
             }
         }
+        Outcome::None
     }
 
     /// Mirror the edit into the working snapshot so the widget re-renders

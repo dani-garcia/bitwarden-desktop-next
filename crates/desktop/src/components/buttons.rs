@@ -3,7 +3,10 @@ use iced::{
     widget::{Button, button},
 };
 
-use crate::theme::{AppTheme, RADIUS_PILL, RADIUS_SM};
+use crate::{
+    components::icons,
+    theme::{AppColors, AppTheme, RADIUS_PILL, RADIUS_SM},
+};
 
 /// Shared builder for `button::Style`. Centralizes `shadow: Shadow::default()`
 /// and `snap: false` — the latter is a mandatory field whose omission produces
@@ -28,7 +31,11 @@ pub fn primary<'a, M: 'a>(content: impl Into<Element<'a, M, AppTheme>>) -> Butto
             button::Status::Hovered | button::Status::Pressed => theme.colors.button_primary_hover,
             _ => theme.colors.button_primary,
         };
-        style(bg, theme.colors.card_bg, Border::default().rounded(RADIUS_PILL))
+        style(
+            bg,
+            theme.colors.card_bg,
+            Border::default().rounded(RADIUS_PILL),
+        )
     })
 }
 
@@ -75,7 +82,11 @@ pub fn ghost<'a, M: 'a>(
                 _ => Color::TRANSPARENT,
             }
         };
-        style(bg, theme.colors.text_primary, Border::default().rounded(radius))
+        style(
+            bg,
+            theme.colors.text_primary,
+            Border::default().rounded(radius),
+        )
     })
 }
 
@@ -94,6 +105,23 @@ pub fn transparent<'a, M: 'a>(
     content: impl Into<Element<'a, M, AppTheme>>,
 ) -> Button<'a, M, AppTheme> {
     button(content).style(|theme: &AppTheme, _status| {
-        style(Color::TRANSPARENT, theme.colors.text_primary, Border::default())
+        style(
+            Color::TRANSPARENT,
+            theme.colors.text_primary,
+            Border::default(),
+        )
     })
+}
+
+/// Small 18 px icon button with ghost-style hover. Shorthand for the
+/// copy / launch / delete icon buttons that appear in list rows and fields.
+pub fn icon_button<'a, M: 'a + Clone>(
+    icon: icons::BwiIcon,
+    msg: M,
+    colors: &AppColors,
+) -> Element<'a, M, AppTheme> {
+    ghost_icon(icon.render(18.0, colors.text_primary), colors.item_hover)
+        .on_press(msg)
+        .padding([6, 6])
+        .into()
 }

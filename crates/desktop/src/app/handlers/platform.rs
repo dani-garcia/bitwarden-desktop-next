@@ -7,48 +7,16 @@
 use iced::Task;
 
 use crate::{
-    clipboard::Sensitivity,
-    state::Screen,
-    views::{
-        about::{self, AboutMessage},
-        settings::SettingsSnapshot,
-        title_bar::{TitleBarEvent, WindowAction},
-        vault::widgets::search_bar,
-    },
+    domain::Screen,
+    views::{settings::SettingsSnapshot, title_bar::WindowAction},
 };
 
 use super::super::{App, Message, SystemMessage, WindowInfo, WindowKind, WindowMessage};
 
 impl App {
-    // ── Sub-view event handlers ────────────────────────────────────────────
-
-    pub(in crate::app) fn handle_titlebar_event(&mut self, event: TitleBarEvent) -> Task<Message> {
-        match event {
-            TitleBarEvent::MenuInvoked(menu_action) => self.handle_menu_action(menu_action),
-            TitleBarEvent::Window(action) => self.handle_window_action(action),
-        }
-    }
-
-    pub(in crate::app) fn handle_about_message(&mut self, msg: AboutMessage) -> Task<Message> {
-        match msg {
-            AboutMessage::CopyInfo => {
-                self.clipboard
-                    .copy(about::info_string(), Sensitivity::Normal);
-                Task::none()
-            }
-            AboutMessage::Close => {
-                if let Some(id) = self.about_window_id() {
-                    iced::window::close(id)
-                } else {
-                    Task::none()
-                }
-            }
-        }
-    }
-
     // ── Window lifecycle ───────────────────────────────────────────────────
 
-    fn handle_window_action(&mut self, action: WindowAction) -> Task<Message> {
+    pub(crate) fn handle_window_action(&mut self, action: WindowAction) -> Task<Message> {
         let id = self.main_window_id();
         match action {
             WindowAction::Minimize => {
@@ -76,7 +44,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn handle_window_message(&mut self, msg: WindowMessage) -> Task<Message> {
+    pub(crate) fn handle_window_message(&mut self, msg: WindowMessage) -> Task<Message> {
         match msg {
             WindowMessage::Opened(id) => {
                 // Native menu only attaches to the main window.
@@ -88,7 +56,7 @@ impl App {
                 }
             }
             WindowMessage::GotRawId(_id, raw_id) => {
-                self.native_menu = crate::menu::attach_menu(raw_id);
+                self.native_menu = crate::services::menu::attach_menu(raw_id);
                 Task::none()
             }
             WindowMessage::CloseRequested(id) => {
@@ -134,7 +102,8 @@ impl App {
                     return Task::none();
                 }
                 let state = self.menu_state();
-                let Some(action) = crate::menu::find_shortcut_action(&key, modifiers, &state)
+                let Some(action) =
+                    crate::services::menu::find_shortcut_action(&key, modifiers, &state)
                 else {
                     return Task::none();
                 };
@@ -146,7 +115,7 @@ impl App {
 
     // ── System signals ─────────────────────────────────────────────────────
 
-    pub(in crate::app) fn handle_system_message(&mut self, msg: SystemMessage) -> Task<Message> {
+    pub(crate) fn handle_system_message(&mut self, msg: SystemMessage) -> Task<Message> {
         match msg {
             SystemMessage::MudaEvent(event) => {
                 // The muda receiver is shared between the native app menu
@@ -189,11 +158,11 @@ impl App {
 
     // ── Menu + tray dispatch ───────────────────────────────────────────────
 
-    pub(in crate::app) fn handle_menu_action(
+    pub(crate) fn handle_menu_action(
         &mut self,
-        action: crate::menu::MenuAction,
+        action: crate::services::menu::MenuAction,
     ) -> Task<Message> {
-        use crate::menu::MenuAction;
+        use crate::services::menu::MenuAction;
         match action {
             MenuAction::Quit => {
                 return iced::exit();
@@ -225,9 +194,9 @@ impl App {
             }
             MenuAction::SearchVault => {
                 if self.screen == Screen::Vault {
-                    self.vault_view.search_query.clear();
+                    let task = self.vault_view.focus_search_task().map(Message::Vault);
                     self.refresh_cache();
-                    return iced::widget::operation::focus(search_bar::SEARCH_ID);
+                    return task;
                 }
             }
             MenuAction::SyncNow | MenuAction::Reload => {
@@ -283,12 +252,12 @@ impl App {
         Task::none()
     }
 
-    fn handle_tray_action(&mut self, action: crate::tray::TrayAction) -> Task<Message> {
-        use crate::tray::TrayAction;
+    fn handle_tray_action(&mut self, action: crate::services::tray::TrayAction) -> Task<Message> {
+        use crate::services::tray::TrayAction;
         match action {
             TrayAction::ToggleShowHide => self.toggle_main_window_visibility(),
             TrayAction::LockVault => {
-                self.handle_menu_action(crate::menu::MenuAction::LockAllVaults)
+                self.handle_menu_action(crate::services::menu::MenuAction::LockAllVaults)
             }
             TrayAction::Exit => iced::exit(),
         }
@@ -332,7 +301,7 @@ impl App {
     /// otherwise the window becomes unrecoverable (hidden with no tray icon).
     fn ensure_tray(&mut self) -> bool {
         if self.tray.is_none() {
-            self.tray = crate::tray::build();
+            self.tray = crate::services::tray::build();
             if self.tray.is_none() {
                 tracing::warn!("tray requested but failed to initialise; continuing without tray");
             }

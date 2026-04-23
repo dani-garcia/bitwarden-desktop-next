@@ -1,5 +1,5 @@
-pub mod about;
-pub mod login;
-pub mod settings;
-pub mod title_bar;
-pub mod vault;
+pub(crate) mod about;
+pub(crate) mod login;
+pub(crate) mod settings;
+pub(crate) mod title_bar;
+pub(crate) mod vault;

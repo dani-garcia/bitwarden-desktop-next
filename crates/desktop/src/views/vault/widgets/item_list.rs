@@ -11,9 +11,8 @@ use iced::{
 
 use crate::{
     components::{self, buttons, icons, virtual_list},
-    favicon::{self, FaviconService, IconState},
     fl,
-    state::UserId,
+    services::favicon::{self, IconState},
     theme::{AppColors, AppTheme, RADIUS_MD, RADIUS_SM},
 };
 
@@ -59,19 +58,13 @@ fn initial_color(name: &str) -> iced::Color {
     Color::from_rgb(r + m, g + m, b + m)
 }
 
-#[allow(
-    clippy::too_many_arguments,
-    reason = "threading favicon state + ids through"
-)]
 pub fn view<'a>(
     items: &'a [Arc<CipherListView>],
     selected_index: Option<usize>,
     scroll: virtual_list::ScrollState,
-    colors: &'a AppColors,
-    favicon: &'a FaviconService,
-    active_user: &'a UserId,
-    show_favicons: bool,
+    ctx: &crate::app::RenderCtx<'a>,
 ) -> Element<'a, ItemListMessage, AppTheme> {
+    let colors = ctx.colors;
     // Table header
     let table_header = container(
         row![
@@ -101,17 +94,7 @@ pub fn view<'a>(
         items,
         scroll,
         ROW_HEIGHT,
-        |i, item| {
-            row_element(
-                i,
-                item,
-                selected_index == Some(i),
-                colors,
-                favicon,
-                active_user,
-                show_favicons,
-            )
-        },
+        |i, item| row_element(i, item, selected_index == Some(i), ctx),
         ItemListMessage::Scrolled,
     )
     .height(Fill)
@@ -151,19 +134,16 @@ pub fn view<'a>(
 /// Build a single row Element at the given global index. `virtual_list`
 /// wraps the returned Element in a `Length::Fixed(ROW_HEIGHT)` container
 /// itself, so no height concern leaks into here.
-#[allow(
-    clippy::too_many_arguments,
-    reason = "threading favicon state + ids through"
-)]
 fn row_element<'a>(
     i: usize,
     item: &'a CipherListView,
     is_selected: bool,
-    colors: &'a AppColors,
-    favicon: &'a FaviconService,
-    active_user: &'a UserId,
-    show_favicons: bool,
+    ctx: &crate::app::RenderCtx<'a>,
 ) -> Element<'a, ItemListMessage, AppTheme> {
+    let colors = ctx.colors;
+    let favicon = ctx.favicon;
+    let active_user = ctx.active_user.expect("item_list requires active_user");
+    let show_favicons = ctx.show_favicons;
     let subtitle = item.subtitle.as_str();
     let (has_username, has_uri) = match &item.r#type {
         CipherListViewType::Login(login) => (

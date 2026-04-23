@@ -22,7 +22,7 @@ use iced::{
 };
 use tokio::sync::{Semaphore, broadcast};
 
-use crate::state::UserId;
+use crate::domain::UserId;
 
 pub type Hostname = String;
 
@@ -205,7 +205,7 @@ pub fn hostname_for_fetch(uri: &str) -> Option<Hostname> {
 // ── Broadcast fan-out (iced subscription) ─────────────────────────────────
 
 /// Process-global fan-out for fetch completions. Lazily initialized on first
-/// send or subscribe — matches the [`crate::menu`] muda pattern. The
+/// send or subscribe — matches the [`crate::services::menu`] muda pattern. The
 /// channel's initial receiver is dropped; [`broadcast::Sender::subscribe`]
 /// still works for subsequent subscribers, and `send()` silently no-ops
 /// when there are zero active receivers (which we ignore anyway).

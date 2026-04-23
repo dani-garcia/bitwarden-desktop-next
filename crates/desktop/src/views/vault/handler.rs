@@ -1,13 +1,16 @@
 use iced::Task;
 
 use crate::{
-    clipboard, components::toast::Toast, menu::MenuAction, state::Screen, views::vault::VaultEvent,
+    app::{App, Message},
+    components::toast::Toast,
+    domain::Screen,
+    fl,
+    services::{clipboard, menu::MenuAction},
+    views::vault::VaultEvent,
 };
 
-use super::super::{App, Message};
-
 impl App {
-    pub(in crate::app) fn handle_vault_event(&mut self, event: VaultEvent) -> Task<Message> {
+    pub(crate) fn handle_vault_event(&mut self, event: VaultEvent) -> Task<Message> {
         match event {
             VaultEvent::UserSelected { uid } => self.handle_user_switch(uid),
             VaultEvent::AddAccountRequested => {
@@ -22,6 +25,16 @@ impl App {
             VaultEvent::ToastRequested(t) => {
                 self.push_toast(t);
                 Task::none()
+            }
+            VaultEvent::ItemSaved { uid } => {
+                self.push_toast(Toast::success(fl!("vault-toast-item-saved"), None));
+                // Refresh the list so renamed items / ownership changes
+                // show up in the left pane without a manual reload.
+                self.load_vault_list_task(uid)
+            }
+            VaultEvent::ItemDeleted { uid } => {
+                self.push_toast(Toast::success(fl!("vault-toast-item-deleted"), None));
+                self.load_vault_list_task(uid)
             }
             VaultEvent::ClipboardCopyRequested {
                 value,

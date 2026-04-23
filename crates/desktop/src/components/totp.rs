@@ -36,10 +36,9 @@ use iced::{
 };
 
 use crate::{
-    components::icons,
+    components::{buttons::icon_button, icons},
     fl,
     theme::{AppColors, AppTheme},
-    views::vault::widgets::field_helpers::icon_button,
 };
 
 /// Diameter of the countdown ring in logical pixels.

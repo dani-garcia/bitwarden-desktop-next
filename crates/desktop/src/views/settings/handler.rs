@@ -1,18 +1,19 @@
 use iced::Task;
 
-use crate::views::settings::{SettingChange, SettingsEvent};
-
-use super::super::{App, Message};
+use crate::{
+    app::{App, Message},
+    views::settings::{SettingChange, SettingsEvent},
+};
 
 impl App {
-    pub(in crate::app) fn handle_settings_event(&mut self, event: SettingsEvent) -> Task<Message> {
+    pub(crate) fn handle_settings_event(&mut self, event: SettingsEvent) -> Task<Message> {
         match event {
             SettingsEvent::Applied(change) => self.apply_setting_change(change),
         }
     }
 
     /// Pull the view's working snapshot back into the persisted
-    /// [`Settings`][crate::settings::Settings] (the view is the source of
+    /// [`Settings`][crate::services::settings::Settings] (the view is the source of
     /// truth during the modal's lifetime), then run any runtime side effect
     /// that the change requires — a theme refresh, a language switch,
     /// clipboard-timeout push, tray respawn — or emit the generic
@@ -41,9 +42,9 @@ impl App {
                 if tag.is_empty() {
                     // Empty = follow OS locale. Re-run the initial selection
                     // so the next `fl!()` call picks up the OS preference.
-                    crate::i18n::init();
+                    crate::services::i18n::init();
                 } else if let Ok(lang_id) = tag.parse() {
-                    crate::i18n::set_language(lang_id);
+                    crate::services::i18n::set_language(lang_id);
                 } else {
                     tracing::warn!(%tag, "unparseable language tag; ignoring");
                 }
@@ -94,7 +95,7 @@ impl App {
         let wants = self.settings.wants_tray();
         match (wants, self.tray.is_some()) {
             (true, false) => {
-                self.tray = crate::tray::build();
+                self.tray = crate::services::tray::build();
                 if self.tray.is_none() {
                     tracing::warn!("tray requested via settings but failed to initialise");
                 }

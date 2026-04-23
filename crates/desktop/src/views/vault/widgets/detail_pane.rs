@@ -7,10 +7,10 @@ use iced::{
 };
 
 use super::field_helpers::{
-    card_with_margin, field_readonly, format_passkey_date, icon_button, section_label, styled_card,
+    card_with_margin, field_readonly, format_passkey_date, section_label, styled_card,
 };
 use crate::{
-    components::{self, buttons, icons, inputs::reveal_field},
+    components::{self, buttons, buttons::icon_button, icons, inputs::reveal_field},
     fl,
     theme::{AppColors, AppTheme},
 };

@@ -1,7 +1,9 @@
+mod ctx;
 mod handlers;
 mod helpers;
 mod message;
 
+pub use ctx::{Outcome, RenderCtx, UpdateCtx, ViewTypes};
 pub use message::{Message, SystemMessage, WindowMessage};
 use message::{WindowInfo, WindowKind};
 
@@ -10,16 +12,15 @@ use std::{collections::HashMap, rc::Rc, sync::Arc};
 use iced::{Element, Subscription, Task};
 
 use crate::{
-    clipboard::ClipboardManager,
     components::{
         account_switcher::AccountEntry,
         toast::{self, Toast},
     },
-    sdk::ClientManager,
-    settings::Settings,
-    state::{Screen, UnlockMethod, UserId},
+    domain::{Screen, UnlockMethod, UserId},
+    services::{
+        clipboard::ClipboardManager, sdk::ClientManager, settings::Settings, tray::TrayHandle,
+    },
     theme::{AppTheme, ThemePreference},
-    tray::TrayHandle,
     views::{
         login, settings as settings_view,
         title_bar::{self, TitleBarMessage},
@@ -37,11 +38,11 @@ pub struct App {
     pub(super) login_view: login::LoginView,
     pub(super) vault_view: vault::VaultView,
     pub(super) settings_view: settings_view::SettingsView,
-    pub(super) title_bar: title_bar::TitleBarState,
+    pub(super) title_bar: title_bar::TitleBarView,
 
     // ── External dependencies ──────────────────────────────────────────────
     pub(super) client_manager: Arc<ClientManager>,
-    pub(super) favicon: crate::favicon::FaviconService,
+    pub(super) favicon: crate::services::favicon::FaviconService,
 
     // ── Derived cache ──────────────────────────────────────────────────────
     // Exists because iced's `view()` returns an `Element<'_, ...>` that
@@ -57,7 +58,7 @@ pub struct App {
     /// Cached id of the main window — always present from `App::new` until
     /// `iced::exit`. Child windows (About) are not tracked here.
     pub(super) main_window: iced::window::Id,
-    pub(super) native_menu: Option<crate::menu::NativeMenuHandle>,
+    pub(super) native_menu: Option<crate::services::menu::NativeMenuHandle>,
 
     // ── Tray + user settings ───────────────────────────────────────────────
     // `settings` is read once at startup from `data/settings.json`. A future
@@ -129,21 +130,21 @@ impl App {
         if !settings.language.is_empty()
             && let Ok(tag) = settings.language.parse()
         {
-            crate::i18n::set_language(tag);
+            crate::services::i18n::set_language(tag);
         }
 
         // Register muda + tray-icon event handlers into their global
         // broadcast channels. Must run *before* any menu or tray icon is
         // built — both crates' `set_event_handler` are one-shot.
-        crate::menu::install_event_handler();
-        crate::tray::install_event_handler();
+        crate::services::menu::install_event_handler();
+        crate::services::tray::install_event_handler();
 
         // Build the tray up-front if any tray-related setting is on, so
         // `start_to_tray` has something to live in and user clicks find it
         // immediately. Tray build failure → log + fall through without.
         let mut tray = None;
         if settings.wants_tray() {
-            tray = crate::tray::build();
+            tray = crate::services::tray::build();
             if tray.is_none() {
                 tracing::warn!("tray requested by settings but failed to initialise");
             }
@@ -159,7 +160,7 @@ impl App {
         let (main_id, open_task) = iced::window::open(iced::window::Settings {
             size: MAIN_WINDOW_SIZE,
             min_size: Some(iced::Size::new(800.0, 750.0)),
-            decorations: crate::menu::should_use_native_title_bar(),
+            decorations: crate::services::menu::should_use_native_title_bar(),
             visible: !start_hidden,
             // Required for tray "close to tray": without this, the OS-sent
             // `CloseRequested` event would close the window before our
@@ -186,7 +187,7 @@ impl App {
 
         // Favicon service. Every user points at the cloud default for now;
         // see `docs/todo.md` "Show favicons" for the per-user `icons_url` swap.
-        let favicon = crate::favicon::FaviconService::new(Arc::new(|_uid: &UserId| {
+        let favicon = crate::services::favicon::FaviconService::new(Arc::new(|_uid: &UserId| {
             "https://icons.bitwarden.net".to_string()
         }));
 
@@ -196,7 +197,7 @@ impl App {
             login_view: login::LoginView::new(),
             vault_view: vault::VaultView::new(),
             settings_view: settings_view::SettingsView::new(),
-            title_bar: title_bar::TitleBarState::new(),
+            title_bar: title_bar::TitleBarView::new(),
             client_manager: Arc::new(ClientManager::empty()),
             favicon,
             cache: ViewCache::default(),
@@ -250,7 +251,7 @@ impl App {
         // (bound inside the stream) forwards events here; the handler filters
         // by `MenuId` to decide whether it's an app-menu or tray-menu click.
         let muda_sub = if self.native_menu.is_some() || self.tray.is_some() {
-            Subscription::run(crate::menu::muda_event_stream)
+            Subscription::run(crate::services::menu::muda_event_stream)
                 .map(|ev| Message::System(SystemMessage::MudaEvent(ev)))
         } else {
             Subscription::none()
@@ -260,7 +261,7 @@ impl App {
         // stream filters to the click-to-toggle case before emitting, so the
         // handler just runs the action.
         let tray_sub = if self.tray.is_some() {
-            Subscription::run(crate::tray::click_stream)
+            Subscription::run(crate::services::tray::click_stream)
                 .map(|action| Message::System(SystemMessage::TrayClick(action)))
         } else {
             Subscription::none()
@@ -272,13 +273,13 @@ impl App {
         // Second-launch wake-up: the listener is bound once, inside this
         // stream, and kept alive across `update()` cycles because iced
         // hashes the subscription identity from the `fn` pointer.
-        let wake_sub = Subscription::run(crate::instance_lock::wake_stream)
+        let wake_sub = Subscription::run(crate::services::instance_lock::wake_stream)
             .map(|_| Message::System(SystemMessage::InstanceWakeRequested));
 
         // Favicon fetch completions. Each message flips one row from globe
         // to real icon by virtue of arriving; the handler just logs.
-        let favicon_sub = Subscription::run(crate::favicon::favicon_event_stream)
-            .map(Message::Favicon);
+        let favicon_sub =
+            Subscription::run(crate::services::favicon::favicon_event_stream).map(Message::Favicon);
 
         Subscription::batch([
             close_sub,
@@ -308,53 +309,38 @@ impl App {
             // overlays (title-bar menus, account-switcher dropdown) that
             // would otherwise paint beside the modal.
             Message::Settings(_) => self.dismiss_all_overlays(),
-            Message::About(_)
-            | Message::Window(_)
-            | Message::System(_)
-            | Message::Favicon(_) => {}
+            Message::About(_) | Message::Window(_) | Message::System(_) | Message::Favicon(_) => {}
         }
 
+        let uctx = UpdateCtx {
+            client_manager: &self.client_manager,
+            active_user: self.active_user.as_ref(),
+        };
+
         let task = match message {
-            Message::Login(m) => {
-                let (task, ev) =
-                    self.login_view
-                        .update(m, &self.client_manager, self.active_user.as_ref());
-                let task = task.map(Message::Login);
-                let ev_task = ev
-                    .map(|e| self.handle_login_event(e))
-                    .unwrap_or_else(Task::none);
-                Task::batch([task, ev_task])
-            }
-            Message::Vault(m) => {
-                let (task, ev) =
-                    self.vault_view
-                        .update(m, &self.client_manager, self.active_user.as_ref());
-                let task = task.map(Message::Vault);
-                let ev_task = ev
-                    .map(|e| self.handle_vault_event(e))
-                    .unwrap_or_else(Task::none);
-                Task::batch([task, ev_task])
-            }
-            Message::TitleBar(m) => {
-                let (task, ev) = self.title_bar.update(m);
-                let task = task.map(Message::TitleBar);
-                let ev_task = ev
-                    .map(|e| self.handle_titlebar_event(e))
-                    .unwrap_or_else(Task::none);
-                Task::batch([task, ev_task])
-            }
+            Message::Login(m) => self
+                .login_view
+                .update(m, &uctx)
+                .dispatch(Message::Login, |e| self.handle_login_event(e)),
+            Message::Vault(m) => self
+                .vault_view
+                .update(m, &uctx)
+                .dispatch(Message::Vault, |e| self.handle_vault_event(e)),
+            Message::TitleBar(m) => self
+                .title_bar
+                .update(m, &uctx)
+                .dispatch(Message::TitleBar, |e| self.handle_titlebar_event(e)),
             Message::About(m) => self.handle_about_message(m),
-            Message::Settings(m) => {
-                let (task, ev) = self.settings_view.update(m);
-                let task = task.map(Message::Settings);
-                let ev_task = ev
-                    .map(|e| self.handle_settings_event(e))
-                    .unwrap_or_else(Task::none);
-                Task::batch([task, ev_task])
-            }
+            Message::Settings(m) => self
+                .settings_view
+                .update(m, &uctx)
+                .dispatch(Message::Settings, |e| self.handle_settings_event(e)),
             Message::Window(m) => self.handle_window_message(m),
             Message::System(m) => self.handle_system_message(m),
-            Message::Favicon(crate::favicon::FaviconMessage::IconResolved { uid, hostname }) => {
+            Message::Favicon(crate::services::favicon::FaviconMessage::IconResolved {
+                uid,
+                hostname,
+            }) => {
                 // Arrival of this message is what drives the redraw; the
                 // service has already mutated its in-memory cache by the
                 // time we see it here. Log at trace so a cold unlock with
@@ -405,6 +391,16 @@ impl App {
             .map(|info| info.size.width)
             .unwrap_or(1024.0);
 
+        let rctx = RenderCtx {
+            colors,
+            favicon: &self.favicon,
+            show_favicons: self.settings.show_favicons,
+            window_width: main_window_width,
+            active_user: self.active_user.as_ref(),
+            active_email: email,
+            accounts: &self.cache.accounts,
+        };
+
         let page: Element<'_, Message, AppTheme> = match self.screen {
             Screen::Loading => {
                 iced::widget::center(crate::components::spinner::spinner(48.0, colors.accent))
@@ -412,31 +408,9 @@ impl App {
             }
             Screen::Login => self
                 .login_view
-                .view(
-                    email,
-                    server,
-                    &self.cache.accounts,
-                    &self.cache.unlock_alternatives,
-                    colors,
-                )
+                .view(server, &self.cache.unlock_alternatives, &rctx)
                 .map(Message::Login),
-            Screen::Vault => self
-                .vault_view
-                .view(
-                    // Invariant: `screen == Vault` implies an active user is set
-                    // (we never flip to Vault without one). The unwraps here
-                    // make that contract explicit to the view.
-                    self.active_user
-                        .as_ref()
-                        .expect("Screen::Vault without active_user"),
-                    email.expect("Screen::Vault without active email"),
-                    &self.cache.accounts,
-                    colors,
-                    main_window_width,
-                    &self.favicon,
-                    self.settings.show_favicons,
-                )
-                .map(Message::Vault),
+            Screen::Vault => self.vault_view.view(&rctx).map(Message::Vault),
         };
 
         let close_toast = |idx| Message::System(SystemMessage::CloseToast(idx));
@@ -445,7 +419,7 @@ impl App {
         // app level so it covers the sidebar AND the title bar.
         let sheet: Option<Element<'_, Message, AppTheme>> = if self.screen == Screen::Vault {
             self.vault_view
-                .sheet_view(colors, main_window_width)
+                .sheet_view(&rctx)
                 .map(|el| el.map(Message::Vault))
         } else {
             None
@@ -454,7 +428,7 @@ impl App {
         // Delete-confirmation modal — same hoisting rule as the sheet.
         let modal: Option<Element<'_, Message, AppTheme>> = if self.screen == Screen::Vault {
             self.vault_view
-                .modal_view(colors)
+                .modal_view(&rctx)
                 .map(|el| el.map(Message::Vault))
         } else {
             None
@@ -467,7 +441,7 @@ impl App {
             .modal_view(colors)
             .map(|el| el.map(Message::Settings));
 
-        let use_custom_menu_bar = crate::menu::should_use_custom_menu_bar();
+        let use_custom_menu_bar = crate::services::menu::should_use_custom_menu_bar();
 
         let tb: Element<'_, Message, AppTheme> = if use_custom_menu_bar {
             let menu_state = self.menu_state();
@@ -475,7 +449,7 @@ impl App {
                 .view(self.main_window_maximized(), &menu_state, colors)
                 .map(Message::TitleBar)
         } else {
-            title_bar::TitleBarState::view_empty().map(Message::TitleBar)
+            title_bar::TitleBarView::view_empty().map(Message::TitleBar)
         };
 
         let main_column: Element<'_, Message, AppTheme> =

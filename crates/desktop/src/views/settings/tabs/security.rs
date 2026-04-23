@@ -6,7 +6,7 @@ use iced::{
 use crate::{
     components::inputs,
     fl,
-    preferences::{LockAfter, LogoutAfter},
+    services::preferences::{LockAfter, LogoutAfter},
     theme::{AppColors, AppTheme},
 };
 

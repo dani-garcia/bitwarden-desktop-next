@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    favicon::FaviconMessage,
-    sdk::ClientManager,
+    services::{favicon::FaviconMessage, sdk::ClientManager},
     views::{
         about::AboutMessage, login::LoginMessage, settings::SettingsMessage,
         title_bar::TitleBarMessage, vault::VaultMessage,
@@ -57,9 +56,9 @@ pub enum SystemMessage {
     /// decide which action to run.
     MudaEvent(muda::MenuEvent),
     /// Left-click released on the tray icon — emitted by the pump in
-    /// [`crate::tray::click_stream`] which already filters to the
+    /// [`crate::services::tray::click_stream`] which already filters to the
     /// click-to-toggle case.
-    TrayClick(crate::tray::TrayAction),
+    TrayClick(crate::services::tray::TrayAction),
     /// OS-level light/dark theme changed. `ThemePreference::System` follows
     /// this; explicit Light/Dark preferences ignore it.
     ThemeChanged,

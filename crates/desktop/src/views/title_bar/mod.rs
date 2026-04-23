@@ -1,13 +1,15 @@
 mod dropdown;
-pub mod window_chrome;
+mod handler;
+pub(super) mod window_chrome;
 
 use iced::{
-    Alignment, Background, Border, Color, Element, Fill, Padding, Shadow, Task,
+    Alignment, Background, Border, Color, Element, Fill, Padding, Shadow,
     widget::{button, container, mouse_area, row, text},
 };
 
 use crate::{
-    menu,
+    app::{Outcome, ViewTypes},
+    services::menu,
     theme::{AppColors, AppTheme},
 };
 
@@ -59,17 +61,22 @@ pub enum WindowAction {
 #[derive(Debug, Clone)]
 pub enum TitleBarEvent {
     /// User invoked a menu entry mapping to a global `MenuAction`.
-    MenuInvoked(crate::menu::MenuAction),
+    MenuInvoked(crate::services::menu::MenuAction),
     /// User clicked a window-chrome button or started a drag/resize.
     Window(WindowAction),
 }
 
-pub struct TitleBarState {
+pub struct TitleBarView {
     pub open_menu: Option<usize>,
     pub open_submenu: Option<usize>,
 }
 
-impl TitleBarState {
+impl ViewTypes for TitleBarView {
+    type Message = TitleBarMessage;
+    type Event = TitleBarEvent;
+}
+
+impl TitleBarView {
     pub fn new() -> Self {
         Self {
             open_menu: None,
@@ -87,8 +94,11 @@ impl TitleBarState {
     pub fn update(
         &mut self,
         msg: TitleBarMessage,
-    ) -> (Task<TitleBarMessage>, Option<TitleBarEvent>) {
-        match msg {
+        _ctx: &crate::app::UpdateCtx,
+    ) -> Outcome<Self> {
+        // Menu-navigation arms mutate state; button-click arms bubble a
+        // `TitleBarEvent::Window(...)` action.
+        let window_action = match msg {
             TitleBarMessage::TopLevelClicked(i) => {
                 self.open_menu = if self.open_menu == Some(i) {
                     None
@@ -96,68 +106,56 @@ impl TitleBarState {
                     Some(i)
                 };
                 self.open_submenu = None;
-                (Task::none(), None)
+                return Outcome::None;
             }
             TitleBarMessage::DismissMenu => {
                 self.dismiss_menu();
-                (Task::none(), None)
+                return Outcome::None;
             }
             TitleBarMessage::TopLevelHovered(i) => {
                 self.open_menu = Some(i);
                 self.open_submenu = None;
-                (Task::none(), None)
+                return Outcome::None;
             }
             TitleBarMessage::SubMenuHovered(_menu, item) => {
                 self.open_submenu = if item == usize::MAX { None } else { Some(item) };
-                (Task::none(), None)
+                return Outcome::None;
             }
             TitleBarMessage::ItemClicked(menu, item) => {
                 self.dismiss_menu();
-                let event = crate::menu::MENUS
-                    .get(menu)
-                    .and_then(|(_, entries)| entries.get(item))
-                    .and_then(|e| e.action)
-                    .map(TitleBarEvent::MenuInvoked);
-                (Task::none(), event)
+                return Outcome::from_option(
+                    crate::services::menu::MENUS
+                        .get(menu)
+                        .and_then(|(_, entries)| entries.get(item))
+                        .and_then(|e| e.action)
+                        .map(TitleBarEvent::MenuInvoked),
+                );
             }
             TitleBarMessage::SubMenuItemClicked(menu, parent, sub) => {
                 self.dismiss_menu();
-                let event = crate::menu::MENUS
-                    .get(menu)
-                    .and_then(|(_, entries)| entries.get(parent))
-                    .and_then(|e| e.children.get(sub))
-                    .and_then(|e| e.action)
-                    .map(TitleBarEvent::MenuInvoked);
-                (Task::none(), event)
+                return Outcome::from_option(
+                    crate::services::menu::MENUS
+                        .get(menu)
+                        .and_then(|(_, entries)| entries.get(parent))
+                        .and_then(|e| e.children.get(sub))
+                        .and_then(|e| e.action)
+                        .map(TitleBarEvent::MenuInvoked),
+                );
             }
-            TitleBarMessage::MinimizeClicked => (
-                Task::none(),
-                Some(TitleBarEvent::Window(WindowAction::Minimize)),
-            ),
-            TitleBarMessage::MaximizeClicked => (
-                Task::none(),
-                Some(TitleBarEvent::Window(WindowAction::Maximize)),
-            ),
-            TitleBarMessage::CloseClicked => (
-                Task::none(),
-                Some(TitleBarEvent::Window(WindowAction::Close)),
-            ),
-            TitleBarMessage::DragStart => (
-                Task::none(),
-                Some(TitleBarEvent::Window(WindowAction::Drag)),
-            ),
-            TitleBarMessage::ResizeEdge(dir) => (
-                Task::none(),
-                Some(TitleBarEvent::Window(WindowAction::ResizeEdge(dir))),
-            ),
-        }
+            TitleBarMessage::MinimizeClicked => WindowAction::Minimize,
+            TitleBarMessage::MaximizeClicked => WindowAction::Maximize,
+            TitleBarMessage::CloseClicked => WindowAction::Close,
+            TitleBarMessage::DragStart => WindowAction::Drag,
+            TitleBarMessage::ResizeEdge(dir) => WindowAction::ResizeEdge(dir),
+        };
+        Outcome::event(TitleBarEvent::Window(window_action))
     }
 }
 
 /// Wrap content with invisible resize handles on all edges.
 pub use self::window_chrome::resize_wrapper;
 
-impl TitleBarState {
+impl TitleBarView {
     /// Draw a minimal title bar with no buttons or drag area (used on macOS
     /// when the native system title bar takes over). Takes no state so it's
     /// an associated function, not a `&self` method.
@@ -190,7 +188,7 @@ impl TitleBarState {
             .map(|(i, (label_key, entries))| {
                 let is_open = open_menu == Some(i);
                 let btn = button(
-                    text(crate::i18n::lookup(label_key))
+                    text(crate::services::i18n::lookup(label_key))
                         .size(14)
                         .color(Color::WHITE),
                 )

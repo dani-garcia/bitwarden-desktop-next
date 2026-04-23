@@ -8,9 +8,8 @@ use bitwarden_vault::CipherType;
 use crate::{
     components::{self, buttons, icons},
     fl,
-    state::{NavSection, SidebarFilter, SidebarMode},
     theme::{AppColors, AppTheme},
-    views::vault::SidebarState,
+    views::vault::{NavSection, SidebarFilter, SidebarMode, SidebarState},
 };
 
 const RAIL_WIDTH: f32 = 50.0;
@@ -20,6 +19,10 @@ const RAIL_BTN_SIZE: f32 = 36.0;
 const ITEM_RADIUS: f32 = 6.0;
 const SIDEBAR_H_PAD: f32 = 8.0;
 
+// The payload types (`SidebarFilter`, `NavSection`) are `pub(in crate::views::vault)`
+// because the private `widgets` module already blocks external construction of
+// this enum. The compiler still flags the technical leakage; silence it here.
+#[allow(private_interfaces)]
 #[derive(Debug, Clone)]
 pub enum SidebarMessage {
     FilterSelected(SidebarFilter),

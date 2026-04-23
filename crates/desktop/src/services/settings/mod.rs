@@ -8,7 +8,7 @@ use std::{collections::HashMap, io::BufReader};
 use bitwarden_core::UserId;
 use serde::{Deserialize, Serialize};
 
-use crate::{preferences::UserPreferences, theme::ThemePreference};
+use crate::{services::preferences::UserPreferences, theme::ThemePreference};
 
 /// Sentinel value for "follow the OS locale". Stored in the `language` field
 /// when the user hasn't picked an explicit language.

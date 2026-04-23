@@ -5,8 +5,8 @@ use iced::{
 
 use crate::{
     components::inputs,
-    fl, i18n,
-    settings::LANGUAGE_SYSTEM,
+    fl,
+    services::{i18n, settings::LANGUAGE_SYSTEM},
     theme::{AppColors, AppTheme, ThemePreference},
 };
 

@@ -289,7 +289,7 @@ impl MenuEntry {
         if self.literal {
             self.label.to_string()
         } else {
-            crate::i18n::lookup(self.label)
+            crate::services::i18n::lookup(self.label)
         }
     }
 }
@@ -302,7 +302,7 @@ use EnabledWhen::*;
 use MenuAction::*;
 
 // Menu labels are Fluent message IDs (e.g. "menu-file-new-login"), resolved at
-// render time via `crate::i18n::lookup()`. Brand names and social/platform
+// render time via `crate::services::i18n::lookup()`. Brand names and social/platform
 // names are stored as plain strings because they don't need translation.
 // Unlike `fl!()`, these keys aren't compile-time-checked against the .ftl —
 // the test below in `tests/menu_labels.rs` validates them at test time.
@@ -575,7 +575,7 @@ pub fn attach_menu(raw_id: u64) -> Option<NativeMenuHandle> {
 
     let menu = Menu::new();
     for (label_key, entries) in MENUS {
-        let label = crate::i18n::lookup(label_key);
+        let label = crate::services::i18n::lookup(label_key);
         let submenu = Submenu::new(format!("&{label}"), true);
         append_entries_to_submenu(&submenu, entries, &mut actions, &mut items);
         let _ = menu.append(&submenu);

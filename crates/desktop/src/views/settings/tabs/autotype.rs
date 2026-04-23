@@ -6,7 +6,7 @@ use iced::{
 use crate::{
     components::inputs,
     fl,
-    preferences::ClearClipboardDelay,
+    services::preferences::ClearClipboardDelay,
     theme::{AppColors, AppTheme},
 };
 

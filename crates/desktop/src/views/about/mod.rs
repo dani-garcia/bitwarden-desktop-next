@@ -1,3 +1,5 @@
+mod handler;
+
 use iced::{
     Alignment, Element, Fill, Length,
     widget::{Space, column, container, row, text},

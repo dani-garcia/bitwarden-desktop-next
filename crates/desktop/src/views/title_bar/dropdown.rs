@@ -5,7 +5,7 @@ use iced::{
 
 use crate::{
     components,
-    menu::{MenuEntry, MenuState},
+    services::menu::{MenuEntry, MenuState},
     theme::{AppColors, AppTheme},
 };
 

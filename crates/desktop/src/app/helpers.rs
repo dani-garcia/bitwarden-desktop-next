@@ -2,35 +2,35 @@ use iced::Task;
 
 use crate::{
     components::account_switcher::AccountEntry,
-    state::{Screen, UserId},
+    domain::{Screen, UserId},
     views::login::AuthPage,
 };
 
 use super::{App, Message, WindowKind};
 
 impl App {
-    pub(super) fn main_window_id(&self) -> iced::window::Id {
+    pub(crate) fn main_window_id(&self) -> iced::window::Id {
         self.main_window
     }
 
-    pub(super) fn about_window_id(&self) -> Option<iced::window::Id> {
+    pub(crate) fn about_window_id(&self) -> Option<iced::window::Id> {
         self.windows
             .iter()
             .find(|(_, w)| w.kind == WindowKind::About)
             .map(|(id, _)| *id)
     }
 
-    pub(super) fn main_window_maximized(&self) -> bool {
+    pub(crate) fn main_window_maximized(&self) -> bool {
         self.windows
             .get(&self.main_window)
             .is_some_and(|w| w.maximized)
     }
 
-    pub(super) fn post_update(&mut self) {
+    pub(crate) fn post_update(&mut self) {
         self.refresh_cache();
     }
 
-    pub(super) fn push_toast(&mut self, toast: crate::components::toast::Toast) {
+    pub(crate) fn push_toast(&mut self, toast: crate::components::toast::Toast) {
         self.toasts.push(toast);
     }
 
@@ -38,19 +38,19 @@ impl App {
     /// from the router's cross-view dismissal arms, which only close the
     /// *other* view's overlays — this one is for "opening something on top
     /// of everything" cases like the settings modal.
-    pub(super) fn dismiss_all_overlays(&mut self) {
+    pub(crate) fn dismiss_all_overlays(&mut self) {
         self.title_bar.dismiss_menu();
         self.login_view.dismiss_dropdowns();
         self.vault_view.dismiss_dropdowns();
     }
 
-    pub(super) fn active_account_entry(&self) -> Option<&AccountEntry> {
+    pub(crate) fn active_account_entry(&self) -> Option<&AccountEntry> {
         self.active_user
             .as_ref()
             .and_then(|uid| self.cache.accounts.iter().find(|a| &a.user_id == uid))
     }
 
-    pub(super) fn refresh_cache(&mut self) {
+    pub(crate) fn refresh_cache(&mut self) {
         self.cache.accounts = self
             .client_manager
             .user_ids()
@@ -84,7 +84,7 @@ impl App {
     /// Switch the active user. Clears the previous user's vault state and,
     /// if the new user is unlocked, returns the task that repopulates the
     /// vault list.
-    pub(super) fn handle_user_switch(&mut self, uid: UserId) -> Task<Message> {
+    pub(crate) fn handle_user_switch(&mut self, uid: UserId) -> Task<Message> {
         self.active_user = Some(uid);
         self.vault_view.reset(&uid);
         // Re-apply the new user's clipboard clear delay so the app-global
@@ -106,12 +106,12 @@ impl App {
     /// Lift `VaultView::load_list_task` into a top-level `Task<Message>`.
     /// Thin wrapper so handlers don't have to repeat the `.map(Message::Vault)`
     /// lift at each call site.
-    pub(super) fn load_vault_list_task(&self, uid: UserId) -> Task<Message> {
+    pub(crate) fn load_vault_list_task(&self, uid: UserId) -> Task<Message> {
         crate::views::vault::VaultView::load_list_task(uid, &self.client_manager)
             .map(Message::Vault)
     }
 
-    pub(super) fn menu_state(&self) -> crate::menu::MenuState {
+    pub(crate) fn menu_state(&self) -> crate::services::menu::MenuState {
         let has_accounts = self.client_manager.has_users();
         let is_locked = self
             .active_user
@@ -120,7 +120,7 @@ impl App {
             .unwrap_or(true);
         let has_lockable = self.client_manager.has_unlocked_users();
 
-        crate::menu::MenuState {
+        crate::services::menu::MenuState {
             is_locked,
             has_accounts,
             has_lockable_accounts: has_lockable,
@@ -133,7 +133,7 @@ impl App {
 // Used by `App::new` to configure the main window. `iced::daemon` doesn't take
 // a `.window(Settings)` — boot creates the window via `window::open`.
 
-pub(super) fn main_window_platform_specific() -> iced::window::settings::PlatformSpecific {
+pub(crate) fn main_window_platform_specific() -> iced::window::settings::PlatformSpecific {
     #[cfg(target_os = "windows")]
     {
         use iced::window::settings::PlatformSpecific;

@@ -1,21 +1,18 @@
+mod handler;
 mod layout;
 mod login_email;
 mod login_password;
 mod server_selector;
 mod unlock;
 
-use std::sync::Arc;
-
-use iced::{Element, Task};
+use iced::Element;
 
 use crate::{
-    components::{
-        account_switcher::{AccountEntry, AccountSwitcherMessage},
-        toast::Toast,
-    },
-    sdk::ClientManager,
-    state::{UnlockMethod, UserId},
-    theme::{AppColors, AppTheme},
+    app::{Outcome, ViewTypes},
+    components::{account_switcher::AccountSwitcherMessage, toast::Toast},
+    domain::{UnlockMethod, UserId},
+    services::sdk::ClientManager,
+    theme::AppTheme,
 };
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -171,6 +168,11 @@ pub struct LoginView {
     pub unlock_in_progress: bool,
 }
 
+impl ViewTypes for LoginView {
+    type Message = LoginMessage;
+    type Event = LoginEvent;
+}
+
 impl LoginView {
     pub fn new() -> Self {
         Self {
@@ -190,39 +192,40 @@ impl LoginView {
     pub fn update(
         &mut self,
         msg: LoginMessage,
-        client_manager: &Arc<ClientManager>,
-        active_user: Option<&UserId>,
-    ) -> (Task<LoginMessage>, Option<LoginEvent>) {
+        ctx: &crate::app::UpdateCtx,
+    ) -> Outcome<Self> {
+        let &crate::app::UpdateCtx {
+            client_manager,
+            active_user,
+        } = ctx;
         match msg {
             // ── Unlock: master password ────────────────────────────────────
             LoginMessage::PasswordChanged(pw) => {
                 if let AuthPage::Unlock { password_input, .. } = &mut self.auth_page {
                     *password_input = pw;
                 }
-                (Task::none(), None)
             }
             LoginMessage::Unlock => {
                 // Re-entry guard: ignore Enter-spam while a task is already
                 // in flight (the text_input's on_submit fires per keystroke).
                 if self.unlock_in_progress {
-                    return (Task::none(), None);
+                    return Outcome::None;
                 }
                 let password = if let AuthPage::Unlock { password_input, .. } = &mut self.auth_page
                 {
                     std::mem::take(password_input)
                 } else {
-                    return (Task::none(), None);
+                    return Outcome::None;
                 };
                 let Some(uid) = active_user.cloned() else {
-                    return (Task::none(), None);
+                    return Outcome::None;
                 };
                 self.unlock_in_progress = true;
                 let mgr = client_manager.clone();
-                let task = Task::perform(
+                return Outcome::spawn(
                     async move { mgr.unlock(&uid, password).await },
                     move |res| LoginMessage::UnlockCompleted(uid, res),
                 );
-                (task, None)
             }
             LoginMessage::UnlockCompleted(msg_uid, result) => {
                 self.unlock_in_progress = false;
@@ -234,10 +237,10 @@ impl LoginView {
                         uid = %msg_uid,
                         "unlock result dropped: active user changed while in flight"
                     );
-                    return (Task::none(), None);
+                    return Outcome::None;
                 }
-                match result {
-                    Ok(()) => (Task::none(), Some(LoginEvent::Unlocked { uid: msg_uid })),
+                return match result {
+                    Ok(()) => Outcome::event(LoginEvent::Unlocked { uid: msg_uid }),
                     Err(err) => {
                         // Log the raw SDK error for debugging, but show a
                         // sanitized message to the user — SDK `Display`
@@ -248,15 +251,12 @@ impl LoginView {
                             %err,
                             "SDK initialize_user_crypto failed"
                         );
-                        (
-                            Task::none(),
-                            Some(LoginEvent::ToastRequested(Toast::error(
-                                crate::fl!("login-toast-unlock-failed-body"),
-                                Some(&crate::fl!("login-toast-unlock-failed-title")),
-                            ))),
-                        )
+                        Outcome::event(LoginEvent::ToastRequested(Toast::error(
+                            crate::fl!("login-toast-unlock-failed-body"),
+                            Some(&crate::fl!("login-toast-unlock-failed-title")),
+                        )))
                     }
-                }
+                };
             }
 
             // ── Unlock: PIN ────────────────────────────────────────────────
@@ -264,51 +264,43 @@ impl LoginView {
                 if let AuthPage::Unlock { pin_input, .. } = &mut self.auth_page {
                     *pin_input = pin;
                 }
-                (Task::none(), None)
             }
             LoginMessage::UnlockWithPin => {
                 if let AuthPage::Unlock { pin_input, .. } = &mut self.auth_page {
                     pin_input.clear();
                 }
-                (
-                    Task::none(),
-                    Some(LoginEvent::ToastRequested(Toast::warning(
-                        crate::fl!("login-toast-pin-unsupported"),
-                        None,
-                    ))),
-                )
+                return Outcome::event(LoginEvent::ToastRequested(Toast::warning(
+                    crate::fl!("login-toast-pin-unsupported"),
+                    None,
+                )));
             }
 
             // ── Unlock: biometrics ─────────────────────────────────────────
-            LoginMessage::UnlockWithBiometrics => (
-                Task::none(),
-                Some(LoginEvent::ToastRequested(Toast::warning(
+            LoginMessage::UnlockWithBiometrics => {
+                return Outcome::event(LoginEvent::ToastRequested(Toast::warning(
                     crate::fl!("login-toast-biometrics-unsupported"),
                     None,
-                ))),
-            ),
+                )));
+            }
 
             // ── Switch unlock method ───────────────────────────────────────
             LoginMessage::SwitchUnlockMethod(method) => {
                 self.auth_page = AuthPage::new_unlock(method);
                 self.unlock_in_progress = false;
-                (Task::none(), None)
             }
 
-            LoginMessage::LogOut => (Task::none(), Some(LoginEvent::SignOutRequested)),
+            LoginMessage::LogOut => return Outcome::event(LoginEvent::SignOutRequested),
 
             // ── Login: email entry ─────────────────────────────────────────
             LoginMessage::EmailChanged(email) => {
                 if let AuthPage::LoginEmail { email_input, .. } = &mut self.auth_page {
                     *email_input = email;
                 }
-                (Task::none(), None)
             }
             LoginMessage::ToggleRememberEmail(checked) => {
                 if let AuthPage::LoginEmail { remember_email, .. } = &mut self.auth_page {
                     *remember_email = checked;
                 }
-                (Task::none(), None)
             }
             LoginMessage::ContinueWithEmail => {
                 if let AuthPage::LoginEmail {
@@ -321,11 +313,9 @@ impl LoginView {
                     let server = selected_server.clone();
                     self.auth_page = AuthPage::new_login_password(email, server);
                 }
-                (Task::none(), None)
             }
             LoginMessage::UseSingleSignOn => {
                 // TODO: SSO login flow
-                (Task::none(), None)
             }
 
             // ── Login: password entry ──────────────────────────────────────
@@ -333,7 +323,6 @@ impl LoginView {
                 if let AuthPage::LoginPassword { password_input, .. } = &mut self.auth_page {
                     *password_input = pw;
                 }
-                (Task::none(), None)
             }
             LoginMessage::LoginWithPassword => {
                 // TODO: call `client_manager.login(email, password).await`
@@ -343,7 +332,6 @@ impl LoginView {
                 if let AuthPage::LoginPassword { password_input, .. } = &mut self.auth_page {
                     let _password = std::mem::take(password_input);
                 }
-                (Task::none(), None)
             }
             LoginMessage::LoginCompleted(msg_uid, result) => {
                 if active_user != Some(&msg_uid) {
@@ -351,24 +339,21 @@ impl LoginView {
                         uid = %msg_uid,
                         "login result dropped: active user changed while in flight"
                     );
-                    return (Task::none(), None);
+                    return Outcome::None;
                 }
-                match result {
-                    Ok(()) => (Task::none(), Some(LoginEvent::LoggedIn { uid: msg_uid })),
+                return match result {
+                    Ok(()) => Outcome::event(LoginEvent::LoggedIn { uid: msg_uid }),
                     Err(err) => {
                         // Log the raw SDK error for debugging, but show a
                         // sanitized message to the user — see the matching
                         // treatment in `UnlockCompleted`.
                         tracing::warn!(uid = %msg_uid, %err, "SDK login failed");
-                        (
-                            Task::none(),
-                            Some(LoginEvent::ToastRequested(Toast::error(
-                                crate::fl!("login-toast-login-failed-body"),
-                                Some(&crate::fl!("login-toast-login-failed-title")),
-                            ))),
-                        )
+                        Outcome::event(LoginEvent::ToastRequested(Toast::error(
+                            crate::fl!("login-toast-login-failed-body"),
+                            Some(&crate::fl!("login-toast-login-failed-title")),
+                        )))
                     }
-                }
+                };
             }
             LoginMessage::BackToEmail => {
                 // Preserve the email + selected server when going back so
@@ -387,11 +372,9 @@ impl LoginView {
                     server_selector_open: false,
                     selected_server: server,
                 };
-                (Task::none(), None)
             }
             LoginMessage::GetPasswordHint => {
                 // TODO: password hint request flow
-                (Task::none(), None)
             }
 
             // ── Server selector ────────────────────────────────────────────
@@ -403,7 +386,6 @@ impl LoginView {
                 {
                     *server_selector_open = !*server_selector_open;
                 }
-                (Task::none(), None)
             }
             LoginMessage::SelectServer(server) => {
                 if let AuthPage::LoginEmail {
@@ -415,41 +397,34 @@ impl LoginView {
                     *selected_server = server;
                     *server_selector_open = false;
                 }
-                (Task::none(), None)
             }
 
             // ── Account switcher ───────────────────────────────────────────
             LoginMessage::AccountSwitcher(AccountSwitcherMessage::ToggleDropdown) => {
                 self.account_switcher_open = !self.account_switcher_open;
-                (Task::none(), None)
+            }
+            LoginMessage::AccountSwitcher(AccountSwitcherMessage::AddAccount) => {
+                // AddAccount stays local to the login view (reset inputs);
+                // every other non-toggle action bubbles an event.
+                self.account_switcher_open = false;
+                self.reset_to_email_entry();
             }
             LoginMessage::AccountSwitcher(asm) => {
-                // Every non-toggle action dismisses the dropdown.
                 self.account_switcher_open = false;
-                match asm {
-                    AccountSwitcherMessage::ToggleDropdown => unreachable!(),
-                    AccountSwitcherMessage::SwitchUser(uid) => {
-                        (Task::none(), Some(LoginEvent::UserSelected { uid }))
+                let event = match asm {
+                    AccountSwitcherMessage::SwitchUser(uid) => LoginEvent::UserSelected { uid },
+                    AccountSwitcherMessage::LockAll => LoginEvent::LockAllRequested,
+                    AccountSwitcherMessage::OpenSettings => LoginEvent::SettingsRequested,
+                    AccountSwitcherMessage::LockActive => LoginEvent::LockActiveRequested,
+                    AccountSwitcherMessage::LogOutActive => LoginEvent::SignOutRequested,
+                    AccountSwitcherMessage::ToggleDropdown | AccountSwitcherMessage::AddAccount => {
+                        unreachable!("handled in earlier arm")
                     }
-                    AccountSwitcherMessage::AddAccount => {
-                        self.reset_to_email_entry();
-                        (Task::none(), None)
-                    }
-                    AccountSwitcherMessage::LockAll => {
-                        (Task::none(), Some(LoginEvent::LockAllRequested))
-                    }
-                    AccountSwitcherMessage::OpenSettings => {
-                        (Task::none(), Some(LoginEvent::SettingsRequested))
-                    }
-                    AccountSwitcherMessage::LockActive => {
-                        (Task::none(), Some(LoginEvent::LockActiveRequested))
-                    }
-                    AccountSwitcherMessage::LogOutActive => {
-                        (Task::none(), Some(LoginEvent::SignOutRequested))
-                    }
-                }
+                };
+                return Outcome::event(event);
             }
         }
+        Outcome::None
     }
 
     /// LOAD-BEARING: called from the App router before it dispatches a
@@ -491,12 +466,12 @@ impl LoginView {
 
     pub fn view<'a>(
         &'a self,
-        email: Option<&'a str>,
         server: &'a str,
-        accounts: &'a [AccountEntry],
         unlock_alternatives: &'a [UnlockMethod],
-        colors: &'a AppColors,
+        ctx: &crate::app::RenderCtx<'a>,
     ) -> Element<'a, LoginMessage, AppTheme> {
+        let colors = ctx.colors;
+        let email = ctx.active_email;
         let (center_content, status_bar) = match &self.auth_page {
             AuthPage::Unlock {
                 method,
@@ -541,7 +516,7 @@ impl LoginView {
             center_content,
             status_bar,
             email,
-            accounts,
+            ctx.accounts,
             self.account_switcher_open,
             colors,
         )

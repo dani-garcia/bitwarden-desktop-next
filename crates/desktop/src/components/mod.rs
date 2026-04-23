@@ -1,14 +1,14 @@
-pub mod account_switcher;
-pub mod bottom_sheet;
-pub mod buttons;
-pub mod drop_down;
-pub mod icons;
-pub mod inputs;
-pub mod modal;
-pub mod spinner;
-pub mod toast;
-pub mod totp;
-pub mod virtual_list;
+pub(crate) mod account_switcher;
+pub(crate) mod bottom_sheet;
+pub(crate) mod buttons;
+pub(crate) mod drop_down;
+pub(crate) mod icons;
+pub(crate) mod inputs;
+pub(crate) mod modal;
+pub(crate) mod spinner;
+pub(crate) mod toast;
+pub(crate) mod totp;
+pub(crate) mod virtual_list;
 
 use iced::{
     Color, Element, Fill, Shadow,

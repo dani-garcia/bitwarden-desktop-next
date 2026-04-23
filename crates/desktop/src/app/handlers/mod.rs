@@ -1,10 +1,5 @@
-//! Event handlers for the top-level `Message` enum, split by concern.
-//!
-//! Each submodule adds `impl App` methods for one slice of the message tree.
-//! Split purely for readability — all methods remain on [`App`][super::App]
-//! and call each other freely via `self.`.
+//! Platform-level event handlers on `App` — window lifecycle, system events,
+//! menu and tray dispatch. Per-view event handlers live next to the view they
+//! belong to (`views/<name>/handler.rs`).
 
-mod login;
 mod platform;
-mod settings;
-mod vault;

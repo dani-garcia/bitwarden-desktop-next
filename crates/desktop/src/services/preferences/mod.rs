@@ -1,4 +1,4 @@
-//! Per-user preferences. Held inside [`crate::settings::Settings`] as a
+//! Per-user preferences. Held inside [`crate::services::settings::Settings`] as a
 //! `HashMap<UserId, UserPreferences>` so they persist alongside the app-wide
 //! settings in `data/settings.json`.
 //!

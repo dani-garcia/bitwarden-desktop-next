@@ -2,19 +2,11 @@
 
 mod app;
 mod assets;
-mod clipboard;
 mod components;
-mod favicon;
-mod i18n;
-mod instance_lock;
-mod menu;
+mod domain;
 mod paths;
-mod preferences;
-mod sdk;
-mod settings;
-mod state;
+mod services;
 mod theme;
-mod tray;
 mod views;
 
 /// Convenience wrapper around [`i18n_embed_fl::fl!`] that passes our static
@@ -30,10 +22,10 @@ mod views;
 #[macro_export]
 macro_rules! fl {
     ($message_id:literal) => {{
-        ::i18n_embed_fl::fl!($crate::i18n::LANGUAGE_LOADER, $message_id)
+        ::i18n_embed_fl::fl!($crate::services::i18n::LANGUAGE_LOADER, $message_id)
     }};
     ($message_id:literal, $($args:expr),*) => {{
-        ::i18n_embed_fl::fl!($crate::i18n::LANGUAGE_LOADER, $message_id, $($args),*)
+        ::i18n_embed_fl::fl!($crate::services::i18n::LANGUAGE_LOADER, $message_id, $($args),*)
     }};
 }
 
@@ -60,20 +52,20 @@ pub const APP_FONT_BOLD: Font = Font {
 
 fn main() -> iced::Result {
     init_tracing();
-    i18n::init();
+    services::i18n::init();
 
     // Single-instance guard: if another process is already running, tell it
     // to surface its window and exit. Otherwise take over as the primary —
     // `wake_stream` will bind the listener once iced's tokio runtime is up.
-    if instance_lock::notify_primary_if_running() {
+    if services::instance_lock::notify_primary_if_running() {
         tracing::info!("Bitwarden Desktop already running; signalled primary. Exiting.");
         return Ok(());
     }
-    instance_lock::cleanup_stale_socket();
+    services::instance_lock::cleanup_stale_socket();
 
     select_backend();
 
-    sdk::ClientManager::verify_data_dir();
+    services::sdk::ClientManager::verify_data_dir();
 
     iced::daemon(App::new, App::update, App::view)
         .subscription(App::subscription)
@@ -110,7 +102,7 @@ fn select_backend() {
         None => {
             let gpu_feature_enabled = cfg!(feature = "gpu");
             let gpu_user_enabled = std::env::args().any(|a| a == "--gpu")
-                || crate::settings::Settings::load().hardware_acceleration;
+                || crate::services::settings::Settings::load().hardware_acceleration;
             let backend = if gpu_feature_enabled && gpu_user_enabled {
                 "wgpu"
             } else {

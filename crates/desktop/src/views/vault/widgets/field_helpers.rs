@@ -8,7 +8,7 @@ use iced::{
 };
 
 use crate::{
-    components::{self, buttons, icons},
+    components,
     theme::{AppColors, AppTheme},
 };
 
@@ -38,18 +38,6 @@ pub fn field_readonly<'a, M: 'a>(
     ]
     .spacing(2)
     .into()
-}
-
-/// Small 18 px icon button with ghost-style hover.
-pub fn icon_button<'a, M: 'a + Clone>(
-    icon: icons::BwiIcon,
-    msg: M,
-    colors: &AppColors,
-) -> Element<'a, M, AppTheme> {
-    buttons::ghost_icon(icon.render(18.0, colors.text_primary), colors.item_hover)
-        .on_press(msg)
-        .padding([6, 6])
-        .into()
 }
 
 /// Wraps a card element with bottom margin for section spacing.
