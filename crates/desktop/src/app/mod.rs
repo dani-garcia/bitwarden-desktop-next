@@ -467,49 +467,40 @@ impl App {
             .modal_view(colors)
             .map(|el| el.map(Message::Settings));
 
-        if crate::menu::should_use_custom_menu_bar() {
-            let menu_state = self.menu_state();
-            let tb = self
-                .title_bar
-                .view(self.main_window_maximized(), &menu_state, colors)
-                .map(Message::TitleBar);
-            let main_column: Element<'_, Message, AppTheme> =
-                iced::widget::column![tb, page].height(iced::Fill).into();
-            let with_sheet: Element<'_, Message, AppTheme> = match sheet {
-                Some(sheet) => iced::widget::stack![main_column, sheet].into(),
-                None => main_column,
-            };
-            let with_modal: Element<'_, Message, AppTheme> = match modal {
-                Some(modal) => iced::widget::stack![with_sheet, modal].into(),
-                None => with_sheet,
-            };
-            let with_settings: Element<'_, Message, AppTheme> = match settings_modal {
-                Some(m) => iced::widget::stack![with_modal, m].into(),
-                None => with_modal,
-            };
-            let with_toasts: Element<'_, Message, AppTheme> =
-                toast::Manager::new(with_settings, &self.toasts, close_toast).into();
+        let use_custom_menu_bar = crate::menu::should_use_custom_menu_bar();
 
+        let tb: Element<'_, Message, AppTheme> = if use_custom_menu_bar {
+            let menu_state = self.menu_state();
+            self.title_bar
+                .view(self.main_window_maximized(), &menu_state, colors)
+                .map(Message::TitleBar)
+        } else {
+            title_bar::TitleBarState::view_empty().map(Message::TitleBar)
+        };
+
+        let main_column: Element<'_, Message, AppTheme> =
+            iced::widget::column![tb, page].height(iced::Fill).into();
+        let with_sheet: Element<'_, Message, AppTheme> = match sheet {
+            Some(sheet) => iced::widget::stack![main_column, sheet].into(),
+            None => main_column,
+        };
+        let with_modal: Element<'_, Message, AppTheme> = match modal {
+            Some(modal) => iced::widget::stack![with_sheet, modal].into(),
+            None => with_sheet,
+        };
+        let with_settings: Element<'_, Message, AppTheme> = match settings_modal {
+            Some(m) => iced::widget::stack![with_modal, m].into(),
+            None => with_modal,
+        };
+        let with_toasts: Element<'_, Message, AppTheme> =
+            toast::Manager::new(with_settings, &self.toasts, close_toast).into();
+
+        if use_custom_menu_bar {
             title_bar::resize_wrapper(with_toasts, |dir| {
                 Message::TitleBar(TitleBarMessage::ResizeEdge(dir))
             })
         } else {
-            let tb = title_bar::TitleBarState::view_empty().map(Message::TitleBar);
-            let main_column: Element<'_, Message, AppTheme> =
-                iced::widget::column![tb, page].height(iced::Fill).into();
-            let with_sheet: Element<'_, Message, AppTheme> = match sheet {
-                Some(sheet) => iced::widget::stack![main_column, sheet].into(),
-                None => main_column,
-            };
-            let with_modal: Element<'_, Message, AppTheme> = match modal {
-                Some(modal) => iced::widget::stack![with_sheet, modal].into(),
-                None => with_sheet,
-            };
-            let with_settings: Element<'_, Message, AppTheme> = match settings_modal {
-                Some(m) => iced::widget::stack![with_modal, m].into(),
-                None => with_modal,
-            };
-            toast::Manager::new(with_settings, &self.toasts, close_toast).into()
+            with_toasts
         }
     }
 }

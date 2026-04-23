@@ -71,8 +71,24 @@ fn main() -> iced::Result {
     }
     instance_lock::cleanup_stale_socket();
 
+    select_backend();
+
     sdk::ClientManager::verify_data_dir();
 
+    iced::daemon(App::new, App::update, App::view)
+        .subscription(App::subscription)
+        .title(App::title)
+        .theme(App::theme)
+        .font(assets::FONT_MEDIUM)
+        .font(assets::FONT_BOLD)
+        .font(assets::BWI_FONT)
+        .font(icons::FONT_BYTES)
+        .default_font(APP_FONT)
+        .antialiasing(true)
+        .run()
+}
+
+fn select_backend() {
     // Default to tiny-skia (CPU) renderer to avoid ~500 ms wgpu GPU init on
     // startup. For a form-based UI this is fast enough, and the instant
     // window appearance is a better UX trade-off. The `gpu` Cargo feature
@@ -105,18 +121,6 @@ fn main() -> iced::Result {
             unsafe { std::env::set_var("ICED_BACKEND", backend) };
         }
     }
-
-    iced::daemon(App::new, App::update, App::view)
-        .subscription(App::subscription)
-        .title(App::title)
-        .theme(App::theme)
-        .font(assets::FONT_MEDIUM)
-        .font(assets::FONT_BOLD)
-        .font(assets::BWI_FONT)
-        .font(icons::FONT_BYTES)
-        .default_font(APP_FONT)
-        .antialiasing(true)
-        .run()
 }
 
 /// Install a `tracing` subscriber driven by the `RUST_LOG` env var. The default
@@ -142,7 +146,8 @@ fn init_tracing() {
     // the app is legibly chatty on a fresh clone without requiring the user
     // to remember the env var.
     const DEFAULT_FILTER: &str = "bitwarden_desktop_next=debug,warn";
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(DEFAULT_FILTER));
+    let filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(DEFAULT_FILTER));
 
     let fmt_layer = fmt::layer()
         .with_target(true)
