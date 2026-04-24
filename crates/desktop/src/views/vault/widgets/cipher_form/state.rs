@@ -229,10 +229,4 @@ impl CipherForm {
             CipherType::SshKey => { /* SSH key fields read-only for now */ }
         }
     }
-
-    /// Router-triggered close helper; flips the collections multi-select
-    /// closed. The single-select pick_lists manage their own overlay state.
-    pub fn dismiss_dropdowns(&mut self) {
-        self.collections_dropdown_open = false;
-    }
 }

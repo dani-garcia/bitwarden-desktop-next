@@ -109,7 +109,6 @@ pub(super) struct ItemCache {
 
 pub struct VaultView {
     pub(super) search_query: String,
-    pub(super) account_switcher_open: bool,
     pub(super) pane_state: pane_grid::State<PaneKind>,
 
     pub(super) sidebar: SidebarState,
@@ -146,22 +145,11 @@ impl VaultView {
 
         Self {
             search_query: String::new(),
-            account_switcher_open: false,
             pane_state,
             sidebar: SidebarState::default(),
             selection: Selection::default(),
             items: HashMap::new(),
             list_scroll: virtual_list::ScrollState::default(),
-        }
-    }
-
-    /// LOAD-BEARING: called from the App router when a title-bar message
-    /// arrives so the account-switcher dropdown closes. See the cross-view
-    /// dismissal block in `App::update`.
-    pub fn dismiss_dropdowns(&mut self) {
-        self.account_switcher_open = false;
-        if let Some(form) = self.selection.form.as_mut() {
-            form.dismiss_dropdowns();
         }
     }
 

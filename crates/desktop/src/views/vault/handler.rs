@@ -3,25 +3,15 @@ use iced::Task;
 use crate::{
     app::{App, Message},
     components::toast::Toast,
-    domain::Screen,
     fl,
-    services::{clipboard, menu::MenuAction},
+    services::clipboard,
     views::vault::VaultEvent,
 };
 
 impl App {
     pub(crate) fn handle_vault_event(&mut self, event: VaultEvent) -> Task<Message> {
         match event {
-            VaultEvent::UserSelected { uid } => self.handle_user_switch(uid),
-            VaultEvent::AddAccountRequested => {
-                self.screen = Screen::Login;
-                self.login_view.reset_to_email_entry();
-                Task::none()
-            }
-            VaultEvent::LockAllRequested => self.handle_menu_action(MenuAction::LockAllVaults),
-            VaultEvent::SettingsRequested => self.handle_menu_action(MenuAction::Settings),
-            VaultEvent::LockActiveRequested => self.handle_lock_active(),
-            VaultEvent::SignOutRequested => self.handle_sign_out(),
+            VaultEvent::AccountSwitcher(e) => self.handle_account_switcher_event(e),
             VaultEvent::ToastRequested(t) => {
                 self.push_toast(t);
                 Task::none()

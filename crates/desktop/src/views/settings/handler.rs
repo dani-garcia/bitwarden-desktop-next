@@ -24,11 +24,11 @@ impl App {
         // `user_preferences` map from open time) plus the active user's
         // freshly-edited `UserPreferences`; overwrite the active slot so
         // other users' prefs stay intact.
-        self.settings = self.settings_view.snapshot.settings.clone();
+        self.settings = self.views.settings.snapshot.settings.clone();
         if let Some(uid) = self.active_user {
             self.settings
                 .user_preferences
-                .insert(uid, self.settings_view.snapshot.prefs);
+                .insert(uid, self.views.settings.snapshot.prefs);
         }
         self.settings.save();
 

@@ -225,6 +225,7 @@ impl VaultView {
             left: 12.0,
         });
 
+        let account_switcher_open = ctx.open_overlay == Some(crate::app::Overlay::AccountSwitcher);
         let avatar_trigger = account_switcher::avatar_trigger(active_email, colors)
             .map(VaultMessage::AccountSwitcher);
         let dd_panel = account_switcher::dropdown(Some(active_email), ctx.accounts, colors)
@@ -233,7 +234,7 @@ impl VaultView {
             crate::components::drop_down::DropDown::new(
                 avatar_trigger,
                 dd_panel,
-                self.account_switcher_open,
+                account_switcher_open,
             )
             .on_dismiss(VaultMessage::AccountSwitcher(
                 AccountSwitcherMessage::ToggleDropdown,

@@ -8,7 +8,7 @@ use iced::{
 };
 
 use crate::{
-    app::{Outcome, ViewTypes},
+    app::{Outcome, Overlay, ViewTypes},
     services::menu,
     theme::{AppColors, AppTheme},
 };
@@ -66,10 +66,10 @@ pub enum TitleBarEvent {
     Window(WindowAction),
 }
 
-pub struct TitleBarView {
-    pub open_menu: Option<usize>,
-    pub open_submenu: Option<usize>,
-}
+/// Stateless view — menu open/close lives in the app-level [`Overlay`] cell.
+/// The struct is kept (rather than making everything free functions) so the
+/// compositional MVU pattern stays uniform across views.
+pub struct TitleBarView;
 
 impl ViewTypes for TitleBarView {
     type Message = TitleBarMessage;
@@ -78,15 +78,7 @@ impl ViewTypes for TitleBarView {
 
 impl TitleBarView {
     pub fn new() -> Self {
-        Self {
-            open_menu: None,
-            open_submenu: None,
-        }
-    }
-
-    pub fn dismiss_menu(&mut self) {
-        self.open_menu = None;
-        self.open_submenu = None;
+        Self
     }
 
     /// Compositional MVU update. Title bar has no async work so the returned
@@ -94,35 +86,47 @@ impl TitleBarView {
     pub fn update(
         &mut self,
         msg: TitleBarMessage,
-        _ctx: &crate::app::UpdateCtx,
+        ctx: crate::app::UpdateCtx<'_>,
     ) -> Outcome<Self> {
-        // Menu-navigation arms mutate state; button-click arms bubble a
-        // `TitleBarEvent::Window(...)` action.
+        // Read the previously open top-level menu, if any, so toggle-on-
+        // same-index can close and clicks on a different index can switch.
+        let current_menu = match *ctx.open_overlay {
+            Some(Overlay::TitleBarMenu { menu, .. }) => Some(menu),
+            _ => None,
+        };
+
+        // Menu-navigation arms mutate overlay state; button-click arms bubble
+        // a `TitleBarEvent::Window(...)` action.
         let window_action = match msg {
             TitleBarMessage::TopLevelClicked(i) => {
-                self.open_menu = if self.open_menu == Some(i) {
+                *ctx.open_overlay = if current_menu == Some(i) {
                     None
                 } else {
-                    Some(i)
+                    Some(Overlay::TitleBarMenu {
+                        menu: i,
+                        submenu: None,
+                    })
                 };
-                self.open_submenu = None;
                 return Outcome::None;
             }
             TitleBarMessage::DismissMenu => {
-                self.dismiss_menu();
+                *ctx.open_overlay = None;
                 return Outcome::None;
             }
             TitleBarMessage::TopLevelHovered(i) => {
-                self.open_menu = Some(i);
-                self.open_submenu = None;
+                *ctx.open_overlay = Some(Overlay::TitleBarMenu {
+                    menu: i,
+                    submenu: None,
+                });
                 return Outcome::None;
             }
-            TitleBarMessage::SubMenuHovered(_menu, item) => {
-                self.open_submenu = if item == usize::MAX { None } else { Some(item) };
+            TitleBarMessage::SubMenuHovered(menu, item) => {
+                let submenu = if item == usize::MAX { None } else { Some(item) };
+                *ctx.open_overlay = Some(Overlay::TitleBarMenu { menu, submenu });
                 return Outcome::None;
             }
             TitleBarMessage::ItemClicked(menu, item) => {
-                self.dismiss_menu();
+                *ctx.open_overlay = None;
                 return Outcome::from_option(
                     crate::services::menu::MENUS
                         .get(menu)
@@ -132,7 +136,7 @@ impl TitleBarView {
                 );
             }
             TitleBarMessage::SubMenuItemClicked(menu, parent, sub) => {
-                self.dismiss_menu();
+                *ctx.open_overlay = None;
                 return Outcome::from_option(
                     crate::services::menu::MENUS
                         .get(menu)
@@ -172,16 +176,16 @@ impl TitleBarView {
     /// Draw the title bar: menu labels on the left, window buttons on the right.
     /// Each menu label wraps a `DropDown` that shows its panel via iced's overlay
     /// system. `is_maximized` and `menu_state` come from App (window-level state
-    /// and derived app-state respectively); the open menu + submenu come from `self`.
+    /// and derived app-state respectively); open-menu and open-submenu are
+    /// extracted from the app-level overlay cell by `App::view_main`.
     pub fn view<'a>(
         &self,
         is_maximized: bool,
         menu_state: &menu::MenuState,
+        open_menu: Option<usize>,
+        open_submenu: Option<usize>,
         colors: &AppColors,
     ) -> Element<'a, TitleBarMessage, AppTheme> {
-        let open_menu = self.open_menu;
-        let open_submenu = self.open_submenu;
-
         let menu_items: Vec<Element<'_, TitleBarMessage, AppTheme>> = menu::MENUS
             .iter()
             .enumerate()

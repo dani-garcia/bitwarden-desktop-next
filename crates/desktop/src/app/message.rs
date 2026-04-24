@@ -10,24 +10,56 @@ use crate::{
 
 // ── Top-level Message ──────────────────────────────────────────────────────
 //
-// Six variants. The three sub-view wrappers route user interaction + async
-// completions into the view that owns the underlying state. `About` handles
-// the About child window (stateless). `Window` carries per-window OS events
-// (every variant takes a `window::Id` for multi-window dispatch). `System`
-// carries global signals that aren't tied to a specific window.
+// Split into two groups. The `View` variant carries messages for the
+// compositional sub-views — all of them need an `UpdateCtx`, and the router
+// factors out one shared construction site. The remaining variants are
+// app-level: `About` handles the About child window (stateless), `Window`
+// carries per-window OS events (every variant takes a `window::Id`),
+// `System` carries global signals, and `Favicon` is a fire-and-forget redraw
+// trigger.
 
 #[derive(Debug, Clone)]
 pub enum Message {
-    Login(LoginMessage),
-    Vault(VaultMessage),
-    TitleBar(TitleBarMessage),
+    View(ViewMessage),
     About(AboutMessage),
-    Settings(SettingsMessage),
     Window(WindowMessage),
     System(SystemMessage),
     /// Favicon service progress — one per completed fetch. Arrival alone
     /// triggers the redraw; the handler only logs.
     Favicon(FaviconMessage),
+}
+
+/// Messages that dispatch into a compositional sub-view's `update()`. All
+/// need a shared `UpdateCtx` at routing time; bundling them under one
+/// variant means `App::update` builds `UpdateCtx` in a single place and the
+/// borrow of `App::open_overlay` has exactly one scope.
+#[derive(Debug, Clone)]
+pub enum ViewMessage {
+    Login(LoginMessage),
+    Vault(VaultMessage),
+    TitleBar(TitleBarMessage),
+    Settings(SettingsMessage),
+}
+
+// Convenience constructors so call sites can keep using `fn`-pointer form
+// (`.map(Message::login)`, `.dispatch(Message::vault, ...)`) without the
+// `Message::View(ViewMessage::Login(..))` double-wrap at every use.
+impl Message {
+    pub fn login(m: LoginMessage) -> Self {
+        Self::View(ViewMessage::Login(m))
+    }
+
+    pub fn vault(m: VaultMessage) -> Self {
+        Self::View(ViewMessage::Vault(m))
+    }
+
+    pub fn title_bar(m: TitleBarMessage) -> Self {
+        Self::View(ViewMessage::TitleBar(m))
+    }
+
+    pub fn settings(m: SettingsMessage) -> Self {
+        Self::View(ViewMessage::Settings(m))
+    }
 }
 
 /// Per-window OS events. Every variant carries `window::Id` so the router
@@ -71,33 +103,4 @@ pub enum SystemMessage {
     /// A second launch of the app was attempted; the single-instance listener
     /// forwarded a "show" signal. Surface the main window.
     InstanceWakeRequested,
-}
-
-/// Per-window metadata. Keyed by `iced::window::Id` in a `HashMap` on `App`.
-#[derive(Debug)]
-pub struct WindowInfo {
-    pub kind: WindowKind,
-    pub fullscreen: bool,
-    pub maximized: bool,
-    /// Last reported logical size. Initialized from `window::Settings.size`
-    /// at creation; updated on `window::Event::Resized`.
-    pub size: iced::Size,
-}
-
-impl WindowInfo {
-    pub fn new(kind: WindowKind, size: iced::Size) -> Self {
-        Self {
-            kind,
-            fullscreen: false,
-            maximized: false,
-            size,
-        }
-    }
-}
-
-/// Discriminant for each kind of window the app can have open.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WindowKind {
-    Main,
-    About,
 }

@@ -6,9 +6,10 @@ use iced::{
 
 use crate::{
     components::{
-        account_switcher::{self, AccountEntry, AccountSwitcherMessage},
+        account_switcher::{self, AccountSwitcherMessage},
         icons,
     },
+    services::sdk::AccountEntry,
     theme::{AppColors, AppTheme},
 };
 

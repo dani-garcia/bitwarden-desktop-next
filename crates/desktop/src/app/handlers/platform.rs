@@ -96,9 +96,9 @@ impl App {
                 if matches!(
                     key,
                     iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape)
-                ) && self.settings_view.open
+                ) && self.views.settings.open
                 {
-                    self.settings_view.close();
+                    self.views.settings.close();
                     return Task::none();
                 }
                 let state = self.menu_state();
@@ -107,7 +107,7 @@ impl App {
                 else {
                     return Task::none();
                 };
-                self.title_bar.dismiss_menu();
+                self.open_overlay = None;
                 self.handle_menu_action(action)
             }
         }
@@ -147,9 +147,10 @@ impl App {
             SystemMessage::ClientManagerLoaded(mgr) => {
                 self.client_manager = mgr;
                 self.active_user = self.client_manager.user_ids().into_iter().next();
-                self.login_view
+                self.views
+                    .login
                     .show_unlock_for(self.active_user.as_ref(), &self.client_manager);
-                self.screen = Screen::Login;
+                self.set_screen(Screen::Login);
                 Task::none()
             }
             SystemMessage::InstanceWakeRequested => self.show_main_window(),
@@ -169,10 +170,10 @@ impl App {
             }
             MenuAction::LockAllVaults => {
                 self.client_manager.lock_all();
-                self.screen = Screen::Login;
-                self.login_view
+                self.views
+                    .login
                     .show_unlock_for(self.active_user.as_ref(), &self.client_manager);
-                self.refresh_cache();
+                self.set_screen(Screen::Login);
             }
             MenuAction::ToggleFullScreen => {
                 let id = self.main_window_id();
@@ -194,14 +195,10 @@ impl App {
             }
             MenuAction::SearchVault => {
                 if self.screen == Screen::Vault {
-                    let task = self.vault_view.focus_search_task().map(Message::Vault);
-                    self.refresh_cache();
-                    return task;
+                    return self.views.vault.focus_search_task().map(Message::vault);
                 }
             }
-            MenuAction::SyncNow | MenuAction::Reload => {
-                self.refresh_cache();
-            }
+            MenuAction::SyncNow | MenuAction::Reload => {}
             MenuAction::HideToTray => {
                 if self.ensure_tray() {
                     return self.hide_main_window();
@@ -210,16 +207,14 @@ impl App {
             MenuAction::ToggleAlwaysOnTop => {}
             MenuAction::Settings => {
                 if let Some(uid) = self.active_user {
-                    // The caller paths (muda poll, Ctrl+,) don't pass
-                    // through the router dismiss block, so close any open
-                    // dropdowns here before the modal appears on top.
-                    self.dismiss_all_overlays();
+                    // Close any open dropdown before the modal paints over it.
+                    self.open_overlay = None;
 
                     let snap = SettingsSnapshot {
                         settings: self.settings.clone(),
                         prefs: self.settings.preferences_for(&uid),
                     };
-                    self.settings_view.open_with(snap);
+                    self.views.settings.open_with(snap);
                 }
             }
             MenuAction::About => {

@@ -170,7 +170,7 @@ impl SettingsView {
     pub fn update(
         &mut self,
         msg: SettingsMessage,
-        _ctx: &crate::app::UpdateCtx,
+        _ctx: crate::app::UpdateCtx<'_>,
     ) -> Outcome<Self> {
         match msg {
             SettingsMessage::Close => self.open = false,

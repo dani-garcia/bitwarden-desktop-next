@@ -14,7 +14,7 @@ use bitwarden_vault::{
 use iced::Task;
 
 use crate::{
-    app::Outcome,
+    app::{Outcome, UpdateCtx},
     components::{account_switcher::AccountSwitcherMessage, toast::Toast},
     domain::UserId,
     fl,
@@ -63,14 +63,11 @@ impl VaultView {
     /// `ctx` carries the SDK handle + active user; it's built fresh on every
     /// `App::update` call so the view can construct `Task::perform` calls
     /// without owning shared state.
-    pub fn update(
-        &mut self,
-        msg: VaultMessage,
-        ctx: &crate::app::UpdateCtx,
-    ) -> Outcome<Self> {
-        let &crate::app::UpdateCtx {
+    pub fn update(&mut self, msg: VaultMessage, ctx: UpdateCtx<'_>) -> Outcome<Self> {
+        let UpdateCtx {
             client_manager,
             active_user,
+            open_overlay,
         } = ctx;
         match msg {
             VaultMessage::Sidebar(m) => return self.handle_sidebar(m, active_user),
@@ -104,7 +101,9 @@ impl VaultView {
             VaultMessage::DeleteCompleted(uid, id, res) => {
                 return self.handle_delete_completed(uid, id, res, active_user);
             }
-            VaultMessage::AccountSwitcher(m) => return self.handle_account_switcher(m),
+            VaultMessage::AccountSwitcher(m) => {
+                return self.handle_account_switcher(m, open_overlay);
+            }
             VaultMessage::NewItem => {}
             VaultMessage::ListLoaded(uid, res) => {
                 return self.handle_list_loaded(uid, res, active_user);
@@ -444,23 +443,20 @@ impl VaultView {
     fn handle_account_switcher(
         &mut self,
         msg: AccountSwitcherMessage,
+        open_overlay: &mut Option<crate::app::Overlay>,
     ) -> Outcome<Self> {
         // Toggle flips the dropdown state; every other variant closes it and
-        // bubbles an app-level event.
-        let event = match msg {
-            AccountSwitcherMessage::ToggleDropdown => {
-                self.account_switcher_open = !self.account_switcher_open;
-                return Outcome::None;
-            }
-            AccountSwitcherMessage::SwitchUser(uid) => VaultEvent::UserSelected { uid },
-            AccountSwitcherMessage::AddAccount => VaultEvent::AddAccountRequested,
-            AccountSwitcherMessage::LockAll => VaultEvent::LockAllRequested,
-            AccountSwitcherMessage::OpenSettings => VaultEvent::SettingsRequested,
-            AccountSwitcherMessage::LockActive => VaultEvent::LockActiveRequested,
-            AccountSwitcherMessage::LogOutActive => VaultEvent::SignOutRequested,
-        };
-        self.account_switcher_open = false;
-        Outcome::event(event)
+        // bubbles a shared `AccountSwitcherEvent` for App to route.
+        if matches!(msg, AccountSwitcherMessage::ToggleDropdown) {
+            *open_overlay = if *open_overlay == Some(crate::app::Overlay::AccountSwitcher) {
+                None
+            } else {
+                Some(crate::app::Overlay::AccountSwitcher)
+            };
+            return Outcome::None;
+        }
+        *open_overlay = None;
+        Outcome::from_option(msg.into_event().map(VaultEvent::AccountSwitcher))
     }
 
     fn handle_list_loaded(

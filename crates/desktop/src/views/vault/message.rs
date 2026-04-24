@@ -14,7 +14,10 @@ use bitwarden_vault::{CipherId, CipherListView, CipherView};
 use iced::widget::pane_grid;
 
 use crate::{
-    components::{account_switcher::AccountSwitcherMessage, toast::Toast},
+    components::{
+        account_switcher::{AccountSwitcherEvent, AccountSwitcherMessage},
+        toast::Toast,
+    },
     domain::UserId,
     services::{
         clipboard::Sensitivity,
@@ -147,18 +150,10 @@ impl std::fmt::Debug for VaultMessage {
 
 #[derive(Debug, Clone)]
 pub enum VaultEvent {
-    /// User picked a different account from the switcher.
-    UserSelected { uid: UserId },
-    /// User clicked Add Account — App switches to the login screen.
-    AddAccountRequested,
-    /// User clicked "Lock now" on the active account card.
-    LockActiveRequested,
-    /// User clicked "Log out" on the active account card.
-    SignOutRequested,
-    /// User clicked "Lock all accounts" in the account switcher options.
-    LockAllRequested,
-    /// User clicked "Settings" in the account switcher options.
-    SettingsRequested,
+    /// Account-switcher action. Forwarded verbatim to
+    /// `App::handle_account_switcher_event` so login and vault share one
+    /// dispatch site.
+    AccountSwitcher(AccountSwitcherEvent),
     /// VaultView wants to show a cross-cutting toast notification.
     ToastRequested(Toast),
     /// A save completed successfully. App pushes a success toast and kicks

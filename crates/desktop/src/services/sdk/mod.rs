@@ -102,6 +102,18 @@ struct UnlockMethodsCfg {
 
 // ── Public client manager ──────────────────────────────────────────────────
 
+/// UI-facing snapshot of a single user account. Produced by
+/// [`ClientManager::accounts`]; App caches one `Vec<AccountEntry>` and hands
+/// it to views via `RenderCtx::accounts`.
+pub struct AccountEntry {
+    pub user_id: UserId,
+    pub email: String,
+    #[expect(dead_code)] // Not displayed yet; reserved for future avatar / profile views.
+    pub display_name: String,
+    pub server_url: String,
+    pub locked: bool,
+}
+
 struct UserEntry {
     client: PasswordManagerClient,
     // User profile data. These fields are the app-side stand-in for SDK
@@ -244,24 +256,23 @@ impl ClientManager {
         ids
     }
 
-    pub fn email(&self, uid: &UserId) -> Option<String> {
-        self.users.read().unwrap().get(uid).map(|e| e.email.clone())
-    }
-
-    pub fn display_name(&self, uid: &UserId) -> Option<String> {
-        self.users
-            .read()
-            .unwrap()
-            .get(uid)
-            .map(|e| e.display_name.clone())
-    }
-
-    pub fn server_url(&self, uid: &UserId) -> Option<String> {
-        self.users
-            .read()
-            .unwrap()
-            .get(uid)
-            .map(|e| e.server_url.clone())
+    /// Snapshot of every known user's display metadata plus lock state, in
+    /// the shape the UI needs. One `users.read()` per call; callers cache
+    /// the result on App rather than calling per view rebuild.
+    pub fn accounts(&self) -> Vec<AccountEntry> {
+        let users = self.users.read().unwrap();
+        let mut entries: Vec<AccountEntry> = users
+            .values()
+            .map(|e| AccountEntry {
+                user_id: e.sdk_user_id,
+                email: e.email.clone(),
+                display_name: e.display_name.clone(),
+                server_url: e.server_url.clone(),
+                locked: !e.client.is_unlocked(),
+            })
+            .collect();
+        entries.sort_by(|a, b| a.email.cmp(&b.email));
+        entries
     }
 
     pub fn unlock_methods(&self, uid: &UserId) -> Option<UnlockMethods> {
@@ -314,7 +325,7 @@ impl ClientManager {
     /// token revocation, local SQLite cleanup, etc.).
     ///
     /// TODO: migrate to `async fn log_out(...) -> Result<(), _>` when the
-    /// SDK exposes a real logout path. Callers (`App::handle_sign_out`) will
+    /// SDK exposes a real logout path. Callers (`App::handle_log_out`) will
     /// need to `.await` and handle errors. The `Arc<UserEntry>` dropped here
     /// may still be alive inside in-flight async tasks that cloned it —
     /// acceptable today, but any future cleanup that requires synchronous

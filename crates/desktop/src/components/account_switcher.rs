@@ -7,6 +7,7 @@ use crate::{
     components::{self, buttons, icons},
     domain::UserId,
     fl,
+    services::sdk::AccountEntry,
     theme::{AppColors, AppTheme, RADIUS_LG},
 };
 
@@ -16,18 +17,41 @@ pub enum AccountSwitcherMessage {
     SwitchUser(UserId),
     AddAccount,
     LockAll,
-    OpenSettings,
+    Settings,
     LockActive,
-    LogOutActive,
+    LogOut,
 }
 
-pub struct AccountEntry {
-    pub user_id: UserId,
-    pub email: String,
-    #[expect(dead_code)] // Not displayed yet; reserved for future avatar / profile views.
-    pub display_name: String,
-    pub server_url: String,
-    pub locked: bool,
+/// App-level semantics the account switcher can request. Views bubble these
+/// via their own event enum (`LoginEvent::AccountSwitcher`,
+/// `VaultEvent::AccountSwitcher`) so both routes land in the same
+/// `App::handle_account_switcher_event` — one place to keep in sync when
+/// the switcher grows a new action.
+#[derive(Debug, Clone)]
+pub enum AccountSwitcherEvent {
+    SwitchUser { uid: UserId },
+    AddAccount,
+    LockAll,
+    Settings,
+    LockActive,
+    LogOut,
+}
+
+impl AccountSwitcherMessage {
+    /// Lift a non-toggle message into its app-level event. `ToggleDropdown`
+    /// is the one case that doesn't bubble — it only flips the overlay —
+    /// so this returns `None` for it.
+    pub fn into_event(self) -> Option<AccountSwitcherEvent> {
+        match self {
+            Self::ToggleDropdown => None,
+            Self::SwitchUser(uid) => Some(AccountSwitcherEvent::SwitchUser { uid }),
+            Self::AddAccount => Some(AccountSwitcherEvent::AddAccount),
+            Self::LockAll => Some(AccountSwitcherEvent::LockAll),
+            Self::Settings => Some(AccountSwitcherEvent::Settings),
+            Self::LockActive => Some(AccountSwitcherEvent::LockActive),
+            Self::LogOut => Some(AccountSwitcherEvent::LogOut),
+        }
+    }
 }
 
 const AVATAR_PALETTE: [Color; 5] = [
@@ -123,7 +147,7 @@ pub fn dropdown<'a>(
     sections.push(options_row(
         icons::GEAR,
         fl!("account-switcher-settings"),
-        Some(AccountSwitcherMessage::OpenSettings),
+        Some(AccountSwitcherMessage::Settings),
         colors,
     ));
     sections.push(options_row(
@@ -215,7 +239,7 @@ fn active_account_card<'a>(
         .spacing(6)
         .align_y(Alignment::Center),
     )
-    .on_press(AccountSwitcherMessage::LogOutActive)
+    .on_press(AccountSwitcherMessage::LogOut)
     .padding([8, 12])
     .width(Fill);
 

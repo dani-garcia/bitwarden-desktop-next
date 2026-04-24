@@ -3,7 +3,6 @@ use iced::Task;
 use crate::{
     app::{App, Message},
     domain::Screen,
-    services::menu::MenuAction,
     views::login::LoginEvent,
 };
 
@@ -18,15 +17,11 @@ impl App {
                     );
                     return Task::none();
                 }
-                self.screen = Screen::Vault;
+                self.set_screen(Screen::Vault);
                 tracing::info!(%uid, "unlock succeeded; loading vault list");
                 self.load_vault_list_task(uid)
             }
-            LoginEvent::SignOutRequested => self.handle_sign_out(),
-            LoginEvent::UserSelected { uid } => self.handle_user_switch(uid),
-            LoginEvent::LockAllRequested => self.handle_menu_action(MenuAction::LockAllVaults),
-            LoginEvent::SettingsRequested => self.handle_menu_action(MenuAction::Settings),
-            LoginEvent::LockActiveRequested => self.handle_lock_active(),
+            LoginEvent::AccountSwitcher(e) => self.handle_account_switcher_event(e),
             LoginEvent::ToastRequested(t) => {
                 self.push_toast(t);
                 Task::none()
@@ -42,18 +37,19 @@ impl App {
             return Task::none();
         };
         self.client_manager.lock(&uid);
-        self.screen = Screen::Login;
-        self.login_view
+        self.views
+            .login
             .show_unlock_for(Some(&uid), &self.client_manager);
+        self.set_screen(Screen::Login);
         Task::none()
     }
 
     /// Sign the active user out: drop their decrypted vault cache, remove
     /// them from `ClientManager`, and either switch to another account or
     /// return to the login screen when no accounts remain.
-    pub(crate) fn handle_sign_out(&mut self) -> Task<Message> {
+    pub(crate) fn handle_log_out(&mut self) -> Task<Message> {
         if let Some(uid) = self.active_user {
-            self.vault_view.remove_user_items(&uid);
+            self.views.vault.remove_user_items(&uid);
             self.favicon.evict_user(&uid);
             self.client_manager.log_out(&uid);
         }
@@ -66,8 +62,8 @@ impl App {
             Some(uid) => self.handle_user_switch(uid),
             None => {
                 self.active_user = None;
-                self.screen = Screen::Login;
-                self.login_view.reset_to_email_entry();
+                self.views.login.reset_to_email_entry();
+                self.set_screen(Screen::Login);
                 Task::none()
             }
         }

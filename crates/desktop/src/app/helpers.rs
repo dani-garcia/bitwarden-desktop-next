@@ -1,9 +1,9 @@
 use iced::Task;
 
 use crate::{
-    components::account_switcher::AccountEntry,
+    components::account_switcher::AccountSwitcherEvent,
     domain::{Screen, UserId},
-    views::login::AuthPage,
+    services::{menu::MenuAction, sdk::AccountEntry},
 };
 
 use super::{App, Message, WindowKind};
@@ -26,22 +26,8 @@ impl App {
             .is_some_and(|w| w.maximized)
     }
 
-    pub(crate) fn post_update(&mut self) {
-        self.refresh_cache();
-    }
-
     pub(crate) fn push_toast(&mut self, toast: crate::components::toast::Toast) {
         self.toasts.push(toast);
-    }
-
-    /// Close every overlay owned by a sub-view or the title bar. Distinct
-    /// from the router's cross-view dismissal arms, which only close the
-    /// *other* view's overlays — this one is for "opening something on top
-    /// of everything" cases like the settings modal.
-    pub(crate) fn dismiss_all_overlays(&mut self) {
-        self.title_bar.dismiss_menu();
-        self.login_view.dismiss_dropdowns();
-        self.vault_view.dismiss_dropdowns();
     }
 
     pub(crate) fn active_account_entry(&self) -> Option<&AccountEntry> {
@@ -50,34 +36,46 @@ impl App {
             .and_then(|uid| self.cache.accounts.iter().find(|a| &a.user_id == uid))
     }
 
-    pub(crate) fn refresh_cache(&mut self) {
-        self.cache.accounts = self
-            .client_manager
-            .user_ids()
-            .into_iter()
-            .map(|uid| AccountEntry {
-                user_id: uid,
-                email: self.client_manager.email(&uid).unwrap_or_default(),
-                display_name: self.client_manager.display_name(&uid).unwrap_or_default(),
-                server_url: self.client_manager.server_url(&uid).unwrap_or_default(),
-                locked: !self.client_manager.is_unlocked(&uid),
-            })
-            .collect();
-
-        // Compute unlock alternatives for the current auth page
-        self.cache.unlock_alternatives =
-            if let AuthPage::Unlock { method, .. } = self.login_view.auth_page {
-                self.active_user
-                    .as_ref()
-                    .and_then(|uid| self.client_manager.unlock_methods(uid))
-                    .map(|m| m.alternatives(method))
-                    .unwrap_or_default()
-            } else {
-                Vec::new()
-            };
+    /// Repopulate the accounts snapshot + resync the native menu's enabled
+    /// state. Called from the handful of handlers that mutate SDK-side user
+    /// state (login, logout, lock, unlock, user switch, manager load) — the
+    /// invalidation set is identical for both, hence the shared entry point.
+    pub(crate) fn refresh_accounts_cache(&mut self) {
+        self.cache.accounts = self.client_manager.accounts();
 
         if let Some(ref handle) = self.native_menu {
             handle.sync_enabled(&self.menu_state());
+        }
+    }
+
+    /// Assign a new screen plus the bookkeeping that always goes with a
+    /// screen transition: drop whatever overlay was open on the previous
+    /// screen, resync the accounts cache + native menu state. Callers do any
+    /// view-specific pre-work (e.g. `show_unlock_for`, `reset_to_email_entry`)
+    /// before calling this.
+    pub(crate) fn set_screen(&mut self, screen: Screen) {
+        self.screen = screen;
+        self.open_overlay = None;
+        self.refresh_accounts_cache();
+    }
+
+    /// Route any account-switcher action. Called from both login and vault
+    /// event handlers so the semantics live in exactly one place.
+    pub(crate) fn handle_account_switcher_event(
+        &mut self,
+        event: AccountSwitcherEvent,
+    ) -> Task<Message> {
+        match event {
+            AccountSwitcherEvent::SwitchUser { uid } => self.handle_user_switch(uid),
+            AccountSwitcherEvent::AddAccount => {
+                self.views.login.reset_to_email_entry();
+                self.set_screen(Screen::Login);
+                Task::none()
+            }
+            AccountSwitcherEvent::LockAll => self.handle_menu_action(MenuAction::LockAllVaults),
+            AccountSwitcherEvent::Settings => self.handle_menu_action(MenuAction::Settings),
+            AccountSwitcherEvent::LockActive => self.handle_lock_active(),
+            AccountSwitcherEvent::LogOut => self.handle_log_out(),
         }
     }
 
@@ -86,29 +84,30 @@ impl App {
     /// vault list.
     pub(crate) fn handle_user_switch(&mut self, uid: UserId) -> Task<Message> {
         self.active_user = Some(uid);
-        self.vault_view.reset(&uid);
+        self.views.vault.reset(&uid);
         // Re-apply the new user's clipboard clear delay so the app-global
         // clipboard manager matches their preference.
         let delay = self.settings.preferences_for(&uid).clear_clipboard;
         self.clipboard.set_timeout(delay.as_duration());
 
         if !self.client_manager.is_unlocked(&uid) {
-            self.screen = Screen::Login;
-            self.login_view
+            self.views
+                .login
                 .show_unlock_for(Some(&uid), &self.client_manager);
+            self.set_screen(Screen::Login);
             Task::none()
         } else {
-            self.screen = Screen::Vault;
+            self.set_screen(Screen::Vault);
             self.load_vault_list_task(uid)
         }
     }
 
     /// Lift `VaultView::load_list_task` into a top-level `Task<Message>`.
-    /// Thin wrapper so handlers don't have to repeat the `.map(Message::Vault)`
+    /// Thin wrapper so handlers don't have to repeat the `.map(Message::vault)`
     /// lift at each call site.
     pub(crate) fn load_vault_list_task(&self, uid: UserId) -> Task<Message> {
         crate::views::vault::VaultView::load_list_task(uid, &self.client_manager)
-            .map(Message::Vault)
+            .map(Message::vault)
     }
 
     pub(crate) fn menu_state(&self) -> crate::services::menu::MenuState {

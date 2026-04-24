@@ -2,23 +2,24 @@ mod ctx;
 mod handlers;
 mod helpers;
 mod message;
+mod window;
 
-pub use ctx::{Outcome, RenderCtx, UpdateCtx, ViewTypes};
-pub use message::{Message, SystemMessage, WindowMessage};
-use message::{WindowInfo, WindowKind};
+pub use ctx::{Outcome, Overlay, RenderCtx, UpdateCtx, ViewTypes};
+pub use message::{Message, SystemMessage, ViewMessage, WindowMessage};
+use window::{WindowInfo, WindowKind};
 
 use std::{collections::HashMap, rc::Rc, sync::Arc};
 
 use iced::{Element, Subscription, Task};
 
 use crate::{
-    components::{
-        account_switcher::AccountEntry,
-        toast::{self, Toast},
-    },
-    domain::{Screen, UnlockMethod, UserId},
+    components::toast::{self, Toast},
+    domain::{Screen, UserId},
     services::{
-        clipboard::ClipboardManager, sdk::ClientManager, settings::Settings, tray::TrayHandle,
+        clipboard::ClipboardManager,
+        sdk::{AccountEntry, ClientManager},
+        settings::Settings,
+        tray::TrayHandle,
     },
     theme::{AppTheme, ThemePreference},
     views::{
@@ -35,10 +36,7 @@ pub struct App {
     pub(super) active_user: Option<UserId>,
 
     // ── Sub-views (each owns its own state + async lifecycle) ──────────────
-    pub(super) login_view: login::LoginView,
-    pub(super) vault_view: vault::VaultView,
-    pub(super) settings_view: settings_view::SettingsView,
-    pub(super) title_bar: title_bar::TitleBarView,
+    pub(super) views: Views,
 
     // ── External dependencies ──────────────────────────────────────────────
     pub(super) client_manager: Arc<ClientManager>,
@@ -71,20 +69,50 @@ pub struct App {
     // ── Cross-cutting UI overlay queue ─────────────────────────────────────
     pub(super) toasts: Vec<Toast>,
 
+    // ── Single-overlay cell ────────────────────────────────────────────────
+    // Source of truth for "which dropdown/menu is open right now". Views
+    // write here through `UpdateCtx::open_overlay`; by construction at most
+    // one overlay can be open, so opening one auto-dismisses any other.
+    pub(super) open_overlay: Option<Overlay>,
+
     // ── Clipboard manager ──────────────────────────────────────────────────
     // Single writer: every clipboard `set` flows through here so the 30 s
     // auto-clear bookkeeping sees every write. See `clipboard.rs`.
     pub(super) clipboard: ClipboardManager,
 }
 
-/// Derived data cached across `view()` rebuilds. Recomputed by
-/// `refresh_cache()` after every `update()`. All fields are derived
-/// from `ClientManager` (the SDK) — they exist only to survive the
-/// iced view borrow, not as independent state.
+/// Derived data cached across `view()` rebuilds. Refreshed only by the
+/// handlers that actually mutate the inputs (login, logout, lock, unlock,
+/// user switch, manager load), not on every update cycle.
+///
+/// Exists because iced's `view()` returns an `Element<'_, ...>` that borrows
+/// from `&self`, so the slice handed to `account_switcher::dropdown` has to
+/// live on App, not be built inline in `view()`.
 #[derive(Default)]
 pub(super) struct ViewCache {
     pub accounts: Vec<AccountEntry>,
-    pub unlock_alternatives: Vec<UnlockMethod>,
+}
+
+/// Sub-views grouped into their own struct so `App::update` can split its
+/// borrow: the view-dispatch arm takes `&mut self.views` plus `&mut
+/// self.open_overlay` via `UpdateCtx`, while event handlers reborrow other
+/// App fields (client_manager, settings, etc.) without overlap.
+pub struct Views {
+    pub(super) login: login::LoginView,
+    pub(super) vault: vault::VaultView,
+    pub(super) settings: settings_view::SettingsView,
+    pub(super) title_bar: title_bar::TitleBarView,
+}
+
+impl Views {
+    pub fn new() -> Self {
+        Self {
+            login: login::LoginView::new(),
+            vault: vault::VaultView::new(),
+            settings: settings_view::SettingsView::new(),
+            title_bar: title_bar::TitleBarView::new(),
+        }
+    }
 }
 
 /// Theme state bundle: user preference, resolved `AppTheme` instance,
@@ -194,10 +222,7 @@ impl App {
         let app = Self {
             active_user: None,
             screen: Screen::Loading,
-            login_view: login::LoginView::new(),
-            vault_view: vault::VaultView::new(),
-            settings_view: settings_view::SettingsView::new(),
-            title_bar: title_bar::TitleBarView::new(),
+            views: Views::new(),
             client_manager: Arc::new(ClientManager::empty()),
             favicon,
             cache: ViewCache::default(),
@@ -208,6 +233,7 @@ impl App {
             settings,
             tray,
             toasts: Vec::new(),
+            open_overlay: None,
             clipboard: ClipboardManager::new(),
         };
 
@@ -293,48 +319,8 @@ impl App {
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
-        // LOAD-BEARING: cross-view overlay dismissal. Any message directed
-        // at a view (or the title bar) should close the *other* view's
-        // overlays so an accidental menu click from the vault doesn't leave
-        // the account-switcher dropdown open, and vice versa. Keep this
-        // policy at the router level so sub-views don't need to know about
-        // each other.
-        match &message {
-            Message::Login(_) | Message::Vault(_) => self.title_bar.dismiss_menu(),
-            Message::TitleBar(_) => {
-                self.login_view.dismiss_dropdowns();
-                self.vault_view.dismiss_dropdowns();
-            }
-            // Interacting with the settings modal should close any other
-            // overlays (title-bar menus, account-switcher dropdown) that
-            // would otherwise paint beside the modal.
-            Message::Settings(_) => self.dismiss_all_overlays(),
-            Message::About(_) | Message::Window(_) | Message::System(_) | Message::Favicon(_) => {}
-        }
-
-        let uctx = UpdateCtx {
-            client_manager: &self.client_manager,
-            active_user: self.active_user.as_ref(),
-        };
-
-        let task = match message {
-            Message::Login(m) => self
-                .login_view
-                .update(m, &uctx)
-                .dispatch(Message::Login, |e| self.handle_login_event(e)),
-            Message::Vault(m) => self
-                .vault_view
-                .update(m, &uctx)
-                .dispatch(Message::Vault, |e| self.handle_vault_event(e)),
-            Message::TitleBar(m) => self
-                .title_bar
-                .update(m, &uctx)
-                .dispatch(Message::TitleBar, |e| self.handle_titlebar_event(e)),
+        match message {
             Message::About(m) => self.handle_about_message(m),
-            Message::Settings(m) => self
-                .settings_view
-                .update(m, &uctx)
-                .dispatch(Message::Settings, |e| self.handle_settings_event(e)),
             Message::Window(m) => self.handle_window_message(m),
             Message::System(m) => self.handle_system_message(m),
             Message::Favicon(crate::services::favicon::FaviconMessage::IconResolved {
@@ -348,10 +334,39 @@ impl App {
                 tracing::trace!(%uid, %hostname, "favicon resolved");
                 Task::none()
             }
-        };
-
-        self.post_update();
-        task
+            Message::View(view_msg) => {
+                // One `UpdateCtx` shared across every view dispatch; its
+                // `&mut self.open_overlay` borrow only needs to coexist with
+                // the disjoint `&mut self.views.*` borrow below.
+                let uctx = UpdateCtx {
+                    client_manager: &self.client_manager,
+                    active_user: self.active_user.as_ref(),
+                    open_overlay: &mut self.open_overlay,
+                };
+                match view_msg {
+                    ViewMessage::Login(m) => self
+                        .views
+                        .login
+                        .update(m, uctx)
+                        .dispatch(Message::login, |e| self.handle_login_event(e)),
+                    ViewMessage::Vault(m) => self
+                        .views
+                        .vault
+                        .update(m, uctx)
+                        .dispatch(Message::vault, |e| self.handle_vault_event(e)),
+                    ViewMessage::TitleBar(m) => self
+                        .views
+                        .title_bar
+                        .update(m, uctx)
+                        .dispatch(Message::title_bar, |e| self.handle_titlebar_event(e)),
+                    ViewMessage::Settings(m) => self
+                        .views
+                        .settings
+                        .update(m, uctx)
+                        .dispatch(Message::settings, |e| self.handle_settings_event(e)),
+                }
+            }
+        }
     }
 
     pub fn view(&self, window_id: iced::window::Id) -> Element<'_, Message, AppTheme> {
@@ -399,6 +414,7 @@ impl App {
             active_user: self.active_user.as_ref(),
             active_email: email,
             accounts: &self.cache.accounts,
+            open_overlay: self.open_overlay,
         };
 
         let page: Element<'_, Message, AppTheme> = match self.screen {
@@ -406,11 +422,8 @@ impl App {
                 iced::widget::center(crate::components::spinner::spinner(48.0, colors.accent))
                     .into()
             }
-            Screen::Login => self
-                .login_view
-                .view(server, &self.cache.unlock_alternatives, &rctx)
-                .map(Message::Login),
-            Screen::Vault => self.vault_view.view(&rctx).map(Message::Vault),
+            Screen::Login => self.views.login.view(server, &rctx).map(Message::login),
+            Screen::Vault => self.views.vault.view(&rctx).map(Message::vault),
         };
 
         let close_toast = |idx| Message::System(SystemMessage::CloseToast(idx));
@@ -418,18 +431,20 @@ impl App {
         // Bottom-sheet overlay for the narrow vault layout. Hoisted to the
         // app level so it covers the sidebar AND the title bar.
         let sheet: Option<Element<'_, Message, AppTheme>> = if self.screen == Screen::Vault {
-            self.vault_view
+            self.views
+                .vault
                 .sheet_view(&rctx)
-                .map(|el| el.map(Message::Vault))
+                .map(|el| el.map(Message::vault))
         } else {
             None
         };
 
         // Delete-confirmation modal — same hoisting rule as the sheet.
         let modal: Option<Element<'_, Message, AppTheme>> = if self.screen == Screen::Vault {
-            self.vault_view
+            self.views
+                .vault
                 .modal_view(&rctx)
-                .map(|el| el.map(Message::Vault))
+                .map(|el| el.map(Message::vault))
         } else {
             None
         };
@@ -437,19 +452,31 @@ impl App {
         // Settings modal — composed above the vault modal so it sits on top
         // of any other overlays.
         let settings_modal: Option<Element<'_, Message, AppTheme>> = self
-            .settings_view
+            .views
+            .settings
             .modal_view(colors)
-            .map(|el| el.map(Message::Settings));
+            .map(|el| el.map(Message::settings));
 
         let use_custom_menu_bar = crate::services::menu::should_use_custom_menu_bar();
 
         let tb: Element<'_, Message, AppTheme> = if use_custom_menu_bar {
             let menu_state = self.menu_state();
-            self.title_bar
-                .view(self.main_window_maximized(), &menu_state, colors)
-                .map(Message::TitleBar)
+            let (open_menu, open_submenu) = match self.open_overlay {
+                Some(Overlay::TitleBarMenu { menu, submenu }) => (Some(menu), submenu),
+                _ => (None, None),
+            };
+            self.views
+                .title_bar
+                .view(
+                    self.main_window_maximized(),
+                    &menu_state,
+                    open_menu,
+                    open_submenu,
+                    colors,
+                )
+                .map(Message::title_bar)
         } else {
-            title_bar::TitleBarView::view_empty().map(Message::TitleBar)
+            title_bar::TitleBarView::view_empty().map(Message::title_bar)
         };
 
         let main_column: Element<'_, Message, AppTheme> =
@@ -471,7 +498,7 @@ impl App {
 
         if use_custom_menu_bar {
             title_bar::resize_wrapper(with_toasts, |dir| {
-                Message::TitleBar(TitleBarMessage::ResizeEdge(dir))
+                Message::title_bar(TitleBarMessage::ResizeEdge(dir))
             })
         } else {
             with_toasts

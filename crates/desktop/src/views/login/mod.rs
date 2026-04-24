@@ -8,8 +8,11 @@ mod unlock;
 use iced::Element;
 
 use crate::{
-    app::{Outcome, ViewTypes},
-    components::{account_switcher::AccountSwitcherMessage, toast::Toast},
+    app::{Outcome, UpdateCtx, ViewTypes},
+    components::{
+        account_switcher::{AccountSwitcherEvent, AccountSwitcherMessage},
+        toast::Toast,
+    },
     domain::{UnlockMethod, UserId},
     services::sdk::ClientManager,
     theme::AppTheme,
@@ -27,7 +30,6 @@ pub enum AuthPage {
     LoginEmail {
         email_input: String,
         remember_email: bool,
-        server_selector_open: bool,
         selected_server: ServerOption,
     },
     LoginPassword {
@@ -50,7 +52,6 @@ impl AuthPage {
         Self::LoginEmail {
             email_input: String::new(),
             remember_email: false,
-            server_selector_open: false,
             selected_server: ServerOption::Bitwarden,
         }
     }
@@ -100,7 +101,6 @@ pub enum LoginMessage {
     UnlockWithBiometrics,
     // Switch between unlock methods
     SwitchUnlockMethod(UnlockMethod),
-    LogOut,
 
     // Login — email entry
     EmailChanged(String),
@@ -144,28 +144,27 @@ pub enum LoginEvent {
     /// messaging differences. Constructed only by `LoginMessage::LoginCompleted`
     /// which is itself a stub until SDK login support lands.
     LoggedIn { uid: UserId },
-    /// User clicked Sign Out — App should drop the active session.
-    SignOutRequested,
-    /// User picked a different account from the switcher.
-    UserSelected { uid: UserId },
-    /// User clicked "Lock now" on the active account card.
-    LockActiveRequested,
-    /// User clicked "Lock all accounts" in the account switcher options.
-    LockAllRequested,
-    /// User clicked "Settings" in the account switcher options.
-    SettingsRequested,
     /// LoginView wants to show a cross-cutting toast notification.
     ToastRequested(Toast),
+    /// Account-switcher action. Forwarded verbatim to
+    /// `App::handle_account_switcher_event` so login and vault share one
+    /// dispatch site.
+    AccountSwitcher(AccountSwitcherEvent),
 }
 
 // ── View State ─────────────────────────────────────────────────────────────
 
 pub struct LoginView {
     pub auth_page: AuthPage,
-    pub account_switcher_open: bool,
     /// True between `LoginMessage::Unlock` firing and `UnlockCompleted` arriving.
     /// Drives the in-progress spinner on the unlock screen and gates re-entry.
     pub unlock_in_progress: bool,
+    /// Other unlock methods the active user has configured, minus the currently
+    /// selected one. Populated only while `auth_page` is `Unlock`; cleared on
+    /// every transition to `LoginEmail` / `LoginPassword`. Lives here instead
+    /// of on `App` because every input (active user, `auth_page`, method
+    /// choice) is already owned or observed by this view.
+    pub unlock_alternatives: Vec<UnlockMethod>,
 }
 
 impl ViewTypes for LoginView {
@@ -177,9 +176,23 @@ impl LoginView {
     pub fn new() -> Self {
         Self {
             auth_page: AuthPage::new_unlock(UnlockMethod::MasterPassword),
-            account_switcher_open: false,
             unlock_in_progress: false,
+            unlock_alternatives: Vec::new(),
         }
+    }
+
+    /// Recompute the alternatives list from the current `auth_page` + active
+    /// user's configured methods. Empty for non-`Unlock` pages and for
+    /// unknown users.
+    fn refresh_unlock_alternatives(&mut self, active_user: Option<&UserId>, mgr: &ClientManager) {
+        self.unlock_alternatives = if let AuthPage::Unlock { method, .. } = self.auth_page {
+            active_user
+                .and_then(|uid| mgr.unlock_methods(uid))
+                .map(|m| m.alternatives(method))
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
     }
 
     /// Compositional MVU update. Returns a task (for async work the view
@@ -189,14 +202,11 @@ impl LoginView {
     /// view can construct `Task::perform` calls without owning shared state.
     /// This matches Halloy's pattern — see
     /// [investigation/halloy/src/buffer.rs:247](../../../../investigation/halloy/src/buffer.rs).
-    pub fn update(
-        &mut self,
-        msg: LoginMessage,
-        ctx: &crate::app::UpdateCtx,
-    ) -> Outcome<Self> {
-        let &crate::app::UpdateCtx {
+    pub fn update(&mut self, msg: LoginMessage, ctx: UpdateCtx<'_>) -> Outcome<Self> {
+        let UpdateCtx {
             client_manager,
             active_user,
+            open_overlay,
         } = ctx;
         match msg {
             // ── Unlock: master password ────────────────────────────────────
@@ -287,9 +297,8 @@ impl LoginView {
             LoginMessage::SwitchUnlockMethod(method) => {
                 self.auth_page = AuthPage::new_unlock(method);
                 self.unlock_in_progress = false;
+                self.refresh_unlock_alternatives(active_user, client_manager);
             }
-
-            LoginMessage::LogOut => return Outcome::event(LoginEvent::SignOutRequested),
 
             // ── Login: email entry ─────────────────────────────────────────
             LoginMessage::EmailChanged(email) => {
@@ -312,6 +321,7 @@ impl LoginView {
                     let email = email_input.clone();
                     let server = selected_server.clone();
                     self.auth_page = AuthPage::new_login_password(email, server);
+                    self.unlock_alternatives.clear();
                 }
             }
             LoginMessage::UseSingleSignOn => {
@@ -369,9 +379,9 @@ impl LoginView {
                 self.auth_page = AuthPage::LoginEmail {
                     email_input: email,
                     remember_email: false,
-                    server_selector_open: false,
                     selected_server: server,
                 };
+                self.unlock_alternatives.clear();
             }
             LoginMessage::GetPasswordHint => {
                 // TODO: password hint request flow
@@ -379,67 +389,36 @@ impl LoginView {
 
             // ── Server selector ────────────────────────────────────────────
             LoginMessage::ToggleServerSelector => {
-                if let AuthPage::LoginEmail {
-                    server_selector_open,
-                    ..
-                } = &mut self.auth_page
-                {
-                    *server_selector_open = !*server_selector_open;
-                }
+                *open_overlay = if *open_overlay == Some(crate::app::Overlay::ServerSelector) {
+                    None
+                } else {
+                    Some(crate::app::Overlay::ServerSelector)
+                };
             }
             LoginMessage::SelectServer(server) => {
                 if let AuthPage::LoginEmail {
-                    selected_server,
-                    server_selector_open,
-                    ..
+                    selected_server, ..
                 } = &mut self.auth_page
                 {
                     *selected_server = server;
-                    *server_selector_open = false;
                 }
+                *open_overlay = None;
             }
 
             // ── Account switcher ───────────────────────────────────────────
             LoginMessage::AccountSwitcher(AccountSwitcherMessage::ToggleDropdown) => {
-                self.account_switcher_open = !self.account_switcher_open;
-            }
-            LoginMessage::AccountSwitcher(AccountSwitcherMessage::AddAccount) => {
-                // AddAccount stays local to the login view (reset inputs);
-                // every other non-toggle action bubbles an event.
-                self.account_switcher_open = false;
-                self.reset_to_email_entry();
+                *open_overlay = if *open_overlay == Some(crate::app::Overlay::AccountSwitcher) {
+                    None
+                } else {
+                    Some(crate::app::Overlay::AccountSwitcher)
+                };
             }
             LoginMessage::AccountSwitcher(asm) => {
-                self.account_switcher_open = false;
-                let event = match asm {
-                    AccountSwitcherMessage::SwitchUser(uid) => LoginEvent::UserSelected { uid },
-                    AccountSwitcherMessage::LockAll => LoginEvent::LockAllRequested,
-                    AccountSwitcherMessage::OpenSettings => LoginEvent::SettingsRequested,
-                    AccountSwitcherMessage::LockActive => LoginEvent::LockActiveRequested,
-                    AccountSwitcherMessage::LogOutActive => LoginEvent::SignOutRequested,
-                    AccountSwitcherMessage::ToggleDropdown | AccountSwitcherMessage::AddAccount => {
-                        unreachable!("handled in earlier arm")
-                    }
-                };
-                return Outcome::event(event);
+                *open_overlay = None;
+                return Outcome::from_option(asm.into_event().map(LoginEvent::AccountSwitcher));
             }
         }
         Outcome::None
-    }
-
-    /// LOAD-BEARING: called from the App router before it dispatches a
-    /// `Message::TitleBar(_)` to close any open login-side overlays so
-    /// menu clicks don't leave them hanging. See the cross-view dismissal
-    /// block in `App::update`.
-    pub fn dismiss_dropdowns(&mut self) {
-        self.account_switcher_open = false;
-        if let AuthPage::LoginEmail {
-            server_selector_open,
-            ..
-        } = &mut self.auth_page
-        {
-            *server_selector_open = false;
-        }
     }
 
     /// Reset the login flow to the email-entry page with empty inputs.
@@ -449,6 +428,7 @@ impl LoginView {
     pub fn reset_to_email_entry(&mut self) {
         self.auth_page = AuthPage::new_login_email();
         self.unlock_in_progress = false;
+        self.unlock_alternatives.clear();
     }
 
     /// Show the unlock page for the given user, picking their preferred
@@ -462,12 +442,12 @@ impl LoginView {
             .unwrap_or(UnlockMethod::MasterPassword);
         self.auth_page = AuthPage::new_unlock(preferred);
         self.unlock_in_progress = false;
+        self.refresh_unlock_alternatives(uid, mgr);
     }
 
     pub fn view<'a>(
         &'a self,
         server: &'a str,
-        unlock_alternatives: &'a [UnlockMethod],
         ctx: &crate::app::RenderCtx<'a>,
     ) -> Element<'a, LoginMessage, AppTheme> {
         let colors = ctx.colors;
@@ -480,7 +460,7 @@ impl LoginView {
             } => {
                 let center = unlock::view(
                     *method,
-                    unlock_alternatives,
+                    &self.unlock_alternatives,
                     email,
                     password_input,
                     pin_input,
@@ -493,11 +473,12 @@ impl LoginView {
             AuthPage::LoginEmail {
                 email_input,
                 remember_email,
-                server_selector_open,
                 selected_server,
             } => {
+                let server_selector_open =
+                    ctx.open_overlay == Some(crate::app::Overlay::ServerSelector);
                 let center = login_email::view(email_input, *remember_email, colors);
-                let status = server_selector::view(selected_server, *server_selector_open, colors);
+                let status = server_selector::view(selected_server, server_selector_open, colors);
                 (center, status)
             }
             AuthPage::LoginPassword {
@@ -512,12 +493,13 @@ impl LoginView {
             }
         };
 
+        let account_switcher_open = ctx.open_overlay == Some(crate::app::Overlay::AccountSwitcher);
         layout::auth_page_shell(
             center_content,
             status_bar,
             email,
             ctx.accounts,
-            self.account_switcher_open,
+            account_switcher_open,
             colors,
         )
     }

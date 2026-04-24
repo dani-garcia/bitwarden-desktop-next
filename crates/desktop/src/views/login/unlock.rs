@@ -137,7 +137,16 @@ fn card_content<'a>(
         items.push(secondary_action(label, msg, in_progress).into());
     }
 
-    items.push(secondary_action(fl!("login-log-out"), LoginMessage::LogOut, in_progress).into());
+    items.push(
+        secondary_action(
+            fl!("login-log-out"),
+            LoginMessage::AccountSwitcher(
+                crate::components::account_switcher::AccountSwitcherMessage::LogOut,
+            ),
+            in_progress,
+        )
+        .into(),
+    );
 
     column(items).spacing(12).align_x(Alignment::Center).into()
 }
