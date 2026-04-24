@@ -26,7 +26,7 @@ use crate::{
     },
     theme::{AppTheme, ThemePreference},
     views::{
-        login, send, settings as settings_view,
+        generator as generator_view, login, send, settings as settings_view,
         title_bar::{self, TitleBarMessage},
         vault,
     },
@@ -109,6 +109,7 @@ pub struct Views {
     pub(super) vault: vault::VaultView,
     pub(super) send: send::SendView,
     pub(super) settings: settings_view::SettingsView,
+    pub(super) generator: generator_view::GeneratorView,
     pub(super) title_bar: title_bar::TitleBarView,
 }
 
@@ -119,6 +120,7 @@ impl Views {
             vault: vault::VaultView::new(),
             send: send::SendView::new(),
             settings: settings_view::SettingsView::new(),
+            generator: generator_view::GeneratorView::new(),
             title_bar: title_bar::TitleBarView::new(),
         }
     }
@@ -384,6 +386,11 @@ impl App {
                         .settings
                         .update(m, uctx)
                         .dispatch(Message::settings, |e| self.handle_settings_event(e)),
+                    ViewMessage::Generator(m) => self
+                        .views
+                        .generator
+                        .update(m, uctx)
+                        .dispatch(Message::generator, |e| self.handle_generator_event(e)),
                 }
             }
         }
@@ -521,6 +528,15 @@ impl App {
             .modal_view(colors)
             .map(|el| el.map(Message::settings));
 
+        // Generator modal — same tier as Settings. Both `modal_view` returns
+        // `None` when closed so the stack stays cheap (CLAUDE.md → "Stack
+        // doesn't cull or clip").
+        let generator_modal: Option<Element<'_, Message, AppTheme>> = self
+            .views
+            .generator
+            .modal_view(colors)
+            .map(|el| el.map(Message::generator));
+
         let use_custom_menu_bar = crate::services::menu::should_use_custom_menu_bar();
 
         let tb: Element<'_, Message, AppTheme> = if use_custom_menu_bar {
@@ -557,8 +573,12 @@ impl App {
             Some(m) => iced::widget::stack![with_modal, m].into(),
             None => with_modal,
         };
+        let with_generator: Element<'_, Message, AppTheme> = match generator_modal {
+            Some(m) => iced::widget::stack![with_settings, m].into(),
+            None => with_settings,
+        };
         let with_toasts: Element<'_, Message, AppTheme> =
-            toast::Manager::new(with_settings, &self.toasts, close_toast).into();
+            toast::Manager::new(with_generator, &self.toasts, close_toast).into();
 
         if use_custom_menu_bar {
             title_bar::resize_wrapper(with_toasts, |dir| {

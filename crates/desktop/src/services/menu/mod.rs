@@ -182,6 +182,8 @@ pub enum MenuAction {
     Close,
     About,
     Settings,
+    Generator,
+    GeneratorHistory,
 }
 
 // ---------------------------------------------------------------------------
@@ -364,8 +366,13 @@ pub const MENUS: &[(&str, &[MenuEntry])] = &[
                 .when(Unlocked)
                 .action(SearchVault),
             SEP,
-            E("menu-view-generator").key(cmd('g')).when(Unlocked),
-            E("menu-view-generator-history").when(Unlocked),
+            E("menu-view-generator")
+                .key(cmd('g'))
+                .when(Unlocked)
+                .action(Generator),
+            E("menu-view-generator-history")
+                .when(Unlocked)
+                .action(GeneratorHistory),
             SEP,
             E("menu-view-zoom-in").key(cmd('+')),
             E("menu-view-zoom-out").key(cmd('-')),

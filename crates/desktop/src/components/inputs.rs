@@ -129,6 +129,52 @@ where
     field_frame(label, input.into(), colors)
 }
 
+/// Number input with up/down chevron steppers stacked on the right edge —
+/// the keyboard handles arbitrary text input, the chevrons emit one
+/// `on_increment` / `on_decrement` per click. Caller is responsible for
+/// rejecting non-digit `on_input` values and for clamping the deltas.
+///
+/// Setting `disabled = true` strips both the `on_input` and the chevron
+/// `on_press` handlers so the field is fully read-only — used when a
+/// parent toggle (e.g. "include numbers") gates the field.
+pub fn stepper_field<'a, M>(
+    label: impl Into<String>,
+    value: &'a str,
+    on_input: impl Fn(String) -> M + 'a,
+    on_increment: M,
+    on_decrement: M,
+    disabled: bool,
+    colors: &'a AppColors,
+) -> Element<'a, M, AppTheme>
+where
+    M: Clone + 'a,
+{
+    let mut input = bare_text_input(value);
+    if !disabled {
+        input = input.on_input(on_input);
+    }
+
+    let mut inc = buttons::ghost_icon(
+        icons::CHEVRON_UP.render(11.0, colors.text_secondary),
+        colors.item_hover,
+    )
+    .padding([2, 6]);
+    let mut dec = buttons::ghost_icon(
+        icons::CHEVRON_DOWN.render(11.0, colors.text_secondary),
+        colors.item_hover,
+    )
+    .padding([2, 6]);
+
+    if !disabled {
+        inc = inc.on_press(on_increment);
+        dec = dec.on_press(on_decrement);
+    }
+
+    let steppers = column![inc, dec].spacing(0);
+    let row_el = row![input, steppers].align_y(Alignment::Center);
+    field_frame(label, row_el.into(), colors)
+}
+
 /// Labeled single-select dropdown backed by iced's `pick_list`.
 ///
 /// The inner `pick_list` draws its own border via `pick_list::Catalog`, so

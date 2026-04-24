@@ -1,15 +1,15 @@
 //! "Additional options" card — view limit, hide-email flag, private notes.
 
 use iced::{
-    Alignment, Element, Length,
-    widget::{checkbox, column, row, text, text_editor},
+    Element, Length,
+    widget::{checkbox, text, text_editor},
 };
 
 use crate::{
-    components::{buttons, icons, inputs},
+    components::inputs,
     fl,
     theme::{AppColors, AppTheme},
-    views::send::widgets::send_edit::{SendForm, SendEditMessage},
+    views::send::widgets::send_edit::{SendEditMessage, SendForm},
 };
 
 use super::shared::card_section;
@@ -45,24 +45,15 @@ fn limit_views_field<'a>(
     form: &'a SendForm,
     colors: &'a AppColors,
 ) -> Element<'a, SendEditMessage, AppTheme> {
-    let input = inputs::bare_text_input(&form.max_access_count_raw)
-        .on_input(SendEditMessage::MaxAccessCountChanged);
-    let inc = buttons::ghost_icon(
-        icons::CHEVRON_UP.render(11.0, colors.text_secondary),
-        colors.item_hover,
+    inputs::stepper_field(
+        fl!("send-form-limit-views"),
+        &form.max_access_count_raw,
+        SendEditMessage::MaxAccessCountChanged,
+        SendEditMessage::MaxAccessCountIncrement,
+        SendEditMessage::MaxAccessCountDecrement,
+        false,
+        colors,
     )
-    .on_press(SendEditMessage::MaxAccessCountIncrement)
-    .padding([2, 6]);
-    let dec = buttons::ghost_icon(
-        icons::CHEVRON_DOWN.render(11.0, colors.text_secondary),
-        colors.item_hover,
-    )
-    .on_press(SendEditMessage::MaxAccessCountDecrement)
-    .padding([2, 6]);
-
-    let steppers = column![inc, dec].spacing(0);
-    let row_el = row![input, steppers].align_y(Alignment::Center);
-    inputs::field_frame(fl!("send-form-limit-views"), row_el.into(), colors)
 }
 
 fn views_left_hint<'a>(

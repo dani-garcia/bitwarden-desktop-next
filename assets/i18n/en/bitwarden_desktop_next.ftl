@@ -494,3 +494,54 @@ send-delete-modal-title = Delete Send
 send-delete-modal-body = Are you sure you want to delete "{$name}"?
 send-delete-modal-cancel = Cancel
 send-delete-modal-confirm = Delete
+
+## Generator
+generator-title = Generator
+generator-tab-password = Password
+generator-tab-passphrase = Passphrase
+generator-tab-username = Username
+generator-options = Options
+
+# Password tab
+generator-length = Length
+generator-length-hint = Value must be between 5 and 128.
+generator-include = Include
+generator-include-uppercase = A-Z
+generator-include-lowercase = a-z
+generator-include-numbers = 0-9
+generator-include-special = !@#$%^&*
+generator-min-number = Minimum numbers
+generator-min-special = Minimum special
+generator-avoid-ambiguous = Avoid ambiguous characters
+
+# Passphrase tab
+generator-num-words = Number of words
+generator-num-words-hint = Value must be between 3 and 20. Use 6 words or more to generate a strong passphrase.
+generator-word-separator = Word separator
+generator-passphrase-capitalize = Capitalize
+generator-passphrase-include-number = Include number
+
+# Username tab
+generator-username-type = Type
+generator-username-kind-word = Random word
+generator-username-kind-subaddress = Plus addressed email
+generator-username-kind-catchall = Catch-all email
+generator-username-capitalize = Capitalize
+generator-username-include-number = Include number
+generator-username-email = Email
+generator-username-domain = Domain
+
+# History
+generator-history-open = Generator history
+generator-history-title = Generator history
+generator-history-heading = Recent
+generator-history-empty = No recent values.
+generator-history-clear = Clear history
+generator-history-just-now = just now
+generator-history-minutes-ago = {$count}m ago
+generator-history-hours-ago = {$count}h ago
+generator-history-days-ago = {$count}d ago
+
+# Toasts
+generator-toast-copied = Copied
+generator-toast-failed = Couldn't generate

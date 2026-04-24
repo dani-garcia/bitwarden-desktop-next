@@ -4,8 +4,8 @@ use crate::{
     components::sidebar::SidebarMessage,
     services::{favicon::FaviconMessage, sdk::ClientManager},
     views::{
-        about::AboutMessage, login::LoginMessage, send::SendMessage, settings::SettingsMessage,
-        title_bar::TitleBarMessage, vault::VaultMessage,
+        about::AboutMessage, generator::GeneratorMessage, login::LoginMessage, send::SendMessage,
+        settings::SettingsMessage, title_bar::TitleBarMessage, vault::VaultMessage,
     },
 };
 
@@ -45,6 +45,7 @@ pub enum ViewMessage {
     Send(SendMessage),
     TitleBar(TitleBarMessage),
     Settings(SettingsMessage),
+    Generator(GeneratorMessage),
 }
 
 // Convenience constructors so call sites can keep using `fn`-pointer form
@@ -69,6 +70,10 @@ impl Message {
 
     pub fn settings(m: SettingsMessage) -> Self {
         Self::View(ViewMessage::Settings(m))
+    }
+
+    pub fn generator(m: GeneratorMessage) -> Self {
+        Self::View(ViewMessage::Generator(m))
     }
 }
 

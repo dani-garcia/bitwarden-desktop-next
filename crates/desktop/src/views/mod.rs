@@ -1,4 +1,5 @@
 pub(crate) mod about;
+pub(crate) mod generator;
 pub(crate) mod login;
 pub(crate) mod send;
 pub(crate) mod settings;

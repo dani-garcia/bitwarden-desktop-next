@@ -64,6 +64,7 @@ bitwarden-auth = { workspace = true }
 bitwarden-collections = { workspace = true }
 bitwarden-core = { workspace = true }
 bitwarden-crypto = { workspace = true }
+bitwarden-generators = { workspace = true }
 bitwarden-logging = { workspace = true }
 bitwarden-pm = { workspace = true }
 bitwarden-send = { workspace = true }

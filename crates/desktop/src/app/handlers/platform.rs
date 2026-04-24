@@ -216,6 +216,12 @@ impl App {
                     self.views.settings.open_with(snap);
                 }
             }
+            MenuAction::Generator => {
+                return self.open_generator_modal();
+            }
+            MenuAction::GeneratorHistory => {
+                return self.open_generator_history();
+            }
             MenuAction::About => {
                 // Re-focus existing About window if already open.
                 if let Some(id) = self.about_window_id() {

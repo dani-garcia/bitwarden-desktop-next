@@ -33,6 +33,9 @@ use bitwarden_core::{
     },
 };
 use bitwarden_crypto::{EncString, Kdf, UnsignedSharedKey};
+use bitwarden_generators::{
+    PassphraseGeneratorRequest, PasswordGeneratorRequest, UsernameGeneratorRequest,
+};
 use bitwarden_pm::PasswordManagerClient;
 use bitwarden_send::{SendId, SendView};
 use bitwarden_state::{
@@ -155,6 +158,20 @@ pub struct ClientManager {
     /// send view's save/delete handlers. See `docs/todo.md` for the
     /// follow-up work to replace this with real persistence.
     sends: RwLock<HashMap<UserId, Vec<SendView>>>,
+    /// In-memory generator history, keyed by user. Every successful call
+    /// to `generate_password` / `generate_passphrase` / `generate_username`
+    /// pushes a `PasswordHistoryEntry` here; the Generator modal reads the
+    /// list back when it opens the history panel. Cleared on `log_out`.
+    password_history: RwLock<HashMap<UserId, Vec<PasswordHistoryEntry>>>,
+}
+
+/// One entry in the in-memory generator history. The list is flat across
+/// password / passphrase / username — matches the official Bitwarden client
+/// which also doesn't distinguish by type.
+#[derive(Debug, Clone)]
+pub struct PasswordHistoryEntry {
+    pub value: String,
+    pub created: chrono::DateTime<chrono::Utc>,
 }
 
 // Needed so `Message` can derive `Debug` with the `ClientManagerLoaded(Arc<ClientManager>)`
@@ -196,6 +213,7 @@ impl ClientManager {
         Self {
             users: RwLock::new(HashMap::new()),
             sends: RwLock::new(HashMap::new()),
+            password_history: RwLock::new(HashMap::new()),
         }
     }
 
@@ -253,6 +271,7 @@ impl ClientManager {
         Self {
             users: RwLock::new(users),
             sends: RwLock::new(HashMap::new()),
+            password_history: RwLock::new(HashMap::new()),
         }
     }
 
@@ -349,6 +368,8 @@ impl ClientManager {
         // Drop the user's in-memory send list too so a fresh login for the
         // same user starts clean.
         self.sends.write().unwrap().remove(uid);
+        // Same for generator history — each login gets a fresh list.
+        self.password_history.write().unwrap().remove(uid);
     }
 
     /// Initialize the SDK crypto state for the given user with their master password.
@@ -697,6 +718,109 @@ impl ClientManager {
             entry.retain(|s| s.id != Some(send_id));
         }
         Ok(())
+    }
+
+    // ── Generator ─────────────────────────────────────────────────────────
+    //
+    // Each `generate_*` pushes the produced value into the user's
+    // `password_history` and returns the fresh history snapshot alongside
+    // the value. Returning both in one round-trip spares the view a follow-
+    // up list call after every regenerate (the generator auto-regenerates
+    // on every option change, so this shaves one Task per keystroke).
+
+    /// Generate a password via the SDK. Sync in the SDK; wrapped in
+    /// `async fn` so call sites use the same `Task::perform` path as the
+    /// other two generator methods.
+    pub async fn generate_password(
+        &self,
+        user_id: &UserId,
+        req: PasswordGeneratorRequest,
+    ) -> Result<(String, Vec<PasswordHistoryEntry>), String> {
+        let entry = self
+            .users
+            .read()
+            .unwrap()
+            .get(user_id)
+            .cloned()
+            .ok_or_else(|| format!("unknown user {user_id}"))?;
+        let value = entry
+            .client
+            .generator()
+            .password(req)
+            .map_err(|e| e.to_string())?;
+        Ok((value.clone(), self.push_history(user_id, value)))
+    }
+
+    /// Generate a passphrase via the SDK.
+    pub async fn generate_passphrase(
+        &self,
+        user_id: &UserId,
+        req: PassphraseGeneratorRequest,
+    ) -> Result<(String, Vec<PasswordHistoryEntry>), String> {
+        let entry = self
+            .users
+            .read()
+            .unwrap()
+            .get(user_id)
+            .cloned()
+            .ok_or_else(|| format!("unknown user {user_id}"))?;
+        let value = entry
+            .client
+            .generator()
+            .passphrase(req)
+            .map_err(|e| e.to_string())?;
+        Ok((value.clone(), self.push_history(user_id, value)))
+    }
+
+    /// Generate a username via the SDK. The SDK's `username` is `async`
+    /// because the `Forwarded` variant does HTTP; `Word`/`Subaddress`/
+    /// `Catchall` resolve synchronously inside the future.
+    pub async fn generate_username(
+        &self,
+        user_id: &UserId,
+        req: UsernameGeneratorRequest,
+    ) -> Result<(String, Vec<PasswordHistoryEntry>), String> {
+        let entry = self
+            .users
+            .read()
+            .unwrap()
+            .get(user_id)
+            .cloned()
+            .ok_or_else(|| format!("unknown user {user_id}"))?;
+        let value = entry
+            .client
+            .generator()
+            .username(req)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok((value.clone(), self.push_history(user_id, value)))
+    }
+
+    /// Current history snapshot for the given user. Ordered oldest-first
+    /// by insertion; the view reverses for display.
+    pub fn password_history(&self, user_id: &UserId) -> Vec<PasswordHistoryEntry> {
+        self.password_history
+            .read()
+            .unwrap()
+            .get(user_id)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    /// Drop every history entry for the given user. Called from the
+    /// "Clear history" button in the Generator modal.
+    pub fn clear_password_history(&self, user_id: &UserId) {
+        self.password_history.write().unwrap().remove(user_id);
+    }
+
+    fn push_history(&self, user_id: &UserId, value: String) -> Vec<PasswordHistoryEntry> {
+        let mut store = self.password_history.write().unwrap();
+        let list = store.entry(*user_id).or_default();
+        list.push(PasswordHistoryEntry {
+            value,
+            created: chrono::Utc::now(),
+        });
+        list.clone()
     }
 }
 

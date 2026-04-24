@@ -29,18 +29,29 @@ impl App {
                 self.sidebar.send_tree_open = !self.sidebar.send_tree_open;
                 Task::none()
             }
-            SidebarMessage::SectionSelected(section) => {
-                self.sidebar.active_section = section;
-                match section {
-                    NavSection::Vault => self.switch_to_vault(),
-                    NavSection::Send => self.switch_to_send(),
-                    NavSection::Generator | NavSection::Import | NavSection::Export => {
-                        // Placeholders — no screen switch until those views
-                        // are implemented. Only the highlight changes.
-                        Task::none()
-                    }
+            SidebarMessage::SectionSelected(section) => match section {
+                NavSection::Vault => {
+                    self.sidebar.active_section = section;
+                    self.switch_to_vault()
                 }
-            }
+                NavSection::Send => {
+                    self.sidebar.active_section = section;
+                    self.switch_to_send()
+                }
+                NavSection::Generator => {
+                    // Generator is a modal, not a screen — leave
+                    // `active_section` pointing at the underlying screen
+                    // so the sidebar highlight tracks where the user
+                    // returns when the modal closes.
+                    self.open_generator_modal()
+                }
+                NavSection::Import | NavSection::Export => {
+                    // Placeholders — no screen switch until those views
+                    // are implemented. Only the highlight changes.
+                    self.sidebar.active_section = section;
+                    Task::none()
+                }
+            },
             SidebarMessage::VaultFilterSelected(filter) => {
                 self.sidebar.active_vault_filter = filter;
                 self.sidebar.active_section = NavSection::Vault;
