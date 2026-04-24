@@ -61,9 +61,11 @@ RUST_LOG=bitwarden_desktop_next=debug,bitwarden_core=debug cargo run  # Full SDK
 - `icon.char()` is `pub(crate)` — used by `toast` and `window_chrome` where the codepoint needs to compose with other text styling.
 
 ### Dropdowns
-- Use `components::drop_down::DropDown` with custom alignments: `BelowLeft`, `BelowRight`, `AboveRight`.
-- Always set `.on_dismiss(message)` for click-outside-to-close.
-- Cross-view dismissal lives at the App router (see [docs/architecture.md](docs/architecture.md) → "Router + Cross-View Dismissal"). Sub-views provide `dismiss_dropdowns()` helpers; don't make sub-views aware of each other.
+- Pick the right helper for the job:
+  - **Single-select from a small fixed list** (card brand, deletion preset, access type) → `inputs::select_field` (iced `pick_list`). Handles its own positioning and dismissal. **Default to this** unless you specifically need one of the other two.
+  - **Searchable single-select** (folder, organization) → `inputs::search_select_field` (iced `combo_box`).
+  - **Checkbox panel or other custom trigger/panel content** (collection multi-select) → `inputs::multi_select_field` (our `DropDown`). Only reach for this when `pick_list` genuinely can't render what you need — the custom `DropDown`'s overlay positioning is naive (flips left past the viewport edge if the trigger sits in the right half of the window), so fields inside a right-side pane commonly misposition.
+- If you do use `DropDown` directly: always set `.on_dismiss(message)` for click-outside-to-close, and cross-view dismissal lives at the App router (see [docs/architecture.md](docs/architecture.md) → "Router + Cross-View Dismissal"). Sub-views provide `dismiss_dropdowns()` helpers; don't make sub-views aware of each other.
 
 ### Dead Code
 - Use `#[expect(dead_code)]` (not `#[allow]`) — warns if suppression becomes unnecessary.
@@ -84,6 +86,7 @@ RUST_LOG=bitwarden_desktop_next=debug,bitwarden_core=debug cargo run  # Full SDK
 - `widget::operation::focus(Id)` sets input focus without a message round-trip; it's a `Task`-returning operation.
 - `iced_aw` (0.13) is kept as a dependency with `default-features = false` purely so the source is in the cargo registry cache for reference — we use our own `drop_down.rs` fork at runtime.
 - `AppTheme` is cloned every time iced calls `App::theme(window_id)`. Keep the struct cheap: `name` is `&'static str`, `colors` is `Copy`.
+- **`pane_grid` eats the first click / first keystroke on widgets inside a newly-mounted pane.** `pane_grid::PaneGrid` has a custom `diff` (widget/src/pane_grid.rs:362-392 in the pinned iced rev) that retains children by matching the new `panes` list against a stashed `Memory::order`. On first mount (and on any view() that toggles the grid in/out of the tree), order is empty and every child tree slot is allocated fresh — `text_input::is_focused` resets to `None`, `text_editor`'s focus state is dropped. Result: first click on `text_editor` is ignored; first keystroke on `text_input` types one char then loses focus. Subsequent content swaps inside an already-mounted grid are fine. **Fix: use [`components::collapsible_pane::CollapsiblePane`](crates/desktop/src/components/collapsible_pane.rs).** It mounts pane_grid once from view construction and toggles visibility via the split ratio (0.0–1.0, where 1.0 collapses the right pane to zero width); `min_size(0)` on the builder lets the pane genuinely disappear. Don't roll a fresh `pane_grid::State<T>` per screen unless you're certain the grid never enters/leaves the widget tree. The cipher detail/form flow dodged this accidentally because clicking a row mounts the grid with a read-only detail pane, and Edit later swaps the detail for the form — pane_grid has warmed up by the time fields are on screen.
 
 ## Source Reference Locations
 

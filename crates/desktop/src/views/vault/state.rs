@@ -6,72 +6,22 @@
 use std::{collections::HashMap, sync::Arc};
 
 use bitwarden_vault::{CipherId, CipherListView, CipherView};
-use iced::{Task, widget::pane_grid};
+use iced::Task;
 
-use crate::{app::ViewTypes, components::virtual_list, domain::UserId};
+use crate::{
+    app::ViewTypes,
+    components::{collapsible_pane::CollapsiblePane, virtual_list},
+    domain::UserId,
+    services::sdk::Organization,
+};
 
 use super::{VaultEvent, VaultMessage, widgets::cipher_form::CipherForm};
 
 // ── View-local domain ──────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub(in crate::views::vault) enum SidebarFilter {
-    AllItems,
-    Favorites,
-    Category(bitwarden_vault::CipherType),
-    Archive,
-    Trash,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(in crate::views::vault) enum SidebarMode {
-    Collapsed,
-    Expanded,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(in crate::views::vault) enum NavSection {
-    Vault,
-    Send,
-    Generator,
-    Import,
-    Export,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub(super) enum PaneKind {
-    List,
-    Detail,
-}
-
-// ── Sub-state ──────────────────────────────────────────────────────────────
-//
-// Three cohesive groups extracted from VaultView. Each group is a set of
-// fields that are always read/written together. See docs/decisions.md →
-// "View Architecture: Compositional MVU" for the rationale; this is the
-// same grouping discipline applied one layer down.
-
-/// Sidebar chrome + the filter it controls. Sidebar is the UI that owns
-/// the active filter — the filter lives here, not on VaultView directly.
-pub(in crate::views::vault) struct SidebarState {
-    pub(in crate::views::vault) mode: SidebarMode,
-    pub(in crate::views::vault) active_section: NavSection,
-    pub(in crate::views::vault) active_filter: SidebarFilter,
-    pub(in crate::views::vault) vault_tree_open: bool,
-    pub(in crate::views::vault) send_tree_open: bool,
-}
-
-impl Default for SidebarState {
-    fn default() -> Self {
-        Self {
-            mode: SidebarMode::Expanded,
-            active_section: NavSection::Vault,
-            active_filter: SidebarFilter::AllItems,
-            vault_tree_open: true,
-            send_tree_open: false,
-        }
-    }
-}
+/// Ratio the detail/form pane opens to the first time. `0.6` matches the
+/// old hardcoded split where the list took 60% and the detail 40%.
+const INITIAL_DETAIL_PANE_RATIO: f32 = 0.4;
 
 /// The currently-selected vault item. An item click sets index + id and
 /// triggers an async decrypt that populates `detail`. When `form` is `Some`,
@@ -99,19 +49,24 @@ impl Selection {
 /// Vault item storage. `all` is the full decrypted list from the SDK;
 /// `cached` is `all` with the current filter + search applied. The two
 /// are always kept in sync via `VaultView::recompute_filtered`.
+/// `organizations` is a snapshot of the user's orgs, refreshed alongside
+/// the cipher list so the sidebar can render per-org rows without the SDK.
 #[derive(Default)]
 pub(super) struct ItemCache {
     pub(super) all: Vec<Arc<CipherListView>>,
     pub(super) cached: Vec<Arc<CipherListView>>,
+    pub(super) organizations: Vec<Organization>,
 }
 
 // ── VaultView ──────────────────────────────────────────────────────────────
 
 pub struct VaultView {
     pub(super) search_query: String,
-    pub(super) pane_state: pane_grid::State<PaneKind>,
+    /// Persistent list/detail split. Mounted from construction so iced's
+    /// `pane_grid::diff` never drops the right pane's child tree state
+    /// when a cipher is selected — see `components::collapsible_pane`.
+    pub(super) pane: CollapsiblePane,
 
-    pub(super) sidebar: SidebarState,
     pub(super) selection: Selection,
     // Item storage keyed by user. Decrypted vault data is structurally
     // isolated per-user so it's impossible to accidentally show one user's
@@ -132,21 +87,9 @@ impl ViewTypes for VaultView {
 
 impl VaultView {
     pub fn new() -> Self {
-        // `list_pane` and the returned `detail_pane` are needed only as local
-        // handles during construction (one to split from, one to resize).
-        // `PaneKind::List` / `PaneKind::Detail` discriminants in `pane_state`
-        // are what `view()` matches on at render time — we don't need the
-        // `Pane` handles themselves after this.
-        let (mut pane_state, list_pane) = pane_grid::State::new(PaneKind::List);
-        let (_detail_pane, split_id) = pane_state
-            .split(pane_grid::Axis::Vertical, list_pane, PaneKind::Detail)
-            .expect("splitting a fresh single-pane state always succeeds");
-        pane_state.resize(split_id, 0.4);
-
         Self {
             search_query: String::new(),
-            pane_state,
-            sidebar: SidebarState::default(),
+            pane: CollapsiblePane::new(INITIAL_DETAIL_PANE_RATIO),
             selection: Selection::default(),
             items: HashMap::new(),
             list_scroll: virtual_list::ScrollState::default(),
@@ -154,18 +97,26 @@ impl VaultView {
     }
 
     /// Reset transient view state when switching users. Item caches are
-    /// preserved in the map — keyed by user so they can't mix.
-    pub fn reset(&mut self, uid: &UserId) {
+    /// preserved in the map — keyed by user so they can't mix. Callers are
+    /// expected to reset the sidebar filter separately (it lives on App).
+    pub fn reset(&mut self, uid: &UserId, filter: crate::components::sidebar::VaultFilter) {
         self.search_query.clear();
         self.selection.clear();
-        self.sidebar.active_filter = SidebarFilter::AllItems;
+        self.pane.close();
         self.list_scroll = virtual_list::ScrollState::default();
-        self.recompute_filtered(uid);
+        self.recompute_filtered(uid, filter);
     }
 
     /// Remove a signed-out user's cached vault data.
     pub fn remove_user_items(&mut self, uid: &UserId) {
         self.items.remove(uid);
+    }
+
+    /// Cached organizations for a user, snapshotted whenever the cipher
+    /// list reloads. App reads this to render per-org rows in the shared
+    /// sidebar without needing a separate org-load task.
+    pub fn organizations_for(&self, uid: &UserId) -> Option<&[Organization]> {
+        self.items.get(uid).map(|ic| ic.organizations.as_slice())
     }
 
     /// Clear the search query and return a task that gives the search input

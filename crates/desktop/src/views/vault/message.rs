@@ -30,7 +30,6 @@ use super::widgets::{
     detail_pane::DetailPaneMessage,
     item_list::ItemListMessage,
     search_bar::SearchMessage,
-    sidebar::SidebarMessage,
 };
 
 /// Payload for [`VaultMessage::FormOptionsLoaded`]. Delivered as a single
@@ -44,7 +43,6 @@ pub struct FormOptions {
 
 #[derive(Clone)]
 pub enum VaultMessage {
-    Sidebar(SidebarMessage),
     ItemList(ItemListMessage),
     Search(SearchMessage),
     AccountSwitcher(AccountSwitcherMessage),
@@ -79,7 +77,6 @@ pub enum VaultMessage {
 impl std::fmt::Debug for VaultMessage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Sidebar(m) => f.debug_tuple("Sidebar").field(m).finish(),
             Self::ItemList(m) => f.debug_tuple("ItemList").field(m).finish(),
             Self::Search(m) => f.debug_tuple("Search").field(m).finish(),
             Self::AccountSwitcher(m) => f.debug_tuple("AccountSwitcher").field(m).finish(),

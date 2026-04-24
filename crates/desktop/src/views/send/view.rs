@@ -1,8 +1,9 @@
-//! `VaultView::view` plus `sheet_view` / `modal_view` / view-internal builders.
+//! `SendView::view` + `sheet_view` / `modal_view` — parallel to the vault
+//! view's rendering pattern.
 
 use std::sync::Arc;
 
-use bitwarden_vault::CipherListView;
+use bitwarden_send::SendView as SdkSendView;
 use iced::{
     Alignment, Border, Element, Fill, Length, Padding,
     widget::{Space, column, container, row, text},
@@ -18,42 +19,40 @@ use crate::{
 };
 
 use super::{
-    SHEET_BREAKPOINT_PX, SHEET_TOP_INSET_PX, SHEET_TOP_RADIUS_PX, VaultMessage,
-    state::VaultView,
-    widgets::{
-        cipher_form,
-        detail_pane::{self, DetailPaneMessage},
-        item_list, search_bar,
-    },
+    SHEET_BREAKPOINT_PX, SHEET_TOP_INSET_PX, SHEET_TOP_RADIUS_PX, SendMessage,
+    state::SendView,
+    widgets::{send_form, send_list},
 };
 
-impl VaultView {
+impl SendView {
     pub fn view<'a>(
         &'a self,
         ctx: &crate::app::RenderCtx<'a>,
-    ) -> Element<'a, VaultMessage, AppTheme> {
-        let active_user = ctx.active_user.expect("Screen::Vault without active_user");
-        let user_cache = self.items.get(active_user);
-        let cached_items: &[Arc<CipherListView>] =
-            user_cache.map(|ic| ic.cached.as_slice()).unwrap_or(&[]);
+    ) -> Element<'a, SendMessage, AppTheme> {
+        let active_user = ctx.active_user.expect("Screen::Send without active_user");
+        let cached_items: &[Arc<SdkSendView>] = self
+            .items
+            .get(active_user)
+            .map(|ic| ic.cached.as_slice())
+            .unwrap_or(&[]);
 
-        // Wide: collapsible-pane with the detail/form on the right (kept
-        // mounted so iced's `pane_grid::diff` never drops child state —
-        // see `components::collapsible_pane`).
-        // Narrow: bottom sheet overlay composed at App level via
-        // `sheet_view`, so the grid drops out entirely here.
-        let content_area_inner: Element<'a, VaultMessage, AppTheme> =
+        // Wide: collapsible-pane with the form on the right (kept mounted
+        // so iced's `pane_grid::diff` never drops its child state — see
+        // `components::collapsible_pane` for the details).
+        // Narrow: the form renders as a bottom sheet via `sheet_view`, so
+        // the pane grid drops out entirely here.
+        let content_area_inner: Element<'a, SendMessage, AppTheme> =
             if ctx.window_width >= SHEET_BREAKPOINT_PX {
                 let right = self
                     .selection
-                    .detail
+                    .form
                     .as_ref()
-                    .map(|_| self.detail_or_form_pane(ctx.colors, 0.0));
+                    .map(|_| self.form_pane(ctx.colors, 0.0));
                 collapsible_pane::view(
                     &self.pane,
                     self.list_content(cached_items, ctx),
                     right,
-                    VaultMessage::PaneResized,
+                    SendMessage::PaneResized,
                 )
             } else {
                 self.list_content(cached_items, ctx)
@@ -70,60 +69,53 @@ impl VaultView {
             .into()
     }
 
-    /// In narrow mode (`window_width < SHEET_BREAKPOINT_PX`) with a detail
-    /// selected, returns the bottom-sheet element that the app composes on
-    /// top of the entire window (including sidebar and title bar). Returns
-    /// `None` otherwise.
     pub fn sheet_view<'a>(
         &'a self,
         ctx: &crate::app::RenderCtx<'a>,
-    ) -> Option<Element<'a, VaultMessage, AppTheme>> {
+    ) -> Option<Element<'a, SendMessage, AppTheme>> {
         if ctx.window_width >= SHEET_BREAKPOINT_PX {
             return None;
         }
-        self.selection.detail.as_ref()?;
-        let pane = self.detail_or_form_pane(ctx.colors, SHEET_TOP_RADIUS_PX);
+        self.selection.form.as_ref()?;
+        let pane = self.form_pane(ctx.colors, SHEET_TOP_RADIUS_PX);
         Some(bottom_sheet::view(
             pane,
             SHEET_TOP_INSET_PX,
-            Some(VaultMessage::CloseDetailPane),
+            Some(SendMessage::CloseFormPane),
         ))
     }
 
-    /// Returns the delete-confirmation modal when armed, `None` otherwise.
-    /// Composed by the App on top of the vault view so the backdrop covers
-    /// the sidebar and title bar.
     pub fn modal_view<'a>(
         &'a self,
         ctx: &crate::app::RenderCtx<'a>,
-    ) -> Option<Element<'a, VaultMessage, AppTheme>> {
+    ) -> Option<Element<'a, SendMessage, AppTheme>> {
         if !self.selection.confirm_delete {
             return None;
         }
         let colors = ctx.colors;
         let item_name = self
             .selection
-            .detail
+            .form
             .as_ref()
-            .map(|c| c.name.as_str())
-            .unwrap_or("");
+            .map(|f| f.name().to_owned())
+            .unwrap_or_default();
 
-        let title = text(fl!("vault-delete-modal-title"))
+        let title = text(fl!("send-delete-modal-title"))
             .size(18)
             .color(colors.text_primary)
             .font(crate::APP_FONT_BOLD);
-        let body = text(fl!("vault-delete-modal-body", name = item_name))
+        let body = text(fl!("send-delete-modal-body", name = item_name))
             .size(14)
             .color(colors.text_primary);
 
-        let cancel_btn = buttons::secondary(text(fl!("vault-delete-modal-cancel")).size(14))
-            .on_press(VaultMessage::CancelDeleteSelected)
+        let cancel_btn = buttons::secondary(text(fl!("send-delete-modal-cancel")).size(14))
+            .on_press(SendMessage::CancelDeleteSelected)
             .padding([8, 20]);
-        let confirm_btn = buttons::primary(text(fl!("vault-delete-modal-confirm")).size(14))
-            .on_press(VaultMessage::ConfirmDeleteSelected)
+        let confirm_btn = buttons::primary(text(fl!("send-delete-modal-confirm")).size(14))
+            .on_press(SendMessage::ConfirmDeleteSelected)
             .padding([8, 20]);
 
-        let dialog_inner: Element<'_, VaultMessage, AppTheme> = column![
+        let dialog_inner: Element<'_, SendMessage, AppTheme> = column![
             title,
             body,
             row![Space::new().width(Fill), cancel_btn, confirm_btn]
@@ -143,43 +135,34 @@ impl VaultView {
 
         Some(crate::components::modal::view(
             dialog.into(),
-            VaultMessage::CancelDeleteSelected,
+            SendMessage::CancelDeleteSelected,
         ))
     }
 
-    /// Builds the right-side pane content: either the editable `cipher_form`
-    /// when `selection.form.is_some()`, or the read-only `detail_pane`.
-    fn detail_or_form_pane<'a>(
+    fn form_pane<'a>(
         &'a self,
         colors: &'a AppColors,
         top_radius: f32,
-    ) -> Element<'a, VaultMessage, AppTheme> {
-        if let Some(form) = self.selection.form.as_ref() {
-            cipher_form::view(form, colors, top_radius).map(VaultMessage::CipherForm)
-        } else {
-            let item = self
-                .selection
-                .detail
-                .as_ref()
-                .expect("detail_or_form_pane called without a selection");
-            detail_pane::view(item, colors, top_radius).map(|msg| match msg {
-                DetailPaneMessage::Close => VaultMessage::CloseDetailPane,
-                other => VaultMessage::DetailPane(other),
-            })
-        }
+    ) -> Element<'a, SendMessage, AppTheme> {
+        let form = self
+            .selection
+            .form
+            .as_ref()
+            .expect("form_pane called without a form");
+        send_form::view(form, colors, top_radius).map(SendMessage::SendForm)
     }
 
-    /// Builds the list pane content (header + search + item list).
     fn list_content<'a>(
         &'a self,
-        cached_items: &'a [Arc<CipherListView>],
+        cached_items: &'a [Arc<SdkSendView>],
         ctx: &crate::app::RenderCtx<'a>,
-    ) -> Element<'a, VaultMessage, AppTheme> {
+    ) -> Element<'a, SendMessage, AppTheme> {
         let colors = ctx.colors;
         let active_email = ctx
             .active_email
-            .expect("Screen::Vault without active_email");
-        let title = text(fl!("vault-title"))
+            .expect("Screen::Send without active_email");
+
+        let title = text(fl!("send-title"))
             .size(28)
             .color(colors.text_primary)
             .font(crate::APP_FONT_BOLD);
@@ -187,12 +170,12 @@ impl VaultView {
         let new_button = buttons::primary(
             row![
                 icons::PLUS.render(14.0, colors.card_bg),
-                text(fl!("vault-new-button")).size(14),
+                text(fl!("send-new-button")).size(14),
             ]
             .spacing(6)
             .align_y(Alignment::Center),
         )
-        .on_press(VaultMessage::NewItem)
+        .on_press(SendMessage::NewItem)
         .padding(Padding {
             top: 8.0,
             right: 16.0,
@@ -202,16 +185,16 @@ impl VaultView {
 
         let account_switcher_open = ctx.open_overlay == Some(crate::app::Overlay::AccountSwitcher);
         let avatar_trigger = account_switcher::avatar_trigger(active_email, colors)
-            .map(VaultMessage::AccountSwitcher);
+            .map(SendMessage::AccountSwitcher);
         let dd_panel = account_switcher::dropdown(Some(active_email), ctx.accounts, colors)
-            .map(VaultMessage::AccountSwitcher);
-        let avatar: Element<'a, VaultMessage, AppTheme> =
+            .map(SendMessage::AccountSwitcher);
+        let avatar: Element<'a, SendMessage, AppTheme> =
             crate::components::drop_down::DropDown::new(
                 avatar_trigger,
                 dd_panel,
                 account_switcher_open,
             )
-            .on_dismiss(VaultMessage::AccountSwitcher(
+            .on_dismiss(SendMessage::AccountSwitcher(
                 AccountSwitcherMessage::ToggleDropdown,
             ))
             .alignment(crate::components::drop_down::Alignment::BelowRight)
@@ -227,7 +210,7 @@ impl VaultView {
         .padding([16, 24])
         .width(Fill);
 
-        let search = search_bar::view(&self.search_query).map(VaultMessage::Search);
+        let search = send_list::search_view(&self.search_query).map(SendMessage::Search);
         let search_row = container(search)
             .padding(Padding {
                 top: 0.0,
@@ -237,10 +220,14 @@ impl VaultView {
             })
             .width(Fill);
 
-        let item_list = item_list::view(cached_items, self.selection.item, self.list_scroll, ctx)
-            .map(VaultMessage::ItemList);
+        let list_body: Element<'a, SendMessage, AppTheme> = if cached_items.is_empty() {
+            send_list::empty_state(colors).map(SendMessage::ItemList)
+        } else {
+            send_list::view(cached_items, self.selection.item, self.list_scroll, colors)
+                .map(SendMessage::ItemList)
+        };
 
-        column![content_header, search_row, item_list]
+        column![content_header, search_row, list_body]
             .width(Fill)
             .height(Fill)
             .into()

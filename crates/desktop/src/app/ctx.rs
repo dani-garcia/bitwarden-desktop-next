@@ -28,6 +28,7 @@ use std::sync::Arc;
 use iced::Task;
 
 use crate::{
+    components::sidebar::{SendFilter, VaultFilter},
     domain::UserId,
     services::{
         favicon::FaviconService,
@@ -57,6 +58,13 @@ pub enum Overlay {
 pub struct UpdateCtx<'a> {
     pub client_manager: &'a Arc<ClientManager>,
     pub active_user: Option<&'a UserId>,
+    /// The active vault filter pulled from the App-level sidebar state.
+    /// Views that filter vault ciphers (currently only `VaultView`) need
+    /// this on search-input changes, list reloads, etc.
+    pub active_vault_filter: VaultFilter,
+    /// The active send filter pulled from the App-level sidebar state.
+    /// Same rationale as `active_vault_filter` but for the send list.
+    pub active_send_filter: SendFilter,
     /// The single cell holding the currently-open app-level overlay. Views
     /// toggle their dropdowns by writing `Some(Overlay::X)` / `None` here —
     /// writing a new value automatically closes whatever was open before.

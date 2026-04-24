@@ -34,6 +34,7 @@ use bitwarden_core::{
 };
 use bitwarden_crypto::{EncString, Kdf, UnsignedSharedKey};
 use bitwarden_pm::PasswordManagerClient;
+use bitwarden_send::{SendId, SendView};
 use bitwarden_state::{
     DatabaseConfiguration,
     registry::StateRegistry,
@@ -147,6 +148,13 @@ pub struct ClientManager {
     /// lock before awaiting — holding a read guard across `.await` risks
     /// deadlock with writers and is flagged by clippy.
     users: RwLock<HashMap<UserId, Arc<UserEntry>>>,
+    /// In-memory send store, keyed by user. The SDK would normally encrypt
+    /// and persist these through a `Repository<Send>`, but until the rest
+    /// of the Send flow is wired up the desktop app holds decrypted
+    /// `SendView` values directly — empty on startup, mutated by the
+    /// send view's save/delete handlers. See `docs/todo.md` for the
+    /// follow-up work to replace this with real persistence.
+    sends: RwLock<HashMap<UserId, Vec<SendView>>>,
 }
 
 // Needed so `Message` can derive `Debug` with the `ClientManagerLoaded(Arc<ClientManager>)`
@@ -187,6 +195,7 @@ impl ClientManager {
     pub fn empty() -> Self {
         Self {
             users: RwLock::new(HashMap::new()),
+            sends: RwLock::new(HashMap::new()),
         }
     }
 
@@ -243,6 +252,7 @@ impl ClientManager {
         tracing::info!(users = users.len(), "ClientManager loaded");
         Self {
             users: RwLock::new(users),
+            sends: RwLock::new(HashMap::new()),
         }
     }
 
@@ -336,6 +346,9 @@ impl ClientManager {
         if let Some(entry) = users.remove(uid) {
             entry.client.lock();
         }
+        // Drop the user's in-memory send list too so a fresh login for the
+        // same user starts clean.
+        self.sends.write().unwrap().remove(uid);
     }
 
     /// Initialize the SDK crypto state for the given user with their master password.
@@ -599,6 +612,91 @@ impl ClientManager {
             .get(user_id)
             .map(|e| e.collections.clone())
             .unwrap_or_default()
+    }
+
+    // ── Send stubs ────────────────────────────────────────────────────────
+    //
+    // Stubbed storage: everything lives in `self.sends` keyed by user. No
+    // SDK encrypt/decrypt roundtrip yet; the view's `SendView` is stored as
+    // is. When the SDK send flow lands, swap these method bodies for the
+    // real client calls (the signatures are already a superset of what the
+    // real flow needs).
+
+    /// Return the user's full list of sends. Async so the call site can
+    /// `Task::perform` the same way it does for ciphers — swapping in a
+    /// real decrypt step later won't ripple.
+    pub async fn list_sends(&self, user_id: &UserId) -> Result<Vec<SendView>, String> {
+        let mut list = self
+            .sends
+            .read()
+            .unwrap()
+            .get(user_id)
+            .cloned()
+            .unwrap_or_default();
+        list.sort_by(|a, b| a.name.cmp(&b.name));
+        Ok(list)
+    }
+
+    /// Look up a single send by id. Used when the user picks a row — we
+    /// always open directly into the edit form, so this returns the full
+    /// `SendView` (it already is the full view for the in-memory stub).
+    pub async fn full_send(
+        &self,
+        user_id: &UserId,
+        send_id: SendId,
+    ) -> Result<SendView, String> {
+        self.sends
+            .read()
+            .unwrap()
+            .get(user_id)
+            .and_then(|sends| sends.iter().find(|s| s.id == Some(send_id)).cloned())
+            .ok_or_else(|| format!("send {send_id} not found"))
+    }
+
+    /// Insert or replace a send for the given user. New sends (no id) get
+    /// an id + access_id generated locally so the UI can render the link
+    /// placeholder. Returns the stored view so callers can rebind their
+    /// selection to the persisted value.
+    pub async fn save_send(
+        &self,
+        user_id: &UserId,
+        mut view: SendView,
+    ) -> Result<SendView, String> {
+        if view.id.is_none() {
+            view.id = Some(SendId::new_v4());
+        }
+        if view.access_id.is_none() {
+            // Placeholder access id until the SDK generates a real one on
+            // create. The view constructs the external URL from this.
+            view.access_id = Some(
+                uuid::Uuid::new_v4()
+                    .simple()
+                    .to_string()
+                    .chars()
+                    .take(16)
+                    .collect(),
+            );
+        }
+
+        let id = view.id.expect("id generated above");
+        let mut sends = self.sends.write().unwrap();
+        let entry = sends.entry(*user_id).or_default();
+        if let Some(slot) = entry.iter_mut().find(|s| s.id == Some(id)) {
+            *slot = view.clone();
+        } else {
+            entry.push(view.clone());
+        }
+        Ok(view)
+    }
+
+    /// Delete a send. In-memory stub; the real SDK flow would call
+    /// `SendsClient::delete` and drop the server copy.
+    pub async fn delete_send(&self, user_id: &UserId, send_id: SendId) -> Result<(), String> {
+        let mut sends = self.sends.write().unwrap();
+        if let Some(entry) = sends.get_mut(user_id) {
+            entry.retain(|s| s.id != Some(send_id));
+        }
+        Ok(())
     }
 }
 

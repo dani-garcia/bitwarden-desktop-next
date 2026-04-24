@@ -108,6 +108,15 @@ Standard cut / copy / paste / select-all on `TextInput` fields and the notes `Te
 - **Indented tree hierarchy** — Vault > All vaults > My vault, with visual indent.
 - **Expand/collapse animation** — needs `Subscription` tick + interpolated width, or the self-animating widget pattern extended to container layout.
 
+### Send — wire to real SDK + supporting flows
+
+Sends currently live as decrypted `SendView`s in an in-memory `HashMap` on [`ClientManager`](../crates/desktop/src/services/sdk/mod.rs) (see `list_sends` / `full_send` / `save_send` / `delete_send`). Empty at startup; mutations never leave the process.
+
+- **SDK repository swap.** Replace the in-memory map with the SDK's `Repository<Send>` + `SendClient::{encrypt, decrypt, decrypt_list}`. The method signatures on `ClientManager` are already async + fallible so call sites don't need to change. Remove the `uuid::Uuid::new_v4()` id fabrication in `save_send` once the SDK assigns the id; the placeholder `access_id` built there should come from `CreateSendResponse` instead.
+- **Password regenerate button.** The refresh icon on the send form's password field currently calls a local 14-char alphanumeric generator (`SendForm::regenerate_password` in [widgets/send_form/state.rs](../crates/desktop/src/views/send/widgets/send_form/state.rs)). Swap for the real `bitwarden-generators` call once that crate is wired up for the Generator tab — same user-facing generator options should be shared.
+- **File Send creation.** The "Choose file" button in the new-file-send branch of the form ([widgets/send_form/view.rs](../crates/desktop/src/views/send/widgets/send_form/view.rs) `file_section`) is a placeholder — message fires, handler is a no-op. Needs an OS file picker (dialog crate or iced's native picker once it lands) to populate `file_name` + `file_size_name`, plus the `SendClient::encrypt_file` / `encrypt_buffer` wiring.
+- **Real send link.** `SendForm::send_link` in [state.rs](../crates/desktop/src/views/send/widgets/send_form/state.rs) builds a stub URL (`http://vault.bitwarden.test/#/send/{access_id}`). Once the SDK's create path returns a real `access_id` + key fragment the formatting rule moves to using the user's configured `server_url` and the actual URL shape.
+
 ### SVG logo antialiasing
 
 Iced's `resvg` rasterizer doesn't match browser quality. Consider a pre-rasterized PNG with 2× / 3× variants, or wait for resvg improvements upstream.

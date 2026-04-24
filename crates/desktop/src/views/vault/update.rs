@@ -15,7 +15,9 @@ use iced::Task;
 
 use crate::{
     app::{Outcome, UpdateCtx},
-    components::{account_switcher::AccountSwitcherMessage, toast::Toast},
+    components::{
+        account_switcher::AccountSwitcherMessage, sidebar::VaultFilter, toast::Toast,
+    },
     domain::UserId,
     fl,
     services::{clipboard::Sensitivity, sdk::ClientManager},
@@ -24,13 +26,12 @@ use crate::{
 use super::{
     VaultEvent, VaultMessage,
     message::FormOptions,
-    state::{SidebarFilter, SidebarMode, VaultView},
+    state::VaultView,
     widgets::{
         cipher_form::{CipherForm, FolderOption, FormAction},
         detail_pane::{self, DetailPaneMessage},
         item_list::ItemListMessage,
         search_bar::SearchMessage,
-        sidebar::SidebarMessage,
     },
 };
 
@@ -67,21 +68,25 @@ impl VaultView {
         let UpdateCtx {
             client_manager,
             active_user,
+            active_vault_filter,
             open_overlay,
+            ..
         } = ctx;
         match msg {
-            VaultMessage::Sidebar(m) => return self.handle_sidebar(m, active_user),
             VaultMessage::ItemList(m) => {
                 return self.handle_item_list(m, client_manager, active_user);
             }
             VaultMessage::Search(SearchMessage::QueryChanged(query)) => {
                 self.search_query = query;
                 if let Some(uid) = active_user {
-                    self.recompute_filtered(uid);
+                    self.recompute_filtered(uid, active_vault_filter);
                 }
             }
-            VaultMessage::CloseDetailPane => self.selection.clear(),
-            VaultMessage::PaneResized(event) => self.pane_state.resize(event.split, event.ratio),
+            VaultMessage::CloseDetailPane => {
+                self.selection.clear();
+                self.pane.close();
+            }
+            VaultMessage::PaneResized(event) => self.pane.set_ratio(event.ratio),
             VaultMessage::DetailPane(m) => {
                 return self.handle_detail_pane(m, client_manager, active_user);
             }
@@ -106,7 +111,13 @@ impl VaultView {
             }
             VaultMessage::NewItem => {}
             VaultMessage::ListLoaded(uid, res) => {
-                return self.handle_list_loaded(uid, res, active_user);
+                return self.handle_list_loaded(
+                    uid,
+                    res,
+                    client_manager,
+                    active_user,
+                    active_vault_filter,
+                );
             }
             VaultMessage::DetailLoaded(uid, id, res) => {
                 return self.handle_detail_loaded(uid, id, res, active_user);
@@ -139,36 +150,13 @@ impl VaultView {
 // ── Per-variant handlers ───────────────────────────────────────────────────
 
 impl VaultView {
-    fn handle_sidebar(
-        &mut self,
-        msg: SidebarMessage,
-        active_user: Option<&UserId>,
-    ) -> Outcome<Self> {
-        match msg {
-            SidebarMessage::FilterSelected(filter) => {
-                self.sidebar.active_filter = filter;
-                self.selection.clear();
-                if let Some(uid) = active_user {
-                    self.recompute_filtered(uid);
-                }
-            }
-            SidebarMessage::ToggleSidebarMode => {
-                self.sidebar.mode = match self.sidebar.mode {
-                    SidebarMode::Collapsed => SidebarMode::Expanded,
-                    SidebarMode::Expanded => SidebarMode::Collapsed,
-                };
-            }
-            SidebarMessage::SectionSelected(section) => {
-                self.sidebar.active_section = section;
-            }
-            SidebarMessage::ToggleVaultTree => {
-                self.sidebar.vault_tree_open = !self.sidebar.vault_tree_open;
-            }
-            SidebarMessage::ToggleSendTree => {
-                self.sidebar.send_tree_open = !self.sidebar.send_tree_open;
-            }
-        }
-        Outcome::None
+    /// Called by App when the active vault filter changes. Clears the
+    /// current selection (what's selected may no longer be in the list) and
+    /// recomputes the cached list for the active user.
+    pub fn apply_filter(&mut self, uid: &UserId, filter: VaultFilter) {
+        self.selection.clear();
+        self.pane.close();
+        self.recompute_filtered(uid, filter);
     }
 
     fn handle_item_list(
@@ -427,6 +415,7 @@ impl VaultView {
         let event = match result {
             Ok(()) => {
                 self.selection.clear();
+                self.pane.close();
                 VaultEvent::ItemDeleted { uid: msg_uid }
             }
             Err(err) => {
@@ -463,18 +452,22 @@ impl VaultView {
         &mut self,
         msg_uid: UserId,
         result: Result<Vec<Arc<CipherListView>>, String>,
+        client_manager: &Arc<ClientManager>,
         active_user: Option<&UserId>,
+        active_filter: VaultFilter,
     ) -> Outcome<Self> {
         match result {
             Ok(items) => {
                 tracing::info!(uid = %msg_uid, count = items.len(), "vault list loaded");
+                let organizations = client_manager.list_organizations(&msg_uid);
                 let cache = self.items.entry(msg_uid).or_default();
                 cache.all = items;
+                cache.organizations = organizations;
                 // Only recompute the filtered view if this is the active user
                 // — search_query / active_filter are view-global state that
                 // may not match a background user's context.
                 if active_user == Some(&msg_uid) {
-                    self.recompute_filtered(&msg_uid);
+                    self.recompute_filtered(&msg_uid, active_filter);
                 }
             }
             Err(err) => {
@@ -507,6 +500,7 @@ impl VaultView {
                 // drop the stale detail.
                 if self.selection.id == view.id {
                     self.selection.detail = Some(*view);
+                    self.pane.open();
                 } else {
                     tracing::debug!(
                         cipher_id = %id,
@@ -530,12 +524,11 @@ impl VaultView {
 
 impl VaultView {
     /// Recompute the filtered item list for a specific user. Uses the
-    /// view-global `search_query` and `sidebar.active_filter` to derive
-    /// `cached` from `all`. Also reconciles the selection index against
-    /// the new filtered list.
-    pub(super) fn recompute_filtered(&mut self, uid: &UserId) {
+    /// view-global `search_query` plus the app-level active vault filter
+    /// to derive `cached` from `all`. Also reconciles the selection index
+    /// against the new filtered list.
+    pub(super) fn recompute_filtered(&mut self, uid: &UserId, filter: VaultFilter) {
         let query = self.search_query.to_lowercase();
-        let filter = self.sidebar.active_filter;
 
         if let Some(cache) = self.items.get_mut(uid) {
             cache.cached = filter_items(&cache.all, filter, &query);
@@ -558,15 +551,17 @@ impl VaultView {
 
 fn filter_items(
     all: &[Arc<CipherListView>],
-    filter: SidebarFilter,
+    filter: VaultFilter,
     query: &str,
 ) -> Vec<Arc<CipherListView>> {
     let items = all.iter().filter(|item| match filter {
-        SidebarFilter::AllItems => true,
-        SidebarFilter::Favorites => item.favorite,
-        SidebarFilter::Category(cat) => cat == cipher_list_view_type_to_type(&item.r#type),
-        SidebarFilter::Archive => item.archived_date.is_some(),
-        SidebarFilter::Trash => item.deleted_date.is_some(),
+        VaultFilter::AllItems => true,
+        VaultFilter::Personal => item.organization_id.is_none(),
+        VaultFilter::Organization(org_id) => item.organization_id == Some(org_id),
+        VaultFilter::Favorites => item.favorite,
+        VaultFilter::Category(cat) => cat == cipher_list_view_type_to_type(&item.r#type),
+        VaultFilter::Archive => item.archived_date.is_some(),
+        VaultFilter::Trash => item.deleted_date.is_some(),
     });
 
     if query.is_empty() {

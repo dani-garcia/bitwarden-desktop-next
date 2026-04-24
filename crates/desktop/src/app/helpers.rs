@@ -1,7 +1,10 @@
 use iced::Task;
 
 use crate::{
-    components::account_switcher::AccountSwitcherEvent,
+    components::{
+        account_switcher::AccountSwitcherEvent,
+        sidebar::{NavSection, SidebarMessage, SidebarMode},
+    },
     domain::{Screen, UserId},
     services::{menu::MenuAction, sdk::AccountEntry},
 };
@@ -84,7 +87,16 @@ impl App {
     /// vault list.
     pub(crate) fn handle_user_switch(&mut self, uid: UserId) -> Task<Message> {
         self.active_user = Some(uid);
-        self.views.vault.reset(&uid);
+        // Reset the sidebar filters on user switch — "AllItems" is the most
+        // neutral entry point for a freshly-active user.
+        self.sidebar.active_vault_filter =
+            crate::components::sidebar::VaultFilter::AllItems;
+        self.sidebar.active_send_filter =
+            crate::components::sidebar::SendFilter::AllItems;
+        self.views
+            .vault
+            .reset(&uid, self.sidebar.active_vault_filter);
+        self.views.send.reset(&uid, self.sidebar.active_send_filter);
         // Re-apply the new user's clipboard clear delay so the app-global
         // clipboard manager matches their preference.
         let delay = self.settings.preferences_for(&uid).clear_clipboard;
@@ -98,7 +110,7 @@ impl App {
             Task::none()
         } else {
             self.set_screen(Screen::Vault);
-            self.load_vault_list_task(uid)
+            Task::batch([self.load_vault_list_task(uid), self.load_send_list_task(uid)])
         }
     }
 
@@ -108,6 +120,97 @@ impl App {
     pub(crate) fn load_vault_list_task(&self, uid: UserId) -> Task<Message> {
         crate::views::vault::VaultView::load_list_task(uid, &self.client_manager)
             .map(Message::vault)
+    }
+
+    /// Mirror of `load_vault_list_task` for the Send screen.
+    pub(crate) fn load_send_list_task(&self, uid: UserId) -> Task<Message> {
+        crate::views::send::SendView::load_list_task(uid, &self.client_manager)
+            .map(Message::send)
+    }
+
+    /// Handle a sidebar message at the App level. Section clicks may
+    /// transition between `Screen::Vault` and `Screen::Send`; filter
+    /// changes are stored on `self.sidebar` and pushed down to the
+    /// affected view via its `apply_filter` method.
+    pub(crate) fn handle_sidebar_message(&mut self, msg: SidebarMessage) -> Task<Message> {
+        match msg {
+            SidebarMessage::ToggleSidebarMode => {
+                self.sidebar.mode = match self.sidebar.mode {
+                    SidebarMode::Collapsed => SidebarMode::Expanded,
+                    SidebarMode::Expanded => SidebarMode::Collapsed,
+                };
+                Task::none()
+            }
+            SidebarMessage::ToggleVaultTree => {
+                self.sidebar.vault_tree_open = !self.sidebar.vault_tree_open;
+                Task::none()
+            }
+            SidebarMessage::ToggleSendTree => {
+                self.sidebar.send_tree_open = !self.sidebar.send_tree_open;
+                Task::none()
+            }
+            SidebarMessage::SectionSelected(section) => {
+                self.sidebar.active_section = section;
+                match section {
+                    NavSection::Vault => self.switch_to_vault(),
+                    NavSection::Send => self.switch_to_send(),
+                    NavSection::Generator | NavSection::Import | NavSection::Export => {
+                        // Placeholders — no screen switch until those views
+                        // are implemented. Only the highlight changes.
+                        Task::none()
+                    }
+                }
+            }
+            SidebarMessage::VaultFilterSelected(filter) => {
+                self.sidebar.active_vault_filter = filter;
+                self.sidebar.active_section = NavSection::Vault;
+                if let Some(uid) = self.active_user {
+                    self.views.vault.apply_filter(&uid, filter);
+                }
+                self.switch_to_vault()
+            }
+            SidebarMessage::SendFilterSelected(filter) => {
+                self.sidebar.active_send_filter = filter;
+                self.sidebar.active_section = NavSection::Send;
+                if let Some(uid) = self.active_user {
+                    self.views.send.apply_filter(&uid, filter);
+                }
+                self.switch_to_send()
+            }
+        }
+    }
+
+    /// Transition to the Vault screen. No-op when already there; otherwise
+    /// refresh the cipher list so it reflects any changes that happened
+    /// while the user was on a different screen.
+    fn switch_to_vault(&mut self) -> Task<Message> {
+        if self.screen == Screen::Vault {
+            return Task::none();
+        }
+        // Only switch while authenticated — clicking the sidebar while on
+        // Login shouldn't flip the screen underneath the login flow.
+        if !matches!(self.screen, Screen::Vault | Screen::Send) {
+            return Task::none();
+        }
+        self.set_screen(Screen::Vault);
+        match self.active_user {
+            Some(uid) => self.load_vault_list_task(uid),
+            None => Task::none(),
+        }
+    }
+
+    fn switch_to_send(&mut self) -> Task<Message> {
+        if self.screen == Screen::Send {
+            return Task::none();
+        }
+        if !matches!(self.screen, Screen::Vault | Screen::Send) {
+            return Task::none();
+        }
+        self.set_screen(Screen::Send);
+        match self.active_user {
+            Some(uid) => self.load_send_list_task(uid),
+            None => Task::none(),
+        }
     }
 
     pub(crate) fn menu_state(&self) -> crate::services::menu::MenuState {

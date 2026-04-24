@@ -66,6 +66,7 @@ bitwarden-core = { workspace = true }
 bitwarden-crypto = { workspace = true }
 bitwarden-logging = { workspace = true }
 bitwarden-pm = { workspace = true }
+bitwarden-send = { workspace = true }
 bitwarden-state = { workspace = true }
 bitwarden-vault = { workspace = true }
 

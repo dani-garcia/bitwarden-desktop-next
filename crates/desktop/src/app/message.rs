@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
 use crate::{
+    components::sidebar::SidebarMessage,
     services::{favicon::FaviconMessage, sdk::ClientManager},
     views::{
-        about::AboutMessage, login::LoginMessage, settings::SettingsMessage,
+        about::AboutMessage, login::LoginMessage, send::SendMessage, settings::SettingsMessage,
         title_bar::TitleBarMessage, vault::VaultMessage,
     },
 };
@@ -24,6 +25,10 @@ pub enum Message {
     About(AboutMessage),
     Window(WindowMessage),
     System(SystemMessage),
+    /// Sidebar chrome — collapse/expand, section/filter selection. Handled
+    /// at the App level because the sidebar persists across authenticated
+    /// screens.
+    Sidebar(SidebarMessage),
     /// Favicon service progress — one per completed fetch. Arrival alone
     /// triggers the redraw; the handler only logs.
     Favicon(FaviconMessage),
@@ -37,6 +42,7 @@ pub enum Message {
 pub enum ViewMessage {
     Login(LoginMessage),
     Vault(VaultMessage),
+    Send(SendMessage),
     TitleBar(TitleBarMessage),
     Settings(SettingsMessage),
 }
@@ -51,6 +57,10 @@ impl Message {
 
     pub fn vault(m: VaultMessage) -> Self {
         Self::View(ViewMessage::Vault(m))
+    }
+
+    pub fn send(m: SendMessage) -> Self {
+        Self::View(ViewMessage::Send(m))
     }
 
     pub fn title_bar(m: TitleBarMessage) -> Self {

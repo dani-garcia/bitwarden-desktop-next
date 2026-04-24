@@ -50,6 +50,7 @@ impl App {
     pub(crate) fn handle_log_out(&mut self) -> Task<Message> {
         if let Some(uid) = self.active_user {
             self.views.vault.remove_user_items(&uid);
+            self.views.send.remove_user_items(&uid);
             self.favicon.evict_user(&uid);
             self.client_manager.log_out(&uid);
         }

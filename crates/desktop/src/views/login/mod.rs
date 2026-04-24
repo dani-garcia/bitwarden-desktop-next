@@ -207,6 +207,7 @@ impl LoginView {
             client_manager,
             active_user,
             open_overlay,
+            ..
         } = ctx;
         match msg {
             // ── Unlock: master password ────────────────────────────────────

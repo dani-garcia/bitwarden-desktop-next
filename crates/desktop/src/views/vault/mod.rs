@@ -7,9 +7,6 @@ mod widgets;
 
 pub use message::{VaultEvent, VaultMessage};
 pub use state::VaultView;
-// Re-export for the `widgets/` submodule — these types stay private to the
-// vault subtree but widgets need them reachable at the vault module path.
-pub(in crate::views::vault) use state::{NavSection, SidebarFilter, SidebarMode, SidebarState};
 
 /// Below this window width (logical px) the detail pane renders as a
 /// bottom sheet instead of a side-by-side `pane_grid` split.

@@ -1,10 +1,12 @@
 pub(crate) mod account_switcher;
 pub(crate) mod bottom_sheet;
 pub(crate) mod buttons;
+pub(crate) mod collapsible_pane;
 pub(crate) mod drop_down;
 pub(crate) mod icons;
 pub(crate) mod inputs;
 pub(crate) mod modal;
+pub(crate) mod sidebar;
 pub(crate) mod spinner;
 pub(crate) mod toast;
 pub(crate) mod totp;

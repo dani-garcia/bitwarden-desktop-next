@@ -13,7 +13,10 @@ use std::{collections::HashMap, rc::Rc, sync::Arc};
 use iced::{Element, Subscription, Task};
 
 use crate::{
-    components::toast::{self, Toast},
+    components::{
+        sidebar::{self, SidebarState},
+        toast::{self, Toast},
+    },
     domain::{Screen, UserId},
     services::{
         clipboard::ClipboardManager,
@@ -23,7 +26,7 @@ use crate::{
     },
     theme::{AppTheme, ThemePreference},
     views::{
-        login, settings as settings_view,
+        login, send, settings as settings_view,
         title_bar::{self, TitleBarMessage},
         vault,
     },
@@ -51,6 +54,10 @@ pub struct App {
 
     // ── Window chrome ─────────────────────────────────────────────────────
     pub(super) screen: Screen,
+    /// App-level sidebar state. Persists across screen transitions so the
+    /// user's collapse / filter selection isn't reset when navigating
+    /// between Vault and Send.
+    pub(super) sidebar: SidebarState,
     pub(super) theme: ThemeState,
     pub(super) windows: HashMap<iced::window::Id, WindowInfo>,
     /// Cached id of the main window — always present from `App::new` until
@@ -100,6 +107,7 @@ pub(super) struct ViewCache {
 pub struct Views {
     pub(super) login: login::LoginView,
     pub(super) vault: vault::VaultView,
+    pub(super) send: send::SendView,
     pub(super) settings: settings_view::SettingsView,
     pub(super) title_bar: title_bar::TitleBarView,
 }
@@ -109,6 +117,7 @@ impl Views {
         Self {
             login: login::LoginView::new(),
             vault: vault::VaultView::new(),
+            send: send::SendView::new(),
             settings: settings_view::SettingsView::new(),
             title_bar: title_bar::TitleBarView::new(),
         }
@@ -222,6 +231,7 @@ impl App {
         let app = Self {
             active_user: None,
             screen: Screen::Loading,
+            sidebar: SidebarState::default(),
             views: Views::new(),
             client_manager: Arc::new(ClientManager::empty()),
             favicon,
@@ -323,6 +333,7 @@ impl App {
             Message::About(m) => self.handle_about_message(m),
             Message::Window(m) => self.handle_window_message(m),
             Message::System(m) => self.handle_system_message(m),
+            Message::Sidebar(m) => self.handle_sidebar_message(m),
             Message::Favicon(crate::services::favicon::FaviconMessage::IconResolved {
                 uid,
                 hostname,
@@ -338,9 +349,13 @@ impl App {
                 // One `UpdateCtx` shared across every view dispatch; its
                 // `&mut self.open_overlay` borrow only needs to coexist with
                 // the disjoint `&mut self.views.*` borrow below.
+                let active_vault_filter = self.sidebar.active_vault_filter;
+                let active_send_filter = self.sidebar.active_send_filter;
                 let uctx = UpdateCtx {
                     client_manager: &self.client_manager,
                     active_user: self.active_user.as_ref(),
+                    active_vault_filter,
+                    active_send_filter,
                     open_overlay: &mut self.open_overlay,
                 };
                 match view_msg {
@@ -354,6 +369,11 @@ impl App {
                         .vault
                         .update(m, uctx)
                         .dispatch(Message::vault, |e| self.handle_vault_event(e)),
+                    ViewMessage::Send(m) => self
+                        .views
+                        .send
+                        .update(m, uctx)
+                        .dispatch(Message::send, |e| self.handle_send_event(e)),
                     ViewMessage::TitleBar(m) => self
                         .views
                         .title_bar
@@ -417,36 +437,80 @@ impl App {
             open_overlay: self.open_overlay,
         };
 
-        let page: Element<'_, Message, AppTheme> = match self.screen {
+        // Inner content for authenticated screens. Vault / Send return just
+        // the "right-hand" content area — the sidebar is composed below so
+        // it persists across screen switches without each view re-rendering
+        // it.
+        let inner: Element<'_, Message, AppTheme> = match self.screen {
             Screen::Loading => {
                 iced::widget::center(crate::components::spinner::spinner(48.0, colors.accent))
                     .into()
             }
             Screen::Login => self.views.login.view(server, &rctx).map(Message::login),
             Screen::Vault => self.views.vault.view(&rctx).map(Message::vault),
+            Screen::Send => self.views.send.view(&rctx).map(Message::send),
+        };
+
+        let page: Element<'_, Message, AppTheme> = if matches!(
+            self.screen,
+            Screen::Vault | Screen::Send
+        ) {
+            let organizations: &[crate::services::sdk::Organization] = self
+                .active_user
+                .as_ref()
+                .and_then(|uid| self.views.vault.organizations_for(uid))
+                .unwrap_or(&[]);
+            let sidebar_el = sidebar::view(&self.sidebar, organizations, colors)
+                .map(Message::Sidebar);
+            let main_row = iced::widget::container(
+                iced::widget::row![sidebar_el, inner].height(iced::Fill),
+            )
+            .width(iced::Fill)
+            .height(iced::Fill)
+            .style(|theme: &AppTheme| {
+                iced::widget::container::Style::default().background(theme.colors.header_bg)
+            });
+            iced::widget::container(main_row)
+                .width(iced::Fill)
+                .height(iced::Fill)
+                .style(|theme: &AppTheme| {
+                    iced::widget::container::Style::default().background(theme.colors.background)
+                })
+                .into()
+        } else {
+            inner
         };
 
         let close_toast = |idx| Message::System(SystemMessage::CloseToast(idx));
 
-        // Bottom-sheet overlay for the narrow vault layout. Hoisted to the
-        // app level so it covers the sidebar AND the title bar.
-        let sheet: Option<Element<'_, Message, AppTheme>> = if self.screen == Screen::Vault {
-            self.views
+        // Bottom-sheet overlay — lives above the sidebar and title bar.
+        let sheet: Option<Element<'_, Message, AppTheme>> = match self.screen {
+            Screen::Vault => self
+                .views
                 .vault
                 .sheet_view(&rctx)
-                .map(|el| el.map(Message::vault))
-        } else {
-            None
+                .map(|el| el.map(Message::vault)),
+            Screen::Send => self
+                .views
+                .send
+                .sheet_view(&rctx)
+                .map(|el| el.map(Message::send)),
+            _ => None,
         };
 
-        // Delete-confirmation modal — same hoisting rule as the sheet.
-        let modal: Option<Element<'_, Message, AppTheme>> = if self.screen == Screen::Vault {
-            self.views
+        // Delete-confirmation modal.
+        let modal: Option<Element<'_, Message, AppTheme>> = match self.screen {
+            Screen::Vault => self
+                .views
                 .vault
                 .modal_view(&rctx)
-                .map(|el| el.map(Message::vault))
-        } else {
-            None
+                .map(|el| el.map(Message::vault)),
+            Screen::Send => self
+                .views
+                .send
+                .modal_view(&rctx)
+                .map(|el| el.map(Message::send)),
+            _ => None,
         };
 
         // Settings modal — composed above the vault modal so it sits on top

@@ -13,6 +13,7 @@ pub enum Screen {
     Loading,
     Login,
     Vault,
+    Send,
 }
 
 /// The unlock method the login view is currently presenting.
