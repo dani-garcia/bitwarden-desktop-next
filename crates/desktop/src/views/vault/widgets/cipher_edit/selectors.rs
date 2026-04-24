@@ -19,14 +19,14 @@ use crate::{
 };
 
 use super::{
-    message::CipherFormMessage,
+    message::CipherEditMessage,
     state::{CipherForm, CollectionOption, FolderChoice, OrgChoice},
 };
 
 pub(super) fn folder_selector<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
-) -> Element<'a, CipherFormMessage, AppTheme> {
+) -> Element<'a, CipherEditMessage, AppTheme> {
     let selected = match form.modified.folder_id {
         None => FolderChoice::None,
         Some(id) => form
@@ -44,8 +44,8 @@ pub(super) fn folder_selector<'a>(
         fl!("form-folder"),
         placeholder,
         Some(selected),
-        |choice: FolderChoice| CipherFormMessage::FolderSelected(choice.id()),
-        CipherFormMessage::FolderComboClosed,
+        |choice: FolderChoice| CipherEditMessage::FolderSelected(choice.id()),
+        CipherEditMessage::FolderComboClosed,
         colors,
     )
 }
@@ -53,7 +53,7 @@ pub(super) fn folder_selector<'a>(
 pub(super) fn org_selector<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
-) -> Element<'a, CipherFormMessage, AppTheme> {
+) -> Element<'a, CipherEditMessage, AppTheme> {
     let selected = match form.modified.organization_id {
         None => OrgChoice::None,
         Some(id) => form
@@ -71,8 +71,8 @@ pub(super) fn org_selector<'a>(
         fl!("form-organization"),
         placeholder,
         Some(selected),
-        |choice: OrgChoice| CipherFormMessage::OrgSelected(choice.id()),
-        CipherFormMessage::OrgComboClosed,
+        |choice: OrgChoice| CipherEditMessage::OrgSelected(choice.id()),
+        CipherEditMessage::OrgComboClosed,
         colors,
     )
 }
@@ -80,7 +80,7 @@ pub(super) fn org_selector<'a>(
 pub(super) fn collections_selector<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
-) -> Element<'a, CipherFormMessage, AppTheme> {
+) -> Element<'a, CipherEditMessage, AppTheme> {
     let org_id = form.modified.organization_id;
     let scoped: Vec<&CollectionOption> = form
         .collections
@@ -96,11 +96,11 @@ pub(super) fn collections_selector<'a>(
     };
 
     let trigger = bordered_dropdown_trigger(&summary, colors, || {
-        CipherFormMessage::CollectionsDropdownToggled
+        CipherEditMessage::CollectionsDropdownToggled
     });
 
     // Checkbox list panel
-    let mut options: Vec<Element<'a, CipherFormMessage, AppTheme>> = Vec::new();
+    let mut options: Vec<Element<'a, CipherEditMessage, AppTheme>> = Vec::new();
     if scoped.is_empty() {
         options.push(
             container(
@@ -128,7 +128,7 @@ pub(super) fn collections_selector<'a>(
                     colors.item_hover,
                     0.0,
                 )
-                .on_press(CipherFormMessage::CollectionToggled(cid))
+                .on_press(CipherEditMessage::CollectionToggled(cid))
                 .padding([6, 12])
                 .width(Fill)
                 .into(),
@@ -136,7 +136,7 @@ pub(super) fn collections_selector<'a>(
         }
     }
 
-    let panel: Element<'a, CipherFormMessage, AppTheme> = container(column(options).spacing(0))
+    let panel: Element<'a, CipherEditMessage, AppTheme> = container(column(options).spacing(0))
         .width(Fill)
         .padding([4, 0])
         .style(|theme: &AppTheme| {
@@ -156,7 +156,7 @@ pub(super) fn collections_selector<'a>(
         trigger,
         panel,
         form.collections_dropdown_open,
-        CipherFormMessage::CollectionsDropdownToggled,
+        CipherEditMessage::CollectionsDropdownToggled,
         colors,
     )
 }

@@ -1,2 +1,2 @@
-pub mod send_form;
+pub mod send_edit;
 pub mod send_list;

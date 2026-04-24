@@ -15,7 +15,7 @@ use crate::{
 };
 
 use super::widgets::{
-    send_form::SendFormMessage,
+    send_edit::SendEditMessage,
     send_list::{SearchMessage, SendListMessage},
 };
 
@@ -24,7 +24,7 @@ pub enum SendMessage {
     ItemList(SendListMessage),
     Search(SearchMessage),
     AccountSwitcher(AccountSwitcherMessage),
-    SendForm(SendFormMessage),
+    SendEdit(SendEditMessage),
     CloseFormPane,
     PaneResized(pane_grid::ResizeEvent),
     /// The "+ New" button on the header. Creates a fresh form whose type
@@ -50,7 +50,7 @@ impl std::fmt::Debug for SendMessage {
             Self::ItemList(m) => f.debug_tuple("ItemList").field(m).finish(),
             Self::Search(m) => f.debug_tuple("Search").field(m).finish(),
             Self::AccountSwitcher(m) => f.debug_tuple("AccountSwitcher").field(m).finish(),
-            Self::SendForm(m) => f.debug_tuple("SendForm").field(m).finish(),
+            Self::SendEdit(m) => f.debug_tuple("SendEdit").field(m).finish(),
             Self::CloseFormPane => f.write_str("CloseFormPane"),
             Self::PaneResized(e) => f.debug_tuple("PaneResized").field(e).finish(),
             Self::NewItem => f.write_str("NewItem"),

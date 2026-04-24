@@ -18,8 +18,8 @@ use super::{
     SHEET_BREAKPOINT_PX, SHEET_TOP_INSET_PX, SHEET_TOP_RADIUS_PX, VaultMessage,
     state::VaultView,
     widgets::{
-        cipher_form,
-        detail_pane::{self, DetailPaneMessage},
+        cipher_edit,
+        cipher_detail::{self, CipherDetailMessage},
         item_list, search_bar,
     },
 };
@@ -83,7 +83,7 @@ impl VaultView {
         Some(bottom_sheet::view(
             pane,
             SHEET_TOP_INSET_PX,
-            Some(VaultMessage::CloseDetailPane),
+            Some(VaultMessage::CloseCipherDetail),
         ))
     }
 
@@ -144,24 +144,24 @@ impl VaultView {
         ))
     }
 
-    /// Builds the right-side pane content: either the editable `cipher_form`
-    /// when `selection.form.is_some()`, or the read-only `detail_pane`.
+    /// Builds the right-side pane content: either the editable `cipher_edit`
+    /// when `selection.form.is_some()`, or the read-only `cipher_detail`.
     fn detail_or_form_pane<'a>(
         &'a self,
         colors: &'a AppColors,
         top_radius: f32,
     ) -> Element<'a, VaultMessage, AppTheme> {
         if let Some(form) = self.selection.form.as_ref() {
-            cipher_form::view(form, colors, top_radius).map(VaultMessage::CipherForm)
+            cipher_edit::view(form, colors, top_radius).map(VaultMessage::CipherEdit)
         } else {
             let item = self
                 .selection
                 .detail
                 .as_ref()
                 .expect("detail_or_form_pane called without a selection");
-            detail_pane::view(item, colors, top_radius).map(|msg| match msg {
-                DetailPaneMessage::Close => VaultMessage::CloseDetailPane,
-                other => VaultMessage::DetailPane(other),
+            cipher_detail::view(item, colors, top_radius).map(|msg| match msg {
+                CipherDetailMessage::Close => VaultMessage::CloseCipherDetail,
+                other => VaultMessage::CipherDetail(other),
             })
         }
     }

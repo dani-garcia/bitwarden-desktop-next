@@ -1,5 +1,5 @@
-//! Small visual primitives shared between `detail_pane` (read-only view)
-//! and `cipher_form` (editable view). Extracted so both can wear the same
+//! Small visual primitives shared between `cipher_detail` (read-only view)
+//! and `cipher_edit` (editable view). Extracted so both can wear the same
 //! section/card/label styling without duplicating the style closures.
 
 use iced::{
@@ -55,7 +55,7 @@ pub fn card_with_margin<'a, M: 'a>(card: Element<'a, M, AppTheme>) -> Element<'a
 /// Styled card wrapper. Thin alias for `components::styled_card` — exposed
 /// here so callers that already import `field_helpers` don't need a second
 /// import path. Named `styled_card` (not `card`) to avoid shadowing in
-/// scopes that use `card` as a parameter name (e.g. `detail_pane`'s
+/// scopes that use `card` as a parameter name (e.g. `cipher_detail`'s
 /// `card_details_card(card: &CardView)`).
 pub fn styled_card<'a, M: 'a>(content: Element<'a, M, AppTheme>) -> Element<'a, M, AppTheme> {
     components::styled_card(content)

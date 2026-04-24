@@ -26,8 +26,8 @@ use crate::{
 };
 
 use super::widgets::{
-    cipher_form::{CipherFormMessage, FolderOption},
-    detail_pane::DetailPaneMessage,
+    cipher_edit::{CipherEditMessage, FolderOption},
+    cipher_detail::CipherDetailMessage,
     item_list::ItemListMessage,
     search_bar::SearchMessage,
 };
@@ -46,9 +46,9 @@ pub enum VaultMessage {
     ItemList(ItemListMessage),
     Search(SearchMessage),
     AccountSwitcher(AccountSwitcherMessage),
-    DetailPane(DetailPaneMessage),
-    CipherForm(CipherFormMessage),
-    CloseDetailPane,
+    CipherDetail(CipherDetailMessage),
+    CipherEdit(CipherEditMessage),
+    CloseCipherDetail,
     PaneResized(pane_grid::ResizeEvent),
     NewItem,
     /// User confirmed the delete in the modal — fire the SDK soft-delete.
@@ -80,9 +80,9 @@ impl std::fmt::Debug for VaultMessage {
             Self::ItemList(m) => f.debug_tuple("ItemList").field(m).finish(),
             Self::Search(m) => f.debug_tuple("Search").field(m).finish(),
             Self::AccountSwitcher(m) => f.debug_tuple("AccountSwitcher").field(m).finish(),
-            Self::DetailPane(m) => f.debug_tuple("DetailPane").field(m).finish(),
-            Self::CipherForm(m) => f.debug_tuple("CipherForm").field(m).finish(),
-            Self::CloseDetailPane => f.write_str("CloseDetailPane"),
+            Self::CipherDetail(m) => f.debug_tuple("CipherDetail").field(m).finish(),
+            Self::CipherEdit(m) => f.debug_tuple("CipherEdit").field(m).finish(),
+            Self::CloseCipherDetail => f.write_str("CloseCipherDetail"),
             Self::PaneResized(e) => f.debug_tuple("PaneResized").field(e).finish(),
             Self::NewItem => f.write_str("NewItem"),
             Self::ConfirmDeleteSelected => f.write_str("ConfirmDeleteSelected"),

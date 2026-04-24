@@ -7,15 +7,15 @@ use iced::{
 
 use crate::{
     theme::{AppColors, AppTheme, RADIUS_LG},
-    views::send::widgets::send_form::SendFormMessage,
+    views::send::widgets::send_edit::SendEditMessage,
 };
 
 /// Heading + rounded card body used by every section.
 pub(in super::super) fn card_section<'a>(
     heading: String,
-    items: Vec<Element<'a, SendFormMessage, AppTheme>>,
+    items: Vec<Element<'a, SendEditMessage, AppTheme>>,
     colors: &'a AppColors,
-) -> Element<'a, SendFormMessage, AppTheme> {
+) -> Element<'a, SendEditMessage, AppTheme> {
     let body = container(column(items).spacing(12))
         .padding(16)
         .width(Fill)

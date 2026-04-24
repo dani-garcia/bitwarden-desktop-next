@@ -17,7 +17,7 @@ use super::{
     SendEvent, SendMessage,
     state::SendView,
     widgets::{
-        send_form::{FormAction, SendForm, SendFormMessage},
+        send_edit::{FormAction, SendForm, SendEditMessage},
         send_list::{SearchMessage, SendListMessage},
     },
 };
@@ -64,8 +64,8 @@ impl SendView {
                 self.pane.close();
             }
             SendMessage::PaneResized(event) => self.pane.set_ratio(event.ratio),
-            SendMessage::SendForm(m) => {
-                return self.handle_send_form(m, client_manager, active_user);
+            SendMessage::SendEdit(m) => {
+                return self.handle_send_edit(m, client_manager, active_user);
             }
             SendMessage::CancelDeleteSelected => self.selection.confirm_delete = false,
             SendMessage::ConfirmDeleteSelected => {
@@ -146,9 +146,9 @@ impl SendView {
         self.pane.open();
     }
 
-    fn handle_send_form(
+    fn handle_send_edit(
         &mut self,
-        msg: SendFormMessage,
+        msg: SendEditMessage,
         client_manager: &Arc<ClientManager>,
         active_user: Option<&UserId>,
     ) -> Outcome<Self> {

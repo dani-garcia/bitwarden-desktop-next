@@ -1,4 +1,4 @@
-//! `CipherFormMessage` + `FormAction` (the return shape of `update()`).
+//! `CipherEditMessage` + `FormAction` (the return shape of `update()`).
 
 use bitwarden_collections::collection::CollectionId;
 use bitwarden_core::OrganizationId;
@@ -6,7 +6,7 @@ use bitwarden_vault::{FieldType, FolderId};
 use iced::widget::text_editor;
 
 #[derive(Debug, Clone)]
-pub enum CipherFormMessage {
+pub enum CipherEditMessage {
     // Item details (universal)
     NameChanged(String),
     NotesAction(text_editor::Action),

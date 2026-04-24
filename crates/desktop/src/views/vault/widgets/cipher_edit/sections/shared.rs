@@ -18,7 +18,7 @@ use crate::{
     fl,
     theme::{AppColors, AppTheme},
     views::vault::widgets::{
-        cipher_form::{CipherForm, CipherFormMessage, selectors},
+        cipher_edit::{CipherForm, CipherEditMessage, selectors},
         field_helpers::{card_with_margin, styled_card},
     },
 };
@@ -26,7 +26,7 @@ use crate::{
 pub(in super::super) fn section_label<'a>(
     label: impl Into<String>,
     colors: &AppColors,
-) -> Element<'a, CipherFormMessage, AppTheme> {
+) -> Element<'a, CipherEditMessage, AppTheme> {
     text(label.into())
         .size(14)
         .color(colors.text_primary)
@@ -36,13 +36,13 @@ pub(in super::super) fn section_label<'a>(
 pub(in super::super) fn item_details_card<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
-) -> Element<'a, CipherFormMessage, AppTheme> {
-    let mut rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = Vec::new();
+) -> Element<'a, CipherEditMessage, AppTheme> {
+    let mut rows: Vec<Element<'a, CipherEditMessage, AppTheme>> = Vec::new();
 
     rows.push(text_field(
         fl!("form-name"),
         &form.modified.name,
-        CipherFormMessage::NameChanged,
+        CipherEditMessage::NameChanged,
         None,
         form.saving,
         colors,
@@ -51,7 +51,7 @@ pub(in super::super) fn item_details_card<'a>(
     // Favorite + reprompt toggles in a row so the card stays compact.
     let favorite_checkbox = checkbox(form.modified.favorite)
         .label(fl!("form-favorite"))
-        .on_toggle(|_| CipherFormMessage::FavoriteToggled)
+        .on_toggle(|_| CipherEditMessage::FavoriteToggled)
         .size(18)
         .spacing(8);
 
@@ -75,7 +75,7 @@ pub(in super::super) fn item_details_card<'a>(
 pub(in super::super) fn additional_options_card<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
-) -> Element<'a, CipherFormMessage, AppTheme> {
+) -> Element<'a, CipherEditMessage, AppTheme> {
     // Multi-line notes field — `text_editor` grows with content between
     // `min_height` and `max_height`. Border/label come from `field_frame`
     // so the visual matches the single-line inputs; we strip the editor's
@@ -86,7 +86,7 @@ pub(in super::super) fn additional_options_card<'a>(
         .min_height(80.0)
         .max_height(600.0);
     if !form.saving {
-        notes_editor = notes_editor.on_action(CipherFormMessage::NotesAction);
+        notes_editor = notes_editor.on_action(CipherEditMessage::NotesAction);
     }
     let notes =
         crate::components::inputs::field_frame(fl!("form-notes"), notes_editor.into(), colors);
@@ -96,11 +96,11 @@ pub(in super::super) fn additional_options_card<'a>(
         CipherRepromptType::Password
     ))
     .label(fl!("form-reprompt"))
-    .on_toggle(|_| CipherFormMessage::RepromptToggled)
+    .on_toggle(|_| CipherEditMessage::RepromptToggled)
     .size(18)
     .spacing(8);
 
-    let rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = vec![notes, reprompt_checkbox.into()];
+    let rows: Vec<Element<'a, CipherEditMessage, AppTheme>> = vec![notes, reprompt_checkbox.into()];
 
     card_with_margin(styled_card(column(rows).spacing(12).into()))
 }
@@ -108,8 +108,8 @@ pub(in super::super) fn additional_options_card<'a>(
 pub(in super::super) fn custom_fields_card<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
-) -> Element<'a, CipherFormMessage, AppTheme> {
-    let mut rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = Vec::new();
+) -> Element<'a, CipherEditMessage, AppTheme> {
+    let mut rows: Vec<Element<'a, CipherEditMessage, AppTheme>> = Vec::new();
 
     let fields = form.modified.fields.as_deref().unwrap_or(&[]);
 
@@ -134,7 +134,7 @@ pub(in super::super) fn custom_fields_card<'a>(
         .spacing(6)
         .align_y(Alignment::Center),
     )
-    .on_press(CipherFormMessage::CustomFieldAdded)
+    .on_press(CipherEditMessage::CustomFieldAdded)
     .padding([6, 12]);
     rows.push(add_btn.into());
 
@@ -146,8 +146,8 @@ fn custom_field_row<'a>(
     f: &'a FieldView,
     form: &'a CipherForm,
     colors: &'a AppColors,
-) -> Element<'a, CipherFormMessage, AppTheme> {
-    let type_picker: Element<'a, CipherFormMessage, AppTheme> = container(select_field(
+) -> Element<'a, CipherEditMessage, AppTheme> {
+    let type_picker: Element<'a, CipherEditMessage, AppTheme> = container(select_field(
         fl!("form-custom-field-type"),
         Some(f.r#type),
         vec![FieldType::Text, FieldType::Hidden, FieldType::Boolean],
@@ -157,7 +157,7 @@ fn custom_field_row<'a>(
             FieldType::Boolean => fl!("form-custom-field-type-boolean"),
             FieldType::Linked => fl!("form-custom-field-type-linked"),
         },
-        move |ty| CipherFormMessage::CustomFieldTypeSelected(idx, ty),
+        move |ty| CipherEditMessage::CustomFieldTypeSelected(idx, ty),
         colors,
     ))
     .width(140)
@@ -166,17 +166,17 @@ fn custom_field_row<'a>(
     let name_input = text_field(
         fl!("form-custom-field-name"),
         f.name.as_deref().unwrap_or(""),
-        move |s| CipherFormMessage::CustomFieldNameChanged(idx, s),
+        move |s| CipherEditMessage::CustomFieldNameChanged(idx, s),
         None,
         form.saving,
         colors,
     );
 
-    let value_widget: Element<'a, CipherFormMessage, AppTheme> = match f.r#type {
+    let value_widget: Element<'a, CipherEditMessage, AppTheme> = match f.r#type {
         FieldType::Text => text_field(
             fl!("form-custom-field-value"),
             f.value.as_deref().unwrap_or(""),
-            move |s| CipherFormMessage::CustomFieldValueChanged(idx, s),
+            move |s| CipherEditMessage::CustomFieldValueChanged(idx, s),
             None,
             form.saving,
             colors,
@@ -184,7 +184,7 @@ fn custom_field_row<'a>(
         FieldType::Hidden => reveal_text_field(
             fl!("form-custom-field-value"),
             f.value.as_deref().unwrap_or(""),
-            move |s| CipherFormMessage::CustomFieldValueChanged(idx, s),
+            move |s| CipherEditMessage::CustomFieldValueChanged(idx, s),
             form.saving,
             colors,
         ),
@@ -192,7 +192,7 @@ fn custom_field_row<'a>(
             let checked = matches!(f.value.as_deref(), Some("true"));
             checkbox(checked)
                 .label(fl!("form-custom-field-enabled"))
-                .on_toggle(move |_| CipherFormMessage::CustomFieldBoolToggled(idx))
+                .on_toggle(move |_| CipherEditMessage::CustomFieldBoolToggled(idx))
                 .size(18)
                 .spacing(8)
                 .into()
@@ -207,7 +207,7 @@ fn custom_field_row<'a>(
         icons::BWI_TRASH.render(18.0, colors.titlebar_close_hover),
         colors.item_hover,
     )
-    .on_press(CipherFormMessage::CustomFieldRemoved(idx))
+    .on_press(CipherEditMessage::CustomFieldRemoved(idx))
     .padding([6, 6]);
 
     row![

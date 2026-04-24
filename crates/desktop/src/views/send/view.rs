@@ -18,7 +18,7 @@ use crate::{
 use super::{
     SHEET_BREAKPOINT_PX, SHEET_TOP_INSET_PX, SHEET_TOP_RADIUS_PX, SendMessage,
     state::SendView,
-    widgets::{send_form, send_list},
+    widgets::{send_edit, send_list},
 };
 
 impl SendView {
@@ -146,7 +146,7 @@ impl SendView {
             .form
             .as_ref()
             .expect("form_pane called without a form");
-        send_form::view(form, colors, top_radius).map(SendMessage::SendForm)
+        send_edit::view(form, colors, top_radius).map(SendMessage::SendEdit)
     }
 
     fn list_content<'a>(

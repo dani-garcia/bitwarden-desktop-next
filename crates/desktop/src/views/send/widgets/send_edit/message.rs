@@ -3,7 +3,7 @@ use iced::widget::text_editor;
 use super::state::{AccessType, DeletionPreset};
 
 #[derive(Debug, Clone)]
-pub enum SendFormMessage {
+pub enum SendEditMessage {
     NameChanged(String),
     TextAction(text_editor::Action),
     HideTextToggled(bool),

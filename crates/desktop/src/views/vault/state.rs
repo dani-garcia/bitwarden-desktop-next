@@ -15,7 +15,7 @@ use crate::{
     services::sdk::Organization,
 };
 
-use super::{VaultEvent, VaultMessage, widgets::cipher_form::CipherForm};
+use super::{VaultEvent, VaultMessage, widgets::cipher_edit::CipherForm};
 
 // ── View-local domain ──────────────────────────────────────────────────────
 

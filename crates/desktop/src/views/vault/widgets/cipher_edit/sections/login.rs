@@ -14,7 +14,7 @@ use crate::{
     fl,
     theme::{AppColors, AppTheme},
     views::vault::widgets::{
-        cipher_form::{CipherForm, CipherFormMessage},
+        cipher_edit::{CipherForm, CipherEditMessage},
         field_helpers::{card_with_margin, field_readonly, format_passkey_date, styled_card},
     },
 };
@@ -22,14 +22,14 @@ use crate::{
 pub(in super::super) fn login_card<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
-) -> Element<'a, CipherFormMessage, AppTheme> {
+) -> Element<'a, CipherEditMessage, AppTheme> {
     let login = form.modified.login.as_ref().expect("ensure_sub_structs");
 
-    let mut rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = vec![
+    let mut rows: Vec<Element<'a, CipherEditMessage, AppTheme>> = vec![
         text_field(
             fl!("form-username"),
             login.username.as_deref().unwrap_or(""),
-            CipherFormMessage::UsernameChanged,
+            CipherEditMessage::UsernameChanged,
             None,
             form.saving,
             colors,
@@ -37,14 +37,14 @@ pub(in super::super) fn login_card<'a>(
         reveal_text_field(
             fl!("form-password"),
             login.password.as_deref().unwrap_or(""),
-            CipherFormMessage::PasswordChanged,
+            CipherEditMessage::PasswordChanged,
             form.saving,
             colors,
         ),
         text_field(
             fl!("form-totp"),
             login.totp.as_deref().unwrap_or(""),
-            CipherFormMessage::TotpChanged,
+            CipherEditMessage::TotpChanged,
             None,
             form.saving,
             colors,
@@ -66,7 +66,7 @@ pub(in super::super) fn login_card<'a>(
                 icons::BWI_TRASH.render(18.0, colors.titlebar_close_hover),
                 colors.item_hover,
             )
-            .on_press(CipherFormMessage::PasskeyRemoved(idx))
+            .on_press(CipherEditMessage::PasskeyRemoved(idx))
             .padding([6, 6]);
 
             rows.push(
@@ -84,8 +84,8 @@ pub(in super::super) fn login_card<'a>(
 pub(in super::super) fn autofill_card<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
-) -> Element<'a, CipherFormMessage, AppTheme> {
-    let mut rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = Vec::new();
+) -> Element<'a, CipherEditMessage, AppTheme> {
+    let mut rows: Vec<Element<'a, CipherEditMessage, AppTheme>> = Vec::new();
 
     let uris = form
         .modified
@@ -107,7 +107,7 @@ pub(in super::super) fn autofill_card<'a>(
             let input = text_field(
                 fl!("form-uri"),
                 value,
-                move |s| CipherFormMessage::UriChanged(idx, s),
+                move |s| CipherEditMessage::UriChanged(idx, s),
                 None,
                 form.saving,
                 colors,
@@ -116,7 +116,7 @@ pub(in super::super) fn autofill_card<'a>(
                 icons::BWI_TRASH.render(18.0, colors.titlebar_close_hover),
                 colors.item_hover,
             )
-            .on_press(CipherFormMessage::UriRemoved(idx))
+            .on_press(CipherEditMessage::UriRemoved(idx))
             .padding([6, 6]);
 
             rows.push(
@@ -136,7 +136,7 @@ pub(in super::super) fn autofill_card<'a>(
         .spacing(6)
         .align_y(Alignment::Center),
     )
-    .on_press(CipherFormMessage::UriAdded)
+    .on_press(CipherEditMessage::UriAdded)
     .padding([6, 12]);
     rows.push(add_btn.into());
 

@@ -11,7 +11,7 @@ use crate::{
     domain::UserId,
 };
 
-use super::{SendEvent, SendMessage, widgets::send_form::SendForm};
+use super::{SendEvent, SendMessage, widgets::send_edit::SendForm};
 
 /// The currently-selected send. Sends open directly into the edit form
 /// when a row is clicked, so there's no read-only "detail" step — `form`

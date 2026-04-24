@@ -1,8 +1,8 @@
-//! Editable cipher form — the flip-side of `detail_pane`.
+//! Editable cipher form — the flip-side of `cipher_detail`.
 //!
 //! Layout mirrors the Angular `add-edit-v2` component so field coverage and
 //! grouping match the official clients. Same section primitives as
-//! `detail_pane` (via `field_helpers`) so view and edit modes share a
+//! `cipher_detail` (via `field_helpers`) so view and edit modes share a
 //! consistent visual rhythm.
 //!
 //! `CipherForm` holds two `CipherView`s: an untouched `original` (for cancel
@@ -12,7 +12,7 @@
 //!
 //! File layout:
 //! - `state.rs`     — `CipherForm` + choice enums + constructors
-//! - `message.rs`   — `CipherFormMessage`, `FormAction`
+//! - `message.rs`   — `CipherEditMessage`, `FormAction`
 //! - `update.rs`    — `CipherForm::update`
 //! - `view.rs`      — `view()` entry + header/bottom-bar
 //! - `selectors.rs` — folder/org/collections selectors + dropdown primitive
@@ -25,6 +25,6 @@ mod state;
 mod update;
 mod view;
 
-pub use message::{CipherFormMessage, FormAction};
+pub use message::{CipherEditMessage, FormAction};
 pub use state::{CipherForm, FolderOption};
 pub use view::view;

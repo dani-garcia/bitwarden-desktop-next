@@ -14,7 +14,7 @@ use crate::{
 };
 
 use super::{
-    message::SendFormMessage,
+    message::SendEditMessage,
     sections::{additional::additional_options_card, details::details_card},
     state::SendForm,
 };
@@ -23,7 +23,7 @@ pub fn view<'a>(
     form: &'a SendForm,
     colors: &'a AppColors,
     top_radius: f32,
-) -> Element<'a, SendFormMessage, AppTheme> {
+) -> Element<'a, SendEditMessage, AppTheme> {
     let is_new = form.id.is_none();
 
     let title = match (is_new, form.send_type) {
@@ -43,7 +43,7 @@ pub fn view<'a>(
             icons::BWI_CLOSE.render(16.0, colors.text_secondary),
             colors.item_hover,
         )
-        .on_press(SendFormMessage::CancelPressed)
+        .on_press(SendEditMessage::CancelPressed)
         .padding([6, 8]),
     ]
     .align_y(Alignment::Center);
@@ -61,7 +61,7 @@ pub fn view<'a>(
                 .border(Border::default().rounded(iced::border::top(top_radius)))
         });
 
-    let body: Element<'a, SendFormMessage, AppTheme> = scrollable(
+    let body: Element<'a, SendEditMessage, AppTheme> = scrollable(
         column![details_card(form, colors), additional_options_card(form, colors)]
             .spacing(16)
             .padding(Padding {
@@ -93,14 +93,14 @@ pub fn view<'a>(
 fn footer<'a>(
     form: &'a SendForm,
     colors: &'a AppColors,
-) -> Element<'a, SendFormMessage, AppTheme> {
+) -> Element<'a, SendEditMessage, AppTheme> {
     let mut save = buttons::primary(text(fl!("send-form-save")).size(14)).padding([8, 20]);
     if !form.saving {
-        save = save.on_press(SendFormMessage::SavePressed);
+        save = save.on_press(SendEditMessage::SavePressed);
     }
 
     let cancel = buttons::secondary(text(fl!("send-form-cancel")).size(14))
-        .on_press(SendFormMessage::CancelPressed)
+        .on_press(SendEditMessage::CancelPressed)
         .padding([8, 20]);
 
     let mut left_row = row![save, cancel].spacing(8).align_y(Alignment::Center);
@@ -113,7 +113,7 @@ fn footer<'a>(
             icons::BWI_TRASH.render(18.0, colors.titlebar_close_hover),
             colors.item_hover,
         )
-        .on_press(SendFormMessage::DeletePressed)
+        .on_press(SendEditMessage::DeletePressed)
         .padding([6, 8]);
         left_row = left_row.push(Space::new().width(Fill));
         left_row = left_row.push(delete_btn);

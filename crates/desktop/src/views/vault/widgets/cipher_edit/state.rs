@@ -117,7 +117,7 @@ pub struct CipherForm {
 
     /// Multi-line editor buffer for the Notes field. `text_editor` requires
     /// its content/cursor state to live on the parent; mutations flow through
-    /// `CipherFormMessage::NotesAction`.
+    /// `CipherEditMessage::NotesAction`.
     pub(super) notes_content: text_editor::Content,
 
     /// Disables the Save button + form inputs while the save task is in flight.

@@ -7,7 +7,7 @@ use bitwarden_send::{AuthType, SendFileView, SendTextView, SendType, SendView};
 use chrono::{DateTime, Duration, Utc};
 use iced::widget::text_editor;
 
-/// Result of dispatching a `SendFormMessage` into `SendForm::update`.
+/// Result of dispatching a `SendEditMessage` into `SendForm::update`.
 /// Mirrors `CipherForm`'s `FormAction` but with extensions for the form's
 /// copy-to-clipboard actions (link, password) which the containing view
 /// needs to promote to `SendEvent`s.

@@ -26,8 +26,8 @@ use super::{
     message::FormOptions,
     state::VaultView,
     widgets::{
-        cipher_form::{CipherForm, FolderOption, FormAction},
-        detail_pane::{self, DetailPaneMessage},
+        cipher_edit::{CipherForm, FolderOption, FormAction},
+        cipher_detail::{self, CipherDetailMessage},
         item_list::ItemListMessage,
         search_bar::SearchMessage,
     },
@@ -80,20 +80,20 @@ impl VaultView {
                     self.recompute_filtered(uid, active_vault_filter);
                 }
             }
-            VaultMessage::CloseDetailPane => {
+            VaultMessage::CloseCipherDetail => {
                 self.selection.clear();
                 self.pane.close();
             }
             VaultMessage::PaneResized(event) => self.pane.set_ratio(event.ratio),
-            VaultMessage::DetailPane(m) => {
-                return self.handle_detail_pane(m, client_manager, active_user);
+            VaultMessage::CipherDetail(m) => {
+                return self.handle_cipher_detail(m, client_manager, active_user);
             }
             VaultMessage::CancelDeleteSelected => self.selection.confirm_delete = false,
             VaultMessage::ConfirmDeleteSelected => {
                 return self.handle_confirm_delete(client_manager, active_user);
             }
-            VaultMessage::CipherForm(m) => {
-                return self.handle_cipher_form(m, client_manager, active_user);
+            VaultMessage::CipherEdit(m) => {
+                return self.handle_cipher_edit(m, client_manager, active_user);
             }
             VaultMessage::FormOptionsLoaded(uid, opts) => {
                 return self.handle_form_options_loaded(uid, opts, active_user);
@@ -144,7 +144,7 @@ impl VaultView {
     }
 
     fn selected_login_uri(&self, idx: usize) -> Option<&str> {
-        detail_pane::login_uri_at(self.selected_login()?, idx)
+        cipher_detail::login_uri_at(self.selected_login()?, idx)
     }
 
     fn selected_ssh_key(&self) -> Option<&SshKeyView> {
@@ -210,41 +210,41 @@ impl VaultView {
         Outcome::None
     }
 
-    fn handle_detail_pane(
+    fn handle_cipher_detail(
         &mut self,
-        msg: DetailPaneMessage,
+        msg: CipherDetailMessage,
         client_manager: &Arc<ClientManager>,
         active_user: Option<&UserId>,
     ) -> Outcome<Self> {
         match msg {
-            DetailPaneMessage::Edit => self.handle_detail_edit(client_manager, active_user),
-            DetailPaneMessage::CopyUsername => clipboard_outcome(
+            CipherDetailMessage::Edit => self.handle_detail_edit(client_manager, active_user),
+            CipherDetailMessage::CopyUsername => clipboard_outcome(
                 self.selected_login()
                     .and_then(|l| l.username.as_deref())
                     .map(str::to_owned),
                 Sensitivity::Normal,
                 fl!("vault-toast-copied-username"),
             ),
-            DetailPaneMessage::CopyPassword => clipboard_outcome(
+            CipherDetailMessage::CopyPassword => clipboard_outcome(
                 self.selected_login()
                     .and_then(|l| l.password.as_deref())
                     .map(str::to_owned),
                 Sensitivity::Sensitive,
                 fl!("vault-toast-copied-password"),
             ),
-            DetailPaneMessage::CopyUrl(idx) => clipboard_outcome(
+            CipherDetailMessage::CopyUrl(idx) => clipboard_outcome(
                 self.selected_login_uri(idx).map(str::to_owned),
                 Sensitivity::Normal,
                 fl!("vault-toast-copied-website"),
             ),
-            DetailPaneMessage::OpenUrl(idx) => {
+            CipherDetailMessage::OpenUrl(idx) => {
                 Outcome::from_option(self.selected_login_uri(idx).map(|uri| {
                     VaultEvent::LaunchUrlRequested {
                         uri: uri.to_owned(),
                     }
                 }))
             }
-            DetailPaneMessage::CopyTotp => {
+            CipherDetailMessage::CopyTotp => {
                 // Recompute the code at the moment of copy so the clipboard
                 // holds a value still valid for ~30 s.
                 let code = self
@@ -254,22 +254,22 @@ impl VaultView {
                     .and_then(|s| bitwarden_vault::generate_totp(s, None).ok().map(|r| r.code));
                 clipboard_outcome(code, Sensitivity::Sensitive, fl!("vault-toast-copied-totp"))
             }
-            DetailPaneMessage::CopySshPrivateKey => clipboard_outcome(
+            CipherDetailMessage::CopySshPrivateKey => clipboard_outcome(
                 self.selected_ssh_key().map(|k| k.private_key.clone()),
                 Sensitivity::Sensitive,
                 fl!("vault-toast-copied-private-key"),
             ),
-            DetailPaneMessage::CopySshPublicKey => clipboard_outcome(
+            CipherDetailMessage::CopySshPublicKey => clipboard_outcome(
                 self.selected_ssh_key().map(|k| k.public_key.clone()),
                 Sensitivity::Normal,
                 fl!("vault-toast-copied-public-key"),
             ),
-            DetailPaneMessage::CopySshFingerprint => clipboard_outcome(
+            CipherDetailMessage::CopySshFingerprint => clipboard_outcome(
                 self.selected_ssh_key().map(|k| k.fingerprint.clone()),
                 Sensitivity::Normal,
                 fl!("vault-toast-copied-fingerprint"),
             ),
-            DetailPaneMessage::CopyCustomField(idx) => {
+            CipherDetailMessage::CopyCustomField(idx) => {
                 let Some(field) = self.selected_field(idx) else {
                     return Outcome::None;
                 };
@@ -284,7 +284,7 @@ impl VaultView {
                 };
                 clipboard_outcome(Some(value), sensitivity, fl!("vault-toast-copied-field"))
             }
-            DetailPaneMessage::Delete => {
+            CipherDetailMessage::Delete => {
                 // Open the confirm modal. Actual delete waits for the user
                 // to press Confirm (`ConfirmDeleteSelected`).
                 self.selection.confirm_delete = true;
@@ -292,7 +292,7 @@ impl VaultView {
             }
             // Close is intercepted at the caller's `.map()` and never reaches
             // this match — kept for exhaustiveness.
-            DetailPaneMessage::Close => Outcome::None,
+            CipherDetailMessage::Close => Outcome::None,
         }
     }
 
@@ -353,9 +353,9 @@ impl VaultView {
         )
     }
 
-    fn handle_cipher_form(
+    fn handle_cipher_edit(
         &mut self,
-        msg: super::widgets::cipher_form::CipherFormMessage,
+        msg: super::widgets::cipher_edit::CipherEditMessage,
         client_manager: &Arc<ClientManager>,
         active_user: Option<&UserId>,
     ) -> Outcome<Self> {

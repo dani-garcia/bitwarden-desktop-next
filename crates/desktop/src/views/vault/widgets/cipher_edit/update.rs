@@ -6,13 +6,13 @@ use bitwarden_vault::{
 };
 
 use super::{
-    message::{CipherFormMessage, FormAction},
+    message::{CipherEditMessage, FormAction},
     state::CipherForm,
 };
 
 impl CipherForm {
-    pub fn update(&mut self, msg: CipherFormMessage) -> FormAction {
-        use CipherFormMessage::*;
+    pub fn update(&mut self, msg: CipherEditMessage) -> FormAction {
+        use CipherEditMessage::*;
         match msg {
             // Item details
             NameChanged(s) => self.modified.name = s,

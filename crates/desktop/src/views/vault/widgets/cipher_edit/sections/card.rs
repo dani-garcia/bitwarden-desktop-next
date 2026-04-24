@@ -7,7 +7,7 @@ use crate::{
     fl,
     theme::{AppColors, AppTheme},
     views::vault::widgets::{
-        cipher_form::{CipherForm, CipherFormMessage},
+        cipher_edit::{CipherForm, CipherEditMessage},
         field_helpers::{card_with_margin, styled_card},
     },
 };
@@ -15,14 +15,14 @@ use crate::{
 pub(in super::super) fn card_details_card<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
-) -> Element<'a, CipherFormMessage, AppTheme> {
+) -> Element<'a, CipherEditMessage, AppTheme> {
     let c = form.modified.card.as_ref().expect("ensure_sub_structs");
 
-    let rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = vec![
+    let rows: Vec<Element<'a, CipherEditMessage, AppTheme>> = vec![
         text_field(
             fl!("form-card-cardholder"),
             c.cardholder_name.as_deref().unwrap_or(""),
-            CipherFormMessage::CardCardholderChanged,
+            CipherEditMessage::CardCardholderChanged,
             None,
             form.saving,
             colors,
@@ -31,7 +31,7 @@ pub(in super::super) fn card_details_card<'a>(
         text_field(
             fl!("form-card-number"),
             c.number.as_deref().unwrap_or(""),
-            CipherFormMessage::CardNumberChanged,
+            CipherEditMessage::CardNumberChanged,
             None,
             form.saving,
             colors,
@@ -40,7 +40,7 @@ pub(in super::super) fn card_details_card<'a>(
         text_field(
             fl!("form-card-exp-year"),
             c.exp_year.as_deref().unwrap_or(""),
-            CipherFormMessage::CardExpYearChanged,
+            CipherEditMessage::CardExpYearChanged,
             None,
             form.saving,
             colors,
@@ -48,7 +48,7 @@ pub(in super::super) fn card_details_card<'a>(
         reveal_text_field(
             fl!("form-card-code"),
             c.code.as_deref().unwrap_or(""),
-            CipherFormMessage::CardCodeChanged,
+            CipherEditMessage::CardCodeChanged,
             form.saving,
             colors,
         ),
@@ -60,7 +60,7 @@ pub(in super::super) fn card_details_card<'a>(
 fn brand_selector<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
-) -> Element<'a, CipherFormMessage, AppTheme> {
+) -> Element<'a, CipherEditMessage, AppTheme> {
     let mut options: Vec<Option<String>> = vec![None];
     options.extend(
         [
@@ -89,7 +89,7 @@ fn brand_selector<'a>(
             None => fl!("form-card-brand-placeholder"),
             Some(s) => s.clone(),
         },
-        CipherFormMessage::CardBrandSelected,
+        CipherEditMessage::CardBrandSelected,
         colors,
     )
 }
@@ -97,7 +97,7 @@ fn brand_selector<'a>(
 fn exp_month_selector<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
-) -> Element<'a, CipherFormMessage, AppTheme> {
+) -> Element<'a, CipherEditMessage, AppTheme> {
     let mut options: Vec<Option<String>> = vec![None];
     options.extend((1..=12).map(|m| Some(format!("{m:02}"))));
 
@@ -111,7 +111,7 @@ fn exp_month_selector<'a>(
             None => fl!("form-card-month-placeholder"),
             Some(s) => s.clone(),
         },
-        CipherFormMessage::CardExpMonthSelected,
+        CipherEditMessage::CardExpMonthSelected,
         colors,
     )
 }

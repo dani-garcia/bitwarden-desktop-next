@@ -12,8 +12,8 @@ use crate::{
     components::{buttons, icons, inputs},
     fl,
     theme::{AppColors, AppTheme},
-    views::send::widgets::send_form::{
-        SendForm, SendFormMessage,
+    views::send::widgets::send_edit::{
+        SendForm, SendEditMessage,
         state::{AccessType, DeletionPreset},
     },
 };
@@ -23,8 +23,8 @@ use super::shared::card_section;
 pub(in super::super) fn details_card<'a>(
     form: &'a SendForm,
     colors: &'a AppColors,
-) -> Element<'a, SendFormMessage, AppTheme> {
-    let mut items: Vec<Element<'a, SendFormMessage, AppTheme>> = Vec::new();
+) -> Element<'a, SendEditMessage, AppTheme> {
+    let mut items: Vec<Element<'a, SendEditMessage, AppTheme>> = Vec::new();
 
     items.push(name_field(form, colors));
 
@@ -34,7 +34,7 @@ pub(in super::super) fn details_card<'a>(
             items.push(
                 checkbox(form.text_hidden)
                     .label(fl!("send-form-hide-text"))
-                    .on_toggle(SendFormMessage::HideTextToggled)
+                    .on_toggle(SendEditMessage::HideTextToggled)
                     .size(18)
                     .spacing(8)
                     .into(),
@@ -86,10 +86,10 @@ pub(in super::super) fn details_card<'a>(
 fn name_field<'a>(
     form: &'a SendForm,
     colors: &'a AppColors,
-) -> Element<'a, SendFormMessage, AppTheme> {
+) -> Element<'a, SendEditMessage, AppTheme> {
     let mut input = inputs::bare_text_input(&form.name);
     if !form.saving {
-        input = input.on_input(SendFormMessage::NameChanged);
+        input = input.on_input(SendEditMessage::NameChanged);
     }
     inputs::field_frame(fl!("send-form-name"), input.into(), colors)
 }
@@ -97,14 +97,14 @@ fn name_field<'a>(
 fn text_to_share_field<'a>(
     form: &'a SendForm,
     colors: &'a AppColors,
-) -> Element<'a, SendFormMessage, AppTheme> {
+) -> Element<'a, SendEditMessage, AppTheme> {
     let mut editor = text_editor(&form.text_content)
         .padding([10, 12])
         .height(Length::Shrink)
         .min_height(80.0)
         .max_height(240.0);
     if !form.saving {
-        editor = editor.on_action(SendFormMessage::TextAction);
+        editor = editor.on_action(SendEditMessage::TextAction);
     }
     inputs::field_frame(fl!("send-form-text"), editor.into(), colors)
 }
@@ -112,7 +112,7 @@ fn text_to_share_field<'a>(
 fn file_section<'a>(
     form: &'a SendForm,
     colors: &'a AppColors,
-) -> Element<'a, SendFormMessage, AppTheme> {
+) -> Element<'a, SendEditMessage, AppTheme> {
     let is_new = form.id.is_none();
     if is_new {
         // New file send: the filename + size are "chosen" via a picker.
@@ -121,7 +121,7 @@ fn file_section<'a>(
             .size(14)
             .color(colors.text_secondary);
         let choose_btn = buttons::secondary(text(fl!("send-form-file-choose")).size(14))
-            .on_press(SendFormMessage::ChooseFilePressed)
+            .on_press(SendEditMessage::ChooseFilePressed)
             .padding([8, 16]);
         row![placeholder, Space::new().width(Fill), choose_btn]
             .spacing(12)
@@ -133,7 +133,7 @@ fn file_section<'a>(
         // widget layer — a single uniform `|_|` keeps the closure types
         // identical across both fields so iced's type inference settles
         // on one `Element` type.
-        let noop = |_: String| SendFormMessage::ChooseFilePressed;
+        let noop = |_: String| SendEditMessage::ChooseFilePressed;
         let name = inputs::text_field(
             fl!("send-form-file-name"),
             &form.file_name,
@@ -157,13 +157,13 @@ fn file_section<'a>(
 fn deletion_date_field<'a>(
     form: &'a SendForm,
     colors: &'a AppColors,
-) -> Element<'a, SendFormMessage, AppTheme> {
+) -> Element<'a, SendEditMessage, AppTheme> {
     inputs::select_field(
         fl!("send-form-deletion-date"),
         Some(form.deletion_preset),
         DeletionPreset::ALL.to_vec(),
         |preset| preset_label(*preset),
-        SendFormMessage::DeletionPresetChosen,
+        SendEditMessage::DeletionPresetChosen,
         colors,
     )
 }
@@ -171,13 +171,13 @@ fn deletion_date_field<'a>(
 fn access_type_field<'a>(
     form: &'a SendForm,
     colors: &'a AppColors,
-) -> Element<'a, SendFormMessage, AppTheme> {
+) -> Element<'a, SendEditMessage, AppTheme> {
     inputs::select_field(
         fl!("send-form-who-can-view"),
         Some(form.access_type),
         AccessType::ALL.to_vec(),
         |t| access_type_label(*t),
-        SendFormMessage::AccessTypeChosen,
+        SendEditMessage::AccessTypeChosen,
         colors,
     )
 }
@@ -185,9 +185,9 @@ fn access_type_field<'a>(
 fn password_field<'a>(
     form: &'a SendForm,
     colors: &'a AppColors,
-) -> Element<'a, SendFormMessage, AppTheme> {
+) -> Element<'a, SendEditMessage, AppTheme> {
     let mut input =
-        inputs::bare_text_input(&form.password).on_input(SendFormMessage::PasswordChanged);
+        inputs::bare_text_input(&form.password).on_input(SendEditMessage::PasswordChanged);
     if !form.password_revealed {
         input = input.secure(true);
     }
@@ -201,21 +201,21 @@ fn password_field<'a>(
         eye_icon.render(16.0, colors.text_secondary),
         colors.item_hover,
     )
-    .on_press(SendFormMessage::PasswordRevealToggled)
+    .on_press(SendEditMessage::PasswordRevealToggled)
     .padding([10, 8]);
 
     let regen_btn = buttons::ghost_icon(
         icons::ARROW_CLOCKWISE.render(16.0, colors.text_secondary),
         colors.item_hover,
     )
-    .on_press(SendFormMessage::PasswordRegenerate)
+    .on_press(SendEditMessage::PasswordRegenerate)
     .padding([10, 8]);
 
     let copy_btn = buttons::ghost_icon(
         icons::COPY.render(16.0, colors.text_secondary),
         colors.item_hover,
     )
-    .on_press(SendFormMessage::PasswordCopy)
+    .on_press(SendEditMessage::PasswordCopy)
     .padding([10, 8]);
 
     let row_el = row![input, eye_btn, regen_btn, copy_btn].align_y(Alignment::Center);
@@ -226,14 +226,14 @@ fn password_field<'a>(
 fn emails_field<'a>(
     form: &'a SendForm,
     colors: &'a AppColors,
-) -> Element<'a, SendFormMessage, AppTheme> {
+) -> Element<'a, SendEditMessage, AppTheme> {
     let mut editor = text_editor(&form.emails_content)
         .padding([10, 12])
         .height(Length::Shrink)
         .min_height(60.0)
         .max_height(140.0);
     if !form.saving {
-        editor = editor.on_action(SendFormMessage::EmailsAction);
+        editor = editor.on_action(SendEditMessage::EmailsAction);
     }
     inputs::field_frame(fl!("send-form-emails"), editor.into(), colors)
 }
@@ -241,7 +241,7 @@ fn emails_field<'a>(
 fn send_link_field<'a>(
     url: String,
     colors: &'a AppColors,
-) -> Element<'a, SendFormMessage, AppTheme> {
+) -> Element<'a, SendEditMessage, AppTheme> {
     let input = text_input("", &url)
         .size(14)
         .padding([10, 12])
@@ -258,7 +258,7 @@ fn send_link_field<'a>(
         icons::COPY.render(16.0, colors.text_secondary),
         colors.item_hover,
     )
-    .on_press(SendFormMessage::CopyLinkPressed)
+    .on_press(SendEditMessage::CopyLinkPressed)
     .padding([10, 8]);
     let row_el = row![input, copy].align_y(Alignment::Center);
     inputs::field_frame(fl!("send-form-send-link"), row_el.into(), colors)

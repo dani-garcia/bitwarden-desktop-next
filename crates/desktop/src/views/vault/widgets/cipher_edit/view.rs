@@ -12,16 +12,16 @@ use crate::{
     theme::{AppColors, AppTheme},
 };
 
-use super::{message::CipherFormMessage, sections, state::CipherForm};
+use super::{message::CipherEditMessage, sections, state::CipherForm};
 
 pub fn view<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
     top_radius: f32,
-) -> Element<'a, CipherFormMessage, AppTheme> {
+) -> Element<'a, CipherEditMessage, AppTheme> {
     let header = header_row(form, colors);
 
-    let mut sections: Vec<Element<'a, CipherFormMessage, AppTheme>> = vec![
+    let mut sections: Vec<Element<'a, CipherEditMessage, AppTheme>> = vec![
         sections::shared::section_label(fl!("form-section-item-details"), colors),
         sections::shared::item_details_card(form, colors),
     ];
@@ -112,7 +112,7 @@ pub fn view<'a>(
 fn header_row<'a>(
     form: &'a CipherForm,
     colors: &AppColors,
-) -> Element<'a, CipherFormMessage, AppTheme> {
+) -> Element<'a, CipherEditMessage, AppTheme> {
     let title_text = if form.original.is_some() {
         match form.modified.r#type {
             CipherType::Login => fl!("form-title-edit-login"),
@@ -131,7 +131,7 @@ fn header_row<'a>(
         icons::BWI_CLOSE.render(32.0, colors.text_secondary),
         colors.item_hover,
     )
-    .on_press(CipherFormMessage::Cancel)
+    .on_press(CipherEditMessage::Cancel)
     .padding([1, 1]);
 
     let header =
@@ -144,7 +144,7 @@ fn header_row<'a>(
 fn bottom_bar<'a>(
     form: &'a CipherForm,
     _colors: &AppColors,
-) -> Element<'a, CipherFormMessage, AppTheme> {
+) -> Element<'a, CipherEditMessage, AppTheme> {
     let save_label = if form.saving {
         fl!("form-saving")
     } else {
@@ -152,11 +152,11 @@ fn bottom_bar<'a>(
     };
     let mut save_btn = buttons::primary(text(save_label).size(14)).padding([8, 20]);
     if !form.saving {
-        save_btn = save_btn.on_press(CipherFormMessage::Save);
+        save_btn = save_btn.on_press(CipherEditMessage::Save);
     }
 
     let cancel_btn = buttons::secondary(text(fl!("form-cancel")).size(14))
-        .on_press(CipherFormMessage::Cancel)
+        .on_press(CipherEditMessage::Cancel)
         .padding([8, 20]);
 
     let bar = container(

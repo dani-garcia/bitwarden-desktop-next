@@ -8,7 +8,7 @@ use crate::{
     fl,
     theme::{AppColors, AppTheme},
     views::vault::widgets::{
-        cipher_form::{CipherForm, CipherFormMessage},
+        cipher_edit::{CipherForm, CipherEditMessage},
         field_helpers::{card_with_margin, styled_card},
     },
 };
@@ -16,14 +16,14 @@ use crate::{
 pub(in super::super) fn identity_personal_card<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
-) -> Element<'a, CipherFormMessage, AppTheme> {
+) -> Element<'a, CipherEditMessage, AppTheme> {
     let i = form.modified.identity.as_ref().expect("ensure_sub_structs");
-    let rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = vec![
+    let rows: Vec<Element<'a, CipherEditMessage, AppTheme>> = vec![
         title_selector(form, colors),
         text_field(
             fl!("form-identity-first-name"),
             i.first_name.as_deref().unwrap_or(""),
-            CipherFormMessage::IdentityFirstNameChanged,
+            CipherEditMessage::IdentityFirstNameChanged,
             None,
             form.saving,
             colors,
@@ -31,7 +31,7 @@ pub(in super::super) fn identity_personal_card<'a>(
         text_field(
             fl!("form-identity-middle-name"),
             i.middle_name.as_deref().unwrap_or(""),
-            CipherFormMessage::IdentityMiddleNameChanged,
+            CipherEditMessage::IdentityMiddleNameChanged,
             None,
             form.saving,
             colors,
@@ -39,7 +39,7 @@ pub(in super::super) fn identity_personal_card<'a>(
         text_field(
             fl!("form-identity-last-name"),
             i.last_name.as_deref().unwrap_or(""),
-            CipherFormMessage::IdentityLastNameChanged,
+            CipherEditMessage::IdentityLastNameChanged,
             None,
             form.saving,
             colors,
@@ -47,7 +47,7 @@ pub(in super::super) fn identity_personal_card<'a>(
         text_field(
             fl!("form-identity-username"),
             i.username.as_deref().unwrap_or(""),
-            CipherFormMessage::IdentityUsernameChanged,
+            CipherEditMessage::IdentityUsernameChanged,
             None,
             form.saving,
             colors,
@@ -55,7 +55,7 @@ pub(in super::super) fn identity_personal_card<'a>(
         text_field(
             fl!("form-identity-company"),
             i.company.as_deref().unwrap_or(""),
-            CipherFormMessage::IdentityCompanyChanged,
+            CipherEditMessage::IdentityCompanyChanged,
             None,
             form.saving,
             colors,
@@ -67,27 +67,27 @@ pub(in super::super) fn identity_personal_card<'a>(
 pub(in super::super) fn identity_identification_card<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
-) -> Element<'a, CipherFormMessage, AppTheme> {
+) -> Element<'a, CipherEditMessage, AppTheme> {
     let i = form.modified.identity.as_ref().expect("ensure_sub_structs");
-    let rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = vec![
+    let rows: Vec<Element<'a, CipherEditMessage, AppTheme>> = vec![
         reveal_text_field(
             fl!("form-identity-ssn"),
             i.ssn.as_deref().unwrap_or(""),
-            CipherFormMessage::IdentitySsnChanged,
+            CipherEditMessage::IdentitySsnChanged,
             form.saving,
             colors,
         ),
         reveal_text_field(
             fl!("form-identity-passport"),
             i.passport_number.as_deref().unwrap_or(""),
-            CipherFormMessage::IdentityPassportChanged,
+            CipherEditMessage::IdentityPassportChanged,
             form.saving,
             colors,
         ),
         text_field(
             fl!("form-identity-license"),
             i.license_number.as_deref().unwrap_or(""),
-            CipherFormMessage::IdentityLicenseChanged,
+            CipherEditMessage::IdentityLicenseChanged,
             None,
             form.saving,
             colors,
@@ -99,13 +99,13 @@ pub(in super::super) fn identity_identification_card<'a>(
 pub(in super::super) fn identity_contact_card<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
-) -> Element<'a, CipherFormMessage, AppTheme> {
+) -> Element<'a, CipherEditMessage, AppTheme> {
     let i = form.modified.identity.as_ref().expect("ensure_sub_structs");
-    let rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = vec![
+    let rows: Vec<Element<'a, CipherEditMessage, AppTheme>> = vec![
         text_field(
             fl!("form-identity-email"),
             i.email.as_deref().unwrap_or(""),
-            CipherFormMessage::IdentityEmailChanged,
+            CipherEditMessage::IdentityEmailChanged,
             None,
             form.saving,
             colors,
@@ -113,7 +113,7 @@ pub(in super::super) fn identity_contact_card<'a>(
         text_field(
             fl!("form-identity-phone"),
             i.phone.as_deref().unwrap_or(""),
-            CipherFormMessage::IdentityPhoneChanged,
+            CipherEditMessage::IdentityPhoneChanged,
             None,
             form.saving,
             colors,
@@ -125,13 +125,13 @@ pub(in super::super) fn identity_contact_card<'a>(
 pub(in super::super) fn identity_address_card<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
-) -> Element<'a, CipherFormMessage, AppTheme> {
+) -> Element<'a, CipherEditMessage, AppTheme> {
     let i = form.modified.identity.as_ref().expect("ensure_sub_structs");
-    let rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = vec![
+    let rows: Vec<Element<'a, CipherEditMessage, AppTheme>> = vec![
         text_field(
             fl!("form-identity-address1"),
             i.address1.as_deref().unwrap_or(""),
-            CipherFormMessage::IdentityAddress1Changed,
+            CipherEditMessage::IdentityAddress1Changed,
             None,
             form.saving,
             colors,
@@ -139,7 +139,7 @@ pub(in super::super) fn identity_address_card<'a>(
         text_field(
             fl!("form-identity-address2"),
             i.address2.as_deref().unwrap_or(""),
-            CipherFormMessage::IdentityAddress2Changed,
+            CipherEditMessage::IdentityAddress2Changed,
             None,
             form.saving,
             colors,
@@ -147,7 +147,7 @@ pub(in super::super) fn identity_address_card<'a>(
         text_field(
             fl!("form-identity-address3"),
             i.address3.as_deref().unwrap_or(""),
-            CipherFormMessage::IdentityAddress3Changed,
+            CipherEditMessage::IdentityAddress3Changed,
             None,
             form.saving,
             colors,
@@ -155,7 +155,7 @@ pub(in super::super) fn identity_address_card<'a>(
         text_field(
             fl!("form-identity-city"),
             i.city.as_deref().unwrap_or(""),
-            CipherFormMessage::IdentityCityChanged,
+            CipherEditMessage::IdentityCityChanged,
             None,
             form.saving,
             colors,
@@ -163,7 +163,7 @@ pub(in super::super) fn identity_address_card<'a>(
         text_field(
             fl!("form-identity-state"),
             i.state.as_deref().unwrap_or(""),
-            CipherFormMessage::IdentityStateChanged,
+            CipherEditMessage::IdentityStateChanged,
             None,
             form.saving,
             colors,
@@ -171,7 +171,7 @@ pub(in super::super) fn identity_address_card<'a>(
         text_field(
             fl!("form-identity-postal"),
             i.postal_code.as_deref().unwrap_or(""),
-            CipherFormMessage::IdentityPostalCodeChanged,
+            CipherEditMessage::IdentityPostalCodeChanged,
             None,
             form.saving,
             colors,
@@ -179,7 +179,7 @@ pub(in super::super) fn identity_address_card<'a>(
         text_field(
             fl!("form-identity-country"),
             i.country.as_deref().unwrap_or(""),
-            CipherFormMessage::IdentityCountryChanged,
+            CipherEditMessage::IdentityCountryChanged,
             None,
             form.saving,
             colors,
@@ -191,7 +191,7 @@ pub(in super::super) fn identity_address_card<'a>(
 fn title_selector<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
-) -> Element<'a, CipherFormMessage, AppTheme> {
+) -> Element<'a, CipherEditMessage, AppTheme> {
     let mut options: Vec<Option<String>> = vec![None];
     options.extend(IDENTITY_TITLES.iter().map(|t| Some((*t).to_string())));
 
@@ -205,7 +205,7 @@ fn title_selector<'a>(
             None => fl!("form-identity-title-placeholder"),
             Some(s) => identity_title_label(s),
         },
-        CipherFormMessage::IdentityTitleSelected,
+        CipherEditMessage::IdentityTitleSelected,
         colors,
     )
 }
