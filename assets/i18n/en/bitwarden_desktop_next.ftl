@@ -426,7 +426,6 @@ settings-advanced-tray = Tray
 settings-advanced-tray-enable = Show tray icon
 settings-advanced-minimize-to-tray = Minimize to tray
 settings-advanced-close-to-tray = Close to tray
-settings-advanced-start-to-tray = Start to tray
 settings-advanced-platform = Platform
 settings-advanced-always-show-dock = Always show dock icon
 settings-advanced-hardware-acceleration = Enable hardware acceleration

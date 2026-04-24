@@ -178,24 +178,30 @@ impl App {
         crate::services::menu::install_event_handler();
         crate::services::tray::install_event_handler();
 
-        // Build the tray up-front if any tray-related setting is on, so
-        // `start_to_tray` has something to live in and user clicks find it
-        // immediately. Tray build failure → log + fall through without.
+        // `--autostart` (used by the future "open at login" path) forces the
+        // app to launch hidden in the tray every time. We force-build the
+        // tray in that case even if the user hasn't enabled any tray
+        // settings, otherwise the hidden window would have no entry point.
+        let autostart = std::env::args().any(|a| a == "--autostart");
+
+        // Build the tray up-front if any tray-related setting is on, or if
+        // `--autostart` requires it, so user clicks find it immediately.
+        // Tray build failure → log + fall through without.
         let mut tray = None;
-        if settings.wants_tray() {
+        if settings.wants_tray() || autostart {
             tray = crate::services::tray::build();
             if tray.is_none() {
-                tracing::warn!("tray requested by settings but failed to initialise");
+                tracing::warn!("tray requested but failed to initialise");
             }
         }
 
-        // Always open the main window; when `start_to_tray` is on (and the
+        // Always open the main window; when `--autostart` is set (and the
         // tray actually initialised), open it hidden so the user sees only
         // the tray. Iced plumbs `visible: false` through winit's
         // `with_visible(false)` — the window never flashes on screen, iced
         // still owns the id and keeps firing `view()`. Toggling later is a
         // cheap `Mode::Windowed` / `gain_focus`.
-        let start_hidden = settings.start_to_tray && tray.is_some();
+        let start_hidden = autostart && tray.is_some();
         let (main_id, open_task) = iced::window::open(iced::window::Settings {
             size: MAIN_WINDOW_SIZE,
             min_size: Some(iced::Size::new(800.0, 750.0)),

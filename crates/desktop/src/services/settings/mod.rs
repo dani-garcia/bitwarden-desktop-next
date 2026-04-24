@@ -52,8 +52,6 @@ pub struct Settings {
     /// Clicking the OS close button hides the window instead of exiting.
     /// Auto-creates the tray if not already shown.
     pub close_to_tray: bool,
-    /// On launch, don't open the main window; only show the tray.
-    pub start_to_tray: bool,
 
     // ── Advanced — platform (all currently stubbed) ───────────────────────
     pub always_show_dock: bool,
@@ -118,6 +116,6 @@ impl Settings {
     /// Whether *any* tray feature is active — used to decide if the tray
     /// should exist at startup.
     pub fn wants_tray(&self) -> bool {
-        self.show_tray_icon || self.minimize_to_tray || self.close_to_tray || self.start_to_tray
+        self.show_tray_icon || self.minimize_to_tray || self.close_to_tray
     }
 }

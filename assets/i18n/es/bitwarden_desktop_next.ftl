@@ -415,7 +415,6 @@ settings-advanced-tray = Bandeja
 settings-advanced-tray-enable = Mostrar icono en la bandeja
 settings-advanced-minimize-to-tray = Minimizar a la bandeja
 settings-advanced-close-to-tray = Cerrar a la bandeja
-settings-advanced-start-to-tray = Iniciar en la bandeja
 settings-advanced-platform = Plataforma
 settings-advanced-always-show-dock = Mostrar siempre el icono del Dock
 settings-advanced-hardware-acceleration = Activar aceleración por hardware

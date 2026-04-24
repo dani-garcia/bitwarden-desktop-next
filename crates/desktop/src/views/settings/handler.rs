@@ -54,8 +54,7 @@ impl App {
             }
             SettingChange::TrayEnabled(_)
             | SettingChange::MinimizeToTray(_)
-            | SettingChange::CloseToTray(_)
-            | SettingChange::StartToTray(_) => self.refresh_tray(),
+            | SettingChange::CloseToTray(_) => self.refresh_tray(),
 
             // No runtime side-effect needed — the setting is read where it
             // takes effect. `MinimizeOnCopy` is consumed in the vault

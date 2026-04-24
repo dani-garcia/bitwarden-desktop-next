@@ -325,7 +325,7 @@ Import per-module: `use crate::fl;`. Call: `fl!("login-unlock-title")` or `fl!("
 
 ## Tray Lifecycle Settings: `data/settings.json`
 
-**Decision**: The four tray-adjacent user settings (`show_tray_icon`, `minimize_to_tray`, `close_to_tray`, `start_to_tray`) live in `data/settings.json` and are loaded once at startup into a `Copy` struct on `App`. No UI yet — the user edits by hand.
+**Decision**: The three tray-adjacent user settings (`show_tray_icon`, `minimize_to_tray`, `close_to_tray`) live in `data/settings.json` and are loaded once at startup into a `Copy` struct on `App`. No UI yet — the user edits by hand. Starting hidden is not a setting: it's a `--autostart` CLI flag the future "open at login" path will pass when registering the auto-launch entry, so the choice belongs to the launcher rather than the persisted user prefs.
 
 **Live-update readiness**: the struct lives as a plain `App` field and every behavioural branch reads `self.settings.<field>` at event time (never cached). When a future settings view lands, mutating the field directly will apply immediately; tray creation is idempotent via `App::ensure_tray` (and a future `remove_tray` on the same pattern).
 
@@ -333,7 +333,7 @@ Import per-module: `use crate::fl;`. Call: `fl!("login-unlock-title")` or `fl!("
 
 ## Single-Instance Lock: stdlib probe + tokio listener
 
-**Decision**: A second launch of the app detects the running primary via a local-IPC probe, sends `"show\n"`, and exits. The primary has a listener that yields a message into the iced update loop, which surfaces the window (gain-focus / unhide / or open if start-to-tray skipped it).
+**Decision**: A second launch of the app detects the running primary via a local-IPC probe, sends `"show\n"`, and exits. The primary has a listener that yields a message into the iced update loop, which surfaces the window (gain-focus / unhide / or open if `--autostart` skipped it).
 
 **Transport** (tokio, already a dep via iced):
 - **Unix**: Unix domain socket at `/tmp/bitwarden-desktop-next.sock`. `tokio::net::UnixListener` on the primary; `std::os::unix::net::UnixStream` for the sync probe in `main()` (no tokio runtime yet).
