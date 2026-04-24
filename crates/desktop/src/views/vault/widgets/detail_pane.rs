@@ -10,7 +10,12 @@ use super::field_helpers::{
     card_with_margin, field_readonly, format_passkey_date, section_label, styled_card,
 };
 use crate::{
-    components::{self, buttons, buttons::icon_button, icons, inputs::reveal_field},
+    components::{
+        self, buttons,
+        buttons::icon_button,
+        icons,
+        inputs::{readonly_field_truncated, reveal_field},
+    },
     fl,
     theme::{AppColors, AppTheme},
 };
@@ -30,6 +35,9 @@ pub enum DetailPaneMessage {
     /// `cipher.fields`. Only wired for hidden-type fields today; plain
     /// text fields can still be selected and copied manually.
     CopyCustomField(usize),
+    CopySshPrivateKey,
+    CopySshPublicKey,
+    CopySshFingerprint,
     Edit,
     /// Trash icon pressed — opens the confirm modal (handled at the vault
     /// view layer). Does not actually delete by itself.
@@ -420,14 +428,26 @@ fn ssh_key_card<'a>(
     colors: &'a AppColors,
 ) -> Element<'a, DetailPaneMessage, AppTheme> {
     let fields = vec![
-        field_readonly(fl!("detail-field-public-key"), &key.public_key, colors),
         reveal_field(
             fl!("detail-field-private-key"),
             &key.private_key,
-            None,
+            Some(DetailPaneMessage::CopySshPrivateKey),
             colors,
         ),
-        field_readonly(fl!("detail-field-fingerprint"), &key.fingerprint, colors),
+        field_with_action(
+            fl!("detail-field-public-key"),
+            key.public_key.as_str(),
+            &[icons::BWI_COPY],
+            &[DetailPaneMessage::CopySshPublicKey],
+            colors,
+        ),
+        field_with_action(
+            fl!("detail-field-fingerprint"),
+            key.fingerprint.as_str(),
+            &[icons::BWI_COPY],
+            &[DetailPaneMessage::CopySshFingerprint],
+            colors,
+        ),
     ];
     card_with_margin(styled_card(column(fields).spacing(12).width(Fill).into()))
 }
@@ -510,32 +530,16 @@ fn autofill_row<'a>(
     uri: &'a str,
     colors: &'a AppColors,
 ) -> Element<'a, DetailPaneMessage, AppTheme> {
-    let label = text(fl!("detail-field-website"))
-        .size(12)
-        .color(colors.text_muted);
-    // Same pattern as other detail fields: avoid wrapping so the buttons
-    // stay aligned with the label row for long URIs.
-    let value = text(uri)
-        .size(14)
-        .color(colors.text_primary)
-        .wrapping(iced::widget::text::Wrapping::None)
-        .ellipsis(iced::widget::text::Ellipsis::End);
-
-    let copy_btn = icon_button(icons::BWI_COPY, DetailPaneMessage::CopyUrl(idx), colors);
-    let open_btn = icon_button(
-        icons::BWI_EXTERNAL_LINK,
-        DetailPaneMessage::OpenUrl(idx),
+    field_with_action(
+        fl!("detail-field-website"),
+        uri,
+        &[icons::BWI_COPY, icons::BWI_EXTERNAL_LINK],
+        &[
+            DetailPaneMessage::CopyUrl(idx),
+            DetailPaneMessage::OpenUrl(idx),
+        ],
         colors,
-    );
-
-    row![
-        column![label, value].spacing(2).width(Fill),
-        copy_btn,
-        open_btn,
-    ]
-    .spacing(4)
-    .align_y(Alignment::Center)
-    .into()
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -586,8 +590,6 @@ fn field_with_action<'a>(
     msgs: &[DetailPaneMessage],
     colors: &AppColors,
 ) -> Element<'a, DetailPaneMessage, AppTheme> {
-    use iced::widget::text::{Ellipsis, Wrapping};
-
     let buttons: Vec<Element<'a, DetailPaneMessage, AppTheme>> = icons_list
         .iter()
         .zip(msgs.iter())
@@ -597,16 +599,7 @@ fn field_with_action<'a>(
     let buttons_row = row(buttons).spacing(2).align_y(Alignment::Center);
 
     row![
-        column![
-            text(label.into()).size(12).color(colors.text_muted),
-            text(value)
-                .size(14)
-                .color(colors.text_primary)
-                .wrapping(Wrapping::None)
-                .ellipsis(Ellipsis::End),
-        ]
-        .spacing(2)
-        .width(Fill),
+        readonly_field_truncated(label, value, colors),
         buttons_row,
     ]
     .spacing(4)

@@ -7,9 +7,8 @@ use iced::{
 
 use crate::{
     theme::{AppColors, AppTheme, RADIUS_LG},
+    views::send::widgets::send_form::SendFormMessage,
 };
-
-use super::super::message::SendFormMessage;
 
 /// Heading + rounded card body used by every section.
 pub(in super::super) fn card_section<'a>(

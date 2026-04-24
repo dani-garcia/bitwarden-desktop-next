@@ -85,6 +85,9 @@ vault-toast-copied-password = Contraseña copiada
 vault-toast-copied-website = Sitio web copiado
 vault-toast-copied-totp = Código de verificación copiado
 vault-toast-copied-field = Campo copiado
+vault-toast-copied-private-key = Clave privada copiada
+vault-toast-copied-public-key = Clave pública copiada
+vault-toast-copied-fingerprint = Huella digital copiada
 vault-toast-item-deleted = Elemento movido a la papelera
 vault-toast-delete-failed-title = Fallo al eliminar
 vault-toast-delete-failed-body = No se pudo eliminar el elemento. Inténtalo de nuevo.
@@ -258,6 +261,9 @@ toast-default-info = Información
 toast-default-success = Éxito
 toast-default-warning = Aviso
 toast-default-error = Error
+
+## Toast — shared messages
+toast-required-fields = Rellena los campos obligatorios.
 
 ## Menu bar — top-level
 menu-file = Archivo

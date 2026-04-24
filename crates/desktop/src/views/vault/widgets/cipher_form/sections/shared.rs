@@ -17,10 +17,11 @@ use crate::{
     },
     fl,
     theme::{AppColors, AppTheme},
+    views::vault::widgets::{
+        cipher_form::{CipherForm, CipherFormMessage, selectors},
+        field_helpers::{card_with_margin, styled_card},
+    },
 };
-
-use super::super::super::field_helpers::{card_with_margin, styled_card};
-use super::super::{message::CipherFormMessage, selectors, state::CipherForm};
 
 pub(in super::super) fn section_label<'a>(
     label: impl Into<String>,

@@ -178,6 +178,17 @@ Before we grow many more call sites (unlock failure, copy-to-clipboard, sync err
 
 Defer until N=3 so the right split is obvious instead of guessed.
 
+### In-form validation surface (red borders + per-field hints)
+
+Today both `CipherForm` and `SendForm` use a single `is_valid()` method + a `toast-required-fields` toast on save. That gets thin once required-field rules grow past one field. Upgrade shape:
+
+- Replace `is_valid() -> bool` with `validate() -> HashMap<FieldId, &'static str>` (or `Vec<(FieldId, &'static str)>`) returning per-field error messages.
+- Add a `show_validation: bool` flag on each form, flipped to `true` the first time the user clicks Save with an invalid form. Keeps first-view UX clean — fields only turn red *after* the user has expressed intent to save.
+- Add an `inputs::validated_text_field(...)` / style helper in [`components/inputs.rs`](../crates/desktop/src/components/inputs.rs) that takes `Option<&str>` error. When `Some`, it paints a red border via the `text_input::Style` closure (iced's style closure receives `&Theme, Status` so the color swap is a one-liner) and renders the error string below the field in the secondary-muted red.
+- Keep the toast as a global "can't save yet" nudge, but demote it to the title — the specifics live inline under each field.
+
+Worth doing once a second required field lands on either form; overkill for one `name` field.
+
 ### Prune dead i18n keys
 
 `assets/i18n/{lang}/bitwarden_desktop_next.ftl` files grow additively. `i18n-embed-fl` validates Rust → `.ftl` references at compile time, but unused keys in the `.ftl` file itself are silent. Add a small lint (grep-based check, or a `cargo xtask i18n-unused` that parses `.ftl` IDs and greps the Rust tree) before the file crosses ~200 keys. Today it's ~130.

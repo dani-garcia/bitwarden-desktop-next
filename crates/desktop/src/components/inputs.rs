@@ -44,6 +44,32 @@ pub fn bare_text_input<'a, M: Clone + 'a>(value: &'a str) -> TextInput<'a, M, Ap
         })
 }
 
+/// Stacked label + single-line truncated value. Read-only display for long
+/// unbroken strings (SSH keys, URIs, hashes, fingerprints) — a normal
+/// `text()` would either wrap on word boundaries (impossible on
+/// base64 / hex) or overflow the container. The full value should be
+/// reachable via a copy action placed alongside this field by the caller.
+pub fn readonly_field_truncated<'a, M: 'a>(
+    label: impl Into<String>,
+    value: impl iced::widget::text::IntoFragment<'a>,
+    colors: &AppColors,
+) -> Element<'a, M, AppTheme> {
+    column![
+        text(label.into()).size(12).color(colors.text_muted),
+        text(value)
+            .size(14)
+            .color(colors.text_primary)
+            .wrapping(Wrapping::None)
+            .ellipsis(Ellipsis::End),
+    ]
+    .spacing(2)
+    // Needed for ellipsis to actually kick in — without `Fill`, the text
+    // widget would be content-sized and iced would lay out the full
+    // un-truncated string instead of clipping it.
+    .width(Fill)
+    .into()
+}
+
 /// Wrap any content in the floating-label frame: a bordered container with
 /// a small label chip stacked on top of the border. The chip has a
 /// background matching the page, so the border visually breaks behind it.
@@ -481,18 +507,7 @@ impl<'a, Message: Clone + 'a> Component<Message, AppTheme> for RevealField<'a, M
         }
 
         row![
-            column![
-                text(self.label.clone())
-                    .size(12)
-                    .color(self.colors.text_muted),
-                text(display)
-                    .size(14)
-                    .color(self.colors.text_primary)
-                    .wrapping(Wrapping::None)
-                    .ellipsis(Ellipsis::End),
-            ]
-            .spacing(2)
-            .width(Fill),
+            readonly_field_truncated(self.label.clone(), display, self.colors),
             row(buttons_row).spacing(2).align_y(Alignment::Center),
         ]
         .spacing(4)

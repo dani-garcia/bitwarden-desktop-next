@@ -12,15 +12,13 @@ use crate::{
     components::{buttons, icons, inputs},
     fl,
     theme::{AppColors, AppTheme},
-};
-
-use super::{
-    shared::card_section,
-    super::{
-        message::SendFormMessage,
-        state::{AccessType, DeletionPreset, SendForm},
+    views::send::widgets::send_form::{
+        SendForm, SendFormMessage,
+        state::{AccessType, DeletionPreset},
     },
 };
+
+use super::shared::card_section;
 
 pub(in super::super) fn details_card<'a>(
     form: &'a SendForm,

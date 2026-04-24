@@ -163,6 +163,12 @@ impl SendView {
                 Outcome::None
             }
             FormAction::Save => {
+                if !form.is_valid() {
+                    return Outcome::event(SendEvent::ToastRequested(Toast::warning(
+                        fl!("toast-required-fields"),
+                        None,
+                    )));
+                }
                 let Some(uid) = active_user.copied() else {
                     return Outcome::None;
                 };

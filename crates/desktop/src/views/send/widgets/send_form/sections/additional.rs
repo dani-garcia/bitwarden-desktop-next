@@ -9,12 +9,10 @@ use crate::{
     components::{buttons, icons, inputs},
     fl,
     theme::{AppColors, AppTheme},
+    views::send::widgets::send_form::{SendForm, SendFormMessage},
 };
 
-use super::{
-    shared::card_section,
-    super::{message::SendFormMessage, state::SendForm},
-};
+use super::shared::card_section;
 
 pub(in super::super) fn additional_options_card<'a>(
     form: &'a SendForm,

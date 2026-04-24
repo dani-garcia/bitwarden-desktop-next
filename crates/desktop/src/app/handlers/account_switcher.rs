@@ -5,12 +5,11 @@
 use iced::Task;
 
 use crate::{
+    app::{App, Message},
     components::account_switcher::AccountSwitcherEvent,
     domain::{Screen, UserId},
     services::menu::MenuAction,
 };
-
-use super::super::{App, Message};
 
 impl App {
     pub(crate) fn handle_account_switcher_event(

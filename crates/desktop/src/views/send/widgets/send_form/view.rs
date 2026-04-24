@@ -95,7 +95,7 @@ fn footer<'a>(
     colors: &'a AppColors,
 ) -> Element<'a, SendFormMessage, AppTheme> {
     let mut save = buttons::primary(text(fl!("send-form-save")).size(14)).padding([8, 20]);
-    if form.is_valid() && !form.saving {
+    if !form.saving {
         save = save.on_press(SendFormMessage::SavePressed);
     }
 

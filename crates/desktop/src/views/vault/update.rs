@@ -9,7 +9,7 @@
 use std::sync::Arc;
 
 use bitwarden_vault::{
-    CipherId, CipherListView, CipherListViewType, CipherView, FieldView, LoginView,
+    CipherId, CipherListView, CipherListViewType, CipherView, FieldView, LoginView, SshKeyView,
 };
 use iced::Task;
 
@@ -146,6 +146,10 @@ impl VaultView {
     fn selected_login_uri(&self, idx: usize) -> Option<&str> {
         detail_pane::login_uri_at(self.selected_login()?, idx)
     }
+
+    fn selected_ssh_key(&self) -> Option<&SshKeyView> {
+        self.selection.detail.as_ref()?.ssh_key.as_ref()
+    }
 }
 
 // ── Per-variant handlers ───────────────────────────────────────────────────
@@ -168,11 +172,22 @@ impl VaultView {
     ) -> Outcome<Self> {
         match msg {
             ItemListMessage::ItemSelected(idx) => {
-                self.selection.item = Some(idx);
-                self.selection.id = active_user
+                let new_id = active_user
                     .and_then(|uid| self.items.get(uid))
                     .and_then(|ic| ic.cached.get(idx))
                     .and_then(|i| i.id);
+                // Switching to a different cipher drops any open edit form
+                // and disarms the inline delete confirmation — user clicked
+                // the list to move on, they don't want the previous item's
+                // transient UI bleeding onto the new one. `detail` is left
+                // as-is so the pane doesn't flash empty during the fetch
+                // (same pattern as re-selecting after an existing detail).
+                if new_id != self.selection.id {
+                    self.selection.form = None;
+                    self.selection.confirm_delete = false;
+                }
+                self.selection.item = Some(idx);
+                self.selection.id = new_id;
                 let Some(id) = self.selection.id else {
                     return Outcome::None;
                 };
@@ -239,6 +254,21 @@ impl VaultView {
                     .and_then(|s| bitwarden_vault::generate_totp(s, None).ok().map(|r| r.code));
                 clipboard_outcome(code, Sensitivity::Sensitive, fl!("vault-toast-copied-totp"))
             }
+            DetailPaneMessage::CopySshPrivateKey => clipboard_outcome(
+                self.selected_ssh_key().map(|k| k.private_key.clone()),
+                Sensitivity::Sensitive,
+                fl!("vault-toast-copied-private-key"),
+            ),
+            DetailPaneMessage::CopySshPublicKey => clipboard_outcome(
+                self.selected_ssh_key().map(|k| k.public_key.clone()),
+                Sensitivity::Normal,
+                fl!("vault-toast-copied-public-key"),
+            ),
+            DetailPaneMessage::CopySshFingerprint => clipboard_outcome(
+                self.selected_ssh_key().map(|k| k.fingerprint.clone()),
+                Sensitivity::Normal,
+                fl!("vault-toast-copied-fingerprint"),
+            ),
             DetailPaneMessage::CopyCustomField(idx) => {
                 let Some(field) = self.selected_field(idx) else {
                     return Outcome::None;
@@ -339,6 +369,12 @@ impl VaultView {
                 Outcome::None
             }
             FormAction::Save => {
+                if !form.is_valid() {
+                    return Outcome::event(VaultEvent::ToastRequested(Toast::warning(
+                        fl!("toast-required-fields"),
+                        None,
+                    )));
+                }
                 let Some(uid) = active_user.copied() else {
                     return Outcome::None;
                 };

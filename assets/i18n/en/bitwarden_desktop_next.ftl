@@ -85,6 +85,9 @@ vault-toast-copied-password = Password copied
 vault-toast-copied-website = Website copied
 vault-toast-copied-totp = Verification code copied
 vault-toast-copied-field = Field copied
+vault-toast-copied-private-key = Private key copied
+vault-toast-copied-public-key = Public key copied
+vault-toast-copied-fingerprint = Fingerprint copied
 vault-toast-item-deleted = Item moved to trash
 vault-toast-delete-failed-title = Delete failed
 vault-toast-delete-failed-body = Couldn't delete the item. Try again.
@@ -260,6 +263,9 @@ toast-default-info = Info
 toast-default-success = Success
 toast-default-warning = Warning
 toast-default-error = Error
+
+## Toast — shared messages
+toast-required-fields = Please fill in the required fields.
 
 ## Menu bar — top-level
 menu-file = File

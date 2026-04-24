@@ -26,7 +26,7 @@ pub fn section_label<'a, M: 'a>(
 }
 
 /// Read-only `{label, value}` stacked pair. Used for displayed-only fields
-/// (card fingerprints, SSH keys, notes, etc.) inside both panes.
+/// that can wrap naturally — names, notes, multi-line addresses.
 pub fn field_readonly<'a, M: 'a>(
     label: impl Into<String>,
     value: impl iced::widget::text::IntoFragment<'a>,

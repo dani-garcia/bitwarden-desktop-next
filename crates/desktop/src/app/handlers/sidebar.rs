@@ -6,11 +6,10 @@
 use iced::Task;
 
 use crate::{
+    app::{App, Message},
     components::sidebar::{NavSection, SidebarMessage, SidebarMode},
     domain::Screen,
 };
-
-use super::super::{App, Message};
 
 impl App {
     pub(crate) fn handle_sidebar_message(&mut self, msg: SidebarMessage) -> Task<Message> {

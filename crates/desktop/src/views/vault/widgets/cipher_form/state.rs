@@ -125,6 +125,13 @@ pub struct CipherForm {
 }
 
 impl CipherForm {
+    /// True once all required fields are populated. Today the only
+    /// universally-required field is `name`; type-specific minimums can be
+    /// added as the form grows.
+    pub fn is_valid(&self) -> bool {
+        !self.modified.name.trim().is_empty()
+    }
+
     /// Construct for editing an existing cipher. Clones the view so `original`
     /// stays pristine regardless of what form events do to `modified`.
     pub fn edit(cv: CipherView) -> Self {

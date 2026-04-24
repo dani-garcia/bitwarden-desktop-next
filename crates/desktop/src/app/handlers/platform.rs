@@ -7,11 +7,10 @@
 use iced::Task;
 
 use crate::{
+    app::{App, Message, SystemMessage, WindowMessage, window::{WindowInfo, WindowKind}},
     domain::Screen,
     views::{settings::SettingsSnapshot, title_bar::WindowAction},
 };
-
-use super::super::{App, Message, SystemMessage, WindowInfo, WindowKind, WindowMessage};
 
 impl App {
     // ── Window lifecycle ───────────────────────────────────────────────────

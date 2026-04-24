@@ -5,12 +5,14 @@ use bitwarden_vault::SshKeyView;
 use iced::{Element, widget::column};
 
 use crate::{
+    components::inputs::readonly_field_truncated,
     fl,
     theme::{AppColors, AppTheme},
+    views::vault::widgets::{
+        cipher_form::{CipherForm, CipherFormMessage},
+        field_helpers::{card_with_margin, styled_card},
+    },
 };
-
-use super::super::super::field_helpers::{card_with_margin, field_readonly, styled_card};
-use super::super::{message::CipherFormMessage, state::CipherForm};
 
 pub(in super::super) fn ssh_key_card<'a>(
     form: &'a CipherForm,
@@ -23,9 +25,9 @@ pub(in super::super) fn ssh_key_card<'a>(
     };
     let k = form.modified.ssh_key.as_ref().unwrap_or(&default_key);
     let rows: Vec<Element<'a, CipherFormMessage, AppTheme>> = vec![
-        field_readonly(fl!("form-ssh-public-key"), k.public_key.clone(), colors),
-        field_readonly(fl!("form-ssh-private-key"), k.private_key.clone(), colors),
-        field_readonly(fl!("form-ssh-fingerprint"), k.fingerprint.clone(), colors),
+        readonly_field_truncated(fl!("form-ssh-private-key"), k.private_key.clone(), colors),
+        readonly_field_truncated(fl!("form-ssh-public-key"), k.public_key.clone(), colors),
+        readonly_field_truncated(fl!("form-ssh-fingerprint"), k.fingerprint.clone(), colors),
     ];
     card_with_margin(styled_card(column(rows).spacing(12).into()))
 }

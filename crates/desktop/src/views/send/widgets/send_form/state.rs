@@ -309,9 +309,10 @@ impl SendForm {
         &self.name
     }
 
-    /// True once the required fields are populated. Used to disable the
-    /// Save button — the form itself still accepts edits.
-    pub(super) fn is_valid(&self) -> bool {
+    /// True once all required fields are populated. Called from the view
+    /// handler's `FormAction::Save` branch to decide between running the
+    /// save task and showing a "please fill in required fields" toast.
+    pub fn is_valid(&self) -> bool {
         if self.name.trim().is_empty() {
             return false;
         }

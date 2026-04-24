@@ -40,11 +40,7 @@ impl SendForm {
 
             SendFormMessage::NotesAction(action) => self.notes_content.perform(action),
 
-            SendFormMessage::SavePressed => {
-                if self.is_valid() {
-                    return FormAction::Save;
-                }
-            }
+            SendFormMessage::SavePressed => return FormAction::Save,
             SendFormMessage::CancelPressed => return FormAction::Cancel,
             SendFormMessage::DeletePressed => return FormAction::Delete,
         }

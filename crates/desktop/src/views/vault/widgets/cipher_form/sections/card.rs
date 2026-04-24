@@ -6,10 +6,11 @@ use crate::{
     components::inputs::{reveal_text_field, select_field, text_field},
     fl,
     theme::{AppColors, AppTheme},
+    views::vault::widgets::{
+        cipher_form::{CipherForm, CipherFormMessage},
+        field_helpers::{card_with_margin, styled_card},
+    },
 };
-
-use super::super::super::field_helpers::{card_with_margin, styled_card};
-use super::super::{message::CipherFormMessage, state::CipherForm};
 
 pub(in super::super) fn card_details_card<'a>(
     form: &'a CipherForm,
