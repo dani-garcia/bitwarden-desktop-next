@@ -147,8 +147,8 @@ pub enum LoginEvent {
     /// LoginView wants to show a cross-cutting toast notification.
     ToastRequested(Toast),
     /// Account-switcher action. Forwarded verbatim to
-    /// `App::handle_account_switcher_event` so login and vault share one
-    /// dispatch site.
+    /// `App::handle_account_switcher_event` so login, vault, and send share
+    /// one dispatch site.
     AccountSwitcher(AccountSwitcherEvent),
 }
 
@@ -407,16 +407,11 @@ impl LoginView {
             }
 
             // ── Account switcher ───────────────────────────────────────────
-            LoginMessage::AccountSwitcher(AccountSwitcherMessage::ToggleDropdown) => {
-                *open_overlay = if *open_overlay == Some(crate::app::Overlay::AccountSwitcher) {
-                    None
-                } else {
-                    Some(crate::app::Overlay::AccountSwitcher)
-                };
-            }
-            LoginMessage::AccountSwitcher(asm) => {
-                *open_overlay = None;
-                return Outcome::from_option(asm.into_event().map(LoginEvent::AccountSwitcher));
+            LoginMessage::AccountSwitcher(m) => {
+                return Outcome::from_option(
+                    m.consume(open_overlay, crate::app::Overlay::AccountSwitcher)
+                        .map(LoginEvent::AccountSwitcher),
+                );
             }
         }
         Outcome::None

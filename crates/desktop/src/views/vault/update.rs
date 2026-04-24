@@ -15,9 +15,7 @@ use iced::Task;
 
 use crate::{
     app::{Outcome, UpdateCtx},
-    components::{
-        account_switcher::AccountSwitcherMessage, sidebar::VaultFilter, toast::Toast,
-    },
+    components::{sidebar::VaultFilter, toast::Toast},
     domain::UserId,
     fl,
     services::{clipboard::Sensitivity, sdk::ClientManager},
@@ -107,7 +105,10 @@ impl VaultView {
                 return self.handle_delete_completed(uid, id, res, active_user);
             }
             VaultMessage::AccountSwitcher(m) => {
-                return self.handle_account_switcher(m, open_overlay);
+                return Outcome::from_option(
+                    m.consume(open_overlay, crate::app::Overlay::AccountSwitcher)
+                        .map(VaultEvent::AccountSwitcher),
+                );
             }
             VaultMessage::NewItem => {}
             VaultMessage::ListLoaded(uid, res) => {
@@ -427,25 +428,6 @@ impl VaultView {
             }
         };
         Outcome::event(event)
-    }
-
-    fn handle_account_switcher(
-        &mut self,
-        msg: AccountSwitcherMessage,
-        open_overlay: &mut Option<crate::app::Overlay>,
-    ) -> Outcome<Self> {
-        // Toggle flips the dropdown state; every other variant closes it and
-        // bubbles a shared `AccountSwitcherEvent` for App to route.
-        if matches!(msg, AccountSwitcherMessage::ToggleDropdown) {
-            *open_overlay = if *open_overlay == Some(crate::app::Overlay::AccountSwitcher) {
-                None
-            } else {
-                Some(crate::app::Overlay::AccountSwitcher)
-            };
-            return Outcome::None;
-        }
-        *open_overlay = None;
-        Outcome::from_option(msg.into_event().map(VaultEvent::AccountSwitcher))
     }
 
     fn handle_list_loaded(

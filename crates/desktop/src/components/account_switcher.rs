@@ -24,9 +24,9 @@ pub enum AccountSwitcherMessage {
 
 /// App-level semantics the account switcher can request. Views bubble these
 /// via their own event enum (`LoginEvent::AccountSwitcher`,
-/// `VaultEvent::AccountSwitcher`) so both routes land in the same
-/// `App::handle_account_switcher_event` — one place to keep in sync when
-/// the switcher grows a new action.
+/// `VaultEvent::AccountSwitcher`, `SendEvent::AccountSwitcher`) so every
+/// route lands in the same `App::handle_account_switcher_event` — one
+/// place to keep in sync when the switcher grows a new action.
 #[derive(Debug, Clone)]
 pub enum AccountSwitcherEvent {
     SwitchUser { uid: UserId },
@@ -50,6 +50,34 @@ impl AccountSwitcherMessage {
             Self::Settings => Some(AccountSwitcherEvent::Settings),
             Self::LockActive => Some(AccountSwitcherEvent::LockActive),
             Self::LogOut => Some(AccountSwitcherEvent::LogOut),
+        }
+    }
+
+    /// Apply a switcher message to the caller-owned overlay cell:
+    /// `ToggleDropdown` flips it on/off against `self_overlay`; every other
+    /// variant closes any open overlay and returns the outbound event for
+    /// App to route.
+    ///
+    /// Generic over the overlay enum so this helper lives in `components/`
+    /// without importing `app::Overlay` — callers pass their own variant.
+    pub fn consume<O: Copy + PartialEq>(
+        self,
+        open_overlay: &mut Option<O>,
+        self_overlay: O,
+    ) -> Option<AccountSwitcherEvent> {
+        match self {
+            Self::ToggleDropdown => {
+                *open_overlay = if *open_overlay == Some(self_overlay) {
+                    None
+                } else {
+                    Some(self_overlay)
+                };
+                None
+            }
+            other => {
+                *open_overlay = None;
+                other.into_event()
+            }
         }
     }
 }
@@ -80,6 +108,27 @@ pub fn avatar_trigger<'a>(
     buttons::transparent(avatar(active_email, 36.0))
         .on_press(AccountSwitcherMessage::ToggleDropdown)
         .padding(0)
+        .into()
+}
+
+/// Avatar trigger + floating dropdown panel wired into a single `DropDown`.
+/// The shared chrome for authenticated screens (vault, send, future
+/// generator) that all show the same avatar-in-top-right. Callers map the
+/// returned element into their own message type with a single
+/// `.map(MyMessage::AccountSwitcher)`.
+pub fn header_switcher<'a>(
+    active_email: &'a str,
+    accounts: &'a [AccountEntry],
+    is_open: bool,
+    colors: &'a AppColors,
+) -> Element<'a, AccountSwitcherMessage, AppTheme> {
+    let trigger = avatar_trigger(active_email, colors);
+    let panel = dropdown(Some(active_email), accounts, colors);
+    crate::components::drop_down::DropDown::new(trigger, panel, is_open)
+        .on_dismiss(AccountSwitcherMessage::ToggleDropdown)
+        .alignment(crate::components::drop_down::Alignment::BelowRight)
+        .width(360.0)
+        .offset(4.0)
         .into()
 }
 

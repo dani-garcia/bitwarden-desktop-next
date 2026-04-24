@@ -1,4 +1,5 @@
 mod message;
+mod sections;
 mod state;
 mod update;
 mod view;

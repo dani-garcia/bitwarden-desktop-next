@@ -169,6 +169,34 @@ Before we grow many more call sites (unlock failure, copy-to-clipboard, sync err
 
 `VaultView::filter_items` re-lowercases `name`, `subtitle`, and URI per item per keystroke. On the 20 k loadtest account that's ~60 k allocations per keystroke. Wrap `CipherListView` in a `CipherRow { inner: Arc<CipherListView>, name_lc: String, subtitle_lc: String, uri_lc: Option<String> }` populated once on `ListLoaded`. Filter against pre-lowered strings. Pairs well with the `Arc<[CipherListView]>` micro-optimization in Tier 4.
 
+### `UpdateCtx` filter leak (revisit when a 3rd filter lands)
+
+[`app/ctx.rs`](../crates/desktop/src/app/ctx.rs) currently carries `active_vault_filter` + `active_send_filter` as separate fields on `UpdateCtx`. Every view's `update()` receives both, even views that don't consume either. When a third filter arrives (Generator likely), the right move becomes clear:
+
+- **Option A:** collapse to a single `sidebar: &SidebarState` field — views that care destructure what they need.
+- **Option B:** push-based: App dispatches a `FilterChanged { filter }` message into the affected view on sidebar clicks rather than threading the current filter through every update cycle.
+
+Defer until N=3 so the right split is obvious instead of guessed.
+
+### Prune dead i18n keys
+
+`assets/i18n/{lang}/bitwarden_desktop_next.ftl` files grow additively. `i18n-embed-fl` validates Rust → `.ftl` references at compile time, but unused keys in the `.ftl` file itself are silent. Add a small lint (grep-based check, or a `cargo xtask i18n-unused` that parses `.ftl` IDs and greps the Rust tree) before the file crosses ~200 keys. Today it's ~130.
+
+### Vault + Send event handlers will generalize once a 3rd list view exists
+
+[`vault/handler.rs`](../crates/desktop/src/views/vault/handler.rs) and [`send/handler.rs`](../crates/desktop/src/views/send/handler.rs) both dispatch the same five event arms — `AccountSwitcher` / `ToastRequested` / `ItemSaved` / `ItemDeleted` / `ClipboardCopyRequested` — differing only in toast strings and which list-reload task to call. Pairs naturally with the "Shared list-view primitive" entry below: once that lands, the handlers deduplicate for free via a shared `ListEvent<V>` or similar. Don't fix in isolation — that just introduces an abstraction the list-view primitive will replace.
+
+### Shared list-view primitive (revisit when a 3rd list view lands)
+
+`VaultView` and `SendView` share near-identical structure: a `Selection { item, id, form, confirm_delete }` / `ItemCache { all, cached }` pair keyed by `UserId`, plus a `recompute_filtered` + `filter_items` + search-query pattern and a `CollapsiblePane` holding the list + detail/form split. Both views also reimplement the same `apply_filter` / `reset` / `remove_user_items` / `focus_search_task` methods.
+
+Two implementations is a coincidence; three is a pattern. Before `Generator` (or any future list-style screen) lands, evaluate extracting:
+
+- A `ListView<T, Form>` generic state struct holding `Selection<T::Id, Form>` + `HashMap<UserId, ItemCache<T>>` + `CollapsiblePane` + scroll + search query, with `recompute_filtered` generic over a filter predicate.
+- A `ListViewController` trait with `load_list_task`, `full_item`, `save_item`, `delete_item` SDK shims, so the state struct can drive the async flow without knowing about ciphers or sends specifically.
+
+**Defer until we have a concrete third consumer** — premature abstraction here would lock the shape against a use case we haven't seen yet. Revisit alongside the Tier 1 "Implement the login command" / Generator work.
+
 ### Testing infrastructure
 
 - **Unit tests for pure logic** — `VaultView::filter_items`, `Shortcut::matches`, `EnabledWhen::check`, sub-view `update()` state machines (message + injected deps → task + event). Standard `#[test]`, no framework needed.

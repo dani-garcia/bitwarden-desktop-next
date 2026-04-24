@@ -9,10 +9,7 @@ use iced::{
 };
 
 use crate::{
-    components::{
-        account_switcher::{self, AccountSwitcherMessage},
-        bottom_sheet, buttons, collapsible_pane, icons,
-    },
+    components::{account_switcher, bottom_sheet, buttons, collapsible_pane, icons},
     fl,
     theme::{AppColors, AppTheme},
 };
@@ -201,23 +198,13 @@ impl VaultView {
         });
 
         let account_switcher_open = ctx.open_overlay == Some(crate::app::Overlay::AccountSwitcher);
-        let avatar_trigger = account_switcher::avatar_trigger(active_email, colors)
-            .map(VaultMessage::AccountSwitcher);
-        let dd_panel = account_switcher::dropdown(Some(active_email), ctx.accounts, colors)
-            .map(VaultMessage::AccountSwitcher);
-        let avatar: Element<'a, VaultMessage, AppTheme> =
-            crate::components::drop_down::DropDown::new(
-                avatar_trigger,
-                dd_panel,
-                account_switcher_open,
-            )
-            .on_dismiss(VaultMessage::AccountSwitcher(
-                AccountSwitcherMessage::ToggleDropdown,
-            ))
-            .alignment(crate::components::drop_down::Alignment::BelowRight)
-            .width(360.0)
-            .offset(4.0)
-            .into();
+        let avatar = account_switcher::header_switcher(
+            active_email,
+            ctx.accounts,
+            account_switcher_open,
+            colors,
+        )
+        .map(VaultMessage::AccountSwitcher);
 
         let content_header = container(
             row![title, Space::new().width(Fill), new_button, avatar]

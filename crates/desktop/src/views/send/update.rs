@@ -7,7 +7,7 @@ use iced::Task;
 
 use crate::{
     app::{Outcome, UpdateCtx},
-    components::{account_switcher::AccountSwitcherMessage, sidebar::SendFilter, toast::Toast},
+    components::{sidebar::SendFilter, toast::Toast},
     domain::UserId,
     fl,
     services::sdk::ClientManager,
@@ -75,7 +75,10 @@ impl SendView {
                 self.handle_new_item(active_send_filter);
             }
             SendMessage::AccountSwitcher(m) => {
-                return self.handle_account_switcher(m, open_overlay);
+                return Outcome::from_option(
+                    m.consume(open_overlay, crate::app::Overlay::AccountSwitcher)
+                        .map(SendEvent::AccountSwitcher),
+                );
             }
             SendMessage::ListLoaded(uid, res) => {
                 return self.handle_list_loaded(uid, res, active_user, active_send_filter);
@@ -209,23 +212,6 @@ impl SendView {
             async move { mgr.delete_send(&uid, send_id).await },
             move |res| SendMessage::DeleteCompleted(uid, send_id, res),
         )
-    }
-
-    fn handle_account_switcher(
-        &mut self,
-        msg: AccountSwitcherMessage,
-        open_overlay: &mut Option<crate::app::Overlay>,
-    ) -> Outcome<Self> {
-        if matches!(msg, AccountSwitcherMessage::ToggleDropdown) {
-            *open_overlay = if *open_overlay == Some(crate::app::Overlay::AccountSwitcher) {
-                None
-            } else {
-                Some(crate::app::Overlay::AccountSwitcher)
-            };
-            return Outcome::None;
-        }
-        *open_overlay = None;
-        Outcome::from_option(msg.into_event().map(SendEvent::AccountSwitcher))
     }
 
     fn handle_list_loaded(

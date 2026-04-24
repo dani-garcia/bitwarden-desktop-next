@@ -34,12 +34,14 @@ This is the prescriptive guide for the `bitwarden-desktop-next` crate. It define
 
 **Invariant:** a module may import only from layers strictly below its own. Within a layer, no sibling-to-sibling imports — sibling views communicate only through `App`'s router; sibling services communicate only through well-defined APIs.
 
-**Enforcement:** Rust visibility is the primary mechanism. Within a layer, internal types and helpers are **never** left as bare `pub` — that accidentally exports them crate-wide and breaks layer isolation. Use the narrowest level that works:
+**Enforcement:** Rust visibility is the primary mechanism. Bare `pub` is reserved for two places: **(a)** the documented public API of the archetype a file belongs to — `{View}View` / `{View}Message` / `{View}Event` / `view()` / `update()` / `new()` / named task factories for views, the `(data, callbacks, ctx) -> Element` constructors for components, the service's outward-facing methods. **(b)** enum/struct fields that are part of that public API. Internal helpers and state use the narrowest level that works:
 
 - `pub(in crate::views::<view>)` — visible only inside one view's subtree (including its `widgets/`). Use for view-local domain enums and state structs.
-- `pub(super)` — visible to the parent module. Use for sub-module internals.
-- `pub(crate)` — visible across the crate. Use only for the archetype's documented public API (e.g., `VaultView`, `VaultMessage`, `VaultEvent`, `view()`, `update()`, `new()`, named task factories, and the event-handler carve-out).
+- `pub(super)` — visible to the parent module. Use for sub-module internals (e.g. a `widgets/send_form/sections/details.rs` field helper that `view.rs` invokes).
+- `pub(crate)` — visible across the crate. Reserved for view archetype entry points and the event-handler carve-out (`handle_{view}_event`).
 - private (no `pub`) — default for struct fields and internal helpers.
+
+Rule of thumb: before writing `pub`, ask *"is this part of the archetype's documented API?"* If no, narrow it.
 
 The compiler refuses cross-layer imports at the `use` line once visibility is set correctly. A grep-based CI check is available as a backstop. When a `pub` enum variant must wrap a narrower type (e.g., `VaultMessage::Sidebar(SidebarMessage)` carrying view-local payloads), silence the resulting `private_interfaces` lint with a scoped `#[allow]` and a one-line comment pointing to the reason.
 
@@ -58,8 +60,11 @@ crates/desktop/src/
 │   ├── mod.rs                      # App struct, new/update/view/subscription
 │   ├── message.rs                  # top-level Message + WindowMessage + SystemMessage
 │   ├── ctx.rs                      # UpdateCtx, RenderCtx bundle definitions
-│   ├── helpers.rs                  # refresh_cache, menu_state, platform bits
-│   └── handlers/platform.rs        # window lifecycle, system events, menu/tray dispatch
+│   ├── helpers.rs                  # stateless App accessors (window id, toast push, menu_state)
+│   └── handlers/
+│       ├── platform.rs             # window lifecycle, system events, menu/tray dispatch
+│       ├── sidebar.rs              # SidebarMessage dispatch + screen transitions
+│       └── account_switcher.rs     # AccountSwitcherEvent routing + user switch
 │
 ├── services/                       # platform + stateful cross-view services
 │   ├── sdk/                        # ClientManager (bitwarden SDK facade)
@@ -73,11 +78,16 @@ crates/desktop/src/
 │   └── settings/                   # Settings load/save
 │
 ├── components/                     # shared UI atoms
-│   ├── buttons.rs                  # primary/secondary/ghost/ghost_icon/icon_button
-│   ├── icons.rs / inputs.rs / drop_down.rs / spinner.rs / virtual_list.rs
-│   ├── bottom_sheet.rs / modal.rs / totp.rs
+│   ├── buttons.rs                  # primary/secondary/ghost/ghost_icon/transparent
+│   ├── icons.rs                    # bootstrap-icons font + constants
+│   ├── inputs.rs                   # field_frame, text_field, select_field, …
+│   ├── drop_down.rs                # iced_aw fork with BelowLeft/BelowRight/AboveRight
+│   ├── spinner.rs / virtual_list.rs / totp.rs
+│   ├── bottom_sheet.rs / modal.rs  # window-level overlays composed at App root
+│   ├── collapsible_pane.rs         # list/detail split that stays mounted on close
+│   ├── sidebar.rs                  # app-level nav chrome (see "Sidebar + shared chrome")
 │   ├── toast/                      # folder: multi-file component
-│   └── account_switcher.rs
+│   └── account_switcher.rs         # avatar trigger + dropdown panel + header_switcher
 │
 ├── views/                          # one folder per screen (team boundary)
 │   ├── login/
@@ -115,9 +125,16 @@ The state/message/update/view split applies once the view's `mod.rs` approaches 
 **Public surface of a view** (the full crate-visible API, callable from `App`):
 - `{View}View` struct (fields stay private; construction via `new()`).
 - `{View}Message`, `{View}Event` enums.
-- `{View}View::new()`, `update()`, `view()`, `dismiss_dropdowns()`.
-- Named task factories (e.g. `load_list_task`). Convention: top-level `pub(crate) fn {action}_task(...)` in `update.rs` (or `mod.rs` if the view hasn't been split). Called from `App` helpers when a task needs to be kicked off outside the view's own `update()` (e.g., post-unlock vault reload). Factory functions never take `&mut self` — they take owned + borrowed inputs and return `Task<{View}Message>`.
+- `{View}View::new()`, `update()`, `view()`.
 - `handle_{view}_event` (defined inside `handler.rs` as `impl App`, marked `pub(crate)`).
+
+**Optional — present when the view owns that feature:**
+- `dismiss_dropdowns()` — closes local overlays when a cross-view message arrives. Only needed when the view owns non-app-level overlays.
+- `sheet_view(&RenderCtx) -> Option<Element>` / `modal_view(&RenderCtx) -> Option<Element>` — window-level overlays composed by `App::view_main` at the App root, so their backdrop covers the title bar and sidebar. Return `None` when the overlay is inactive. Vault and Send both expose these; App stacks them above the main column.
+- `reset(&uid, filter)` / `apply_filter(&uid, filter)` — called by App from user-switch and sidebar-filter handlers. Views that own a filterable list implement both; they keep per-user cached data consistent with the current sidebar selection.
+- `remove_user_items(&uid)` — drop per-user cached data on sign-out.
+- `focus_search_task()` — return a `Task` that focuses the view's search input. Called by File-menu shortcuts (Ctrl+F).
+- Named task factories (e.g. `load_list_task`). Convention: top-level `pub fn {action}_task(...)` in `update.rs`. Called from `App` helpers when a task needs to be kicked off outside the view's own `update()` (e.g., post-unlock list reload). Factory functions never take `&mut self` — they take owned + borrowed inputs and return `Task<{View}Message>`.
 
 Everything else stays `pub(super)` or private. Struct fields default to private.
 
@@ -463,9 +480,18 @@ impl App {
 
 ### 6. Wire a screen switch (if the view owns a screen)
 
-Add `Screen::Generator` in `domain.rs`, branch on it in `App::view_main`, and flip to it from the triggering action.
+Add `Screen::Generator` in `domain.rs`, branch on it in `App::view_main`, and flip to it from the triggering action. For a screen driven from the sidebar, see "Sidebar + Shared Authenticated Chrome" above — adding a `NavSection` variant + handler dispatch arm is the idiomatic path.
 
 If the view is a panel/modal within an existing screen, skip this step.
+
+### 7. Expose window-level overlays (if the view owns any)
+
+If the view owns an overlay that should cover the **entire** window (including the title bar and sidebar) — typically a delete-confirmation modal or a narrow-mode bottom sheet — expose an `Option<Element>` accessor and compose it at App level rather than nesting inside the view's `view()`. Conventional method names:
+
+- `sheet_view(&RenderCtx) -> Option<Element>` — narrow-mode detail panel as a bottom sheet.
+- `modal_view(&RenderCtx) -> Option<Element>` — confirm-delete / warning dialogs.
+
+App's `view_main` stacks them above the main column. See [decisions.md](./decisions.md) → "Window-Level Overlays Composed at App Root" for the why.
 
 ### What this recipe costs in `app.rs`
 
@@ -476,7 +502,30 @@ Exactly four mechanical adds plus one `impl App { fn handle_generator_event }` i
 3. One router arm (calls `.update()` + `handle_generator_event`).
 4. One cross-view dismissal entry.
 
-Plus (if the view owns a screen) one `Screen::Generator` variant and one `view_main` branch.
+Plus, as applicable: one `Screen::Generator` variant + `view_main` branch (if the view owns a screen), one `sheet_view` / `modal_view` stack entry (if it owns window-level overlays), one `NavSection::Generator` + handler arm (if it's sidebar-driven).
+
+## Sidebar + Shared Authenticated Chrome
+
+Authenticated screens (Vault, Send, future Generator) share two pieces of chrome: the **left sidebar** (`components/sidebar.rs`) and the **top-right account switcher** (`components/account_switcher.rs`). Both are rendered alongside the per-screen content in `App::view_main` — the views themselves don't re-render them.
+
+### Sidebar state lives on `App`
+
+`SidebarState` (mode, active section, per-screen filters, tree-open flags) persists across screen switches, so it belongs on `App`, not inside any one view. [`app/handlers/sidebar.rs`](../crates/desktop/src/app/handlers/sidebar.rs) owns the full dispatcher: section clicks may flip `Screen`, filter clicks mutate `SidebarState` **and** push the new filter down to the owning view via its `apply_filter(&uid, filter)` method. The view never reads `SidebarState` back — App is the single writer, views are receivers.
+
+### Adding a screen as a sidebar-driven nav section
+
+Editing [`components/sidebar.rs`](../crates/desktop/src/components/sidebar.rs) is a single-file touch that covers every sidebar concern for a new screen. When adding a `Generator` / `Import` / `Export` screen, expect to:
+
+1. Add a `NavSection::{YourScreen}` variant.
+2. If the screen owns a filterable list, add a `{YourScreen}Filter` enum + `active_{yourscreen}_filter` field on `SidebarState` + `{YourScreen}FilterSelected(...)` on `SidebarMessage`. Model from `SendFilter` / `VaultFilter`.
+3. Render the section in `expanded_panel()` (parent header row + nav buttons) and the icon rail.
+4. Add dispatch arms in [`app/handlers/sidebar.rs`](../crates/desktop/src/app/handlers/sidebar.rs): a `SectionSelected(NavSection::YourScreen)` arm that calls `switch_to_{yourscreen}()`, and (if applicable) a filter arm that calls `self.views.{yourscreen}.apply_filter(&uid, filter)` then the switch helper.
+
+Sidebar-related changes are intentionally centralized — the sidebar is logically one widget. This is *not* a layering violation; it's the correct home for chrome that spans multiple screens. When it grows to the point of friction, revisit by splitting per-section sub-modules under `components/sidebar/` rather than by distributing state back into views.
+
+### Account switcher reuse
+
+The top-right avatar + dropdown is wired via `components::account_switcher::header_switcher(active_email, accounts, is_open, colors)` — one call returns the complete trigger + panel in `AccountSwitcherMessage` space. Each view maps it into its own message type with one `.map(MyMessage::AccountSwitcher)`. The resulting `*Event::AccountSwitcher` bubbles up through the view's handler and lands in [`app/handlers/account_switcher.rs`](../crates/desktop/src/app/handlers/account_switcher.rs) — the single place where switch / add / lock / logout semantics live.
 
 ## Menu System
 

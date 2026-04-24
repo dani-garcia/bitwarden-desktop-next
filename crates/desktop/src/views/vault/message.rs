@@ -148,8 +148,8 @@ impl std::fmt::Debug for VaultMessage {
 #[derive(Debug, Clone)]
 pub enum VaultEvent {
     /// Account-switcher action. Forwarded verbatim to
-    /// `App::handle_account_switcher_event` so login and vault share one
-    /// dispatch site.
+    /// `App::handle_account_switcher_event` so login, vault, and send share
+    /// one dispatch site.
     AccountSwitcher(AccountSwitcherEvent),
     /// VaultView wants to show a cross-cutting toast notification.
     ToastRequested(Toast),
