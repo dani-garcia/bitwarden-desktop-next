@@ -13,7 +13,7 @@ use crate::{
     fl,
     theme::{AppColors, AppTheme},
     views::send::widgets::send_edit::{
-        SendForm, SendEditMessage,
+        SendEditMessage, SendForm,
         state::{AccessType, DeletionPreset},
     },
 };
@@ -49,9 +49,8 @@ pub(in super::super) fn details_card<'a>(
     items.push(
         text(fl!(
             "send-form-deletion-hint",
-            date = crate::views::send::widgets::send_list::format_deletion_date(
-                &form.deletion_date
-            )
+            date =
+                crate::views::send::widgets::send_list::format_deletion_date(&form.deletion_date)
         ))
         .size(12)
         .color(colors.text_secondary)

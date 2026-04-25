@@ -544,3 +544,13 @@ generator-history-days-ago = {$count}d ago
 # Toasts
 generator-toast-copied = Copied
 generator-toast-failed = Couldn't generate
+
+# Magnify launcher
+magnify-search-placeholder = Bitwarden Magnify
+magnify-locked-title = Your vault is locked
+magnify-locked-subtitle = Open Bitwarden to unlock
+magnify-open-bitwarden = Open Bitwarden
+magnify-no-results = No matching items
+magnify-copy-password = Copy password
+magnify-copy-username = Copy username
+magnify-hint-navigate = Navigate

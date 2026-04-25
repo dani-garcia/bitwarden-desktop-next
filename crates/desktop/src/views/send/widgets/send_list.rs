@@ -6,11 +6,11 @@ use std::sync::Arc;
 use bitwarden_send::{SendType, SendView as SdkSendView};
 use chrono::{DateTime, Utc};
 use iced::{
-    Alignment, Background, Border, Color, Element, Fill, Shadow,
-    widget,
+    Alignment, Background, Border, Color, Element, Fill, Shadow, widget,
     widget::{
-        Space, column, container, row, scrollable, text, text_input,
+        Space, column, container, row, scrollable, text,
         text::{Ellipsis, Wrapping},
+        text_input,
     },
 };
 

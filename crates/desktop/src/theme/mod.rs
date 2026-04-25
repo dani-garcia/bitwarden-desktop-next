@@ -8,7 +8,17 @@ use iced::Color;
 pub const RADIUS_SM: f32 = 4.0;
 pub const RADIUS_MD: f32 = 6.0;
 pub const RADIUS_LG: f32 = 8.0;
+/// Larger surface radius — used by floating launcher-style windows whose
+/// outer container is the only painted region (Magnify).
+pub const RADIUS_XL: f32 = 12.0;
 pub const RADIUS_PILL: f32 = 20.0;
+
+/// Surface translucency for the Magnify launcher window. The launcher's
+/// outer container fills with `colors.card_bg` at this alpha so a hint of
+/// what's behind shows through, matching `designs/magnify/{locked,unlocked}.jpg`.
+/// Theme-invariant today; promote to a per-theme `AppColors` token if a
+/// future theme needs a different blend.
+pub const MAGNIFY_SURFACE_ALPHA: f32 = 0.95;
 
 /// The application's custom theme, carrying a full set of semantic colors.
 #[derive(Debug, Clone)]
@@ -16,6 +26,12 @@ pub struct AppTheme {
     pub colors: AppColors,
     name: &'static str,
     mode: iced::theme::Mode,
+    /// When `true`, [`Base::base`] returns a transparent window background
+    /// so the OS-level window can show through outside any container fills.
+    /// Used by the Magnify launcher window so its rounded outer container
+    /// is the only visible region — pixels outside the rounded region stay
+    /// fully transparent.
+    transparent_background: bool,
 }
 
 /// User preference for which theme to use.
@@ -52,6 +68,7 @@ impl AppTheme {
             colors: AppColors::dark(),
             name: "Bitwarden Dark",
             mode: iced::theme::Mode::Dark,
+            transparent_background: false,
         }
     }
 
@@ -60,7 +77,16 @@ impl AppTheme {
             colors: AppColors::light(),
             name: "Bitwarden Light",
             mode: iced::theme::Mode::Light,
+            transparent_background: false,
         }
+    }
+
+    /// Return a clone of this theme with `transparent_background` set so
+    /// `iced::theme::Base::base()` paints a transparent window background.
+    /// Used by the Magnify launcher window.
+    pub fn with_transparent_background(mut self) -> Self {
+        self.transparent_background = true;
+        self
     }
 }
 
@@ -78,7 +104,11 @@ impl iced::theme::Base for AppTheme {
 
     fn base(&self) -> iced::theme::Style {
         iced::theme::Style {
-            background_color: self.colors.background,
+            background_color: if self.transparent_background {
+                Color::TRANSPARENT
+            } else {
+                self.colors.background
+            },
             text_color: self.colors.text_primary,
         }
     }
@@ -115,6 +145,10 @@ pub struct AppColors {
     pub border: Color,
     /// Sidebar selected item background
     pub sidebar_selected: Color,
+    /// Highlight color for the selected row in the Magnify launcher.
+    /// Brighter than `accent` (Figma `#53A3FA`) so a single row reads as
+    /// strongly highlighted against the launcher's translucent dark surface.
+    pub magnify_selected: Color,
     /// Selected row background in light-surface contexts (e.g. the settings
     /// modal sidebar). A darker gray than `item_hover` so the selection
     /// reads as distinct from mere hover. Separate from `sidebar_selected`

@@ -70,6 +70,7 @@ crates/desktop/src/
 │   ├── sdk/                        # ClientManager (bitwarden SDK facade)
 │   ├── clipboard/                  # ClipboardManager + sensitivity
 │   ├── favicon/                    # FaviconService + fetch stream
+│   ├── global_hotkey/              # OS-level hotkey → Magnify toggle stream
 │   ├── menu/                       # muda binding + MENUS + MenuAction
 │   ├── tray/                       # TrayHandle + click stream
 │   ├── i18n/                       # fluent loader + fl! macro target
@@ -101,6 +102,7 @@ crates/desktop/src/
 │   │   ├── handler.rs
 │   │   └── widgets/                # view-private custom widgets
 │   ├── settings/, title_bar/       # same shape
+│   ├── magnify/                    # secondary launcher window (Ctrl+Shift+Space)
 │   └── about/                      # stateless exception (single mod.rs + handler.rs)
 │
 └── theme/                          # visual contract (palette + iced catalog)
@@ -550,6 +552,16 @@ In addition, two **window-level overlay archetypes** are composed at the App roo
 - **Bottom sheet** — `components::bottom_sheet`. Narrow-mode detail/form pane. Same scrim + opaque pattern. Open/close uses a `FadeInOut` on the owning view's `Selection`; the close path defers `selection.clear()` by the outro duration so the sheet has content to render while sliding out.
 
 Iced overlays support only ONE level — a `DropDown` inside another `DropDown`'s overlay won't render its own overlay. Submenus must be part of the same overlay content (e.g. `row![main_panel, submenu]`).
+
+## Windows
+
+`App` holds `windows: HashMap<window::Id, WindowInfo>` and dispatches per-window via `WindowKind::{Main, About, Magnify}` in `view()` / `theme()`. Three concrete windows today; the `WindowKind` enum is the single point of extension for adding more.
+
+- **Main** — created in `App::new` via `iced::window::open`. Holds the entire authenticated experience (vault, send, generator, settings). Close-to-tray is gated by `exit_on_close_request: false` so the custom handler decides whether to actually close.
+- **About** — opened on demand from `MenuAction::About`; closes normally. Reference implementation for "second window with normal chrome" — see [app/handlers/platform.rs](../crates/desktop/src/app/handlers/platform.rs).
+- **Magnify launcher** — borderless transparent secondary window summoned by the `Ctrl+Shift+Space` global hotkey ([crates/desktop/src/services/global_hotkey/](../crates/desktop/src/services/global_hotkey/mod.rs)). Lazily opened on the first hotkey press, then kept alive across summons via `Mode::Hidden` toggling so subsequent summons are instant. Resizes dynamically (`window::resize`) as the result count changes — the only window in the app that does. Owns its own state on `App::magnify` and reads decrypted ciphers off `VaultView::all_items_for(uid)`; its message variant `Message::Magnify(MagnifyMessage)` routes directly into `app::handlers::magnify` rather than through `ViewMessage`, because the launcher's update path doesn't share `UpdateCtx` with the screen-driven views. Sticky search persists across summons within a 5-minute TTL; expired or cross-user summons reset.
+
+The global hotkey is wired through the same `tokio::sync::broadcast` + `Subscription::run` pattern used by `services::menu` and `services::tray` — `install_event_handler()` runs once at startup before the first hotkey can fire.
 
 ## Animation
 

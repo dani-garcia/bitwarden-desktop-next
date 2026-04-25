@@ -4,8 +4,9 @@ use crate::{
     components::sidebar::SidebarMessage,
     services::{favicon::FaviconMessage, sdk::ClientManager},
     views::{
-        about::AboutMessage, generator::GeneratorMessage, login::LoginMessage, send::SendMessage,
-        settings::SettingsMessage, title_bar::TitleBarMessage, vault::VaultMessage,
+        about::AboutMessage, generator::GeneratorMessage, login::LoginMessage,
+        magnify::MagnifyMessage, send::SendMessage, settings::SettingsMessage,
+        title_bar::TitleBarMessage, vault::VaultMessage,
     },
 };
 
@@ -38,6 +39,11 @@ pub enum Message {
     /// while at least one `FadeInOut` reports `in_progress`, so the wake
     /// rate drops to zero whenever nothing's animating.
     AnimationTick,
+    /// Magnify launcher events — global hotkey, search input, copy actions.
+    /// The launcher owns its own window; routed at the top level (rather
+    /// than via `ViewMessage`) because it can't share `UpdateCtx` with
+    /// screen-driven views.
+    Magnify(MagnifyMessage),
 }
 
 /// Messages that dispatch into a compositional sub-view's `update()`. All
@@ -98,6 +104,12 @@ pub enum WindowMessage {
     Closed(iced::window::Id),
     KeyPressed(iced::window::Id, iced::keyboard::Event),
     Resized(iced::window::Id, iced::Size),
+    /// Window lost focus. The Magnify launcher uses this for
+    /// click-outside-to-dismiss; other windows ignore it. Intentionally
+    /// emitted for every window rather than narrowed to the launcher's id
+    /// — the per-window check in the handler is cheap and keeps this
+    /// message reusable if a future window also wants blur semantics.
+    Unfocused(iced::window::Id),
 }
 
 /// Global signals that aren't tied to a specific window.

@@ -26,7 +26,7 @@ use crate::{
     },
     theme::{AppTheme, ThemePreference},
     views::{
-        generator as generator_view, login, send, settings as settings_view,
+        generator as generator_view, login, magnify, send, settings as settings_view,
         title_bar::{self, TitleBarMessage},
         vault,
     },
@@ -86,6 +86,10 @@ pub struct App {
     // Single writer: every clipboard `set` flows through here so the 30 s
     // auto-clear bookkeeping sees every write. See `clipboard.rs`.
     pub(super) clipboard: ClipboardManager,
+
+    // ── Magnify launcher ──────────────────────────────────────────────────
+    // Owns its own (lazily-opened) window; summoned by the global hotkey.
+    pub(super) magnify: magnify::MagnifyView,
 }
 
 /// Derived data cached across `view()` rebuilds. Refreshed only by the
@@ -177,6 +181,10 @@ impl App {
         // built — both crates' `set_event_handler` are one-shot.
         crate::services::menu::install_event_handler();
         crate::services::tray::install_event_handler();
+        // Global keyboard shortcuts (currently just the Magnify hotkey).
+        // Failure (e.g. Wayland) is logged inside `install_event_handler`
+        // and the rest of the app keeps running — Magnify is just unreachable.
+        crate::services::global_hotkey::install_event_handler();
 
         // `--autostart` (used by the future "open at login" path) forces the
         // app to launch hidden in the tray every time. We force-build the
@@ -253,6 +261,7 @@ impl App {
             toasts: Vec::new(),
             open_overlay: None,
             clipboard: ClipboardManager::new(),
+            magnify: magnify::MagnifyView::new(),
         };
 
         (
@@ -277,8 +286,9 @@ impl App {
         // closure (iced enforces this at const-eval time), and we need
         // the id bound into the emitted message for daemon-readiness.
         // The same listener also forwards `window::Event::Resized` so the
-        // app can drive a responsive layout, and `CloseRequested` so
-        // close-to-tray can intercept OS-native close actions.
+        // app can drive a responsive layout, `CloseRequested` so close-
+        // to-tray can intercept OS-native close actions, and `Unfocused`
+        // so the Magnify launcher can dismiss on click-outside.
         let event_sub = iced::event::listen_with(|event, _status, id| match event {
             iced::Event::Keyboard(ev) => Some(Message::Window(WindowMessage::KeyPressed(id, ev))),
             iced::Event::Window(iced::window::Event::Resized(size)) => {
@@ -286,6 +296,9 @@ impl App {
             }
             iced::Event::Window(iced::window::Event::CloseRequested) => {
                 Some(Message::Window(WindowMessage::CloseRequested(id)))
+            }
+            iced::Event::Window(iced::window::Event::Unfocused) => {
+                Some(Message::Window(WindowMessage::Unfocused(id)))
             }
             _ => None,
         });
@@ -320,6 +333,12 @@ impl App {
         let wake_sub = Subscription::run(crate::services::instance_lock::wake_stream)
             .map(|_| Message::System(SystemMessage::InstanceWakeRequested));
 
+        // Global hotkey → Magnify launcher toggle. Idle when the OS-side
+        // registration failed (Wayland, missing permissions) — the stream
+        // terminates immediately and the subscription stays dormant.
+        let magnify_sub = Subscription::run(crate::services::global_hotkey::event_stream)
+            .map(|_| Message::Magnify(crate::views::magnify::MagnifyMessage::HotkeyPressed));
+
         // Favicon fetch completions. Each message flips one row from globe
         // to real icon by virtue of arriving; the handler just logs.
         let favicon_sub =
@@ -345,6 +364,7 @@ impl App {
             wake_sub,
             favicon_sub,
             anim_sub,
+            magnify_sub,
         ])
     }
 
@@ -354,6 +374,7 @@ impl App {
             Message::Window(m) => self.handle_window_message(m),
             Message::System(m) => self.handle_system_message(m),
             Message::Sidebar(m) => self.handle_sidebar_message(m),
+            Message::Magnify(m) => self.handle_magnify_message(m),
             // No-op handler — the redraw triggered by this message reaching
             // update() is the only thing we need. Subscription rebuilds after
             // the redraw and unsubscribes once nothing's animating.
@@ -424,6 +445,14 @@ impl App {
             Some(WindowKind::About) => {
                 crate::views::about::view(&self.theme.current.colors).map(Message::About)
             }
+            Some(WindowKind::Magnify) => crate::views::magnify::view(
+                &self.magnify,
+                &self.favicon,
+                self.settings.show_favicons,
+                self.active_user.as_ref(),
+                &self.theme.current.colors,
+            )
+            .map(Message::Magnify),
             // Defensive: all windows are eagerly inserted at creation time,
             // but if iced calls view for an id we somehow don't know about,
             // an empty space is a safe no-op.
@@ -438,8 +467,18 @@ impl App {
         }
     }
 
-    pub fn theme(&self, _window_id: iced::window::Id) -> AppTheme {
-        self.theme.current.clone()
+    pub fn theme(&self, window_id: iced::window::Id) -> AppTheme {
+        let theme = self.theme.current.clone();
+        // Magnify launcher needs a transparent OS-window background so the
+        // pixels outside its rounded container stay see-through.
+        if matches!(
+            self.windows.get(&window_id).map(|w| w.kind),
+            Some(WindowKind::Magnify)
+        ) {
+            theme.with_transparent_background()
+        } else {
+            theme
+        }
     }
 
     fn view_main(&self) -> Element<'_, Message, AppTheme> {
@@ -480,35 +519,34 @@ impl App {
             Screen::Send => self.views.send.view(&rctx).map(Message::send),
         };
 
-        let page: Element<'_, Message, AppTheme> = if matches!(
-            self.screen,
-            Screen::Vault | Screen::Send
-        ) {
-            let organizations: &[crate::services::sdk::Organization] = self
-                .active_user
-                .as_ref()
-                .and_then(|uid| self.views.vault.organizations_for(uid))
-                .unwrap_or(&[]);
-            let sidebar_el = sidebar::view(&self.sidebar, organizations, colors)
-                .map(Message::Sidebar);
-            let main_row = iced::widget::container(
-                iced::widget::row![sidebar_el, inner].height(iced::Fill),
-            )
-            .width(iced::Fill)
-            .height(iced::Fill)
-            .style(|theme: &AppTheme| {
-                iced::widget::container::Style::default().background(theme.colors.header_bg)
-            });
-            iced::widget::container(main_row)
+        let page: Element<'_, Message, AppTheme> =
+            if matches!(self.screen, Screen::Vault | Screen::Send) {
+                let organizations: &[crate::services::sdk::Organization] = self
+                    .active_user
+                    .as_ref()
+                    .and_then(|uid| self.views.vault.organizations_for(uid))
+                    .unwrap_or(&[]);
+                let sidebar_el =
+                    sidebar::view(&self.sidebar, organizations, colors).map(Message::Sidebar);
+                let main_row = iced::widget::container(
+                    iced::widget::row![sidebar_el, inner].height(iced::Fill),
+                )
                 .width(iced::Fill)
                 .height(iced::Fill)
                 .style(|theme: &AppTheme| {
-                    iced::widget::container::Style::default().background(theme.colors.background)
-                })
-                .into()
-        } else {
-            inner
-        };
+                    iced::widget::container::Style::default().background(theme.colors.header_bg)
+                });
+                iced::widget::container(main_row)
+                    .width(iced::Fill)
+                    .height(iced::Fill)
+                    .style(|theme: &AppTheme| {
+                        iced::widget::container::Style::default()
+                            .background(theme.colors.background)
+                    })
+                    .into()
+            } else {
+                inner
+            };
 
         let close_toast = |idx| Message::System(SystemMessage::CloseToast(idx));
 

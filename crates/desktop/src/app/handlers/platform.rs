@@ -7,7 +7,10 @@
 use iced::Task;
 
 use crate::{
-    app::{App, Message, SystemMessage, WindowMessage, window::{WindowInfo, WindowKind}},
+    app::{
+        App, Message, SystemMessage, WindowMessage,
+        window::{WindowInfo, WindowKind},
+    },
     domain::Screen,
     views::{settings::SettingsSnapshot, title_bar::WindowAction},
 };
@@ -72,6 +75,9 @@ impl App {
             WindowMessage::Closed(id) => {
                 let was_main = id == self.main_window_id();
                 self.windows.remove(&id);
+                if Some(id) == self.magnify.window {
+                    self.magnify.window = None;
+                }
                 if was_main { iced::exit() } else { Task::none() }
             }
             WindowMessage::Resized(id, size) => {
@@ -80,7 +86,20 @@ impl App {
                 }
                 Task::none()
             }
+            WindowMessage::Unfocused(id) => {
+                if Some(id) == self.magnify.window {
+                    return self
+                        .handle_magnify_message(crate::views::magnify::MagnifyMessage::Hide);
+                }
+                Task::none()
+            }
             WindowMessage::KeyPressed(id, ev) => {
+                // Magnify launcher gets first crack at keys for its own window.
+                if Some(id) == self.magnify.window
+                    && let Some(task) = self.handle_magnify_key(ev.clone())
+                {
+                    return task;
+                }
                 // Keyboard shortcuts only affect the main window — Ctrl+F
                 // in the About window must not trigger vault search.
                 if id != self.main_window_id() {
@@ -169,6 +188,11 @@ impl App {
             }
             MenuAction::LockAllVaults => {
                 self.client_manager.lock_all();
+                // Drop sticky Magnify state — `results` holds Arc clones of
+                // decrypted ciphers from the now-locked vault, and any
+                // in-flight `pending_password` decrypt would deliver a
+                // freshly-decrypted secret to the (now-locked) session.
+                self.magnify_reset_sticky();
                 self.views
                     .login
                     .show_unlock_for(self.active_user.as_ref(), &self.client_manager);

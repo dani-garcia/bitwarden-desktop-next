@@ -127,6 +127,14 @@ impl VaultView {
         self.items.get(uid).map(|ic| ic.organizations.as_slice())
     }
 
+    /// Raw decrypted item list for a user — the unfiltered backing store.
+    /// Includes archived and deleted ciphers; consumers (e.g. the Magnify
+    /// launcher) are responsible for excluding `archived_date` / `deleted_date`
+    /// rows where appropriate.
+    pub fn all_items_for(&self, uid: &UserId) -> Option<&[Arc<CipherListView>]> {
+        self.items.get(uid).map(|ic| ic.all.as_slice())
+    }
+
     /// Clear the search query and return a task that gives the search input
     /// focus. Called by the `File → Search vault` menu action; encapsulated
     /// here so `app/` doesn't need to reach into `widgets::search_bar`.

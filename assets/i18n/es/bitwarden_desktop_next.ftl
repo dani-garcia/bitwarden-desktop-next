@@ -482,3 +482,13 @@ send-delete-modal-title = Eliminar Send
 send-delete-modal-body = ¿Seguro que quieres eliminar "{$name}"?
 send-delete-modal-cancel = Cancelar
 send-delete-modal-confirm = Eliminar
+
+# Magnify launcher
+magnify-search-placeholder = Bitwarden Magnify
+magnify-locked-title = Tu bóveda está bloqueada
+magnify-locked-subtitle = Abre Bitwarden para desbloquear
+magnify-open-bitwarden = Abrir Bitwarden
+magnify-no-results = Sin coincidencias
+magnify-copy-password = Copiar contraseña
+magnify-copy-username = Copiar usuario
+magnify-hint-navigate = Navegar

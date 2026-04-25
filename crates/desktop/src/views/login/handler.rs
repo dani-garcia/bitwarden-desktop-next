@@ -37,6 +37,10 @@ impl App {
             return Task::none();
         };
         self.client_manager.lock(&uid);
+        // Drop sticky Magnify state — `results` holds Arc clones of
+        // decrypted ciphers and `pending_password` could deliver a
+        // newly-decrypted secret to a now-locked session.
+        self.magnify_reset_sticky();
         self.views
             .login
             .show_unlock_for(Some(&uid), &self.client_manager);
@@ -54,6 +58,10 @@ impl App {
             self.favicon.evict_user(&uid);
             self.client_manager.log_out(&uid);
         }
+        // Drop any sticky Magnify search keyed to the user we just signed
+        // out — otherwise the launcher still holds Arc clones of their
+        // decrypted ciphers in `results`.
+        self.magnify_reset_sticky();
         let next_uid = self
             .client_manager
             .user_ids()

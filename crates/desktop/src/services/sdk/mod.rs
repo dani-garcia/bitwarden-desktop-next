@@ -661,11 +661,7 @@ impl ClientManager {
     /// Look up a single send by id. Used when the user picks a row — we
     /// always open directly into the edit form, so this returns the full
     /// `SendView` (it already is the full view for the in-memory stub).
-    pub async fn full_send(
-        &self,
-        user_id: &UserId,
-        send_id: SendId,
-    ) -> Result<SendView, String> {
+    pub async fn full_send(&self, user_id: &UserId, send_id: SendId) -> Result<SendView, String> {
         self.sends
             .read()
             .unwrap()

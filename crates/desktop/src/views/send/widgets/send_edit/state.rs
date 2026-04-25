@@ -294,10 +294,7 @@ impl SendForm {
             hide_email: self.hide_email,
             revision_date: Utc::now(),
             deletion_date: self.deletion_date,
-            expiration_date: self
-                .original
-                .as_ref()
-                .and_then(|o| o.expiration_date),
+            expiration_date: self.original.as_ref().and_then(|o| o.expiration_date),
             emails,
             auth_type,
         }
@@ -333,8 +330,7 @@ impl SendForm {
 
     /// Remaining views, used for the hint under the limit-views field.
     pub(super) fn views_left(&self) -> Option<u32> {
-        parse_limit(&self.max_access_count_raw)
-            .map(|max| max.saturating_sub(self.access_count))
+        parse_limit(&self.max_access_count_raw).map(|max| max.saturating_sub(self.access_count))
     }
 
     // ── Mutators used by `update.rs` ──────────────────────────────────────
@@ -363,8 +359,7 @@ impl SendForm {
         // Placeholder generator: 14-char alphanumeric. Tracked in
         // docs/todo.md for replacement with the real `bitwarden-generators`
         // client once the Generator tab is wired up.
-        const CHARS: &[u8] =
-            b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        const CHARS: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         let mut out = String::with_capacity(14);
         for _ in 0..14 {
             let idx = fastrand_idx(CHARS.len());
@@ -394,7 +389,6 @@ impl SendForm {
             next.to_string()
         };
     }
-
 }
 
 /// Pick the preset whose duration most closely matches the given date's

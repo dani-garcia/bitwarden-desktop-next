@@ -30,4 +30,8 @@ impl WindowInfo {
 pub enum WindowKind {
     Main,
     About,
+    /// Magnify launcher — borderless transparent secondary window summoned
+    /// by the global hotkey. Kept alive across summons after the first
+    /// hotkey press; its visibility is toggled via `window::Mode::Hidden`.
+    Magnify,
 }

@@ -2,10 +2,7 @@
 //! and `cipher_edit` (editable view). Extracted so both can wear the same
 //! section/card/label styling without duplicating the style closures.
 
-use iced::{
-    Element,
-    widget::text,
-};
+use iced::{Element, widget::text};
 
 use crate::{
     components,

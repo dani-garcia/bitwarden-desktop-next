@@ -62,15 +62,11 @@ pub fn view<'a, Message: Clone + 'a>(
         a: progress * BACKDROP_ALPHA,
         ..Color::BLACK
     };
-    let backdrop = mouse_area(
-        container(Space::new())
-            .width(Fill)
-            .height(Fill)
-            .style(move |_theme: &AppTheme| {
-                container::Style::default().background(backdrop_color)
-            }),
-    )
-    .on_press(on_dismiss);
+    let backdrop =
+        mouse_area(container(Space::new()).width(Fill).height(Fill).style(
+            move |_theme: &AppTheme| container::Style::default().background(backdrop_color),
+        ))
+        .on_press(on_dismiss);
 
     // Slide origin: at progress=0 the dialog sits SLIDE_OFFSET_PX *below*
     // its rest position, sliding up to 0 as it opens. The slide is faked
@@ -139,7 +135,10 @@ where
 ///
 /// Backdrop click + the cancel button both fire `on_cancel`. Width is
 /// fixed at 380 px and the dialog shrinks to its content height.
-#[expect(clippy::too_many_arguments, reason = "explicit args read clearly at the call site; a struct here would be pure boilerplate")]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "explicit args read clearly at the call site; a struct here would be pure boilerplate"
+)]
 pub fn confirm_dialog<'a, M>(
     title_text: impl Into<String>,
     body_text: impl Into<String>,
@@ -157,9 +156,7 @@ where
         .size(18)
         .color(colors.text_primary)
         .font(crate::APP_FONT_BOLD);
-    let body = text(body_text.into())
-        .size(14)
-        .color(colors.text_primary);
+    let body = text(body_text.into()).size(14).color(colors.text_primary);
 
     let cancel_btn = buttons::secondary(text(cancel_label.into()).size(14))
         .on_press(on_cancel.clone())
@@ -179,5 +176,12 @@ where
     .padding(Padding::from([16, 20]))
     .width(Fill);
 
-    dialog(380.0, None, |c| c.card_bg, progress, inner.into(), on_cancel)
+    dialog(
+        380.0,
+        None,
+        |c| c.card_bg,
+        progress,
+        inner.into(),
+        on_cancel,
+    )
 }

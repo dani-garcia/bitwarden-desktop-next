@@ -46,18 +46,20 @@ impl App {
         };
         let mgr: Arc<ClientManager> = Arc::clone(&self.client_manager);
         match kind {
-            GenerateKind::Password(req) => Task::perform(
-                async move { mgr.generate_password(&uid, req).await },
-                |r| Message::generator(GeneratorMessage::Generated(r)),
-            ),
+            GenerateKind::Password(req) => {
+                Task::perform(async move { mgr.generate_password(&uid, req).await }, |r| {
+                    Message::generator(GeneratorMessage::Generated(r))
+                })
+            }
             GenerateKind::Passphrase(req) => Task::perform(
                 async move { mgr.generate_passphrase(&uid, req).await },
                 |r| Message::generator(GeneratorMessage::Generated(r)),
             ),
-            GenerateKind::Username(req) => Task::perform(
-                async move { mgr.generate_username(&uid, req).await },
-                |r| Message::generator(GeneratorMessage::Generated(r)),
-            ),
+            GenerateKind::Username(req) => {
+                Task::perform(async move { mgr.generate_username(&uid, req).await }, |r| {
+                    Message::generator(GeneratorMessage::Generated(r))
+                })
+            }
         }
     }
 

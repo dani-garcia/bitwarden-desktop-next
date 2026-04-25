@@ -17,7 +17,7 @@ use super::{
     SendEvent, SendMessage,
     state::SendView,
     widgets::{
-        send_edit::{FormAction, SendForm, SendEditMessage},
+        send_edit::{FormAction, SendEditMessage, SendForm},
         send_list::{SearchMessage, SendListMessage},
     },
 };
@@ -130,10 +130,9 @@ impl SendView {
                     return Outcome::None;
                 };
                 let mgr = client_manager.clone();
-                return Outcome::spawn(
-                    async move { mgr.full_send(&uid, id).await },
-                    move |res| SendMessage::DetailLoaded(uid, id, res.map(Box::new)),
-                );
+                return Outcome::spawn(async move { mgr.full_send(&uid, id).await }, move |res| {
+                    SendMessage::DetailLoaded(uid, id, res.map(Box::new))
+                });
             }
             SendListMessage::Scrolled(viewport) => {
                 self.list_scroll.track(viewport);
@@ -186,10 +185,9 @@ impl SendView {
                 form.saving = true;
                 let mgr = client_manager.clone();
                 let view = form.to_send_view();
-                Outcome::spawn(
-                    async move { mgr.save_send(&uid, view).await },
-                    move |res| SendMessage::SaveCompleted(uid, res.map(Box::new)),
-                )
+                Outcome::spawn(async move { mgr.save_send(&uid, view).await }, move |res| {
+                    SendMessage::SaveCompleted(uid, res.map(Box::new))
+                })
             }
             FormAction::Delete => {
                 self.selection.confirm_delete.open();
@@ -383,4 +381,3 @@ fn filter_items(
             .collect()
     }
 }
-

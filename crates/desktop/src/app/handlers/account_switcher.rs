@@ -34,6 +34,10 @@ impl App {
     /// and, if the new user is unlocked, returns the task that repopulates
     /// both lists.
     pub(crate) fn handle_user_switch(&mut self, uid: UserId) -> Task<Message> {
+        // Drop sticky Magnify state before flipping the active user — it
+        // holds Arc clones of the previous user's decrypted ciphers in
+        // `results`, and the next summon would otherwise restore them.
+        self.magnify_reset_sticky();
         self.active_user = Some(uid);
         // Reset the sidebar filters on user switch — "AllItems" is the most
         // neutral entry point for a freshly-active user.
@@ -56,7 +60,10 @@ impl App {
             Task::none()
         } else {
             self.set_screen(Screen::Vault);
-            Task::batch([self.load_vault_list_task(uid), self.load_send_list_task(uid)])
+            Task::batch([
+                self.load_vault_list_task(uid),
+                self.load_send_list_task(uid),
+            ])
         }
     }
 }

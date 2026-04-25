@@ -14,7 +14,7 @@ use crate::{
     fl,
     theme::{AppColors, AppTheme},
     views::vault::widgets::{
-        cipher_edit::{CipherForm, CipherEditMessage},
+        cipher_edit::{CipherEditMessage, CipherForm},
         field_helpers::{card_with_margin, field_readonly, format_passkey_date, styled_card},
     },
 };

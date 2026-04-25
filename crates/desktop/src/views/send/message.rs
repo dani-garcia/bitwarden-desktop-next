@@ -104,8 +104,12 @@ pub enum SendEvent {
     /// Account-switcher action, routed to the shared App handler.
     AccountSwitcher(AccountSwitcherEvent),
     ToastRequested(Toast),
-    ItemSaved { uid: UserId },
-    ItemDeleted { uid: UserId },
+    ItemSaved {
+        uid: UserId,
+    },
+    ItemDeleted {
+        uid: UserId,
+    },
     ClipboardCopyRequested {
         value: String,
         sensitivity: Sensitivity,

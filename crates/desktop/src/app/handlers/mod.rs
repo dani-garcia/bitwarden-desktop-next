@@ -4,5 +4,6 @@
 //! view they belong to (`views/<name>/handler.rs`).
 
 mod account_switcher;
+mod magnify;
 mod platform;
 mod sidebar;

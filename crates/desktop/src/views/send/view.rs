@@ -128,9 +128,7 @@ impl SendView {
         ctx: &crate::app::RenderCtx<'a>,
     ) -> Element<'a, SendMessage, AppTheme> {
         let colors = ctx.colors;
-        let active_email = ctx
-            .active_email
-            .expect("Screen::Send without active_email");
+        let active_email = ctx.active_email.expect("Screen::Send without active_email");
 
         let title = text(fl!("send-title"))
             .size(28)

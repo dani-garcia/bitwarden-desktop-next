@@ -26,8 +26,8 @@ use crate::{
 };
 
 use super::widgets::{
-    cipher_edit::{CipherEditMessage, FolderOption},
     cipher_detail::CipherDetailMessage,
+    cipher_edit::{CipherEditMessage, FolderOption},
     item_list::ItemListMessage,
     search_bar::SearchMessage,
 };

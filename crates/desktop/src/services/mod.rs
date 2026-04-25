@@ -6,11 +6,14 @@
 
 pub mod animation;
 pub mod clipboard;
+pub mod cursor_monitor;
 pub mod favicon;
+pub mod global_hotkey;
 pub mod i18n;
 pub mod instance_lock;
 pub mod menu;
 pub mod preferences;
 pub mod sdk;
+pub mod search;
 pub mod settings;
 pub mod tray;

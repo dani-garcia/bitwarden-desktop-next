@@ -320,10 +320,7 @@ impl GeneratorView {
                     return Outcome::None;
                 }
                 self.active_tab = tab;
-                let new_index = TabKind::ALL
-                    .iter()
-                    .position(|t| *t == tab)
-                    .unwrap_or(0) as f32;
+                let new_index = TabKind::ALL.iter().position(|t| *t == tab).unwrap_or(0) as f32;
                 self.tab_anim.transition(new_index, Instant::now());
                 animation::extend(Duration::from_millis(TAB_ANIM_MS as u64));
                 self.current = None;
@@ -399,8 +396,7 @@ impl GeneratorView {
                 Outcome::None
             }
             GeneratorMessage::BumpMinNumber(delta) => {
-                self.password.min_number =
-                    bump_clamped(&self.password.min_number, delta, 1, 0, 9);
+                self.password.min_number = bump_clamped(&self.password.min_number, delta, 1, 0, 9);
                 self.regenerate_event()
             }
             GeneratorMessage::SetMinSpecial(raw) => {
@@ -832,9 +828,7 @@ fn value_card<'a>(
 /// body. Tapping anywhere on the row flips the modal into history mode.
 /// Styled as a clickable card matching the option cards so it sits
 /// flush with the rest of the card-based layout.
-fn history_entry_row<'a>(
-    colors: &'a AppColors,
-) -> Element<'a, GeneratorMessage, AppTheme> {
+fn history_entry_row<'a>(colors: &'a AppColors) -> Element<'a, GeneratorMessage, AppTheme> {
     let row_content = row![
         text(fl!("generator-history-open"))
             .size(14)

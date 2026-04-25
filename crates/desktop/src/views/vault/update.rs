@@ -26,8 +26,8 @@ use super::{
     message::FormOptions,
     state::VaultView,
     widgets::{
-        cipher_edit::{CipherForm, FolderOption, FormAction},
         cipher_detail::{self, CipherDetailMessage},
+        cipher_edit::{CipherForm, FolderOption, FormAction},
         item_list::ItemListMessage,
         search_bar::SearchMessage,
     },
@@ -616,24 +616,7 @@ fn filter_items(
         items.cloned().collect()
     } else {
         items
-            .filter(|item| {
-                if item.name.to_lowercase().contains(query)
-                    || item.subtitle.to_lowercase().contains(query)
-                {
-                    return true;
-                }
-                if let CipherListViewType::Login(login) = &item.r#type
-                    && let Some(uri) = login
-                        .uris
-                        .as_ref()
-                        .and_then(|u| u.first())
-                        .and_then(|u| u.uri.as_deref())
-                    && uri.to_lowercase().contains(query)
-                {
-                    return true;
-                }
-                false
-            })
+            .filter(|item| crate::services::search::matches_query(item, query))
             .cloned()
             .collect()
     }

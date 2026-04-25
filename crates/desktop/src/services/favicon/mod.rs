@@ -373,6 +373,16 @@ fn apply_rounded_mask(img: &mut ::image::RgbaImage, radius: f32) {
 
 // ── Globe fallback handle ──────────────────────────────────────────────────
 
+/// Process-wide cached globe handle. `image::Handle::from_bytes` calls
+/// `Id::unique()` internally, so naively re-constructing the handle on each
+/// render produces a fresh id every frame, defeating iced's GPU texture
+/// cache and visibly flickering the globe icon during scroll. Caching once
+/// in a `OnceLock` keeps the same id for the life of the process — clones
+/// hit the cache instantly.
+static GLOBE_HANDLE: OnceLock<image::Handle> = OnceLock::new();
+
 pub fn globe_handle() -> image::Handle {
-    image::Handle::from_bytes(crate::assets::BWI_GLOBE_PNG)
+    GLOBE_HANDLE
+        .get_or_init(|| image::Handle::from_bytes(crate::assets::BWI_GLOBE_PNG))
+        .clone()
 }

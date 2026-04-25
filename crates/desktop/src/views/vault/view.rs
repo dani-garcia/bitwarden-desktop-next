@@ -18,9 +18,8 @@ use super::{
     SHEET_BREAKPOINT_PX, SHEET_TOP_INSET_PX, SHEET_TOP_RADIUS_PX, VaultMessage,
     state::VaultView,
     widgets::{
-        cipher_edit,
         cipher_detail::{self, CipherDetailMessage},
-        item_list, search_bar,
+        cipher_edit, item_list, search_bar,
     },
 };
 

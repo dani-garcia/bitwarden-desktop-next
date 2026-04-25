@@ -61,7 +61,9 @@ pub fn view<'a, Message: Clone + 'a>(
     // top spacer is *not* opaque so clicks above the sheet still dismiss.
     let sheet = opaque(container(content).width(Fill).height(Fill));
     let offset_content = column![
-        Space::new().width(Fill).height(Length::Fixed(animated_inset)),
+        Space::new()
+            .width(Fill)
+            .height(Length::Fixed(animated_inset)),
         sheet,
     ]
     .width(Fill)
@@ -70,9 +72,5 @@ pub fn view<'a, Message: Clone + 'a>(
     // Outer `opaque` mirrors the modal pattern: the entire sheet overlay
     // is opaque to widgets below it (so hover/clicks on the page beneath
     // can't light up while the sheet is up).
-    opaque(
-        stack![backdrop, offset_content]
-            .width(Fill)
-            .height(Fill),
-    )
+    opaque(stack![backdrop, offset_content].width(Fill).height(Fill))
 }

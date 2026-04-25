@@ -68,8 +68,7 @@ impl App {
 
     /// Mirror of `load_vault_list_task` for the Send screen.
     pub(crate) fn load_send_list_task(&self, uid: UserId) -> Task<Message> {
-        crate::views::send::SendView::load_list_task(uid, &self.client_manager)
-            .map(Message::send)
+        crate::views::send::SendView::load_list_task(uid, &self.client_manager).map(Message::send)
     }
 
     pub(crate) fn menu_state(&self) -> crate::services::menu::MenuState {

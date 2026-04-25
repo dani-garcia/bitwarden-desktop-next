@@ -1,0 +1,103 @@
+//! Global keyboard shortcuts that fire regardless of which app has focus.
+//!
+//! Currently used only by the Magnify launcher window (Ctrl+Shift+Space toggles
+//! it). Mirrors the broadcast-channel pattern used by `services::menu` and
+//! `services::tray`: a callback installed once at startup pushes events into a
+//! `tokio::sync::broadcast`, and iced subscribes via [`event_stream`].
+//!
+//! Wayland note: `global-hotkey` does not implement Wayland natively. Linux
+//! Wayland users see a warning at startup and the launcher is unreachable
+//! until they switch to X11; everything else in the app keeps working.
+
+use std::sync::OnceLock;
+
+use global_hotkey::{
+    GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState,
+    hotkey::{Code, HotKey, Modifiers},
+};
+use iced::futures::{SinkExt, Stream};
+use tokio::sync::broadcast;
+
+/// One unit value per matched global-hotkey press. Only `Pressed` transitions
+/// are forwarded — releases are dropped so subscribers don't have to filter.
+#[derive(Debug, Clone, Copy)]
+pub struct MagnifyToggle;
+
+/// Broadcast fan-out for hotkey events. Populated by the callback registered
+/// in [`install_event_handler`]; consumed via [`event_stream`].
+static HOTKEY_EVENTS: OnceLock<broadcast::Receiver<MagnifyToggle>> = OnceLock::new();
+
+/// Register the global-hotkey event callback and bind the V1 default
+/// shortcut (Ctrl+Shift+Space on Win/Linux, Cmd+Shift+Space on macOS).
+///
+/// Call once at startup. Subsequent calls are no-ops because both
+/// `OnceLock::set` and `GlobalHotKeyEvent::set_event_handler` are
+/// single-shot. Failure to initialise the manager (Wayland, missing
+/// permissions, etc.) is logged and silently ignored — the rest of the app
+/// continues working without the hotkey.
+pub fn install_event_handler() {
+    let manager = match GlobalHotKeyManager::new() {
+        Ok(m) => m,
+        Err(e) => {
+            tracing::warn!(error = %e, "global hotkey manager init failed; Magnify hotkey disabled");
+            return;
+        }
+    };
+
+    let modifiers = if cfg!(target_os = "macos") {
+        Modifiers::SUPER | Modifiers::SHIFT
+    } else {
+        Modifiers::CONTROL | Modifiers::SHIFT
+    };
+    let hotkey = HotKey::new(Some(modifiers), Code::Space);
+
+    if let Err(e) = manager.register(hotkey) {
+        tracing::warn!(error = %e, "Magnify hotkey registration failed");
+        return;
+    }
+    let toggle_id = hotkey.id();
+
+    let (tx, rx) = broadcast::channel(16);
+    let _ = HOTKEY_EVENTS.set(rx);
+    GlobalHotKeyEvent::set_event_handler(Some(move |event: GlobalHotKeyEvent| {
+        if event.state == HotKeyState::Pressed && event.id == toggle_id {
+            let _ = tx.send(MagnifyToggle);
+        }
+    }));
+
+    // Leak the manager so the OS-level registration outlives this scope.
+    // `GlobalHotKeyManager` isn't `Send + Sync` on Windows (holds a raw HWND
+    // pointer), so we can't park it in a `static`. `mem::forget` keeps the
+    // OS-side handle alive for the rest of the process lifetime — caller is
+    // `App::new`, which only runs once at startup, so this is effectively a
+    // one-shot leak.
+    std::mem::forget(manager);
+}
+
+/// Iced-compatible stream of [`MagnifyToggle`]s, one per hotkey press.
+/// Subscribes to the static broadcast channel populated by the handler
+/// installed in [`install_event_handler`]. If the installer failed (e.g.
+/// Wayland), the channel will never have been initialised and the stream
+/// terminates immediately — leaving the subscription idle.
+pub fn event_stream() -> impl Stream<Item = MagnifyToggle> {
+    use iced::futures::channel::mpsc;
+    iced::stream::channel(16, |mut out: mpsc::Sender<_>| async move {
+        let Some(rx) = HOTKEY_EVENTS.get() else {
+            return;
+        };
+        let mut rx = rx.resubscribe();
+        loop {
+            match rx.recv().await {
+                Ok(toggle) => {
+                    if out.send(toggle).await.is_err() {
+                        break;
+                    }
+                }
+                Err(broadcast::error::RecvError::Lagged(n)) => {
+                    tracing::warn!(dropped = n, "global-hotkey subscriber lagged");
+                }
+                Err(broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    })
+}

@@ -122,12 +122,9 @@ pub(super) fn field_with_action<'a>(
 
     let buttons_row = row(buttons).spacing(2).align_y(Alignment::Center);
 
-    row![
-        readonly_field_truncated(label, value, colors),
-        buttons_row,
-    ]
-    .spacing(4)
-    .width(Fill)
-    .align_y(Alignment::Center)
-    .into()
+    row![readonly_field_truncated(label, value, colors), buttons_row,]
+        .spacing(4)
+        .width(Fill)
+        .align_y(Alignment::Center)
+        .into()
 }

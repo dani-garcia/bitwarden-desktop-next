@@ -62,14 +62,17 @@ pub fn view<'a>(
         });
 
     let body: Element<'a, SendEditMessage, AppTheme> = scrollable(
-        column![details_card(form, colors), additional_options_card(form, colors)]
-            .spacing(16)
-            .padding(Padding {
-                top: 16.0,
-                right: 20.0,
-                bottom: 16.0,
-                left: 20.0,
-            }),
+        column![
+            details_card(form, colors),
+            additional_options_card(form, colors)
+        ]
+        .spacing(16)
+        .padding(Padding {
+            top: 16.0,
+            right: 20.0,
+            bottom: 16.0,
+            left: 20.0,
+        }),
     )
     .height(Fill)
     .style(scrollable_style)
@@ -90,10 +93,7 @@ pub fn view<'a>(
 
 // ── Footer (Save / Cancel / Delete) ───────────────────────────────────────
 
-fn footer<'a>(
-    form: &'a SendForm,
-    colors: &'a AppColors,
-) -> Element<'a, SendEditMessage, AppTheme> {
+fn footer<'a>(form: &'a SendForm, colors: &'a AppColors) -> Element<'a, SendEditMessage, AppTheme> {
     let mut save = buttons::primary(text(fl!("send-form-save")).size(14)).padding([8, 20]);
     if !form.saving {
         save = save.on_press(SendEditMessage::SavePressed);

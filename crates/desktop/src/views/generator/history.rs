@@ -92,12 +92,9 @@ fn history_row<'a>(
         .color(colors.text_muted);
 
     container(
-        row![
-            column![value, age].spacing(2).width(Fill),
-            copy,
-        ]
-        .spacing(8)
-        .align_y(Alignment::Center),
+        row![column![value, age].spacing(2).width(Fill), copy,]
+            .spacing(8)
+            .align_y(Alignment::Center),
     )
     .padding(Padding::from([8, 12]))
     .width(Fill)
