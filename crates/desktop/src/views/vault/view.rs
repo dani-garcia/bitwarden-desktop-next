@@ -94,9 +94,7 @@ impl VaultView {
         &'a self,
         ctx: &crate::app::RenderCtx<'a>,
     ) -> Option<Element<'a, VaultMessage, AppTheme>> {
-        if !self.selection.confirm_delete {
-            return None;
-        }
+        let progress = self.selection.confirm_delete.progress_if_visible()?;
         let colors = ctx.colors;
         let item_name = self
             .selection
@@ -113,6 +111,7 @@ impl VaultView {
             VaultMessage::ConfirmDeleteSelected,
             VaultMessage::CancelDeleteSelected,
             colors,
+            progress,
         ))
     }
 

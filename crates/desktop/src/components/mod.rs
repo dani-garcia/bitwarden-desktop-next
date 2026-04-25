@@ -3,6 +3,7 @@ pub(crate) mod bottom_sheet;
 pub(crate) mod buttons;
 pub(crate) mod collapsible_pane;
 pub(crate) mod drop_down;
+pub(crate) mod fade_in_out;
 pub(crate) mod icons;
 pub(crate) mod inputs;
 pub(crate) mod modal;
@@ -11,6 +12,8 @@ pub(crate) mod spinner;
 pub(crate) mod toast;
 pub(crate) mod totp;
 pub(crate) mod virtual_list;
+
+pub(crate) use fade_in_out::FadeInOut;
 
 use iced::{
     Color, Element, Fill, Padding, Shadow,

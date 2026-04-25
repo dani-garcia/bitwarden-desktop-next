@@ -903,6 +903,7 @@ dependencies = [
  "i18n-embed-fl",
  "iced",
  "image",
+ "lilt",
  "muda",
  "open",
  "reqwest",

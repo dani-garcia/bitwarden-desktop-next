@@ -4,6 +4,7 @@
 //! by views via `UpdateCtx`. Services may not import from `views/`, `components/`,
 //! or `app/`.
 
+pub mod animation;
 pub mod clipboard;
 pub mod favicon;
 pub mod i18n;

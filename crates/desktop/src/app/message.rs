@@ -32,6 +32,12 @@ pub enum Message {
     /// Favicon service progress — one per completed fetch. Arrival alone
     /// triggers the redraw; the handler only logs.
     Favicon(FaviconMessage),
+    /// Per-frame tick driven by `iced::window::frames()` while any modal's
+    /// open/close animation is in flight. The handler is a no-op — the
+    /// redraw the message triggers is the entire point. Subscribed to only
+    /// while at least one `FadeInOut` reports `in_progress`, so the wake
+    /// rate drops to zero whenever nothing's animating.
+    AnimationTick,
 }
 
 /// Messages that dispatch into a compositional sub-view's `update()`. All

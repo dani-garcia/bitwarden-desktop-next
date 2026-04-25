@@ -86,9 +86,7 @@ impl SendView {
         &'a self,
         ctx: &crate::app::RenderCtx<'a>,
     ) -> Option<Element<'a, SendMessage, AppTheme>> {
-        if !self.selection.confirm_delete {
-            return None;
-        }
+        let progress = self.selection.confirm_delete.progress_if_visible()?;
         let colors = ctx.colors;
         let item_name = self
             .selection
@@ -105,6 +103,7 @@ impl SendView {
             SendMessage::ConfirmDeleteSelected,
             SendMessage::CancelDeleteSelected,
             colors,
+            progress,
         ))
     }
 

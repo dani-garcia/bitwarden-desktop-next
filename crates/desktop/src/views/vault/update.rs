@@ -88,7 +88,7 @@ impl VaultView {
             VaultMessage::CipherDetail(m) => {
                 return self.handle_cipher_detail(m, client_manager, active_user);
             }
-            VaultMessage::CancelDeleteSelected => self.selection.confirm_delete = false,
+            VaultMessage::CancelDeleteSelected => self.selection.confirm_delete.close(),
             VaultMessage::ConfirmDeleteSelected => {
                 return self.handle_confirm_delete(client_manager, active_user);
             }
@@ -184,7 +184,7 @@ impl VaultView {
                 // (same pattern as re-selecting after an existing detail).
                 if new_id != self.selection.id {
                     self.selection.form = None;
-                    self.selection.confirm_delete = false;
+                    self.selection.confirm_delete.close();
                 }
                 self.selection.item = Some(idx);
                 self.selection.id = new_id;
@@ -287,7 +287,7 @@ impl VaultView {
             CipherDetailMessage::Delete => {
                 // Open the confirm modal. Actual delete waits for the user
                 // to press Confirm (`ConfirmDeleteSelected`).
-                self.selection.confirm_delete = true;
+                self.selection.confirm_delete.open();
                 Outcome::None
             }
             // Close is intercepted at the caller's `.map()` and never reaches
@@ -339,7 +339,7 @@ impl VaultView {
         client_manager: &Arc<ClientManager>,
         active_user: Option<&UserId>,
     ) -> Outcome<Self> {
-        self.selection.confirm_delete = false;
+        self.selection.confirm_delete.close();
         let Some(cipher_id) = self.selection.id else {
             return Outcome::None;
         };

@@ -67,7 +67,7 @@ impl SendView {
             SendMessage::SendEdit(m) => {
                 return self.handle_send_edit(m, client_manager, active_user);
             }
-            SendMessage::CancelDeleteSelected => self.selection.confirm_delete = false,
+            SendMessage::CancelDeleteSelected => self.selection.confirm_delete.close(),
             SendMessage::ConfirmDeleteSelected => {
                 return self.handle_confirm_delete(client_manager, active_user);
             }
@@ -181,7 +181,7 @@ impl SendView {
                 )
             }
             FormAction::Delete => {
-                self.selection.confirm_delete = true;
+                self.selection.confirm_delete.open();
                 Outcome::None
             }
             FormAction::CopyLink(url) => Outcome::event(SendEvent::ClipboardCopyRequested {
@@ -202,7 +202,7 @@ impl SendView {
         client_manager: &Arc<ClientManager>,
         active_user: Option<&UserId>,
     ) -> Outcome<Self> {
-        self.selection.confirm_delete = false;
+        self.selection.confirm_delete.close();
         let Some(send_id) = self.selection.id else {
             // New-item form hasn't been saved yet — "delete" just dismisses
             // the draft.

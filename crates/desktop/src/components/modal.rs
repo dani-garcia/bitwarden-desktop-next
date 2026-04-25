@@ -24,23 +24,30 @@ use crate::{
     theme::{AppColors, AppTheme, RADIUS_LG},
 };
 
-/// Scrim color painted over the underlying view.
-const BACKDROP: Color = Color::from_rgba(0.0, 0.0, 0.0, 0.45);
+/// Scrim alpha at full open. Backdrop alpha is `progress * BACKDROP_ALPHA`
+/// so the scrim fades in/out alongside the dialog.
+const BACKDROP_ALPHA: f32 = 0.45;
 
-/// Drop shadow shared by every modal dialog so the dialog reads as lifted
-/// off the backdrop. Beefier than the per-card shadow inside the cipher
-/// detail / generator option cards (this sits on top of the 45 % black
-/// scrim, so it needs more weight to be felt).
-const DIALOG_SHADOW: Shadow = Shadow {
-    color: Color::from_rgba(0.0, 0.0, 0.0, 0.45),
-    offset: Vector::new(0.0, 4.0),
-    blur_radius: 48.0,
-};
+/// Drop-shadow alpha at full open — modulated by `progress` so the shadow
+/// fades together with the dialog rather than popping in.
+const SHADOW_ALPHA: f32 = 0.45;
+
+/// Vertical slide distance (px) the dialog travels during the open
+/// transition. The dialog starts `SLIDE_OFFSET_PX` below its centered rest
+/// position and slides up; on close it slides back down. Implemented as a
+/// `column![Space(offset), card]` whose top spacer height tracks
+/// `(1 - progress) * SLIDE_OFFSET_PX` — iced has no transform widget, so
+/// this is the cleanest fake-translate.
+const SLIDE_OFFSET_PX: f32 = 24.0;
 
 /// Wrap `dialog` as a centered modal with a full-window darkened backdrop.
 /// Clicks on the exposed backdrop fire `on_dismiss`; clicks on the dialog
 /// itself are absorbed by z-order. The caller's `dialog` is responsible
 /// for its own background, padding, and border radius.
+///
+/// `progress` is the open animation phase, `0.0` (fully closed — caller
+/// shouldn't render at all) → `1.0` (fully open). Drives backdrop alpha
+/// and the slide-down origin. Pass `1.0` for non-animated callers.
 ///
 /// The whole overlay is wrapped in [`opaque`] so mouse moves and hovers
 /// can't reach widgets beneath — otherwise buttons below would still light
@@ -48,16 +55,33 @@ const DIALOG_SHADOW: Shadow = Shadow {
 pub fn view<'a, Message: Clone + 'a>(
     dialog: Element<'a, Message, AppTheme>,
     on_dismiss: Message,
+    progress: f32,
 ) -> Element<'a, Message, AppTheme> {
+    let progress = progress.clamp(0.0, 1.0);
+    let backdrop_color = Color {
+        a: progress * BACKDROP_ALPHA,
+        ..Color::BLACK
+    };
     let backdrop = mouse_area(
         container(Space::new())
             .width(Fill)
             .height(Fill)
-            .style(|_theme: &AppTheme| container::Style::default().background(BACKDROP)),
+            .style(move |_theme: &AppTheme| {
+                container::Style::default().background(backdrop_color)
+            }),
     )
     .on_press(on_dismiss);
 
-    let centered = center(dialog).width(Length::Fill).height(Length::Fill);
+    // Slide origin: at progress=0 the dialog sits SLIDE_OFFSET_PX *below*
+    // its rest position, sliding up to 0 as it opens. The slide is faked
+    // with a top spacer inside the centered column — iced has no transform.
+    let slide_offset = (1.0 - progress) * SLIDE_OFFSET_PX;
+    let slid = column![
+        Space::new().height(Length::Fixed(slide_offset)),
+        dialog,
+    ];
+
+    let centered = center(slid).width(Length::Fill).height(Length::Fill);
 
     opaque(stack![backdrop, centered].width(Fill).height(Fill))
 }
@@ -76,12 +100,22 @@ pub fn dialog<'a, M>(
     width: f32,
     height: Option<f32>,
     bg: impl Fn(&AppColors) -> Color + Copy + 'static,
+    progress: f32,
     body: Element<'a, M, AppTheme>,
     on_dismiss: M,
 ) -> Element<'a, M, AppTheme>
 where
     M: Clone + 'a,
 {
+    let progress = progress.clamp(0.0, 1.0);
+    let shadow = Shadow {
+        color: Color {
+            a: progress * SHADOW_ALPHA,
+            ..Color::BLACK
+        },
+        offset: Vector::new(0.0, 4.0),
+        blur_radius: 48.0,
+    };
     let card = container(body)
         .width(Length::Fixed(width))
         .height(height.map(Length::Fixed).unwrap_or(Length::Shrink))
@@ -89,9 +123,9 @@ where
             container::Style::default()
                 .background(bg(&theme.colors))
                 .border(Border::default().rounded(RADIUS_LG))
-                .shadow(DIALOG_SHADOW)
+                .shadow(shadow)
         });
-    view(card.into(), on_dismiss)
+    view(card.into(), on_dismiss, progress)
 }
 
 /// Confirmation dialog with a title, body text, and primary/secondary
@@ -100,6 +134,7 @@ where
 ///
 /// Backdrop click + the cancel button both fire `on_cancel`. Width is
 /// fixed at 380 px and the dialog shrinks to its content height.
+#[expect(clippy::too_many_arguments, reason = "explicit args read clearly at the call site; a struct here would be pure boilerplate")]
 pub fn confirm_dialog<'a, M>(
     title_text: impl Into<String>,
     body_text: impl Into<String>,
@@ -108,6 +143,7 @@ pub fn confirm_dialog<'a, M>(
     on_confirm: M,
     on_cancel: M,
     colors: &AppColors,
+    progress: f32,
 ) -> Element<'a, M, AppTheme>
 where
     M: Clone + 'a,
@@ -138,5 +174,5 @@ where
     .padding(Padding::from([16, 20]))
     .width(Fill);
 
-    dialog(380.0, None, |c| c.card_bg, inner.into(), on_cancel)
+    dialog(380.0, None, |c| c.card_bg, progress, inner.into(), on_cancel)
 }

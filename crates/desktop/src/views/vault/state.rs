@@ -10,7 +10,7 @@ use iced::Task;
 
 use crate::{
     app::ViewTypes,
-    components::{collapsible_pane::CollapsiblePane, virtual_list},
+    components::{FadeInOut, collapsible_pane::CollapsiblePane, virtual_list},
     domain::UserId,
     services::sdk::Organization,
 };
@@ -36,8 +36,10 @@ pub(super) struct Selection {
     pub(super) form: Option<CipherForm>,
     /// Armed-delete state for the detail pane's inline confirm row.
     /// Reset when selection changes (via `clear()`), when the user cancels,
-    /// or when any non-delete detail-pane message arrives.
-    pub(super) confirm_delete: bool,
+    /// or when any non-delete detail-pane message arrives. Wrapped in a
+    /// `FadeInOut` so the modal animates in/out — call `.open()` to arm,
+    /// `.close()` to disarm.
+    pub(super) confirm_delete: FadeInOut,
 }
 
 impl Selection {

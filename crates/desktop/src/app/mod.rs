@@ -325,6 +325,17 @@ impl App {
         let favicon_sub =
             Subscription::run(crate::services::favicon::favicon_event_stream).map(Message::Favicon);
 
+        // Animation ticker — only subscribed while at least one transition
+        // somewhere in the app might still be running. The check is a single
+        // global-watermark read against `services::animation`, so any new
+        // animation primitive that calls `animation::extend(...)` on its
+        // transitions auto-registers here without extra wiring.
+        let anim_sub = if crate::services::animation::any_in_progress() {
+            iced::window::frames().map(|_| Message::AnimationTick)
+        } else {
+            Subscription::none()
+        };
+
         Subscription::batch([
             close_sub,
             event_sub,
@@ -333,6 +344,7 @@ impl App {
             theme_sub,
             wake_sub,
             favicon_sub,
+            anim_sub,
         ])
     }
 
@@ -342,6 +354,10 @@ impl App {
             Message::Window(m) => self.handle_window_message(m),
             Message::System(m) => self.handle_system_message(m),
             Message::Sidebar(m) => self.handle_sidebar_message(m),
+            // No-op handler — the redraw triggered by this message reaching
+            // update() is the only thing we need. Subscription rebuilds after
+            // the redraw and unsubscribes once nothing's animating.
+            Message::AnimationTick => Task::none(),
             Message::Favicon(crate::services::favicon::FaviconMessage::IconResolved {
                 uid,
                 hostname,

@@ -20,7 +20,7 @@ use iced::{
 
 use crate::{
     app::{Outcome, ViewTypes},
-    components::{buttons, icons, modal, toast::Toast},
+    components::{self, buttons, icons, modal, toast::Toast},
     fl,
     services::{
         preferences::{
@@ -34,7 +34,7 @@ use crate::{
 // ── State ──────────────────────────────────────────────────────────────────
 
 pub struct SettingsView {
-    pub open: bool,
+    pub fade: components::FadeInOut,
     active: CategoryKind,
     /// Working copy of `(Settings, UserPreferences)`. Every edit mutates this
     /// directly and also bubbles up via `SettingsEvent::Applied` so App can
@@ -150,20 +150,28 @@ pub enum SettingsEvent {
 impl SettingsView {
     pub fn new() -> Self {
         Self {
-            open: false,
+            fade: components::FadeInOut::default(),
             active: CategoryKind::Security,
             snapshot: SettingsSnapshot::default(),
         }
     }
 
+    /// True while the user has the settings modal logically open. Distinct
+    /// from "currently rendered" — the outro animation keeps the view alive
+    /// for ~180ms after `close()` is called, but `is_open()` already returns
+    /// false at that point so Escape-key handlers don't re-fire.
+    pub fn is_open(&self) -> bool {
+        self.fade.is_open()
+    }
+
     pub fn open_with(&mut self, snap: SettingsSnapshot) {
         self.active = CategoryKind::Security;
         self.snapshot = snap;
-        self.open = true;
+        self.fade.open();
     }
 
     pub fn close(&mut self) {
-        self.open = false;
+        self.fade.close();
     }
 
     pub fn update(
@@ -172,7 +180,7 @@ impl SettingsView {
         _ctx: crate::app::UpdateCtx<'_>,
     ) -> Outcome<Self> {
         match msg {
-            SettingsMessage::Close => self.open = false,
+            SettingsMessage::Close => self.fade.close(),
             SettingsMessage::SelectCategory(kind) => self.active = kind,
             SettingsMessage::SettingChanged(change) => {
                 self.apply_to_snapshot(&change);
@@ -222,9 +230,7 @@ impl SettingsView {
         &'a self,
         colors: &'a AppColors,
     ) -> Option<Element<'a, SettingsMessage, AppTheme>> {
-        if !self.open {
-            return None;
-        }
+        let progress = self.fade.progress_if_visible()?;
 
         let sidebar = self.sidebar_view(colors);
         let pane = self.content_pane(colors);
@@ -239,6 +245,7 @@ impl SettingsView {
             640.0,
             Some(440.0),
             |c| c.background,
+            progress,
             body.into(),
             SettingsMessage::Close,
         ))

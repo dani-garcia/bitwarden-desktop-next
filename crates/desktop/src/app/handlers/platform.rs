@@ -95,7 +95,7 @@ impl App {
                 if matches!(
                     key,
                     iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape)
-                ) && self.views.settings.open
+                ) && self.views.settings.is_open()
                 {
                     self.views.settings.close();
                     return Task::none();

@@ -36,7 +36,7 @@ use crate::{
 // ── State ──────────────────────────────────────────────────────────────────
 
 pub struct GeneratorView {
-    pub open: bool,
+    pub fade: components::FadeInOut,
     mode: Mode,
     active_tab: TabKind,
     password: PasswordForm,
@@ -249,7 +249,7 @@ impl ViewTypes for GeneratorView {
 impl GeneratorView {
     pub fn new() -> Self {
         Self {
-            open: false,
+            fade: components::FadeInOut::default(),
             mode: Mode::Generator,
             active_tab: TabKind::Password,
             password: PasswordForm::default(),
@@ -261,14 +261,14 @@ impl GeneratorView {
     }
 
     pub fn open_as_generator(&mut self) {
-        self.open = true;
+        self.fade.open();
         self.mode = Mode::Generator;
         self.active_tab = TabKind::Password;
         self.current = None;
     }
 
     pub fn open_as_history(&mut self) {
-        self.open = true;
+        self.fade.open();
         self.mode = Mode::History;
     }
 
@@ -296,7 +296,7 @@ impl GeneratorView {
     ) -> Outcome<Self> {
         match msg {
             GeneratorMessage::Close => {
-                self.open = false;
+                self.fade.close();
                 Outcome::None
             }
             GeneratorMessage::SelectTab(tab) => {
@@ -472,9 +472,7 @@ impl GeneratorView {
         &'a self,
         colors: &'a AppColors,
     ) -> Option<Element<'a, GeneratorMessage, AppTheme>> {
-        if !self.open {
-            return None;
-        }
+        let progress = self.fade.progress_if_visible()?;
 
         let body = match self.mode {
             Mode::Generator => self.generator_body(colors),
@@ -563,6 +561,7 @@ impl GeneratorView {
             680.0,
             Some(620.0),
             |c| c.card_bg,
+            progress,
             body.into(),
             GeneratorMessage::Close,
         ))

@@ -7,7 +7,7 @@ use iced::Task;
 
 use crate::{
     app::ViewTypes,
-    components::{collapsible_pane::CollapsiblePane, sidebar::SendFilter, virtual_list},
+    components::{FadeInOut, collapsible_pane::CollapsiblePane, sidebar::SendFilter, virtual_list},
     domain::UserId,
 };
 
@@ -22,8 +22,10 @@ pub(super) struct Selection {
     pub(super) item: Option<usize>,
     pub(super) id: Option<SendId>,
     pub(super) form: Option<SendForm>,
-    /// Armed-delete state for the inline confirmation modal.
-    pub(super) confirm_delete: bool,
+    /// Armed-delete state for the inline confirmation modal. Wrapped in a
+    /// `FadeInOut` so the modal animates in/out — call `.open()` to arm,
+    /// `.close()` to disarm.
+    pub(super) confirm_delete: FadeInOut,
 }
 
 impl Selection {
