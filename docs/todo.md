@@ -71,7 +71,7 @@ All 24 settings in the Appearance / Security / Integrations / Autotype / Advance
 
 - **Depends on `desktop_native` study above**
   - Touch ID / Windows Hello / polkit biometrics unlock.
-  - SSH agent (+ prompt behaviour) — the named-pipe / Unix-socket server serving keys from the unlocked vault.
+  - *(SSH agent moved to Tier 4 — waiting on upstream V2.)*
 
 ---
 
@@ -218,6 +218,19 @@ Two implementations is a coincidence; three is a pattern. Before `Generator` (or
 ---
 
 ## Tier 4 — Deferred / Waiting Upstream
+
+### SSH agent — waiting on upstream V2
+
+`Settings::ssh_agent` (master toggle) and the per-user `SshPromptBehavior` (Always / Never / RememberUntilLock) are already wired through [crates/desktop/src/views/settings/tabs/integrations.rs](../crates/desktop/src/views/settings/tabs/integrations.rs) and persisted, but the agent itself isn't started — toggling currently no-ops on the runtime side.
+
+Upstream has two implementations and neither is a clean target right now:
+
+- **V1** ([clients/apps/desktop/desktop_native/core/src/ssh_agent/](../clients/apps/desktop/desktop_native/core/src/ssh_agent)) is functional (named pipe on Windows, Unix socket elsewhere; `bitwarden-russh` for the agent protocol; `mpsc` request → `broadcast` response channels for UI approval — maps cleanly onto our `Subscription::run` pattern). But the module header flags it deprecated, accepting only security patches until V2 lands.
+- **V2** ([clients/apps/desktop/desktop_native/ssh_agent/](../clients/apps/desktop/desktop_native/ssh_agent)) has the cleaner shape we'd want to build against (`ApprovalRequester` async trait, generic `KeyStore`, separate crate), but `BitwardenSSHAgent::start_server()` is a no-op stub (PM-30756) and `InMemoryEncryptedKeyStore::sign_data()` is `todo!()` (PM-30755). Not usable yet.
+
+**Decision:** park until V2 ships. Building on V1 now would mean rewriting most of it against V2 within months. Revisit when the upstream `todo!()` calls are gone and V2 is shipped in the Electron client.
+
+When unblocked: implement `ApprovalRequester` so approval prompts pump onto a tokio broadcast channel consumed by an `iced::Subscription::run` stream (mirrors [services/instance_lock](../crates/desktop/src/services/instance_lock/mod.rs)); the prompt opens a small confirmation window (About-window pattern in [app/handlers/platform.rs:225](../crates/desktop/src/app/handlers/platform.rs#L225)) when `SshPromptBehavior` requires it; `Settings::ssh_agent` toggles drive the listener task lifecycle; the keystore is fed from the active user's `CipherType::SshKey` ciphers via `ClientManager`. The SDK's `bitwarden-ssh` crate handles key generation/import/export only — it is **not** the agent protocol layer (that's `bitwarden-russh`).
 
 ### Hot reloading
 
