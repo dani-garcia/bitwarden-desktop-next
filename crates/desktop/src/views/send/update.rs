@@ -60,8 +60,18 @@ impl SendView {
                 }
             }
             SendMessage::CloseFormPane => {
-                self.selection.clear();
+                // Start the outro and defer the selection clear so the
+                // sheet form stays alive for ~180 ms while the slide
+                // animates out. Wide-mode pane closes immediately.
+                self.selection.sheet_fade.close();
                 self.pane.close();
+                return Outcome::spawn(
+                    tokio::time::sleep(std::time::Duration::from_millis(180)),
+                    |_| SendMessage::FinalizeSheetClose,
+                );
+            }
+            SendMessage::FinalizeSheetClose => {
+                self.selection.clear();
             }
             SendMessage::PaneResized(event) => self.pane.set_ratio(event.ratio),
             SendMessage::SendEdit(m) => {
@@ -143,6 +153,7 @@ impl SendView {
         };
         self.selection.clear();
         self.selection.form = Some(SendForm::new(send_type));
+        self.selection.sheet_fade.open();
         self.pane.open();
     }
 
@@ -257,6 +268,7 @@ impl SendView {
             Ok(view) => {
                 if self.selection.id == Some(id) {
                     self.selection.form = Some(SendForm::edit(*view));
+                    self.selection.sheet_fade.open();
                     self.pane.open();
                 }
             }
@@ -287,6 +299,7 @@ impl SendView {
                 // keep the form open.
                 self.selection.id = view.id;
                 self.selection.form = Some(SendForm::edit(*view));
+                self.selection.sheet_fade.open();
                 SendEvent::ItemSaved { uid: msg_uid }
             }
             Err(err) => {

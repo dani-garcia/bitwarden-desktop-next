@@ -75,13 +75,15 @@ crates/desktop/src/
 │   ├── i18n/                       # fluent loader + fl! macro target
 │   ├── instance_lock/              # single-instance guard + wake stream
 │   ├── preferences/                # per-user UserPreferences
-│   └── settings/                   # Settings load/save
+│   ├── settings/                   # Settings load/save
+│   └── animation/                  # global "any animation in progress" watermark
 │
 ├── components/                     # shared UI atoms
 │   ├── buttons.rs                  # primary/secondary/ghost/ghost_icon/transparent
 │   ├── icons.rs                    # bootstrap-icons font + constants
 │   ├── inputs.rs                   # field_frame, text_field, select_field, …
 │   ├── drop_down.rs                # iced_aw fork with BelowLeft/BelowRight/AboveRight
+│   ├── fade_in_out.rs              # lilt-backed open/close animator for overlays
 │   ├── spinner.rs / virtual_list.rs / totp.rs
 │   ├── bottom_sheet.rs / modal.rs  # window-level overlays composed at App root
 │   ├── collapsible_pane.rs         # list/detail split that stays mounted on close
@@ -186,10 +188,14 @@ Always a folder:
 Signatures with 5+ args use a bundle. Two bundles are defined in `app/ctx.rs`:
 
 ```rust
-// Update-time: services + session. Used only by view update() paths.
+// Update-time: services + session + sidebar selection + the open-overlay cell.
+// Used only by view update() paths.
 pub struct UpdateCtx<'a> {
     pub client_manager: &'a Arc<ClientManager>,
     pub active_user: Option<&'a UserId>,
+    pub active_vault_filter: VaultFilter,
+    pub active_send_filter: SendFilter,
+    pub open_overlay: &'a mut Option<Overlay>,
 }
 
 // Render-time: everything needed to render. Allowed in components.
@@ -201,6 +207,7 @@ pub struct RenderCtx<'a> {
     pub active_user: Option<&'a UserId>,
     pub active_email: Option<&'a str>,
     pub accounts: &'a [AccountEntry],
+    pub open_overlay: Option<Overlay>,
 }
 ```
 
@@ -272,14 +279,11 @@ Each view implements:
 pub fn update(
     &mut self,
     msg: {View}Message,
-    ctx: &UpdateCtx,
-) -> (Task<{View}Message>, Option<{View}Event>);
+    ctx: UpdateCtx<'_>,
+) -> Outcome<Self>;
 ```
 
-- **`Task<{View}Message>`** carries any async work the view kicked off; the App router lifts it via `.map(Message::{View})`.
-- **`Option<{View}Event>`** carries a declarative fact for App to route; `None` means the view handled everything locally.
-
-App's `handle_{view}_event` methods (defined in the view's `handler.rs`) translate each event into concrete side effects: screen switches, user swaps, toast pushes, menu actions, follow-on tasks.
+The return is an [`Outcome<V>`](#update-outcome) — `None` / `Task(t)` / `Event(e)`, mutually exclusive. App's `handle_{view}_event` methods (in the view's `handler.rs`) translate each event into concrete side effects: screen switches, user swaps, toast pushes, menu actions, follow-on tasks.
 
 Async callbacks live inside sub-messages, not at the top level. `LoginMessage::UnlockCompleted(uid, Result)` is handled by `LoginView::update` (stale-check, clear `unlock_in_progress`, emit `LoginEvent::Unlocked` or a sanitized error toast).
 
@@ -303,17 +307,14 @@ pub enum Message {
 `App::update` is a pre-match dismissal block followed by the per-variant router:
 
 ```rust
-Message::Vault(m) => {
-    let (task, ev) = self.vault_view.update(m, &uctx);
-    let task = task.map(Message::Vault);
-    let ev_task = ev
-        .map(|e| self.handle_vault_event(e))
-        .unwrap_or_else(Task::none);
-    Task::batch([task, ev_task])
-}
+Message::Vault(m) => self
+    .views
+    .vault
+    .update(m, uctx)
+    .dispatch(Message::vault, |e| self.handle_vault_event(e)),
 ```
 
-The pre-match block is **load-bearing**: any login/vault message dismisses the title-bar menu, and any title-bar message dismisses the login/vault dropdowns. Without it, an accidental menu click from the vault would leave the account-switcher dropdown open.
+[`Outcome::dispatch`](crates/desktop/src/app/ctx.rs) lifts the view's local message type via `wrap` and routes events through `handle_event`. The pre-match block is **load-bearing**: any login/vault message dismisses the title-bar menu, and any title-bar message dismisses the login/vault dropdowns. Without it, an accidental menu click from the vault would leave the account-switcher dropdown open.
 
 ## Cross-Cutting Rules
 
@@ -362,20 +363,24 @@ Minimal `mod.rs` skeleton:
 ```rust
 mod handler;
 
-use iced::{Element, Task};
+use iced::Element;
 
 use crate::{
-    app::{RenderCtx, UpdateCtx},
+    app::{Outcome, RenderCtx, UpdateCtx, ViewTypes},
     theme::AppTheme,
 };
 
 #[derive(Debug, Clone)]
 pub enum GeneratorMessage { /* widget events + async completions */ }
 
-#[derive(Debug, Clone)]
 pub enum GeneratorEvent { /* outbound facts for App */ }
 
 pub struct GeneratorView { /* local state */ }
+
+impl ViewTypes for GeneratorView {
+    type Message = GeneratorMessage;
+    type Event = GeneratorEvent;
+}
 
 impl GeneratorView {
     pub fn new() -> Self { Self { /* ... */ } }
@@ -383,10 +388,10 @@ impl GeneratorView {
     pub fn update(
         &mut self,
         msg: GeneratorMessage,
-        _ctx: &UpdateCtx,
-    ) -> (Task<GeneratorMessage>, Option<GeneratorEvent>) {
+        _ctx: UpdateCtx<'_>,
+    ) -> Outcome<Self> {
         // match msg { ... }
-        (Task::none(), None)
+        Outcome::None
     }
 
     /// Close any local overlays when a message destined for another view arrives.
@@ -430,14 +435,11 @@ Initialize in `App::new()`: `generator_view: generator::GeneratorView::new(),`.
 ### 4. Add the router arm in `App::update`
 
 ```rust
-Message::Generator(m) => {
-    let (task, ev) = self.generator_view.update(m, &uctx);
-    let task = task.map(Message::Generator);
-    let ev_task = ev
-        .map(|e| self.handle_generator_event(e))
-        .unwrap_or_else(Task::none);
-    Task::batch([task, ev_task])
-}
+Message::Generator(m) => self
+    .views
+    .generator
+    .update(m, uctx)
+    .dispatch(Message::generator, |e| self.handle_generator_event(e)),
 ```
 
 Add `Message::Generator(_)` to the cross-view dismissal pre-match block at the top of `App::update`, so an accidental click into the generator doesn't leave other views' overlays open. It looks like this:
@@ -539,18 +541,38 @@ Single `MENUS` static drives both custom and native menus:
 
 Two kinds, both via iced's native overlay system (window-level rendering, not nested in the page layout):
 
-- **Dropdowns** — `components::drop_down::DropDown` (local fork of iced_aw). Custom alignments: `BelowLeft`, `BelowRight`, `AboveRight`. Used for the account switcher and title-bar menus.
+- **Dropdowns** — `components::drop_down::DropDown` (local fork of iced_aw). Custom alignments: `BelowLeft`, `BelowRight`, `AboveRight`. Used for the account switcher and title-bar menus. Wraps user-supplied overlay content in a shared shadowed container + `iced::widget::opaque` so clicks on the panel's empty space don't fall through to widgets behind, and so every dropdown reads as lifted off the page without each call site declaring its own shadow.
 - **Toasts** — `components::toast::Manager` wraps the app content and overlays a vertical stack of toasts in the lower-right. Animation state (fade, progress, hover-pause) is driven from the overlay's `update()` via `window::Event::RedrawRequested` ticks — no separate `Subscription`.
+
+In addition, two **window-level overlay archetypes** are composed at the App root (above the main column, including the sidebar and title bar):
+
+- **Modal dialogs** — `components::modal::{view, dialog, confirm_dialog}`. Backdrop scrim, click-to-dismiss, drop shadow, and animated open/close via `FadeInOut`. The dialog body is itself wrapped in `opaque` so clicks on its empty space don't dismiss; the entire stack is wrapped in `opaque` so hover doesn't leak through to widgets behind.
+- **Bottom sheet** — `components::bottom_sheet`. Narrow-mode detail/form pane. Same scrim + opaque pattern. Open/close uses a `FadeInOut` on the owning view's `Selection`; the close path defers `selection.clear()` by the outro duration so the sheet has content to render while sliding out.
 
 Iced overlays support only ONE level — a `DropDown` inside another `DropDown`'s overlay won't render its own overlay. Submenus must be part of the same overlay content (e.g. `row![main_panel, submenu]`).
 
-## Self-Animating Widgets
+## Animation
 
-Pattern: intercept `Event::Window(window::Event::RedrawRequested(now))` in `Widget::update` and request the next frame via `shell`. The widget drives its own redraws without an app-level subscription or dummy message.
+Two patterns coexist:
 
-Two variants:
-- `shell.request_redraw()` — redraw on the display's next frame. Simplest. Used by the spinner.
-- `shell.request_redraw_at(now + delta)` — redraw at an explicit instant, capping the rate regardless of display Hz. Used by the toast overlay and the TOTP countdown.
+1. **Self-driving widgets** — for animations local to one widget (spinner, toast, TOTP countdown). Intercept `window::Event::RedrawRequested` in `Widget::update` and call `shell.request_redraw()` (or `request_redraw_at(now + delta)` for explicit cadence). No app-level subscription. See [decisions.md](./decisions.md) → "Self-Animating Widget Pattern".
+
+2. **State-driven animations via lilt** — for transitions tied to view state changes (modal open/close, segmented-pill swoosh). State holds a `lilt::Animated<T, Instant>`; `update()` calls `.transition(target, now)` on user actions; `view()` reads the interpolated value via `.animate_wrapped(now)` etc. The App-level subscription unions in `iced::window::frames()` while any animation is running, gated by a single global watermark in `services::animation`:
+
+   ```rust
+   // at the start of every transition
+   self.fade.transition(true, Instant::now());
+   services::animation::extend(Duration::from_millis(180));
+
+   // at the App level
+   if services::animation::any_in_progress() {
+       Subscription::batch([..., iced::window::frames().map(|_| Message::AnimationTick)])
+   }
+   ```
+
+   `services::animation::extend(d)` pushes the global "earliest quiet" instant forward by `d`. Any animation primitive that calls it auto-registers — adding new animated widgets needs no plumbing on the App side. `components::FadeInOut` is the bool-valued case; float-valued animations (e.g. the generator's segmented-pill swoosh) hold an `Animated<f32, Instant>` directly and call `extend` themselves.
+
+   Lifetime trick for outro animations: a `FadeInOut` stays "visible" while in_progress is true, even after `value` flips false. View functions gate on `progress_if_visible()? -> Option<f32>` — when fully closed the view returns `None` and the overlay unmounts. For overlays whose content is tied to selection state (bottom sheet), the close handler additionally spawns a delayed `Task` that runs `selection.clear()` after the outro duration so content stays rendered for the duration.
 
 ## Iced Gotchas
 
@@ -576,6 +598,7 @@ Git-pinned checkouts for investigation:
 - `iced` (git, 0.15) with `tokio`, `tiny-skia`, `advanced`, `svg`, `image`, `crisp`, `hinting`, `web-colors`, `x11`, `wayland` features
 - `muda = "0.18"` — native OS menus
 - `iced_aw` (0.13, default-features = false) — kept as local source reference for our `DropDown` fork
+- `lilt = "0.8"` — renderer-agnostic interruptable transition animations; powers `FadeInOut` and the generator's segmented-pill swoosh
 - `system-theme = "0.3"` — OS dark/light detection
 - `bitwarden-*` — SDK (git-pinned via `[workspace.dependencies]`)
 - `tracing` / `tracing-subscriber` — structured logging driven by `RUST_LOG`

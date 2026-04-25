@@ -74,10 +74,12 @@ impl SendView {
             return None;
         }
         self.selection.form.as_ref()?;
+        let progress = self.selection.sheet_fade.progress_if_visible()?;
         let pane = self.form_pane(ctx.colors, SHEET_TOP_RADIUS_PX);
         Some(bottom_sheet::view(
             pane,
             SHEET_TOP_INSET_PX,
+            progress,
             Some(SendMessage::CloseFormPane),
         ))
     }

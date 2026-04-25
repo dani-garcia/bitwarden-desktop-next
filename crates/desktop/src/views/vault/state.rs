@@ -40,6 +40,12 @@ pub(super) struct Selection {
     /// `FadeInOut` so the modal animates in/out — call `.open()` to arm,
     /// `.close()` to disarm.
     pub(super) confirm_delete: FadeInOut,
+    /// Animates the bottom sheet (narrow-mode only) in and out. Driven by
+    /// the same setters that set `detail`: every code path that loads a
+    /// detail calls `.open()`, and `CloseCipherDetail` calls `.close()`
+    /// alongside scheduling a delayed clear so the outro has content to
+    /// render.
+    pub(super) sheet_fade: FadeInOut,
 }
 
 impl Selection {

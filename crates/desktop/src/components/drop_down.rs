@@ -3,7 +3,7 @@
 //! Copied from iced_aw 0.13.1 to allow local modifications.
 
 use iced::{
-    Element, Event, Length, Point, Rectangle, Size, Vector,
+    Border, Color, Element, Event, Length, Point, Rectangle, Shadow, Size, Vector,
     advanced::{
         Layout, Shell, Widget,
         layout::{Limits, Node},
@@ -13,6 +13,20 @@ use iced::{
     },
     keyboard::{self, key::Named},
     touch,
+    widget::container,
+};
+
+use crate::theme::RADIUS_LG;
+
+/// Drop shadow rendered behind every dropdown panel — gives popovers a
+/// "lifted off the page" feel without each call site rolling its own.
+/// Border radius matches all panels' [`RADIUS_LG`] so the shadow shape
+/// follows the panel's rounded corners; if a future panel needs a
+/// different radius, this consolidation breaks down and we'd parameterise.
+const PANEL_SHADOW: Shadow = Shadow {
+    color: Color::from_rgba(0.0, 0.0, 0.0, 0.25),
+    offset: Vector::new(0.0, 4.0),
+    blur_radius: 16.0,
 };
 
 // ── Alignment ──────────────────────────────────────────────────────────────
@@ -113,18 +127,37 @@ where
 
 impl<'a, Message, Theme, Renderer> DropDown<'a, Message, Theme, Renderer>
 where
-    Message: Clone,
-    Renderer: renderer::Renderer,
+    Message: Clone + 'a,
+    Renderer: renderer::Renderer + 'a,
 {
     /// Create a new [`DropDown`]
+    ///
+    /// The overlay element is wrapped in:
+    /// 1. A shadow-only container (radius [`RADIUS_LG`], drop shadow) so
+    ///    every dropdown reads as lifted off the page without each call
+    ///    site declaring its own shadow.
+    /// 2. [`iced::widget::opaque`] so clicks and hovers on the panel's
+    ///    empty space don't fall through to widgets beneath the open
+    ///    dropdown.
+    ///
+    /// Callers' panels should match the shadow radius (`RADIUS_LG`) so the
+    /// shadow follows their rounded corners — every existing consumer
+    /// already does.
     pub fn new<U, B>(underlay: U, overlay: B, expanded: bool) -> Self
     where
         U: Into<Element<'a, Message, Theme, Renderer>>,
         B: Into<Element<'a, Message, Theme, Renderer>>,
+        Theme: container::Catalog + 'a,
+        <Theme as container::Catalog>::Class<'a>: From<container::StyleFn<'a, Theme>>,
     {
+        let shadowed = container(overlay).style(|_theme: &Theme| container::Style {
+            shadow: PANEL_SHADOW,
+            border: Border::default().rounded(RADIUS_LG),
+            ..container::Style::default()
+        });
         DropDown {
             underlay: underlay.into(),
-            overlay: overlay.into(),
+            overlay: iced::widget::opaque(shadowed),
             expanded,
             on_dismiss: None,
             width: None,

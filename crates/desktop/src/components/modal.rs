@@ -75,10 +75,15 @@ pub fn view<'a, Message: Clone + 'a>(
     // Slide origin: at progress=0 the dialog sits SLIDE_OFFSET_PX *below*
     // its rest position, sliding up to 0 as it opens. The slide is faked
     // with a top spacer inside the centered column — iced has no transform.
+    //
+    // `opaque` on the dialog absorbs clicks on its empty/non-interactive
+    // areas so they don't fall through to the backdrop's dismiss handler.
+    // The outer `opaque` further down still blocks events from reaching
+    // widgets behind the entire overlay.
     let slide_offset = (1.0 - progress) * SLIDE_OFFSET_PX;
     let slid = column![
         Space::new().height(Length::Fixed(slide_offset)),
-        dialog,
+        opaque(dialog),
     ];
 
     let centered = center(slid).width(Length::Fill).height(Length::Fill);

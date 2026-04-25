@@ -15,7 +15,7 @@ use crate::{
         inputs::{multi_select_field, search_select_field},
     },
     fl,
-    theme::{AppColors, AppTheme, RADIUS_SM},
+    theme::{AppColors, AppTheme, RADIUS_LG, RADIUS_SM},
 };
 
 use super::{
@@ -146,7 +146,7 @@ pub(super) fn collections_selector<'a>(
                     Border::default()
                         .color(theme.colors.border)
                         .width(1.0)
-                        .rounded(RADIUS_SM),
+                        .rounded(RADIUS_LG),
                 )
         })
         .into();

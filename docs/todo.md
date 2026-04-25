@@ -106,7 +106,8 @@ Standard cut / copy / paste / select-all on `TextInput` fields and the notes `Te
 ### Sidebar polish
 
 - **Indented tree hierarchy** — Vault > All vaults > My vault, with visual indent.
-- **Expand/collapse animation** — needs `Subscription` tick + interpolated width, or the self-animating widget pattern extended to container layout.
+- **Expand/collapse animation** — sidebar width snaps between `RAIL_WIDTH` and `PANEL_WIDTH`. Wire a `lilt::Animated<f32, Instant>` for the width and call `services::animation::extend(...)` on toggle so the App's frame subscription picks it up automatically (same pattern as the generator's segmented-pill swoosh — see [decisions.md](./decisions.md) → "State-Driven Animation").
+- **Active-row crossfade** — animate the bg color of the selected row in/out instead of snap. Cheap visual polish via `lilt::Animated<bool>` per row, or a single `Animated<usize>` that picks which row paints accent.
 
 ### Send — wire to real SDK + supporting flows
 
@@ -171,7 +172,7 @@ Before we grow many more call sites (unlock failure, copy-to-clipboard, sync err
 
 ### `UpdateCtx` filter leak (revisit when a 3rd filter lands)
 
-[`app/ctx.rs`](../crates/desktop/src/app/ctx.rs) currently carries `active_vault_filter` + `active_send_filter` as separate fields on `UpdateCtx`. Every view's `update()` receives both, even views that don't consume either. When a third filter arrives (Generator likely), the right move becomes clear:
+[`app/ctx.rs`](../crates/desktop/src/app/ctx.rs) currently carries `active_vault_filter` + `active_send_filter` as separate fields on `UpdateCtx`. Every view's `update()` receives both, even views that don't consume either. The Generator landed without a sidebar filter (history mode is internal to the modal), so we're still at N=2; whichever next view introduces a sidebar-driven filter will tip this into N=3 and the right move becomes clear:
 
 - **Option A:** collapse to a single `sidebar: &SidebarState` field — views that care destructure what they need.
 - **Option B:** push-based: App dispatches a `FilterChanged { filter }` message into the affected view on sidebar clicks rather than threading the current filter through every update cycle.

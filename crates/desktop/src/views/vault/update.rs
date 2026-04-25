@@ -81,8 +81,19 @@ impl VaultView {
                 }
             }
             VaultMessage::CloseCipherDetail => {
-                self.selection.clear();
+                // Start the outro and defer the selection clear so the
+                // sheet content stays alive for ~180 ms while the slide
+                // animates out. The wide-mode pane closes immediately —
+                // it has no animation to wait on.
+                self.selection.sheet_fade.close();
                 self.pane.close();
+                return Outcome::spawn(
+                    tokio::time::sleep(std::time::Duration::from_millis(180)),
+                    |_| VaultMessage::FinalizeSheetClose,
+                );
+            }
+            VaultMessage::FinalizeSheetClose => {
+                self.selection.clear();
             }
             VaultMessage::PaneResized(event) => self.pane.set_ratio(event.ratio),
             VaultMessage::CipherDetail(m) => {
@@ -423,6 +434,7 @@ impl VaultView {
             Ok(view) => {
                 self.selection.detail = Some(*view);
                 self.selection.form = None;
+                self.selection.sheet_fade.open();
                 VaultEvent::ItemSaved { uid: msg_uid }
             }
             Err(err) => {
@@ -518,6 +530,7 @@ impl VaultView {
                 // drop the stale detail.
                 if self.selection.id == view.id {
                     self.selection.detail = Some(*view);
+                    self.selection.sheet_fade.open();
                     self.pane.open();
                 } else {
                     tracing::debug!(

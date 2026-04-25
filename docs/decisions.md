@@ -66,7 +66,7 @@
 
 ## Compositional MVU
 
-**Decision**: Each view owns its local state and async work, and returns `(Task<SubMessage>, Option<SubEvent>)` from its `update()` method. App is a thin router. See [architecture.md](./architecture.md) → "Compositional MVU Pattern" for the implementation shape, message flow, and "How to Add a New View" recipe.
+**Decision**: Each view owns its local state and async work, and returns an [`Outcome<V>`](./architecture.md#update-outcome) (mutually-exclusive `None` / `Task(t)` / `Event(e)`) from its `update()` method. App is a thin router that calls `Outcome::dispatch` to lift the view's local message type and route events through `handle_{view}_event`. See [architecture.md](./architecture.md) → "Compositional MVU" / "Update Outcome" for the implementation shape, message flow, and "How to Add a New View" recipe.
 
 **Previous approach**: Sub-views returned `Vec<Action>` with imperative requests; App owned every `Task::perform` call; async completions were orphan top-level `Message` variants.
 
@@ -164,6 +164,20 @@
 **Prior art**: The toast overlay predates the spinner and established the pattern.
 
 **Rationale**: Subscriptions create every-tick updates that run the whole app `update` cycle even when nothing changed; the redraw-request path only redraws the widget tree without running `update`, so the cost stays bounded to the widget that needs the animation.
+
+## State-Driven Animation: lilt + Animation Watermark
+
+**Decision**: Animations tied to view state changes (modal open/close, segmented-pill swoosh, future slide-ins) use `lilt::Animated<T, Instant>` for the interpolation math and a single global watermark in [`services::animation`](../crates/desktop/src/services/animation/mod.rs) to gate the App's per-frame subscription. Every primitive that starts a transition calls `animation::extend(duration)` to push the watermark forward; `animation::any_in_progress()` is a single read that the App's subscription consults to decide whether to drive `iced::window::frames()`.
+
+**Why not the self-animating widget pattern?** That pattern works for animations whose state lives entirely inside one widget (spinner, toast, TOTP). Modals/sheets/segmented controls have animation state on the *view* (e.g. `tab_anim: Animated<f32, Instant>` next to `active_tab: TabKind`), driven by user-facing messages (`SelectTab`). State-on-the-widget can't see the message, and threading frame ticks through `update()` for every animation would mean either dummy `AnimationTick` per primitive or a global one. We went with one global tick + the watermark.
+
+**Auto-registration is the load-bearing property**: adding a new animated overlay needs no plumbing on the App side. `FadeInOut::open/close` calls `animation::extend(180ms)` internally; the App's `Subscription::batch` already includes `frames()` gated on `animation::any_in_progress()`. Drop in a new `Animated<f32>` somewhere, call `extend` on transition, done. Without auto-registration we had a fan-out of `any_modal_animating()` checks across every view — easy to forget, drift over time.
+
+**`FadeInOut`**: thin wrapper around `Animated<bool, Instant>` for open/close lifecycles. Exposes `open()` / `close()` (auto-extend) and a `progress_if_visible() -> Option<f32>` gate that view functions use as `let progress = self.fade.progress_if_visible()?;` to short-circuit when the overlay is fully closed. The "keep rendering during outro" lifetime is solved by lilt's `in_progress(now)` semantics — value flips false immediately, but `is_visible` stays true while the close transition runs.
+
+**Outro content lifetime**: for overlays whose content is tied to selection state (the bottom sheet's content comes from `selection.detail`), the close handler additionally spawns a delayed `Task` that runs `selection.clear()` after the outro duration. Skipping this would wipe the content on close-click and leave nothing for the slide-out to render.
+
+**Why lilt and not cosmic-time / hand-rolled?** lilt is renderer-agnostic (only depends on `web-time`), tracks no specific iced version, and its `Animated<T>` value semantics ("transition declares a path, render reads the value at `now`") fit the elm-style update loop without per-tick mutation. ~250 LOC API, drop-in.
 
 ## Component Library
 

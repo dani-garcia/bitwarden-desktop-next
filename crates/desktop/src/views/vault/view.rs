@@ -79,10 +79,12 @@ impl VaultView {
             return None;
         }
         self.selection.detail.as_ref()?;
+        let progress = self.selection.sheet_fade.progress_if_visible()?;
         let pane = self.detail_or_form_pane(ctx.colors, SHEET_TOP_RADIUS_PX);
         Some(bottom_sheet::view(
             pane,
             SHEET_TOP_INSET_PX,
+            progress,
             Some(VaultMessage::CloseCipherDetail),
         ))
     }

@@ -583,35 +583,20 @@ impl App {
 
         let main_column: Element<'_, Message, AppTheme> =
             iced::widget::column![tb, page].height(iced::Fill).into();
-        let with_sheet: Element<'_, Message, AppTheme> = match sheet {
-            Some(sheet) => iced::widget::stack![main_column, sheet].into(),
-            None => main_column,
-        };
-        // Compute modal-presence BEFORE moving the Options into the stack
-        // so we can decide whether to add the drag-by-titlebar overlay below.
-        let modal_present =
-            modal.is_some() || settings_modal.is_some() || generator_modal.is_some();
 
-        let with_modal: Element<'_, Message, AppTheme> = match modal {
-            Some(modal) => iced::widget::stack![with_sheet, modal].into(),
-            None => with_sheet,
-        };
-        let with_settings: Element<'_, Message, AppTheme> = match settings_modal {
-            Some(m) => iced::widget::stack![with_modal, m].into(),
-            None => with_modal,
-        };
-        let with_generator: Element<'_, Message, AppTheme> = match generator_modal {
-            Some(m) => iced::widget::stack![with_settings, m].into(),
-            None => with_settings,
-        };
+        // All optional layers above `main_column`, in z-order (lowest first).
+        // `flatten()` drops the `None`s so the resulting Vec contains only
+        // the overlays that actually need to render this frame.
+        let mut overlays: Vec<Element<'_, Message, AppTheme>> =
+            [sheet, modal, settings_modal, generator_modal]
+                .into_iter()
+                .flatten()
+                .collect();
 
-        // Drag-by-titlebar while a modal is open: a transparent strip
-        // covering the top TITLE_BAR_HEIGHT pixels emits the same DragStart
-        // message the title bar would. Below the strip is a non-interactive
-        // Space that lets clicks fall through to the modal beneath.
-        // Only meaningful when the custom title bar is in use — macOS uses
-        // the native title bar, which already handles drag itself.
-        let with_drag: Element<'_, Message, AppTheme> = if use_custom_menu_bar && modal_present {
+        // Drag-by-titlebar overlay sits on top of everything else when any
+        // overlay is up. Only meaningful when the custom title bar is in use
+        // — macOS uses the native title bar, which already handles drag.
+        if use_custom_menu_bar && !overlays.is_empty() {
             let drag_strip = iced::widget::mouse_area(
                 iced::widget::container(iced::widget::Space::new())
                     .width(iced::Fill)
@@ -621,16 +606,28 @@ impl App {
             let filler = iced::widget::container(iced::widget::Space::new())
                 .width(iced::Fill)
                 .height(iced::Fill);
-            let overlay = iced::widget::column![drag_strip, filler]
-                .width(iced::Fill)
-                .height(iced::Fill);
-            iced::widget::stack![with_generator, overlay].into()
+            overlays.push(
+                iced::widget::column![drag_strip, filler]
+                    .width(iced::Fill)
+                    .height(iced::Fill)
+                    .into(),
+            );
+        }
+
+        let stacked: Element<'_, Message, AppTheme> = if overlays.is_empty() {
+            main_column
         } else {
-            with_generator
+            let mut layers = Vec::with_capacity(overlays.len() + 1);
+            layers.push(main_column);
+            layers.extend(overlays);
+            iced::widget::Stack::with_children(layers)
+                .width(iced::Fill)
+                .height(iced::Fill)
+                .into()
         };
 
         let with_toasts: Element<'_, Message, AppTheme> =
-            toast::Manager::new(with_drag, &self.toasts, close_toast).into();
+            toast::Manager::new(stacked, &self.toasts, close_toast).into();
 
         if use_custom_menu_bar {
             title_bar::resize_wrapper(with_toasts, |dir| {

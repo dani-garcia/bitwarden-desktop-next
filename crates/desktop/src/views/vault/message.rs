@@ -49,6 +49,10 @@ pub enum VaultMessage {
     CipherDetail(CipherDetailMessage),
     CipherEdit(CipherEditMessage),
     CloseCipherDetail,
+    /// Fires after the bottom-sheet outro animation completes — actually
+    /// clears the selection. Split out so the sheet has content to render
+    /// during its slide-down/fade-out.
+    FinalizeSheetClose,
     PaneResized(pane_grid::ResizeEvent),
     NewItem,
     /// User confirmed the delete in the modal — fire the SDK soft-delete.
@@ -83,6 +87,7 @@ impl std::fmt::Debug for VaultMessage {
             Self::CipherDetail(m) => f.debug_tuple("CipherDetail").field(m).finish(),
             Self::CipherEdit(m) => f.debug_tuple("CipherEdit").field(m).finish(),
             Self::CloseCipherDetail => f.write_str("CloseCipherDetail"),
+            Self::FinalizeSheetClose => f.write_str("FinalizeSheetClose"),
             Self::PaneResized(e) => f.debug_tuple("PaneResized").field(e).finish(),
             Self::NewItem => f.write_str("NewItem"),
             Self::ConfirmDeleteSelected => f.write_str("ConfirmDeleteSelected"),

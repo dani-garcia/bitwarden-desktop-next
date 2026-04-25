@@ -26,6 +26,11 @@ pub(super) struct Selection {
     /// `FadeInOut` so the modal animates in/out — call `.open()` to arm,
     /// `.close()` to disarm.
     pub(super) confirm_delete: FadeInOut,
+    /// Animates the bottom sheet (narrow-mode only) in and out. Same
+    /// pattern as the vault selection's `sheet_fade`: every form-setting
+    /// path calls `.open()` and `CloseFormPane` calls `.close()` ahead of
+    /// a delayed `clear()` so the outro keeps the form content alive.
+    pub(super) sheet_fade: FadeInOut,
 }
 
 impl Selection {

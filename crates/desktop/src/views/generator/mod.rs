@@ -20,18 +20,24 @@ mod tabs;
 use bitwarden_generators::{
     PassphraseGeneratorRequest, PasswordGeneratorRequest, UsernameGeneratorRequest,
 };
+use std::time::{Duration, Instant};
+
 use iced::{
-    Alignment, Background, Border, Color, Element, Fill, Padding, Shadow,
-    widget::{Space, button, column, container, row, scrollable, text},
+    Alignment, Background, Border, Color, Element, Fill, Length, Padding, Shadow,
+    widget::{Space, Stack, button, column, container, row, scrollable, text},
 };
+use lilt::{Animated, Easing};
 
 use crate::{
     app::{Outcome, ViewTypes},
     components::{self, buttons, icons, modal, toast::Toast},
     fl,
-    services::sdk::PasswordHistoryEntry,
+    services::{animation, sdk::PasswordHistoryEntry},
     theme::{AppColors, AppTheme, RADIUS_LG, RADIUS_PILL},
 };
+
+/// How fast the segmented tab indicator slides between positions.
+const TAB_ANIM_MS: f32 = 160.0;
 
 // ── State ──────────────────────────────────────────────────────────────────
 
@@ -39,6 +45,10 @@ pub struct GeneratorView {
     pub fade: components::FadeInOut,
     mode: Mode,
     active_tab: TabKind,
+    /// Float-valued tab index used to drive the sliding pill indicator.
+    /// Snaps to the active tab's index on `SelectTab` and lilt interpolates
+    /// the path. Starts at `0.0` (Password tab) to match `active_tab`.
+    tab_anim: Animated<f32, Instant>,
     password: PasswordForm,
     passphrase: PassphraseForm,
     username: UsernameForm,
@@ -252,6 +262,9 @@ impl GeneratorView {
             fade: components::FadeInOut::default(),
             mode: Mode::Generator,
             active_tab: TabKind::Password,
+            tab_anim: Animated::new(0.0)
+                .duration(TAB_ANIM_MS)
+                .easing(Easing::EaseOut),
             password: PasswordForm::default(),
             passphrase: PassphraseForm::default(),
             username: UsernameForm::default(),
@@ -264,6 +277,9 @@ impl GeneratorView {
         self.fade.open();
         self.mode = Mode::Generator;
         self.active_tab = TabKind::Password;
+        // Snap the indicator without animating — opening is already an
+        // in-animation; sliding the pill on top of that would be busy.
+        self.tab_anim.transition_instantaneous(0.0, Instant::now());
         self.current = None;
     }
 
@@ -304,6 +320,12 @@ impl GeneratorView {
                     return Outcome::None;
                 }
                 self.active_tab = tab;
+                let new_index = TabKind::ALL
+                    .iter()
+                    .position(|t| *t == tab)
+                    .unwrap_or(0) as f32;
+                self.tab_anim.transition(new_index, Instant::now());
+                animation::extend(Duration::from_millis(TAB_ANIM_MS as u64));
                 self.current = None;
                 self.regenerate_event()
             }
@@ -571,7 +593,8 @@ impl GeneratorView {
         &'a self,
         colors: &'a AppColors,
     ) -> Element<'a, GeneratorMessage, AppTheme> {
-        let tabs = tab_row(self.active_tab, colors);
+        let tab_progress = self.tab_anim.animate_wrapped(Instant::now());
+        let tabs = tab_row(self.active_tab, tab_progress, colors);
         let value_card = value_card(self.current.as_deref().unwrap_or(""), colors);
         let options: Element<'a, GeneratorMessage, AppTheme> = match self.active_tab {
             TabKind::Password => tabs::password::view(&self.password, colors),
@@ -679,18 +702,54 @@ pub(super) fn section_heading<'a>(
         .into()
 }
 
-/// Segmented tab bar (three buttons in a rounded pill). Active tab uses
-/// the accent color; inactive tabs are transparent with hover.
+/// Segmented tab bar (three buttons in a rounded pill). The accent pill
+/// is a separate layer behind the buttons; its position interpolates
+/// between tab indices via the caller-supplied `progress` (a float-valued
+/// tab index driven by lilt). Buttons themselves render only their text.
 fn tab_row<'a>(
     active: TabKind,
+    progress: f32,
     colors: &'a AppColors,
 ) -> Element<'a, GeneratorMessage, AppTheme> {
-    let mut r = row![].spacing(2);
+    let n_tabs = TabKind::ALL.len();
+    let max_index = (n_tabs - 1) as f32;
+    let left = progress.clamp(0.0, max_index);
+    let right = max_index - left;
+
+    // FillPortion(0) collapses the space — clamp to a tiny share so the
+    // sliding pill still renders a sliver at each end. The pill itself
+    // gets a fixed share of `100`; the flanking spaces get `left * 100`
+    // and `right * 100` shares so at integer `progress` values the pill
+    // aligns exactly with the corresponding button.
+    let pill_p: u16 = 100;
+    let left_p = ((left * 100.0).round() as u16).max(1);
+    let right_p = ((right * 100.0).round() as u16).max(1);
+
+    let pill = container(Space::new())
+        .width(Length::FillPortion(pill_p))
+        .height(Fill)
+        .style(|theme: &AppTheme| {
+            container::Style::default()
+                .background(theme.colors.accent)
+                .border(Border::default().rounded(RADIUS_PILL))
+        });
+    let indicator = row![
+        Space::new().width(Length::FillPortion(left_p)),
+        pill,
+        Space::new().width(Length::FillPortion(right_p)),
+    ]
+    .height(Fill);
+
+    let mut buttons_row = row![];
     for &k in TabKind::ALL {
-        r = r.push(tab_button(k, k == active, colors));
+        buttons_row = buttons_row.push(tab_button(k, k == active, colors));
     }
 
-    container(r)
+    // `push_under` puts the indicator behind the buttons without affecting
+    // the stack's intrinsic size — the buttons row dictates height.
+    let stacked = Stack::new().push(buttons_row).push_under(indicator);
+
+    container(stacked)
         .padding(Padding::from([2, 2]))
         .width(Fill)
         .style(|theme: &AppTheme| {
@@ -711,8 +770,6 @@ fn tab_button<'a>(
     } else {
         colors.text_secondary
     };
-    let active_bg = colors.accent;
-    let hover_bg = colors.item_hover;
 
     let label = container(
         text(kind.label())
@@ -724,10 +781,18 @@ fn tab_button<'a>(
     .align_x(Alignment::Center)
     .padding([4, 8]);
 
-    buttons::ghost(label, active, active_bg, hover_bg, RADIUS_PILL)
-        .width(Fill)
-        .on_press(GeneratorMessage::SelectTab(kind))
-        .into()
+    // Transparent buttons — the sliding pill behind is the visual bg.
+    // Hover is also transparent so it doesn't fight with the indicator.
+    buttons::ghost(
+        label,
+        false,
+        Color::TRANSPARENT,
+        Color::TRANSPARENT,
+        RADIUS_PILL,
+    )
+    .width(Fill)
+    .on_press(GeneratorMessage::SelectTab(kind))
+    .into()
 }
 
 /// Big value display with refresh + copy buttons on the right. Monospace
