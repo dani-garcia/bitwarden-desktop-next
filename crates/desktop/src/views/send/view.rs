@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use bitwarden_send::SendView as SdkSendView;
 use iced::{
-    Alignment, Border, Element, Fill, Length, Padding,
+    Alignment, Border, Element, Fill, Padding,
     widget::{Space, column, container, row, text},
 };
 
@@ -97,42 +97,14 @@ impl SendView {
             .map(|f| f.name().to_owned())
             .unwrap_or_default();
 
-        let title = text(fl!("send-delete-modal-title"))
-            .size(18)
-            .color(colors.text_primary)
-            .font(crate::APP_FONT_BOLD);
-        let body = text(fl!("send-delete-modal-body", name = item_name))
-            .size(14)
-            .color(colors.text_primary);
-
-        let cancel_btn = buttons::secondary(text(fl!("send-delete-modal-cancel")).size(14))
-            .on_press(SendMessage::CancelDeleteSelected)
-            .padding([8, 20]);
-        let confirm_btn = buttons::primary(text(fl!("send-delete-modal-confirm")).size(14))
-            .on_press(SendMessage::ConfirmDeleteSelected)
-            .padding([8, 20]);
-
-        let dialog_inner: Element<'_, SendMessage, AppTheme> = column![
-            title,
-            body,
-            row![Space::new().width(Fill), cancel_btn, confirm_btn]
-                .spacing(8)
-                .align_y(Alignment::Center),
-        ]
-        .spacing(12)
-        .padding(Padding::from([16, 20]))
-        .width(Length::Fixed(380.0))
-        .into();
-
-        let dialog = container(dialog_inner).style(|theme: &AppTheme| {
-            container::Style::default()
-                .background(theme.colors.card_bg)
-                .border(Border::default().rounded(crate::theme::RADIUS_LG))
-        });
-
-        Some(crate::components::modal::view(
-            dialog.into(),
+        Some(crate::components::modal::confirm_dialog(
+            fl!("send-delete-modal-title"),
+            fl!("send-delete-modal-body", name = item_name),
+            fl!("send-delete-modal-confirm"),
+            fl!("send-delete-modal-cancel"),
+            SendMessage::ConfirmDeleteSelected,
             SendMessage::CancelDeleteSelected,
+            colors,
         ))
     }
 

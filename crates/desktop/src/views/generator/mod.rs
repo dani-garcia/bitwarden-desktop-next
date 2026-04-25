@@ -21,16 +21,16 @@ use bitwarden_generators::{
     PassphraseGeneratorRequest, PasswordGeneratorRequest, UsernameGeneratorRequest,
 };
 use iced::{
-    Alignment, Background, Border, Color, Element, Fill, Length, Padding, Shadow,
+    Alignment, Background, Border, Color, Element, Fill, Padding, Shadow,
     widget::{Space, button, column, container, row, scrollable, text},
 };
 
 use crate::{
     app::{Outcome, ViewTypes},
-    components::{buttons, icons, modal, toast::Toast},
+    components::{self, buttons, icons, modal, toast::Toast},
     fl,
     services::sdk::PasswordHistoryEntry,
-    theme::{AppColors, AppTheme, RADIUS_LG, RADIUS_MD, RADIUS_PILL, RADIUS_SM},
+    theme::{AppColors, AppTheme, RADIUS_LG, RADIUS_PILL},
 };
 
 // ── State ──────────────────────────────────────────────────────────────────
@@ -546,21 +546,26 @@ impl GeneratorView {
             .width(Fill)
             .height(Fill);
 
-        let dialog = container(
-            container(content)
-                .padding(Padding::from([20, 24]))
-                .width(Fill)
-                .height(Fill),
-        )
-        .width(Length::Fixed(680.0))
-        .height(Length::Fixed(620.0))
-        .style(|theme: &AppTheme| {
-            container::Style::default()
-                .background(theme.colors.background)
-                .border(Border::default().rounded(RADIUS_LG))
-        });
+        // Right padding is reduced to compensate for the scrollable's
+        // internal right-rail clearance (12px above), so cards sit
+        // symmetrically inside the dialog instead of drifting left.
+        let body = container(content)
+            .padding(Padding {
+                top: 12.0,
+                right: 12.0,
+                bottom: 12.0,
+                left: 24.0,
+            })
+            .width(Fill)
+            .height(Fill);
 
-        Some(modal::view(dialog.into(), GeneratorMessage::Close))
+        Some(modal::dialog(
+            680.0,
+            Some(620.0),
+            |c| c.card_bg,
+            body.into(),
+            GeneratorMessage::Close,
+        ))
     }
 
     fn generator_body<'a>(
@@ -569,7 +574,6 @@ impl GeneratorView {
     ) -> Element<'a, GeneratorMessage, AppTheme> {
         let tabs = tab_row(self.active_tab, colors);
         let value_card = value_card(self.current.as_deref().unwrap_or(""), colors);
-        let options_heading = section_heading(fl!("generator-options"), colors);
         let options: Element<'a, GeneratorMessage, AppTheme> = match self.active_tab {
             TabKind::Password => tabs::password::view(&self.password, colors),
             TabKind::Passphrase => tabs::passphrase::view(&self.passphrase, colors),
@@ -581,12 +585,8 @@ impl GeneratorView {
         column![
             tabs,
             Space::new().height(12),
-            value_card,
-            Space::new().height(14),
-            options_heading,
-            Space::new().height(6),
+            components::card_with_margin(value_card),
             options,
-            Space::new().height(14),
             history_row,
         ]
         .width(Fill)
@@ -696,7 +696,7 @@ fn tab_row<'a>(
         .width(Fill)
         .style(|theme: &AppTheme| {
             container::Style::default()
-                .background(theme.colors.card_bg)
+                .background(theme.colors.background)
                 .border(Border::default().rounded(RADIUS_PILL))
         })
         .into()
@@ -756,23 +756,18 @@ fn value_card<'a>(
     .padding([6, 6])
     .on_press(GeneratorMessage::CopyCurrent);
 
-    container(
+    components::styled_card(
         row![value_text, Space::new().width(Fill), refresh, copy]
             .align_y(Alignment::Center)
-            .spacing(4),
+            .spacing(4)
+            .into(),
     )
-    .padding(Padding::from([12, 16]))
-    .width(Fill)
-    .style(|theme: &AppTheme| {
-        container::Style::default()
-            .background(theme.colors.card_bg)
-            .border(Border::default().rounded(RADIUS_MD))
-    })
-    .into()
 }
 
 /// "Generator history >" disclosure row at the bottom of the generator
 /// body. Tapping anywhere on the row flips the modal into history mode.
+/// Styled as a clickable card matching the option cards so it sits
+/// flush with the rest of the card-based layout.
 fn history_entry_row<'a>(
     colors: &'a AppColors,
 ) -> Element<'a, GeneratorMessage, AppTheme> {
@@ -786,23 +781,23 @@ fn history_entry_row<'a>(
     ]
     .align_y(Alignment::Center);
 
-    let padded = container(row_content)
-        .padding(Padding::from([12, 16]))
-        .width(Fill);
-
-    button(padded)
+    button(row_content)
         .width(Fill)
-        .padding(0)
-        .style(move |_theme: &AppTheme, status| {
+        .padding(Padding::from([12, 16]))
+        .style(move |theme: &AppTheme, status| {
             let bg = match status {
-                button::Status::Hovered => Background::Color(colors.item_hover),
-                _ => Background::Color(Color::TRANSPARENT),
+                button::Status::Hovered => Background::Color(theme.colors.item_hover),
+                _ => Background::Color(theme.colors.background),
             };
             button::Style {
                 background: Some(bg),
                 text_color: colors.text_primary,
-                border: Border::default().rounded(RADIUS_SM),
-                shadow: iced::Shadow::default(),
+                border: Border::default().rounded(RADIUS_LG),
+                shadow: Shadow {
+                    color: Color::from_rgba(0.0, 0.0, 0.0, 0.20),
+                    offset: iced::Vector::new(0.0, 1.0),
+                    blur_radius: 2.0,
+                },
                 snap: false,
             }
         })

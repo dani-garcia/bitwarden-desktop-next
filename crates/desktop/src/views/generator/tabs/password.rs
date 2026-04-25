@@ -4,7 +4,7 @@ use iced::{
 };
 
 use crate::{
-    components::inputs,
+    components::{self, inputs},
     fl,
     theme::{AppColors, AppTheme},
 };
@@ -83,18 +83,29 @@ pub(in super::super) fn view<'a>(
         GeneratorMessage::ToggleAvoidAmbiguous,
     );
 
+    let length_card = components::styled_card(
+        column![length, Space::new().height(2), length_hint]
+            .width(Fill)
+            .into(),
+    );
+
+    let include_card = components::styled_card(
+        column![
+            include_heading,
+            Space::new().height(6),
+            include_row,
+            Space::new().height(12),
+            row![min_number, min_special].spacing(12).width(Fill),
+            Space::new().height(10),
+            avoid,
+        ]
+        .width(Fill)
+        .into(),
+    );
+
     column![
-        length,
-        Space::new().height(2),
-        length_hint,
-        Space::new().height(12),
-        include_heading,
-        Space::new().height(6),
-        include_row,
-        Space::new().height(12),
-        row![min_number, min_special].spacing(12).width(Fill),
-        Space::new().height(10),
-        avoid,
+        components::card_with_margin(length_card),
+        components::card_with_margin(include_card),
     ]
     .width(Fill)
     .into()

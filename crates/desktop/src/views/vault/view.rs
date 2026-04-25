@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use bitwarden_vault::CipherListView;
 use iced::{
-    Alignment, Border, Element, Fill, Length, Padding,
+    Alignment, Border, Element, Fill, Padding,
     widget::{Space, column, container, row, text},
 };
 
@@ -105,42 +105,14 @@ impl VaultView {
             .map(|c| c.name.as_str())
             .unwrap_or("");
 
-        let title = text(fl!("vault-delete-modal-title"))
-            .size(18)
-            .color(colors.text_primary)
-            .font(crate::APP_FONT_BOLD);
-        let body = text(fl!("vault-delete-modal-body", name = item_name))
-            .size(14)
-            .color(colors.text_primary);
-
-        let cancel_btn = buttons::secondary(text(fl!("vault-delete-modal-cancel")).size(14))
-            .on_press(VaultMessage::CancelDeleteSelected)
-            .padding([8, 20]);
-        let confirm_btn = buttons::primary(text(fl!("vault-delete-modal-confirm")).size(14))
-            .on_press(VaultMessage::ConfirmDeleteSelected)
-            .padding([8, 20]);
-
-        let dialog_inner: Element<'_, VaultMessage, AppTheme> = column![
-            title,
-            body,
-            row![Space::new().width(Fill), cancel_btn, confirm_btn]
-                .spacing(8)
-                .align_y(Alignment::Center),
-        ]
-        .spacing(12)
-        .padding(Padding::from([16, 20]))
-        .width(Length::Fixed(380.0))
-        .into();
-
-        let dialog = container(dialog_inner).style(|theme: &AppTheme| {
-            container::Style::default()
-                .background(theme.colors.card_bg)
-                .border(Border::default().rounded(crate::theme::RADIUS_LG))
-        });
-
-        Some(crate::components::modal::view(
-            dialog.into(),
+        Some(crate::components::modal::confirm_dialog(
+            fl!("vault-delete-modal-title"),
+            fl!("vault-delete-modal-body", name = item_name),
+            fl!("vault-delete-modal-confirm"),
+            fl!("vault-delete-modal-cancel"),
+            VaultMessage::ConfirmDeleteSelected,
             VaultMessage::CancelDeleteSelected,
+            colors,
         ))
     }
 

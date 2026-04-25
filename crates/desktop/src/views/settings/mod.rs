@@ -235,16 +235,13 @@ impl SettingsView {
         // it (CLAUDE.md → "Nested container backgrounds mask parent border-radius").
         let body = row![sidebar, pane].width(Fill).height(Fill);
 
-        let dialog = container(body)
-            .width(Length::Fixed(640.0))
-            .height(Length::Fixed(440.0))
-            .style(|theme: &AppTheme| {
-                container::Style::default()
-                    .background(theme.colors.background)
-                    .border(Border::default().rounded(RADIUS_LG))
-            });
-
-        Some(modal::view(dialog.into(), SettingsMessage::Close))
+        Some(modal::dialog(
+            640.0,
+            Some(440.0),
+            |c| c.background,
+            body.into(),
+            SettingsMessage::Close,
+        ))
     }
 
     fn sidebar_view<'a>(&'a self, colors: &'a AppColors) -> Element<'a, SettingsMessage, AppTheme> {

@@ -4,7 +4,7 @@ use iced::{
 };
 
 use crate::{
-    components::inputs,
+    components::{self, inputs},
     fl,
     theme::{AppColors, AppTheme},
 };
@@ -51,16 +51,27 @@ pub(in super::super) fn view<'a>(
         GeneratorMessage::TogglePassphraseIncludeNumber,
     );
 
+    let num_card = components::styled_card(
+        column![num_words, Space::new().height(2), num_hint]
+            .width(Fill)
+            .into(),
+    );
+
+    let extras_card = components::styled_card(
+        column![
+            separator,
+            Space::new().height(12),
+            capitalize,
+            Space::new().height(6),
+            include_number,
+        ]
+        .width(Fill)
+        .into(),
+    );
+
     column![
-        num_words,
-        Space::new().height(2),
-        num_hint,
-        Space::new().height(12),
-        separator,
-        Space::new().height(12),
-        capitalize,
-        Space::new().height(6),
-        include_number,
+        components::card_with_margin(num_card),
+        components::card_with_margin(extras_card),
     ]
     .width(Fill)
     .into()

@@ -3,8 +3,8 @@
 //! section/card/label styling without duplicating the style closures.
 
 use iced::{
-    Element, Padding,
-    widget::{container, text},
+    Element,
+    widget::text,
 };
 
 use crate::{
@@ -40,16 +40,11 @@ pub fn field_readonly<'a, M: 'a>(
     .into()
 }
 
-/// Wraps a card element with bottom margin for section spacing.
+/// Wraps a card element with bottom margin for section spacing. Thin alias
+/// for `components::card_with_margin` — kept here so callers that already
+/// import `field_helpers` don't need a second import path.
 pub fn card_with_margin<'a, M: 'a>(card: Element<'a, M, AppTheme>) -> Element<'a, M, AppTheme> {
-    container(card)
-        .padding(Padding {
-            top: 0.0,
-            right: 0.0,
-            bottom: 8.0,
-            left: 0.0,
-        })
-        .into()
+    components::card_with_margin(card)
 }
 
 /// Styled card wrapper. Thin alias for `components::styled_card` — exposed

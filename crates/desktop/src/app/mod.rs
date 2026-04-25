@@ -571,6 +571,11 @@ impl App {
             Some(sheet) => iced::widget::stack![main_column, sheet].into(),
             None => main_column,
         };
+        // Compute modal-presence BEFORE moving the Options into the stack
+        // so we can decide whether to add the drag-by-titlebar overlay below.
+        let modal_present =
+            modal.is_some() || settings_modal.is_some() || generator_modal.is_some();
+
         let with_modal: Element<'_, Message, AppTheme> = match modal {
             Some(modal) => iced::widget::stack![with_sheet, modal].into(),
             None => with_sheet,
@@ -583,8 +588,33 @@ impl App {
             Some(m) => iced::widget::stack![with_settings, m].into(),
             None => with_settings,
         };
+
+        // Drag-by-titlebar while a modal is open: a transparent strip
+        // covering the top TITLE_BAR_HEIGHT pixels emits the same DragStart
+        // message the title bar would. Below the strip is a non-interactive
+        // Space that lets clicks fall through to the modal beneath.
+        // Only meaningful when the custom title bar is in use — macOS uses
+        // the native title bar, which already handles drag itself.
+        let with_drag: Element<'_, Message, AppTheme> = if use_custom_menu_bar && modal_present {
+            let drag_strip = iced::widget::mouse_area(
+                iced::widget::container(iced::widget::Space::new())
+                    .width(iced::Fill)
+                    .height(iced::Length::Fixed(title_bar::TITLE_BAR_HEIGHT)),
+            )
+            .on_press(Message::title_bar(TitleBarMessage::DragStart));
+            let filler = iced::widget::container(iced::widget::Space::new())
+                .width(iced::Fill)
+                .height(iced::Fill);
+            let overlay = iced::widget::column![drag_strip, filler]
+                .width(iced::Fill)
+                .height(iced::Fill);
+            iced::widget::stack![with_generator, overlay].into()
+        } else {
+            with_generator
+        };
+
         let with_toasts: Element<'_, Message, AppTheme> =
-            toast::Manager::new(with_generator, &self.toasts, close_toast).into();
+            toast::Manager::new(with_drag, &self.toasts, close_toast).into();
 
         if use_custom_menu_bar {
             title_bar::resize_wrapper(with_toasts, |dir| {

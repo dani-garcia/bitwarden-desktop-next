@@ -13,7 +13,7 @@ pub(crate) mod totp;
 pub(crate) mod virtual_list;
 
 use iced::{
-    Color, Element, Fill, Shadow,
+    Color, Element, Fill, Padding, Shadow,
     widget::{container, rule},
 };
 
@@ -57,6 +57,18 @@ pub fn styled_card<'a, M: 'a>(content: Element<'a, M, AppTheme>) -> Element<'a, 
                     offset: iced::Vector::new(0.0, 1.0),
                     blur_radius: 2.0,
                 })
+        })
+        .into()
+}
+
+/// Wraps a card element with bottom margin for section spacing.
+pub fn card_with_margin<'a, M: 'a>(card: Element<'a, M, AppTheme>) -> Element<'a, M, AppTheme> {
+    container(card)
+        .padding(Padding {
+            top: 0.0,
+            right: 0.0,
+            bottom: 8.0,
+            left: 0.0,
         })
         .into()
 }

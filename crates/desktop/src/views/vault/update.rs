@@ -573,11 +573,28 @@ fn filter_items(
     query: &str,
 ) -> Vec<Arc<CipherListView>> {
     let items = all.iter().filter(|item| match filter {
-        VaultFilter::AllItems => true,
-        VaultFilter::Personal => item.organization_id.is_none(),
-        VaultFilter::Organization(org_id) => item.organization_id == Some(org_id),
-        VaultFilter::Favorites => item.favorite,
-        VaultFilter::Category(cat) => cat == cipher_list_view_type_to_type(&item.r#type),
+        // Archived/deleted ciphers only surface in their dedicated views —
+        // every other filter hides them so a soft-deleted login doesn't keep
+        // showing up under All Items / Favorites / Personal / etc.
+        VaultFilter::AllItems => item.deleted_date.is_none() && item.archived_date.is_none(),
+        VaultFilter::Personal => {
+            item.organization_id.is_none()
+                && item.deleted_date.is_none()
+                && item.archived_date.is_none()
+        }
+        VaultFilter::Organization(org_id) => {
+            item.organization_id == Some(org_id)
+                && item.deleted_date.is_none()
+                && item.archived_date.is_none()
+        }
+        VaultFilter::Favorites => {
+            item.favorite && item.deleted_date.is_none() && item.archived_date.is_none()
+        }
+        VaultFilter::Category(cat) => {
+            cat == cipher_list_view_type_to_type(&item.r#type)
+                && item.deleted_date.is_none()
+                && item.archived_date.is_none()
+        }
         VaultFilter::Archive => item.archived_date.is_some(),
         VaultFilter::Trash => item.deleted_date.is_some(),
     });

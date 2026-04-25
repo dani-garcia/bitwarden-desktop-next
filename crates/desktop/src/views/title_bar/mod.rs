@@ -24,7 +24,7 @@ const ITEM_PADDING: Padding = Padding {
     left: 16.0,
 };
 const PANEL_RADIUS: f32 = 8.0;
-const TITLE_BAR_HEIGHT: f32 = 32.0;
+pub const TITLE_BAR_HEIGHT: f32 = 32.0;
 const WINDOW_BTN_WIDTH: f32 = 46.0;
 
 #[derive(Debug, Clone)]
