@@ -163,10 +163,14 @@ pub enum VaultEvent {
     ToastRequested(Toast),
     /// A save completed successfully. App pushes a success toast and kicks
     /// off a list reload so the sidebar reflects renames / ownership moves.
-    ItemSaved { uid: UserId },
+    ItemSaved {
+        uid: UserId,
+    },
     /// A soft-delete completed successfully. App pushes a success toast and
     /// reloads the list so the deleted row disappears.
-    ItemDeleted { uid: UserId },
+    ItemDeleted {
+        uid: UserId,
+    },
     /// User clicked a copy-to-clipboard button on the detail pane.
     /// Routed to `ClipboardManager::copy`; the handler also pushes a
     /// success toast with `toast_label` as the body.
@@ -177,5 +181,7 @@ pub enum VaultEvent {
     },
     /// User clicked the launch button on a login's URI.
     /// Routed to `clipboard::launch_url` which enforces scheme allowlist.
-    LaunchUrlRequested { uri: String },
+    LaunchUrlRequested {
+        uri: String,
+    },
 }

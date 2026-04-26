@@ -424,9 +424,8 @@ pub const MENUS: &[(&str, &[MenuEntry])] = &[
                 L("Safari"),
             ]),
             SEP,
-            E("menu-help-troubleshooting").sub(&[
-                E("menu-help-troubleshooting-gpu").action(ToggleHardwareAcceleration),
-            ]),
+            E("menu-help-troubleshooting")
+                .sub(&[E("menu-help-troubleshooting-gpu").action(ToggleHardwareAcceleration)]),
             SEP,
             E("menu-help-about").action(About),
         ],

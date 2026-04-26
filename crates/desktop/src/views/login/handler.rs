@@ -21,8 +21,7 @@ impl App {
                 tracing::info!(%uid, "unlock succeeded; loading vault list");
                 Task::batch([
                     self.load_vault_list_task(uid),
-                    crate::views::vault::VaultView::delayed_auto_focus_task()
-                        .map(Message::vault),
+                    crate::views::vault::VaultView::delayed_auto_focus_task().map(Message::vault),
                 ])
             }
             LoginEvent::AccountSwitcher(e) => self.handle_account_switcher_event(e),

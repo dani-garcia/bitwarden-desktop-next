@@ -443,9 +443,7 @@ impl LoginView {
     /// inside the in-page transition arms of `update`).
     pub fn auto_focus_task(&self) -> Task<LoginMessage> {
         match &self.auth_page {
-            AuthPage::LoginEmail { .. } => {
-                iced::widget::operation::focus(LOGIN_EMAIL_FIELD_ID)
-            }
+            AuthPage::LoginEmail { .. } => iced::widget::operation::focus(LOGIN_EMAIL_FIELD_ID),
             AuthPage::LoginPassword { .. } => {
                 iced::widget::operation::focus(LOGIN_PASSWORD_FIELD_ID)
             }

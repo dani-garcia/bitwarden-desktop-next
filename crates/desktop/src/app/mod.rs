@@ -213,7 +213,10 @@ impl App {
         // window so we don't repay adapter/driver init.
         let (magnify_id, magnify_size, magnify_open_task) =
             handlers::magnify::open_magnify_window();
-        windows.insert(magnify_id, WindowInfo::new(WindowKind::Magnify, magnify_size));
+        windows.insert(
+            magnify_id,
+            WindowInfo::new(WindowKind::Magnify, magnify_size),
+        );
 
         // Discover users in `<workspace-root>/data/` and open one SQLite DB
         // per user. The `ClientManagerLoaded` handler swaps the Arc when done.

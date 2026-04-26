@@ -37,7 +37,10 @@ use crate::{
 pub enum Overlay {
     /// Submenus are single-level; the submenu index refers to a position
     /// inside `MENUS[menu].entries`.
-    TitleBarMenu { menu: usize, submenu: Option<usize> },
+    TitleBarMenu {
+        menu: usize,
+        submenu: Option<usize>,
+    },
     /// Disambiguated between login and vault by the currently-rendered `Screen`.
     AccountSwitcher,
     ServerSelector,
