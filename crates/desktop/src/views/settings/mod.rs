@@ -23,9 +23,7 @@ use crate::{
     components::{self, buttons, icons, modal, toast::Toast},
     fl,
     services::{
-        preferences::{
-            ClearClipboardDelay, LockAfter, LogoutAfter, SshPromptBehavior, UserPreferences,
-        },
+        preferences::{DurationSecs, SshPromptBehavior, UserPreferences},
         settings::Settings,
     },
     theme::{AppColors, AppTheme, RADIUS_LG, RADIUS_MD, ThemePreference},
@@ -115,8 +113,8 @@ pub enum SettingChange {
     OpenAtLogin(bool),
     PinUnlock(bool),
     TouchIdUnlock(bool),
-    LockAfter(LockAfter),
-    LogoutAfter(LogoutAfter),
+    LockAfter(DurationSecs),
+    LogoutAfter(DurationSecs),
     // Integrations
     BrowserIntegration(bool),
     BrowserIntegrationFingerprint(bool),
@@ -125,7 +123,7 @@ pub enum SettingChange {
     DuckDuckGo(bool),
     // Autotype & copy
     AutotypeEnabled(bool),
-    ClearClipboard(ClearClipboardDelay),
+    ClearClipboard(DurationSecs),
     MinimizeOnCopy(bool),
     // Appearance
     Theme(ThemePreference),

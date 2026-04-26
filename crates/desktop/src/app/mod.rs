@@ -257,12 +257,25 @@ impl App {
             cache: ViewCache::default(),
         };
 
+        // Resolves only after the wgpu compositor exists (so the backend wgpu
+        // ended up using is final). Drives `Settings::wgpu_backend_verified`
+        // for the next-launch fast path. Compiled to `Task::none()` when the
+        // `gpu` feature is off so the discovery plumbing only exists in builds
+        // that can actually use a wgpu backend.
+        #[cfg(feature = "gpu")]
+        let info_task = iced::system::information().map(|info| {
+            Message::System(SystemMessage::WgpuBackendDiscovered(info.graphics_backend))
+        });
+        #[cfg(not(feature = "gpu"))]
+        let info_task = Task::none();
+
         (
             app,
             Task::batch([
                 open_task.map(|id| Message::Window(WindowMessage::Opened(id))),
                 magnify_open_task,
                 load_task,
+                info_task,
             ]),
         )
     }

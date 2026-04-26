@@ -111,4 +111,10 @@ pub enum SystemMessage {
     ClientManagerLoaded(Arc<ClientManager>),
     /// Single-instance listener forwarded a "show" signal from a second launch.
     InstanceWakeRequested,
+    /// `iced::system::information()` resolved with the actual graphics backend
+    /// wgpu picked. Used to populate `Settings::wgpu_backend_verified` so the
+    /// next launch can skip multi-backend enumeration. Empty/unknown payloads
+    /// are dropped by the handler.
+    #[cfg(feature = "gpu")]
+    WgpuBackendDiscovered(String),
 }

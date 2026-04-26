@@ -165,6 +165,33 @@ impl App {
                 self.views.login.auto_focus_task().map(Message::login)
             }
             SystemMessage::InstanceWakeRequested => self.show_main_window(),
+            #[cfg(feature = "gpu")]
+            SystemMessage::WgpuBackendDiscovered(backend) => {
+                // We've reached first paint, so whatever wgpu picked is
+                // known-good for this hardware/driver combo. Persist for
+                // next launch and clear the crash-sentinel.
+                //
+                // The backend string comes from `format!("{:?}", wgpu::Backend)`
+                // inside iced's wgpu compositor. PascalCase → lowercase here,
+                // then fed back to `WGPU_BACKEND` whose parser
+                // (`Backends::from_comma_list`) accepts only the four desktop
+                // names. Pinning that contract explicitly so we don't silently
+                // poison settings.json if a future iced/wgpu rev:
+                //   - renames a Debug variant (e.g. `Dx12` → `DirectX12`)
+                //   - exposes `Noop` or `BrowserWebGpu` as a string we'd
+                //     otherwise persist (Noop especially is a real env value
+                //     that wgpu honours, locking us into the dummy backend)
+                //   - falls back to tiny-skia, whose compositor reports
+                //     `backend: "tiny-skia"`.
+                let normalised = backend.to_lowercase();
+                if matches!(normalised.as_str(), "vulkan" | "dx12" | "metal" | "gl") {
+                    let mut s = crate::services::settings::Settings::load();
+                    s.wgpu_backend_pending = None;
+                    s.wgpu_backend_verified = Some(normalised);
+                    s.save();
+                }
+                Task::none()
+            }
         }
     }
 

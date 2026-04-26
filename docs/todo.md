@@ -179,6 +179,32 @@ There's also a standalone `ssh_agent` binary crate at `clients/apps/desktop/desk
 
 **Deliverable:** a plan document with a recommendation for (integration path) × (biometrics in scope?) × (ssh_agent in scope?).
 
+### Replace `system_theme` crate with iced's built-in `theme_changes()`
+
+[`iced::system::theme_changes()`](../crates/desktop/src/theme/mod.rs) returns a `Subscription<theme::Mode>` that targets the same OS signal we already get from the [`system_theme`](https://crates.io/crates/system-theme) crate (used in [`ThemeState::new`](../crates/desktop/src/app/mod.rs) and the `theme_sub` subscription in `App::subscription`). Switching would drop a dependency, lose a tokio observer thread, and let the message carry the new mode directly (today our `SystemMessage::ThemeChanged` is a no-arg signal that re-reads via `system.get_scheme()`).
+
+**Different OS hooks under the hood** — they're not redundant with each other:
+
+| Source | `system_theme` | iced via winit |
+|---|---|---|
+| Windows | WinRT `UISettings.ColorValuesChanged` event handler (background thread) | Win32 `WM_SETTINGCHANGE` / `WM_THEMECHANGED` window message |
+| macOS | NSDistributedNotificationCenter | winit's NSApp observation |
+| Linux | XDG portal `org.freedesktop.appearance/color-scheme` | winit's per-windowing-system reading |
+
+**Blockers / things to verify before switching:**
+
+1. **Synchronous initial value.** `ThemeState::new()` calls `system.get_scheme()` synchronously inside `App::new` so the first paint renders the right theme. iced's path needs `iced::system::theme()` (a `Task<theme::Mode>` — same plumbing as `iced::system::information()` for the wgpu backend cache) which resolves on the next message cycle. Acceptable if a single frame of "wrong theme" before the task resolves is invisible — verify on a dark-themed OS that the light → dark flip isn't perceptible at startup.
+2. **High-contrast and accent color.** `system_theme` exposes `theme_contrast()` and `theme_accent()`; winit's event carries Light/Dark only. We don't use either today, so OK to drop — but note this in `decisions.md` so a future a11y pass doesn't try to grep for what's gone.
+3. **Linux Wayland coverage.** XDG portals work consistently across GNOME/KDE/sway. winit's Wayland color-scheme reading has been spottier historically — test on at least one Wayland compositor before committing.
+
+**Implementation sketch**:
+- Drop `system-theme` from `Cargo.toml`.
+- Replace `ThemeState.system: Rc<system_theme::SystemTheme>` with whatever the new flow needs (likely just the resolved mode).
+- `ThemeState::new(preference)` resolves to a default (e.g. light) initially; dispatch `iced::system::theme()` from `App::new` like we do for `iced::system::information()`, handle the result in `update` (`SystemMessage::SystemThemeResolved(Mode)`).
+- Replace the existing `theme_sub` with `iced::system::theme_changes().map(|mode| Message::System(SystemMessage::SystemThemeChanged(mode)))`. `SystemMessage::ThemeChanged` becomes `SystemThemeChanged(Mode)` with the payload baked in; `theme.refresh(mode)` takes the mode directly instead of re-reading.
+
+**Estimated impact**: −1 crate, −1 background thread, ~30 lines of code simpler. Mostly a tidiness change — leaves the user behaviour unchanged on Windows + macOS, may or may not improve Linux coverage.
+
 ### Toast API review
 
 Before we grow many more call sites (unlock failure, copy-to-clipboard, sync errors, etc.), validate the API:

@@ -6,7 +6,7 @@ use iced::{
 use crate::{
     components::inputs,
     fl,
-    services::preferences::{LockAfter, LogoutAfter},
+    services::preferences::{DurationSecs, LOCK_AFTER_PRESETS, LOGOUT_AFTER_PRESETS},
     theme::{AppColors, AppTheme},
 };
 
@@ -42,8 +42,8 @@ pub fn view<'a>(
     let lock_after = inputs::select_field(
         fl!("settings-security-lock-after"),
         Some(snap.prefs.lock_after),
-        LockAfter::ALL.to_vec(),
-        |v: &LockAfter| v.label(),
+        LOCK_AFTER_PRESETS.to_vec(),
+        |v: &DurationSecs| v.label(),
         SettingChange::LockAfter,
         colors,
     );
@@ -51,8 +51,8 @@ pub fn view<'a>(
     let logout_after = inputs::select_field(
         fl!("settings-security-logout-after"),
         Some(snap.prefs.logout_after),
-        LogoutAfter::ALL.to_vec(),
-        |v: &LogoutAfter| v.label(),
+        LOGOUT_AFTER_PRESETS.to_vec(),
+        |v: &DurationSecs| v.label(),
         SettingChange::LogoutAfter,
         colors,
     );

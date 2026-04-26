@@ -35,6 +35,7 @@ iced = { workspace = true, features = [
     "x11",        # Linux X11 display backend
     "wayland",    # Linux Wayland display backend
     "lazy",
+    "sysinfo",    # `iced::system::information()` (wgpu backend cache + bug report)
 ] }
 arboard = { version = "3.6", default-features = false, features = [
     "wayland-data-control",

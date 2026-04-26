@@ -6,7 +6,7 @@ use iced::{
 use crate::{
     components::inputs,
     fl,
-    services::preferences::ClearClipboardDelay,
+    services::preferences::{CLEAR_CLIPBOARD_PRESETS, DurationSecs},
     theme::{AppColors, AppTheme},
 };
 
@@ -32,8 +32,8 @@ pub fn view<'a>(
     let clear_clipboard = inputs::select_field(
         fl!("settings-clipboard-clear-after"),
         Some(snap.prefs.clear_clipboard),
-        ClearClipboardDelay::ALL.to_vec(),
-        |v: &ClearClipboardDelay| v.label(),
+        CLEAR_CLIPBOARD_PRESETS.to_vec(),
+        |v: &DurationSecs| v.label(),
         SettingChange::ClearClipboard,
         colors,
     );

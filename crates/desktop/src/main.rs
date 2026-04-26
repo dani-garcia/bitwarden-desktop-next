@@ -80,26 +80,48 @@ fn main() -> iced::Result {
 }
 
 fn select_backend() {
-    // Default to tiny-skia (CPU) to avoid ~500 ms wgpu init on startup.
-    // Precedence (highest wins): `ICED_BACKEND` env var, `--gpu` CLI flag,
-    // `hardware_acceleration = true` in `data/settings.json`, then tiny-skia.
-    // The persisted setting only takes effect on the next launch.
-    match std::env::var_os("ICED_BACKEND") {
-        Some(backend) => {
-            tracing::info!("ICED_BACKEND already set in environment, honoring: {backend:?}");
+    if let Some(backend) = std::env::var_os("ICED_BACKEND") {
+        tracing::info!("ICED_BACKEND already set in environment, honoring: {backend:?}");
+        return;
+    }
+
+    if !cfg!(feature = "gpu") {
+        tracing::info!("GPU feature not enabled; using tiny-skia backend");
+        return;
+    }
+
+    let settings = crate::services::settings::Settings::load();
+    let backend = if settings.hardware_acceleration {
+        "wgpu"
+    } else {
+        "tiny-skia"
+    };
+    tracing::info!("Starting app with Iced backend: {}", backend);
+    // SAFETY: called at the very start of main, before any threads are spawned.
+    unsafe { std::env::set_var("ICED_BACKEND", backend) };
+
+    // For the GPU backend, we try to load the last used backend so that the app starts faster.
+    // If we don't specify one, wgpu will probe all of them which can take a second or two.
+    #[cfg(feature = "gpu")]
+    if backend == "wgpu" {
+        let mut settings = settings;
+        // If this is set, it means the last attempt probably crashed, reset the stored values.
+        if settings.wgpu_backend_pending.is_some() {
+            tracing::warn!(
+                "previous wgpu attempt did not reach first paint; clearing backend cache"
+            );
+            settings.wgpu_backend_pending = None;
+            settings.wgpu_backend_verified = None;
+            settings.save();
+            return;
         }
-        None => {
-            let gpu_feature_enabled = cfg!(feature = "gpu");
-            let gpu_user_enabled = std::env::args().any(|a| a == "--gpu")
-                || crate::services::settings::Settings::load().hardware_acceleration;
-            let backend = if gpu_feature_enabled && gpu_user_enabled {
-                "wgpu"
-            } else {
-                "tiny-skia"
-            };
-            tracing::info!("Starting app with Iced backend: {}", backend);
-            // SAFETY: called at the very start of main, before any threads are spawned.
-            unsafe { std::env::set_var("ICED_BACKEND", backend) };
+
+        // If we have a verified backend from a previous run, use it to speed up initialization.
+        if let Some(verified) = &settings.wgpu_backend_verified {
+            // SAFETY: still single-threaded at this point in main.
+            unsafe { std::env::set_var("WGPU_BACKEND", verified) };
+            settings.wgpu_backend_pending = Some(verified.clone());
+            settings.save();
         }
     }
 }

@@ -57,6 +57,22 @@ pub struct Settings {
     pub hardware_acceleration: bool,
     pub allow_screenshots: bool,
 
+    // ── wgpu backend cache ────────────────────────────────────────────────
+    // Only meaningful when the `gpu` Cargo feature is on. Pre-existing fields
+    // in settings.json are silently dropped on deserialize when the feature
+    // is off (no `deny_unknown_fields`), and re-populated on the first launch
+    // after re-enabling the feature.
+    /// Backend wgpu used last time we reached first paint. Reused on the next
+    /// launch via `WGPU_BACKEND` to skip the multi-backend enumeration walk
+    /// (saves ~325 ms on a warm machine — see `select_backend` in `main.rs`).
+    #[cfg(feature = "gpu")]
+    pub wgpu_backend_verified: Option<String>,
+    /// Set just before `iced::run`, cleared on first paint. If still set on
+    /// the next launch, the previous run never reached first paint — treat
+    /// the cache as poisoned and re-enumerate.
+    #[cfg(feature = "gpu")]
+    pub wgpu_backend_pending: Option<String>,
+
     // ── Per-user preferences ───────────────────────────────────────────────
     /// Keyed by `UserId`. Populated lazily; persisted alongside the app-wide
     /// fields so unlock-with-PIN, clipboard delay, etc. survive across launches.
