@@ -37,8 +37,10 @@ pub enum Mode {
 
 #[derive(Default)]
 pub struct MagnifyView {
-    /// Iced window id once the launcher has been opened at least once.
-    /// `None` until the first hotkey press.
+    /// Iced window id for the launcher. Created hidden in `App::new` so
+    /// every hotkey press is a cheap show / hide; remains `Some` for the
+    /// lifetime of the app. Stays `Option` only because `Default::default()`
+    /// has nothing meaningful to put here.
     pub(crate) window: Option<iced::window::Id>,
 
     /// Search query. Persists across summons subject to the sticky-search

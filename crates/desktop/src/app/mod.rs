@@ -231,6 +231,15 @@ impl App {
         let mut windows = HashMap::new();
         windows.insert(main_id, WindowInfo::new(WindowKind::Main, MAIN_WINDOW_SIZE));
 
+        // Pre-create the magnify launcher hidden so subsequent hotkey presses
+        // are a cheap show / hide instead of paying for window creation +
+        // first-paint mid-summon. The cost is one extra wgpu surface at boot;
+        // the wgpu device is shared with the main window so we don't repay
+        // adapter/driver init.
+        let (magnify_id, magnify_size, magnify_open_task) =
+            handlers::magnify::open_magnify_window();
+        windows.insert(magnify_id, WindowInfo::new(WindowKind::Magnify, magnify_size));
+
         // Discover users in `<workspace-root>/data/` and open one SQLite DB
         // per user. Runs as a regular async task on iced's tokio multi-thread
         // runtime; the `ClientManagerLoaded` handler swaps the Arc when done.
@@ -261,13 +270,18 @@ impl App {
             toasts: Vec::new(),
             open_overlay: None,
             clipboard: ClipboardManager::new(),
-            magnify: magnify::MagnifyView::new(),
+            magnify: {
+                let mut m = magnify::MagnifyView::new();
+                m.window = Some(magnify_id);
+                m
+            },
         };
 
         (
             app,
             Task::batch([
                 open_task.map(|id| Message::Window(WindowMessage::Opened(id))),
+                magnify_open_task,
                 load_task,
             ]),
         )

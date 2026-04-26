@@ -10,10 +10,7 @@ use std::time::Instant;
 use iced::Task;
 
 use crate::{
-    app::{
-        App, Message,
-        window::{WindowInfo, WindowKind},
-    },
+    app::{App, Message},
     domain::Screen,
     services::{clipboard::Sensitivity, cursor_monitor},
     views::magnify::{MAGNIFY_RESULTS_SCROLL_ID, MAGNIFY_SEARCH_ID, MagnifyMessage, Mode, dims},
@@ -23,28 +20,12 @@ impl App {
     pub(crate) fn handle_magnify_message(&mut self, msg: MagnifyMessage) -> Task<Message> {
         match msg {
             MagnifyMessage::HotkeyPressed => self.magnify_hotkey(),
-            MagnifyMessage::WindowOpened(id) => {
-                // First-summon completion. Force the new launcher window to
-                // the foreground (relevant when the main app was minimized
-                // / hidden in the tray), focus the input + select-all so
-                // the sticky-search query is replaced on first keystroke,
-                // and scroll the list so the previously-selected row (if
-                // any) is visible without an extra arrow press.
-                if self.magnify.window == Some(id) {
-                    // The freshly-mounted scrollable starts at offset 0 — sync
-                    // our cached value so `magnify_keep_selected_visible` makes
-                    // the right "is selected on-screen?" decision.
-                    self.magnify.scroll_offset_y = 0.0;
-                    let scroll = self.magnify_keep_selected_visible();
-                    Task::batch([
-                        iced::window::gain_focus(id),
-                        iced::widget::operation::focus(MAGNIFY_SEARCH_ID),
-                        iced::widget::operation::select_all(MAGNIFY_SEARCH_ID),
-                        scroll,
-                    ])
-                } else {
-                    Task::none()
-                }
+            MagnifyMessage::WindowOpened(_id) => {
+                // Window is created hidden at startup in `App::new`. The first
+                // hotkey press goes through `magnify_hotkey`'s toggle path,
+                // which handles focus / select-all / scroll when the window
+                // actually becomes visible — nothing to do here.
+                Task::none()
             }
             MagnifyMessage::QueryChanged(query) => {
                 self.magnify.query = query;
@@ -206,81 +187,42 @@ impl App {
         // was preserved).
         self.magnify_recompute();
 
-        if let Some(id) = self.magnify.window {
-            // Resize to match the current results count *before* the OS
-            // window becomes visible — avoids a one-frame flash at the old
-            // height before the resize lands.
-            let height = dims::height_for(self.magnify.results.len());
-            let resize = iced::window::resize::<Message>(id, iced::Size::new(dims::WIDTH, height));
-            // Reposition onto the cursor's monitor so the launcher follows
-            // the user across multi-monitor setups. Falls back to no-op on
-            // platforms where the lookup isn't implemented; the window
-            // stays where it last was.
-            let reposition = magnify_reposition_for_cursor(id, height);
-            // Scroll the selected row into view. Safe to fire regardless
-            // of show/hide — operating on a hidden scrollable just
-            // updates its offset for the next show. `Task` is not `Clone`
-            // so this lives outside the `mode` continuation.
-            let scroll = self.magnify_keep_selected_visible();
-            // Already open — toggle visibility. `iced::window::mode(id)`
-            // is async; same pattern as `toggle_main_window_visibility`.
-            return Task::batch([
-                resize,
-                reposition,
-                scroll,
-                iced::window::mode(id).then(move |mode| match mode {
-                    iced::window::Mode::Hidden => Task::batch([
-                        iced::window::set_mode(id, iced::window::Mode::Windowed),
-                        iced::window::gain_focus(id),
-                        iced::widget::operation::focus(MAGNIFY_SEARCH_ID).map(Message::Magnify),
-                        iced::widget::operation::select_all(MAGNIFY_SEARCH_ID)
-                            .map(Message::Magnify),
-                    ]),
-                    iced::window::Mode::Windowed | iced::window::Mode::Fullscreen => {
-                        iced::window::set_mode(id, iced::window::Mode::Hidden)
-                    }
-                }),
-            ]);
-        }
-
-        // First summon — open the launcher window. `min_size` / `max_size`
-        // bracket the dynamic-resize range so subsequent `window::resize`
-        // calls grow / shrink the launcher freely without the OS clamping.
-        let height = dims::height_for(self.magnify.results.len());
-        let size = iced::Size::new(dims::WIDTH, height);
-        // Position on the cursor's monitor when we can; fall back to the
-        // primary monitor centered. The cursor lookup is best-effort and
-        // returns `None` on macOS / Linux for now (see `services::cursor_monitor`).
-        let position = match cursor_monitor::cursor_monitor_logical_center() {
-            Some((cx, cy)) => iced::window::Position::Specific(iced::Point::new(
-                cx - dims::WIDTH / 2.0,
-                cy - height / 2.0,
-            )),
-            None => iced::window::Position::Centered,
+        // Window is created at startup in `App::new`, so id is always set.
+        let Some(id) = self.magnify.window else {
+            tracing::error!("magnify: hotkey fired before window was created");
+            return Task::none();
         };
-        let (id, open_task) = iced::window::open(iced::window::Settings {
-            size,
-            min_size: Some(iced::Size::new(dims::WIDTH, dims::COLLAPSED_HEIGHT)),
-            max_size: Some(iced::Size::new(
-                dims::WIDTH,
-                dims::height_for(dims::MAX_VISIBLE_ROWS),
-            )),
-            position,
-            resizable: false,
-            decorations: false,
-            transparent: true,
-            level: iced::window::Level::AlwaysOnTop,
-            visible: true,
-            exit_on_close_request: false,
-            platform_specific: magnify_platform_specific(),
-            ..Default::default()
-        });
-
-        self.magnify.window = Some(id);
-        self.windows
-            .insert(id, WindowInfo::new(WindowKind::Magnify, size));
-
-        open_task.map(|id| Message::Magnify(MagnifyMessage::WindowOpened(id)))
+        // Resize to match the current results count *before* the OS
+        // window becomes visible — avoids a one-frame flash at the old
+        // height before the resize lands.
+        let height = dims::height_for(self.magnify.results.len());
+        let resize = iced::window::resize::<Message>(id, iced::Size::new(dims::WIDTH, height));
+        // Reposition onto the cursor's monitor so the launcher follows
+        // the user across multi-monitor setups. Falls back to no-op on
+        // platforms where the lookup isn't implemented; the window
+        // stays where it last was.
+        let reposition = magnify_reposition_for_cursor(id, height);
+        // Scroll the selected row into view. Safe to fire regardless
+        // of show/hide — operating on a hidden scrollable just
+        // updates its offset for the next show. `Task` is not `Clone`
+        // so this lives outside the `mode` continuation.
+        let scroll = self.magnify_keep_selected_visible();
+        Task::batch([
+            resize,
+            reposition,
+            scroll,
+            iced::window::mode(id).then(move |mode| match mode {
+                iced::window::Mode::Hidden => Task::batch([
+                    iced::window::set_mode(id, iced::window::Mode::Windowed),
+                    iced::window::gain_focus(id),
+                    iced::widget::operation::focus(MAGNIFY_SEARCH_ID).map(Message::Magnify),
+                    iced::widget::operation::select_all(MAGNIFY_SEARCH_ID).map(Message::Magnify),
+                ]),
+                iced::window::Mode::Windowed | iced::window::Mode::Fullscreen => {
+                    iced::window::set_mode(id, iced::window::Mode::Hidden)
+                }
+            }),
+        ])
     }
 
     fn magnify_hide(&mut self) -> Task<Message> {
@@ -412,6 +354,43 @@ impl App {
         self.magnify.anchored_user = self.active_user;
         self.magnify.last_used = None;
     }
+}
+
+/// Opens the launcher window hidden at app startup so that subsequent hotkey
+/// presses just toggle visibility instead of paying for window creation.
+/// `Position::Centered` matches the previous first-summon fallback used when
+/// the cursor-monitor lookup is unavailable — every hotkey still calls
+/// `magnify_reposition_for_cursor`, so once that stub is implemented per
+/// platform the launcher will follow the cursor's monitor on first show.
+/// `min_size` / `max_size` bracket the dynamic-resize range so later
+/// `window::resize` calls grow / shrink freely without OS clamping. Returns
+/// the new id, the initial size (so the caller can register a `WindowInfo`),
+/// and the open-task pre-mapped onto `MagnifyMessage::WindowOpened`.
+pub(crate) fn open_magnify_window() -> (iced::window::Id, iced::Size, Task<Message>) {
+    let height = dims::height_for(0);
+    let size = iced::Size::new(dims::WIDTH, height);
+    let (id, open_task) = iced::window::open(iced::window::Settings {
+        size,
+        min_size: Some(iced::Size::new(dims::WIDTH, dims::COLLAPSED_HEIGHT)),
+        max_size: Some(iced::Size::new(
+            dims::WIDTH,
+            dims::height_for(dims::MAX_VISIBLE_ROWS),
+        )),
+        position: iced::window::Position::Centered,
+        resizable: false,
+        decorations: false,
+        transparent: true,
+        level: iced::window::Level::AlwaysOnTop,
+        visible: false,
+        exit_on_close_request: false,
+        platform_specific: magnify_platform_specific(),
+        ..Default::default()
+    });
+    (
+        id,
+        size,
+        open_task.map(|id| Message::Magnify(MagnifyMessage::WindowOpened(id))),
+    )
 }
 
 /// `move_to` task that puts the launcher's top-left at the cursor monitor's
