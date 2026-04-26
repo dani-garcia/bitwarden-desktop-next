@@ -1,10 +1,8 @@
-//! Per-user preferences. Held inside [`crate::services::settings::Settings`] as a
-//! `HashMap<UserId, UserPreferences>` so they persist alongside the app-wide
-//! settings in `data/settings.json`.
+//! Per-user preferences. Held inside [`crate::services::settings::Settings`] as
+//! a `HashMap<UserId, UserPreferences>`, persisted in `data/settings.json`.
 //!
-//! Clipboard-clear delay is read through here and pushed to `ClipboardManager`
-//! on user switch so the app-global clipboard reflects the active user's
-//! preference.
+//! Clipboard-clear delay is pushed to `ClipboardManager` on user switch so the
+//! app-global clipboard reflects the active user's preference.
 
 use std::time::Duration;
 
@@ -144,8 +142,7 @@ impl ClearClipboardDelay {
         }
     }
 
-    /// `None` disables auto-clear entirely. Otherwise returns the delay to
-    /// hand to `ClipboardManager::set_timeout`.
+    /// `None` disables auto-clear entirely.
     pub fn as_duration(self) -> Option<Duration> {
         match self {
             Self::Never => None,

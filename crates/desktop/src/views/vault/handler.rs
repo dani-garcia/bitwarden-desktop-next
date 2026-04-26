@@ -18,8 +18,6 @@ impl App {
             }
             VaultEvent::ItemSaved { uid } => {
                 self.push_toast(Toast::success(fl!("vault-toast-item-saved"), None));
-                // Refresh the list so renamed items / ownership changes
-                // show up in the left pane without a manual reload.
                 self.load_vault_list_task(uid)
             }
             VaultEvent::ItemDeleted { uid } => {
@@ -33,8 +31,6 @@ impl App {
             } => {
                 self.clipboard.copy(value, sensitivity);
                 self.push_toast(Toast::success(toast_label, None));
-                // `minimize_on_copy` is a per-user preference — trigger it
-                // only when the active user has opted in.
                 let minimize = self
                     .active_user
                     .as_ref()

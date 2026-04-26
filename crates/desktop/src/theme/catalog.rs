@@ -1,8 +1,6 @@
-//! Widget `Catalog` trait implementations for `AppTheme`.
-//!
-//! These allow iced widgets to resolve styles through our custom theme type.
-//! Most widgets use explicit `.style()` closures, so these defaults are rarely
-//! invoked directly — they exist to satisfy trait bounds.
+//! Widget `Catalog` trait implementations for `AppTheme`. Most widgets
+//! use explicit `.style()` closures, so these defaults are rarely invoked
+//! directly — they exist to satisfy trait bounds.
 
 use iced::{Background, Border, Color, Shadow, border, widget};
 
@@ -325,7 +323,6 @@ impl iced::overlay::menu::Catalog for AppTheme {
 }
 
 // ── combo_box (searchable pick_list) ───────────────────────────────────────
-// combo_box::Catalog is a blanket trait over text_input::Catalog + menu::Catalog
-// with only default methods; both are implemented above.
+// Blanket trait over text_input::Catalog + menu::Catalog, both impl'd above.
 
 impl widget::combo_box::Catalog for AppTheme {}

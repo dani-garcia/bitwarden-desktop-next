@@ -16,9 +16,6 @@ use crate::{
 use super::LoginMessage;
 
 /// Shared outer shell for all auth screens.
-///
-/// Renders: logo (top-left), account switcher (top-right), center content,
-/// background illustrations, status bar at bottom.
 pub fn auth_page_shell<'a>(
     center_content: Element<'a, LoginMessage, AppTheme>,
     status_bar: Element<'a, LoginMessage, AppTheme>,
@@ -40,7 +37,6 @@ pub fn auth_page_shell<'a>(
 
     let logo_row = container(logo).width(Fill).padding([16, 24]);
 
-    // Background illustrations
     let bg_left = svg(svg::Handle::from_memory(crate::assets::BG_LEFT))
         .width(Length::Fixed(400.0))
         .height(Length::Fixed(180.0))
@@ -58,7 +54,6 @@ pub fn auth_page_shell<'a>(
     .width(Fill)
     .height(Fill);
 
-    // Account switcher "..." button
     let menu_dot_trigger = button(
         container(icons::THREE_DOTS.render(16.0, Color::WHITE))
             .width(36)

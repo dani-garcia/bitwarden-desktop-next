@@ -157,7 +157,6 @@ fn icon_for<'a>(
                 CipherListViewType::Identity => icons::BWI_IDENTITY,
                 CipherListViewType::SecureNote => icons::BWI_NOTE,
                 CipherListViewType::SshKey => icons::BWI_KEY,
-                // Login handled above.
                 CipherListViewType::Login(_) => icons::BWI_LOGIN,
             };
             container(icon.render(20.0, colors.text_primary))

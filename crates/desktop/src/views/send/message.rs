@@ -34,17 +34,11 @@ pub enum SendMessage {
     /// The "+ New" button on the header. Creates a fresh form whose type
     /// depends on the currently-selected Send sub-filter (Text / File).
     NewItem,
-    /// User confirmed delete in the modal.
     ConfirmDeleteSelected,
-    /// User dismissed the delete modal.
     CancelDeleteSelected,
-    /// Async task completion: full send list loaded.
     ListLoaded(UserId, Result<Vec<Arc<SdkSendView>>, String>),
-    /// Async task completion: single send fetched for the form.
     DetailLoaded(UserId, SendId, Result<Box<SdkSendView>, String>),
-    /// Async task completion: save finished.
     SaveCompleted(UserId, Result<Box<SdkSendView>, String>),
-    /// Async task completion: delete finished.
     DeleteCompleted(UserId, SendId, Result<(), String>),
 }
 
@@ -101,7 +95,6 @@ impl std::fmt::Debug for SendMessage {
 
 #[derive(Debug, Clone)]
 pub enum SendEvent {
-    /// Account-switcher action, routed to the shared App handler.
     AccountSwitcher(AccountSwitcherEvent),
     ToastRequested(Toast),
     ItemSaved {

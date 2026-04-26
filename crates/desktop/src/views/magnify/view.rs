@@ -1,10 +1,7 @@
 //! Magnify launcher rendering. Three branches matching
-//! `designs/magnify/locked.jpg`, `unlocked.jpg`, and `searching.jpg`.
-//!
-//! The whole launcher is one rounded outer container with a solid background.
-//! Per CLAUDE.md ("Nested container backgrounds mask parent border-radius"),
-//! inner rows / search bar / footer must NOT paint their own backgrounds —
-//! only the outermost container fills, so the rounded edges aren't clipped.
+//! `designs/magnify/locked.jpg`, `unlocked.jpg`, and `searching.jpg`. Only
+//! the outermost container paints a background so the rounded edges aren't
+//! clipped by inner fills.
 //!
 //! **Tree-shape stability:** in `Mode::Unlocked`, the outer column always
 //! starts with the same `search_row` widget at index 0, with the optional
@@ -12,8 +9,7 @@
 //! the widget tree identical whether the query is empty or not — iced
 //! matches widget state by tree position, so a structural shift between
 //! "empty" and "searching" branches would drop the input's focus state on
-//! the first keystroke. Symptom (before the fix): user types one character,
-//! then the input loses focus.
+//! the first keystroke.
 
 use iced::{
     Alignment, Background, Border, Color, Element, Fill, Length,
@@ -31,14 +27,9 @@ use crate::{
     },
 };
 
-/// Build the launcher window's view tree. Routes off `state.mode`:
-///
-/// - `Mode::Locked`: pill matching `designs/magnify/locked.jpg`.
-/// - `Mode::Unlocked`: column with stable `search_row` at index 0 and an
-///   optional results-list + footer below. The outer container draws the
-///   rounded background; the per-window theme returns
-///   `background: TRANSPARENT` so the OS window stays see-through outside
-///   the rounded region.
+/// Build the launcher window's view tree. The outer container draws the
+/// rounded background; the per-window theme returns `background: TRANSPARENT`
+/// so the OS window stays see-through outside the rounded region.
 pub fn view<'a>(
     state: &'a MagnifyView,
     favicon: &'a FaviconService,

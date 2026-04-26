@@ -35,70 +35,54 @@ use crate::{
 use helpers::main_window_platform_specific;
 
 pub struct App {
-    // ── Domain state ───────────────────────────────────────────────────────
+    // ── Session ───────────────────────────────────────────────────────────
     pub(super) active_user: Option<UserId>,
+    pub(super) client_manager: Arc<ClientManager>,
+    /// Read once at startup. Lifecycle branches re-read `self.settings.<field>`
+    /// at event time (never cached) so live changes apply without a restart.
+    pub(super) settings: Settings,
 
-    // ── Sub-views (each owns its own state + async lifecycle) ──────────────
+    // ── Navigation ────────────────────────────────────────────────────────
+    pub(super) screen: Screen,
+    /// Persists across screen transitions so collapse / filter selection
+    /// isn't reset when navigating between Vault and Send.
+    pub(super) sidebar: SidebarState,
+
+    // ── Sub-views ─────────────────────────────────────────────────────────
     pub(super) views: Views,
 
-    // ── External dependencies ──────────────────────────────────────────────
-    pub(super) client_manager: Arc<ClientManager>,
-    pub(super) favicon: crate::services::favicon::FaviconService,
-
-    // ── Derived cache ──────────────────────────────────────────────────────
-    // Exists because iced's `view()` returns an `Element<'_, ...>` that
-    // borrows from `&self`; locally-computed Vecs inside `view()` would be
-    // dropped before the Element. Cached fields survive the borrow. See
-    // `docs/architecture.md` → "Why Things Are the Way They Are".
-    pub(super) cache: ViewCache,
-
-    // ── Window chrome ─────────────────────────────────────────────────────
-    pub(super) screen: Screen,
-    /// App-level sidebar state. Persists across screen transitions so the
-    /// user's collapse / filter selection isn't reset when navigating
-    /// between Vault and Send.
-    pub(super) sidebar: SidebarState,
-    pub(super) theme: ThemeState,
+    // ── Windows ───────────────────────────────────────────────────────────
     pub(super) windows: HashMap<iced::window::Id, WindowInfo>,
-    /// Cached id of the main window — always present from `App::new` until
-    /// `iced::exit`. Child windows (About) are not tracked here.
+    /// Always present from `App::new` until `iced::exit`. Child windows
+    /// (About) are not tracked here.
     pub(super) main_window: iced::window::Id,
-    pub(super) native_menu: Option<crate::services::menu::NativeMenuHandle>,
+    pub(super) magnify: magnify::MagnifyView,
 
-    // ── Tray + user settings ───────────────────────────────────────────────
-    // `settings` is read once at startup from `data/settings.json`. A future
-    // settings view mutates fields directly; all tray / lifecycle branches
-    // re-read `self.settings.<field>` at event time (never cached), so live
-    // changes apply without a restart.
-    pub(super) settings: Settings,
+    // ── Native chrome ─────────────────────────────────────────────────────
+    pub(super) theme: ThemeState,
+    pub(super) native_menu: Option<crate::services::menu::NativeMenuHandle>,
     pub(super) tray: Option<TrayHandle>,
 
-    // ── Cross-cutting UI overlay queue ─────────────────────────────────────
+    // ── Cross-cutting services ────────────────────────────────────────────
+    /// Single writer: every clipboard `set` flows through here so the 30 s
+    /// auto-clear bookkeeping sees every write.
+    pub(super) clipboard: ClipboardManager,
+    pub(super) favicon: crate::services::favicon::FaviconService,
+
+    // ── Transient UI ──────────────────────────────────────────────────────
+    /// Source of truth for which dropdown/menu is open. Writing auto-
+    /// dismisses any other overlay by construction.
+    pub(super) open_overlay: Option<Overlay>,
     pub(super) toasts: Vec<Toast>,
 
-    // ── Single-overlay cell ────────────────────────────────────────────────
-    // Source of truth for "which dropdown/menu is open right now". Views
-    // write here through `UpdateCtx::open_overlay`; by construction at most
-    // one overlay can be open, so opening one auto-dismisses any other.
-    pub(super) open_overlay: Option<Overlay>,
-
-    // ── Clipboard manager ──────────────────────────────────────────────────
-    // Single writer: every clipboard `set` flows through here so the 30 s
-    // auto-clear bookkeeping sees every write. See `clipboard.rs`.
-    pub(super) clipboard: ClipboardManager,
-
-    // ── Magnify launcher ──────────────────────────────────────────────────
-    // Owns its own (lazily-opened) window; summoned by the global hotkey.
-    pub(super) magnify: magnify::MagnifyView,
+    // ── Derived ───────────────────────────────────────────────────────────
+    pub(super) cache: ViewCache,
 }
 
-/// Derived data cached across `view()` rebuilds. Refreshed only by the
-/// handlers that actually mutate the inputs (login, logout, lock, unlock,
-/// user switch, manager load), not on every update cycle.
-///
-/// Exists because iced's `view()` returns an `Element<'_, ...>` that borrows
-/// from `&self`, so the slice handed to `account_switcher::dropdown` has to
-/// live on App, not be built inline in `view()`.
+/// Derived data cached across `view()` rebuilds. Refreshed only by handlers
+/// that mutate the inputs (login, logout, lock, unlock, user switch, manager
+/// load). Cached on App because `view()` returns an `Element<'_, ...>`
+/// borrowing `&self` — slices handed to children can't be built inline.
 #[derive(Default)]
 pub(super) struct ViewCache {
     pub accounts: Vec<AccountEntry>,
@@ -169,32 +153,26 @@ impl App {
 
         // Apply the persisted language preference before any `fl!()` call
         // resolves user-visible strings. Empty string = "follow OS locale"
-        // which the `i18n::init()` earlier in `main` already honoured.
+        // (already handled by `i18n::init()` in `main`).
         if !settings.language.is_empty()
             && let Ok(tag) = settings.language.parse()
         {
             crate::services::i18n::set_language(tag);
         }
 
-        // Register muda + tray-icon event handlers into their global
-        // broadcast channels. Must run *before* any menu or tray icon is
-        // built — both crates' `set_event_handler` are one-shot.
+        // Must run *before* any menu or tray icon is built — both crates'
+        // `set_event_handler` are one-shot.
         crate::services::menu::install_event_handler();
         crate::services::tray::install_event_handler();
-        // Global keyboard shortcuts (currently just the Magnify hotkey).
-        // Failure (e.g. Wayland) is logged inside `install_event_handler`
-        // and the rest of the app keeps running — Magnify is just unreachable.
+        // Global hotkey registration failure (e.g. Wayland) is logged
+        // internally; Magnify is then just unreachable.
         crate::services::global_hotkey::install_event_handler();
 
-        // `--autostart` (used by the future "open at login" path) forces the
-        // app to launch hidden in the tray every time. We force-build the
-        // tray in that case even if the user hasn't enabled any tray
-        // settings, otherwise the hidden window would have no entry point.
+        // `--autostart` forces the app to launch hidden in the tray. Force
+        // the tray to build in that case even if no tray settings are on,
+        // otherwise the hidden window would have no entry point.
         let autostart = std::env::args().any(|a| a == "--autostart");
 
-        // Build the tray up-front if any tray-related setting is on, or if
-        // `--autostart` requires it, so user clicks find it immediately.
-        // Tray build failure → log + fall through without.
         let mut tray = None;
         if settings.wants_tray() || autostart {
             tray = crate::services::tray::build();
@@ -203,12 +181,10 @@ impl App {
             }
         }
 
-        // Always open the main window; when `--autostart` is set (and the
-        // tray actually initialised), open it hidden so the user sees only
-        // the tray. Iced plumbs `visible: false` through winit's
-        // `with_visible(false)` — the window never flashes on screen, iced
-        // still owns the id and keeps firing `view()`. Toggling later is a
-        // cheap `Mode::Windowed` / `gain_focus`.
+        // When `--autostart` is set and the tray initialised, open hidden so
+        // the user sees only the tray. `visible: false` flows through winit's
+        // `with_visible(false)` — no flash, iced still owns the id and keeps
+        // firing `view()`. Toggling later is a cheap `Mode::Windowed`.
         let start_hidden = autostart && tray.is_some();
         let (main_id, open_task) = iced::window::open(iced::window::Settings {
             size: MAIN_WINDOW_SIZE,
@@ -232,17 +208,15 @@ impl App {
         windows.insert(main_id, WindowInfo::new(WindowKind::Main, MAIN_WINDOW_SIZE));
 
         // Pre-create the magnify launcher hidden so subsequent hotkey presses
-        // are a cheap show / hide instead of paying for window creation +
-        // first-paint mid-summon. The cost is one extra wgpu surface at boot;
-        // the wgpu device is shared with the main window so we don't repay
-        // adapter/driver init.
+        // are a cheap show/hide instead of paying for window creation +
+        // first-paint mid-summon. The wgpu device is shared with the main
+        // window so we don't repay adapter/driver init.
         let (magnify_id, magnify_size, magnify_open_task) =
             handlers::magnify::open_magnify_window();
         windows.insert(magnify_id, WindowInfo::new(WindowKind::Magnify, magnify_size));
 
         // Discover users in `<workspace-root>/data/` and open one SQLite DB
-        // per user. Runs as a regular async task on iced's tokio multi-thread
-        // runtime; the `ClientManagerLoaded` handler swaps the Arc when done.
+        // per user. The `ClientManagerLoaded` handler swaps the Arc when done.
         let load_task = Task::perform(async { Arc::new(ClientManager::load().await) }, |mgr| {
             Message::System(SystemMessage::ClientManagerLoaded(mgr))
         });
@@ -255,22 +229,29 @@ impl App {
 
         let app = Self {
             active_user: None,
+            client_manager: Arc::new(ClientManager::empty()),
+            settings,
+
             screen: Screen::Loading,
             sidebar: SidebarState::default(),
+
             views: Views::new(),
-            client_manager: Arc::new(ClientManager::empty()),
-            favicon,
-            cache: ViewCache::default(),
-            theme: ThemeState::new(user_theme),
+
             windows,
             main_window: main_id,
-            native_menu: None,
-            settings,
-            tray,
-            toasts: Vec::new(),
-            open_overlay: None,
-            clipboard: ClipboardManager::new(),
             magnify: magnify::MagnifyView::new(magnify_id),
+
+            theme: ThemeState::new(user_theme),
+            native_menu: None,
+            tray,
+
+            clipboard: ClipboardManager::new(),
+            favicon,
+
+            open_overlay: None,
+            toasts: Vec::new(),
+
+            cache: ViewCache::default(),
         };
 
         (
@@ -284,21 +265,13 @@ impl App {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        // Window close events — needed for daemon mode lifecycle. When the
-        // main window closes we call `iced::exit()` to terminate the daemon;
-        // closing a child window (About) just removes it from the map.
         let close_sub =
             iced::window::close_events().map(|id| Message::Window(WindowMessage::Closed(id)));
 
-        // Keyboard events are routed through `event::listen_with` (not
-        // `keyboard::listen`) so the `window::Id` is provided natively by
-        // the listener. `Subscription::map` requires a non-capturing
-        // closure (iced enforces this at const-eval time), and we need
-        // the id bound into the emitted message for daemon-readiness.
-        // The same listener also forwards `window::Event::Resized` so the
-        // app can drive a responsive layout, `CloseRequested` so close-
-        // to-tray can intercept OS-native close actions, and `Unfocused`
-        // so the Magnify launcher can dismiss on click-outside.
+        // Routed through `event::listen_with` (not `keyboard::listen`) so the
+        // `window::Id` is provided natively. `Subscription::map` requires a
+        // non-capturing closure, and we need the id bound into the emitted
+        // message for daemon multi-window dispatch.
         let event_sub = iced::event::listen_with(|event, _status, id| match event {
             iced::Event::Keyboard(ev) => Some(Message::Window(WindowMessage::KeyPressed(id, ev))),
             iced::Event::Window(iced::window::Event::Resized(size)) => {
@@ -313,10 +286,9 @@ impl App {
             _ => None,
         });
 
-        // muda's `MenuEvent::receiver()` is global — the native app menu and
-        // the tray context menu both dispatch to it. A single pump thread
-        // (bound inside the stream) forwards events here; the handler filters
-        // by `MenuId` to decide whether it's an app-menu or tray-menu click.
+        // muda's `MenuEvent::receiver()` is global — both the native app menu
+        // and the tray context menu dispatch to it. The handler filters by
+        // `MenuId` to decide which one fired.
         let muda_sub = if self.native_menu.is_some() || self.tray.is_some() {
             Subscription::run(crate::services::menu::muda_event_stream)
                 .map(|ev| Message::System(SystemMessage::MudaEvent(ev)))
@@ -324,9 +296,6 @@ impl App {
             Subscription::none()
         };
 
-        // Tray icon left-click events come through a separate receiver. The
-        // stream filters to the click-to-toggle case before emitting, so the
-        // handler just runs the action.
         let tray_sub = if self.tray.is_some() {
             Subscription::run(crate::services::tray::click_stream)
                 .map(|action| Message::System(SystemMessage::TrayClick(action)))
@@ -337,28 +306,27 @@ impl App {
         let theme_sub = Subscription::run_with(self.theme.system.clone(), |st| st.subscribe())
             .map(|_| Message::System(SystemMessage::ThemeChanged));
 
-        // Second-launch wake-up: the listener is bound once, inside this
-        // stream, and kept alive across `update()` cycles because iced
-        // hashes the subscription identity from the `fn` pointer.
+        // Second-launch wake-up: listener bound once inside this stream, kept
+        // alive across `update()` cycles because iced hashes the subscription
+        // identity from the `fn` pointer.
         let wake_sub = Subscription::run(crate::services::instance_lock::wake_stream)
             .map(|_| Message::System(SystemMessage::InstanceWakeRequested));
 
-        // Global hotkey → Magnify launcher toggle. Idle when the OS-side
-        // registration failed (Wayland, missing permissions) — the stream
-        // terminates immediately and the subscription stays dormant.
+        // Idle when OS-side hotkey registration failed (Wayland, missing
+        // permissions) — the stream terminates and the subscription stays
+        // dormant.
         let magnify_sub = Subscription::run(crate::services::global_hotkey::event_stream)
             .map(|_| Message::Magnify(crate::views::magnify::MagnifyMessage::HotkeyPressed));
 
         // Favicon fetch completions. Each message flips one row from globe
-        // to real icon by virtue of arriving; the handler just logs.
+        // to real icon by virtue of arriving.
         let favicon_sub =
             Subscription::run(crate::services::favicon::favicon_event_stream).map(Message::Favicon);
 
-        // Animation ticker — only subscribed while at least one transition
-        // somewhere in the app might still be running. The check is a single
-        // global-watermark read against `services::animation`, so any new
-        // animation primitive that calls `animation::extend(...)` on its
-        // transitions auto-registers here without extra wiring.
+        // Only subscribed while at least one transition might still be
+        // running. `any_in_progress` is a single global-watermark read, so
+        // animation primitives that call `animation::extend(...)`
+        // auto-register here without extra wiring.
         let anim_sub = if crate::services::animation::any_in_progress() {
             iced::window::frames().map(|_| Message::AnimationTick)
         } else {
@@ -385,25 +353,20 @@ impl App {
             Message::System(m) => self.handle_system_message(m),
             Message::Sidebar(m) => self.handle_sidebar_message(m),
             Message::Magnify(m) => self.handle_magnify_message(m),
-            // No-op handler — the redraw triggered by this message reaching
-            // update() is the only thing we need. Subscription rebuilds after
-            // the redraw and unsubscribes once nothing's animating.
+            // No-op — the redraw the message triggers is the entire point.
+            // Subscription rebuilds and unsubscribes once nothing's animating.
             Message::AnimationTick => Task::none(),
             Message::Favicon(crate::services::favicon::FaviconMessage::IconResolved {
                 uid,
                 hostname,
             }) => {
-                // Arrival of this message is what drives the redraw; the
-                // service has already mutated its in-memory cache by the
-                // time we see it here. Log at trace so a cold unlock with
+                // Arrival drives the redraw; the service has already mutated
+                // its in-memory cache. Log at trace so a cold unlock with
                 // thousands of icons doesn't spam RUST_LOG=info users.
                 tracing::trace!(%uid, %hostname, "favicon resolved");
                 Task::none()
             }
             Message::View(view_msg) => {
-                // One `UpdateCtx` shared across every view dispatch; its
-                // `&mut self.open_overlay` borrow only needs to coexist with
-                // the disjoint `&mut self.views.*` borrow below.
                 let active_vault_filter = self.sidebar.active_vault_filter;
                 let active_send_filter = self.sidebar.active_send_filter;
                 let uctx = UpdateCtx {
@@ -463,9 +426,8 @@ impl App {
                 &self.theme.current.colors,
             )
             .map(Message::Magnify),
-            // Defensive: all windows are eagerly inserted at creation time,
-            // but if iced calls view for an id we somehow don't know about,
-            // an empty space is a safe no-op.
+            // Defensive: all windows are inserted at creation, but a stray
+            // unknown id renders as empty space rather than panicking.
             None => iced::widget::Space::new().into(),
         }
     }
@@ -479,8 +441,8 @@ impl App {
 
     pub fn theme(&self, window_id: iced::window::Id) -> AppTheme {
         let theme = self.theme.current.clone();
-        // Magnify launcher needs a transparent OS-window background so the
-        // pixels outside its rounded container stay see-through.
+        // Magnify launcher needs a transparent OS-window background so pixels
+        // outside its rounded container stay see-through.
         if matches!(
             self.windows.get(&window_id).map(|w| w.kind),
             Some(WindowKind::Magnify)
@@ -515,10 +477,9 @@ impl App {
             open_overlay: self.open_overlay,
         };
 
-        // Inner content for authenticated screens. Vault / Send return just
-        // the "right-hand" content area — the sidebar is composed below so
-        // it persists across screen switches without each view re-rendering
-        // it.
+        // Vault / Send return just the right-hand content area — the sidebar
+        // is composed below so it persists across screen switches without
+        // each view re-rendering it.
         let inner: Element<'_, Message, AppTheme> = match self.screen {
             Screen::Loading => {
                 iced::widget::center(crate::components::spinner::spinner(48.0, colors.accent))
@@ -560,7 +521,6 @@ impl App {
 
         let close_toast = |idx| Message::System(SystemMessage::CloseToast(idx));
 
-        // Bottom-sheet overlay — lives above the sidebar and title bar.
         let sheet: Option<Element<'_, Message, AppTheme>> = match self.screen {
             Screen::Vault => self
                 .views
@@ -575,7 +535,6 @@ impl App {
             _ => None,
         };
 
-        // Delete-confirmation modal.
         let modal: Option<Element<'_, Message, AppTheme>> = match self.screen {
             Screen::Vault => self
                 .views
@@ -590,17 +549,14 @@ impl App {
             _ => None,
         };
 
-        // Settings modal — composed above the vault modal so it sits on top
-        // of any other overlays.
         let settings_modal: Option<Element<'_, Message, AppTheme>> = self
             .views
             .settings
             .modal_view(colors)
             .map(|el| el.map(Message::settings));
 
-        // Generator modal — same tier as Settings. Both `modal_view` returns
-        // `None` when closed so the stack stays cheap (CLAUDE.md → "Stack
-        // doesn't cull or clip").
+        // Both `modal_view` returns `None` when closed so the stack stays
+        // cheap (CLAUDE.md → "Stack doesn't cull or clip").
         let generator_modal: Option<Element<'_, Message, AppTheme>> = self
             .views
             .generator
@@ -632,18 +588,18 @@ impl App {
         let main_column: Element<'_, Message, AppTheme> =
             iced::widget::column![tb, page].height(iced::Fill).into();
 
-        // All optional layers above `main_column`, in z-order (lowest first).
-        // `flatten()` drops the `None`s so the resulting Vec contains only
-        // the overlays that actually need to render this frame.
+        // Optional layers above `main_column`, in z-order (lowest first).
+        // `flatten()` drops the `None`s so only overlays that need to render
+        // this frame end up in the Vec.
         let mut overlays: Vec<Element<'_, Message, AppTheme>> =
             [sheet, modal, settings_modal, generator_modal]
                 .into_iter()
                 .flatten()
                 .collect();
 
-        // Drag-by-titlebar overlay sits on top of everything else when any
-        // overlay is up. Only meaningful when the custom title bar is in use
-        // — macOS uses the native title bar, which already handles drag.
+        // Drag-by-titlebar overlay sits on top when any overlay is up. Only
+        // meaningful with the custom title bar — macOS native already handles
+        // drag.
         if use_custom_menu_bar && !overlays.is_empty() {
             let drag_strip = iced::widget::mouse_area(
                 iced::widget::container(iced::widget::Space::new())

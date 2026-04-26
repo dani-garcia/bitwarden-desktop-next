@@ -23,10 +23,8 @@ pub enum AccountSwitcherMessage {
 }
 
 /// App-level semantics the account switcher can request. Views bubble these
-/// via their own event enum (`LoginEvent::AccountSwitcher`,
-/// `VaultEvent::AccountSwitcher`, `SendEvent::AccountSwitcher`) so every
-/// route lands in the same `App::handle_account_switcher_event` — one
-/// place to keep in sync when the switcher grows a new action.
+/// via their own event enum so every route lands in the same
+/// `App::handle_account_switcher_event`.
 #[derive(Debug, Clone)]
 pub enum AccountSwitcherEvent {
     SwitchUser { uid: UserId },
@@ -39,8 +37,7 @@ pub enum AccountSwitcherEvent {
 
 impl AccountSwitcherMessage {
     /// Lift a non-toggle message into its app-level event. `ToggleDropdown`
-    /// is the one case that doesn't bubble — it only flips the overlay —
-    /// so this returns `None` for it.
+    /// only flips the overlay so it returns `None`.
     pub fn into_event(self) -> Option<AccountSwitcherEvent> {
         match self {
             Self::ToggleDropdown => None,
@@ -56,10 +53,8 @@ impl AccountSwitcherMessage {
     /// Apply a switcher message to the caller-owned overlay cell:
     /// `ToggleDropdown` flips it on/off against `self_overlay`; every other
     /// variant closes any open overlay and returns the outbound event for
-    /// App to route.
-    ///
-    /// Generic over the overlay enum so this helper lives in `components/`
-    /// without importing `app::Overlay` — callers pass their own variant.
+    /// App to route. Generic over the overlay enum so this helper avoids
+    /// importing `app::Overlay`.
     pub fn consume<O: Copy + PartialEq>(
         self,
         open_overlay: &mut Option<O>,
@@ -83,14 +78,13 @@ impl AccountSwitcherMessage {
 }
 
 const AVATAR_PALETTE: [Color; 5] = [
-    Color::from_rgb8(0x00, 0x7c, 0x95), // teal
-    Color::from_rgb8(0xc7, 0x18, 0x00), // coral
-    Color::from_rgb8(0x17, 0x5d, 0xdc), // brand (blue)
-    Color::from_rgb8(0x00, 0x82, 0x36), // green
-    Color::from_rgb8(0x82, 0x00, 0xdb), // purple
+    Color::from_rgb8(0x00, 0x7c, 0x95),
+    Color::from_rgb8(0xc7, 0x18, 0x00),
+    Color::from_rgb8(0x17, 0x5d, 0xdc),
+    Color::from_rgb8(0x00, 0x82, 0x36),
+    Color::from_rgb8(0x82, 0x00, 0xdb),
 ];
 
-/// Deterministic avatar color for a given id.
 fn avatar_color_for(id: &str) -> Color {
     use std::hash::{Hash as _, Hasher as _};
     let mut hasher = std::hash::DefaultHasher::new();
@@ -100,7 +94,6 @@ fn avatar_color_for(id: &str) -> Color {
     AVATAR_PALETTE[hash as usize % AVATAR_PALETTE.len()]
 }
 
-/// Renders a round avatar circle trigger for the vault header.
 pub fn avatar_trigger<'a>(
     active_email: &'a str,
     _colors: &AppColors,
@@ -112,10 +105,8 @@ pub fn avatar_trigger<'a>(
 }
 
 /// Avatar trigger + floating dropdown panel wired into a single `DropDown`.
-/// The shared chrome for authenticated screens (vault, send, future
-/// generator) that all show the same avatar-in-top-right. Callers map the
-/// returned element into their own message type with a single
-/// `.map(MyMessage::AccountSwitcher)`.
+/// Shared chrome for authenticated screens; callers map the returned element
+/// into their own message type via `.map(MyMessage::AccountSwitcher)`.
 pub fn header_switcher<'a>(
     active_email: &'a str,
     accounts: &'a [AccountEntry],
@@ -132,30 +123,16 @@ pub fn header_switcher<'a>(
         .into()
 }
 
-/// Renders the floating dropdown panel.
-///
-/// Layout mirrors `designs/Desktop 2025/breakpoint-sm-authentication-1.png`
-/// and `vault-1 or more accounts added-1..5.png`:
-/// 1. Active account card — avatar, email + server, green check, "Lock now"
-///    and "Log out" buttons. Only shown when the active account exists and
-///    is unlocked.
-/// 2. "Other Bitwarden accounts" list — one row per non-active account, with
-///    a trailing lock / unlock icon. Row tap switches accounts.
-/// 3. "Options" section — "Lock all accounts" (when any account is unlocked),
-///    "Settings", "Add account".
-///
-/// Only `SwitchUser`, `AddAccount`, and `ToggleDropdown` are wired. The
-/// Lock / Log out / Lock all / Settings buttons render visually but have no
-/// `on_press` — they'll be wired in follow-up changes.
+/// Renders the floating dropdown panel: active account card, "Other
+/// Bitwarden accounts" list, and "Options" section.
 pub fn dropdown<'a>(
     active_email: Option<&'a str>,
     accounts: &'a [AccountEntry],
     colors: &'a AppColors,
 ) -> Element<'a, AccountSwitcherMessage, AppTheme> {
-    // Only show the active-account card when the account is unlocked — its
-    // controls (Lock now / Log out) don't apply to a locked account. When
-    // the active account is locked it falls back into the "Other" list so
-    // the user can click it to bring up the unlock screen.
+    // Only show the active-account card when unlocked — its controls (Lock
+    // now / Log out) don't apply to a locked account. Locked active accounts
+    // fall back into the "Other" list so the user can click to unlock.
     let active_unlocked = active_email
         .and_then(|email| accounts.iter().find(|a| a.email == email))
         .filter(|a| !a.locked);
@@ -226,8 +203,7 @@ pub fn dropdown<'a>(
 
 /// Renders the initials avatar. Email keys both the initials (first two
 /// chars) and the palette color. The Angular clients hash the UUID instead,
-/// but cross-client color parity per user isn't required here — only palette
-/// parity.
+/// but cross-client color parity per user isn't required here.
 fn avatar<'a, M: 'a>(email: &str, size: f32) -> Element<'a, M, AppTheme> {
     let initials = email.chars().take(2).collect::<String>().to_uppercase();
     let bg = avatar_color_for(email);

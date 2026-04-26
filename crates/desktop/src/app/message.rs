@@ -11,14 +11,8 @@ use crate::{
 };
 
 // ── Top-level Message ──────────────────────────────────────────────────────
-//
-// Split into two groups. The `View` variant carries messages for the
-// compositional sub-views — all of them need an `UpdateCtx`, and the router
-// factors out one shared construction site. The remaining variants are
-// app-level: `About` handles the About child window (stateless), `Window`
-// carries per-window OS events (every variant takes a `window::Id`),
-// `System` carries global signals, and `Favicon` is a fire-and-forget redraw
-// trigger.
+// `View` carries sub-view messages (all need `UpdateCtx`, factored into one
+// shared construction site). The rest are app-level signals.
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -26,30 +20,22 @@ pub enum Message {
     About(AboutMessage),
     Window(WindowMessage),
     System(SystemMessage),
-    /// Sidebar chrome — collapse/expand, section/filter selection. Handled
-    /// at the App level because the sidebar persists across authenticated
-    /// screens.
+    /// Sidebar chrome (collapse, section/filter selection). Handled at App
+    /// level because it persists across authenticated screens.
     Sidebar(SidebarMessage),
-    /// Favicon service progress — one per completed fetch. Arrival alone
-    /// triggers the redraw; the handler only logs.
+    /// One per completed fetch; arrival alone triggers the redraw.
     Favicon(FaviconMessage),
-    /// Per-frame tick driven by `iced::window::frames()` while any modal's
-    /// open/close animation is in flight. The handler is a no-op — the
-    /// redraw the message triggers is the entire point. Subscribed to only
-    /// while at least one `FadeInOut` reports `in_progress`, so the wake
-    /// rate drops to zero whenever nothing's animating.
+    /// Per-frame tick from `iced::window::frames()` while a transition is
+    /// in flight. No-op handler — the redraw is the point. Subscribed only
+    /// while something is animating, so idle wake rate is zero.
     AnimationTick,
-    /// Magnify launcher events — global hotkey, search input, copy actions.
-    /// The launcher owns its own window; routed at the top level (rather
-    /// than via `ViewMessage`) because it can't share `UpdateCtx` with
-    /// screen-driven views.
+    /// Routed at the top level (not via `ViewMessage`) because the launcher
+    /// owns its own window and can't share `UpdateCtx` with screen views.
     Magnify(MagnifyMessage),
 }
 
-/// Messages that dispatch into a compositional sub-view's `update()`. All
-/// need a shared `UpdateCtx` at routing time; bundling them under one
-/// variant means `App::update` builds `UpdateCtx` in a single place and the
-/// borrow of `App::open_overlay` has exactly one scope.
+/// Sub-view messages, bundled so `App::update` builds `UpdateCtx` in one
+/// place and the `&mut App::open_overlay` borrow has a single scope.
 #[derive(Debug, Clone)]
 pub enum ViewMessage {
     Login(LoginMessage),
@@ -60,9 +46,8 @@ pub enum ViewMessage {
     Generator(GeneratorMessage),
 }
 
-// Convenience constructors so call sites can keep using `fn`-pointer form
-// (`.map(Message::login)`, `.dispatch(Message::vault, ...)`) without the
-// `Message::View(ViewMessage::Login(..))` double-wrap at every use.
+// Convenience constructors so call sites can use fn-pointer form
+// (`.map(Message::login)`) without the `View(ViewMessage::Login(..))` wrap.
 impl Message {
     pub fn login(m: LoginMessage) -> Self {
         Self::View(ViewMessage::Login(m))
@@ -89,51 +74,41 @@ impl Message {
     }
 }
 
-/// Per-window OS events. Every variant carries `window::Id` so the router
-/// can dispatch to the correct window in daemon (multi-window) mode.
+/// Per-window OS events. Every variant carries `window::Id` for daemon
+/// multi-window dispatch.
 #[derive(Debug, Clone)]
 pub enum WindowMessage {
     Opened(iced::window::Id),
     GotRawId(iced::window::Id, u64),
-    /// OS emitted a close request (X button on native title bar, Alt+F4,
-    /// window-list "Close", etc.). Funnels into the same `WindowAction::Close`
-    /// path the custom title-bar X-button uses, so close-to-tray applies
-    /// uniformly. `exit_on_close_request: false` on the main window defers
-    /// the real close to our handler.
+    /// OS-emitted close (Alt+F4, native X, window-list "Close"). Funnels
+    /// into the same `WindowAction::Close` path the custom title-bar X uses,
+    /// so close-to-tray applies uniformly. `exit_on_close_request: false`
+    /// on the main window defers the real close to our handler.
     CloseRequested(iced::window::Id),
     Closed(iced::window::Id),
     KeyPressed(iced::window::Id, iced::keyboard::Event),
     Resized(iced::window::Id, iced::Size),
-    /// Window lost focus. The Magnify launcher uses this for
-    /// click-outside-to-dismiss; other windows ignore it. Intentionally
-    /// emitted for every window rather than narrowed to the launcher's id
-    /// — the per-window check in the handler is cheap and keeps this
-    /// message reusable if a future window also wants blur semantics.
+    /// Used by Magnify for click-outside-to-dismiss; other windows ignore it.
     Unfocused(iced::window::Id),
 }
 
 /// Global signals that aren't tied to a specific window.
 #[derive(Debug, Clone)]
 pub enum SystemMessage {
-    /// A muda-managed menu item was activated — either from the native app
-    /// menu or the tray context menu (they share one global receiver). The
-    /// handler looks the id up on `NativeMenuHandle` / `TrayHandle` to
-    /// decide which action to run.
+    /// Muda menu item activated — native app menu and tray context menu
+    /// share one global receiver; the handler resolves the id on whichever
+    /// handle owns it.
     MudaEvent(muda::MenuEvent),
-    /// Left-click released on the tray icon — emitted by the pump in
-    /// [`crate::services::tray::click_stream`] which already filters to the
-    /// click-to-toggle case.
+    /// Tray icon left-click; the pump in [`crate::services::tray::click_stream`]
+    /// already filters to the toggle case.
     TrayClick(crate::services::tray::TrayAction),
-    /// OS-level light/dark theme changed. `ThemePreference::System` follows
-    /// this; explicit Light/Dark preferences ignore it.
+    /// OS-level light/dark scheme changed. Only acted on under
+    /// `ThemePreference::System`.
     ThemeChanged,
-    /// User dismissed a toast via the x button or auto-dismiss expiry.
     CloseToast(usize),
-    /// The background `ClientManager::load` task finished. Swaps the placeholder
-    /// `ClientManager::empty()` for the fully-populated one and transitions out
-    /// of `Screen::Loading`.
+    /// Background `ClientManager::load` finished. Swaps the placeholder
+    /// `ClientManager::empty()` for the populated one.
     ClientManagerLoaded(Arc<ClientManager>),
-    /// A second launch of the app was attempted; the single-instance listener
-    /// forwarded a "show" signal. Surface the main window.
+    /// Single-instance listener forwarded a "show" signal from a second launch.
     InstanceWakeRequested,
 }

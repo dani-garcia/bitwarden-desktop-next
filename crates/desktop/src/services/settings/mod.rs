@@ -1,7 +1,6 @@
-//! App-wide user settings, read once from `data/settings.json`.
-//!
-//! Behavioral branches re-read `self.settings.<field>` at event time (never
-//! cached), so live changes apply without a restart. See `docs/decisions.md`.
+//! App-wide user settings, read once from `data/settings.json`. Behavioral
+//! branches re-read `self.settings.<field>` at event time (never cached), so
+//! live changes apply without a restart. See `docs/decisions.md`.
 
 use std::{collections::HashMap, io::BufReader};
 
@@ -10,8 +9,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{services::preferences::UserPreferences, theme::ThemePreference};
 
-/// Sentinel value for "follow the OS locale". Stored in the `language` field
-/// when the user hasn't picked an explicit language.
+/// Sentinel for "follow the OS locale". Stored in `language` when no explicit
+/// language has been picked.
 pub const LANGUAGE_SYSTEM: &str = "";
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -20,8 +19,8 @@ pub struct Settings {
     // ── Appearance ─────────────────────────────────────────────────────────
     pub theme: ThemePreference,
     /// BCP-47 language tag (e.g. `"en"`, `"es"`) or [`LANGUAGE_SYSTEM`] for OS
-    /// preferred. Kept as a plain string so new locales don't need a code
-    /// change — only an `assets/i18n/<tag>/` directory.
+    /// preferred. Plain string so new locales need only an `assets/i18n/<tag>/`
+    /// directory, no code change.
     pub language: String,
 
     // ── Security ───────────────────────────────────────────────────────────
@@ -59,25 +58,20 @@ pub struct Settings {
     pub allow_screenshots: bool,
 
     // ── Per-user preferences ───────────────────────────────────────────────
-    /// Keyed by `UserId`. Populated lazily on first read/write via
-    /// [`Settings::preferences_for`] / [`Settings::preferences_for_mut`].
-    /// Persisted alongside the app-wide fields so unlock-with-PIN, clipboard
-    /// delay, etc. survive across launches.
+    /// Keyed by `UserId`. Populated lazily; persisted alongside the app-wide
+    /// fields so unlock-with-PIN, clipboard delay, etc. survive across launches.
     pub user_preferences: HashMap<UserId, UserPreferences>,
 }
 
 impl Settings {
-    /// Current preferences for `uid`, or defaults if the user has none saved
-    /// yet. Read-only — edits land via the settings modal, which mutates
-    /// its own working snapshot and pushes it back through App.
+    /// Current preferences for `uid`, or defaults if none are saved.
     pub fn preferences_for(&self, uid: &UserId) -> UserPreferences {
         self.user_preferences.get(uid).copied().unwrap_or_default()
     }
 }
 
 impl Settings {
-    /// Read `<workspace>/data/settings.json`. Missing file → defaults.
-    /// Malformed → defaults + `tracing::warn!`.
+    /// Missing file → defaults. Malformed → defaults + `tracing::warn!`.
     pub fn load() -> Self {
         let path = crate::paths::data_dir().join("settings.json");
         let file = match std::fs::File::open(&path) {
@@ -97,8 +91,6 @@ impl Settings {
         }
     }
 
-    /// Persist the current settings to `data/settings.json`. Called whenever
-    /// the settings view applies a live-wired change.
     pub fn save(&self) {
         let path = crate::paths::data_dir().join("settings.json");
         let file = match std::fs::File::create(&path) {
@@ -113,8 +105,7 @@ impl Settings {
         }
     }
 
-    /// Whether *any* tray feature is active — used to decide if the tray
-    /// should exist at startup.
+    /// Whether *any* tray feature is active — drives tray creation at startup.
     pub fn wants_tray(&self) -> bool {
         self.show_tray_icon || self.minimize_to_tray || self.close_to_tray
     }

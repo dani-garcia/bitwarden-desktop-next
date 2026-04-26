@@ -36,7 +36,6 @@ pub enum ItemListMessage {
     Scrolled(scrollable::Viewport),
 }
 
-// Generate a deterministic color from a string
 fn initial_color(name: &str) -> iced::Color {
     let hash: u32 = name
         .bytes()
@@ -65,7 +64,6 @@ pub fn view<'a>(
     ctx: &crate::app::RenderCtx<'a>,
 ) -> Element<'a, ItemListMessage, AppTheme> {
     let colors = ctx.colors;
-    // Table header
     let table_header = container(
         row![
             text(fl!("vault-column-name"))
@@ -200,7 +198,6 @@ fn row_element<'a>(
     .spacing(2)
     .width(Fill);
 
-    // Action icons
     let mut actions: Vec<Element<'a, ItemListMessage, AppTheme>> = Vec::new();
     if has_uri {
         actions.push(action_icon(

@@ -43,14 +43,13 @@ const TOAST_MAX_WIDTH: f32 = 320.0;
 const FADE_IN_MS: u64 = 150;
 const FADE_OUT_MS: u64 = 150;
 const PROGRESS_BAR_HEIGHT: f32 = 3.0;
-/// Approximately 30fps. We tick this fast for the entire visible lifetime of a
-/// toast so the progress bar shrinks smoothly and the fades look continuous.
+/// ~30fps tick for the toast's full visible lifetime so the progress bar
+/// shrinks smoothly and fades stay continuous.
 const ANIMATION_TICK_MS: u64 = 33;
-/// Peak opacity: toasts never quite reach fully opaque so the content behind
-/// them stays subtly visible.
+/// Peak opacity: toasts stay slightly translucent so content behind them
+/// remains subtly visible.
 const MAX_ALPHA: f32 = 0.95;
-/// Space reserved at the top of the overlay so the toast stack never rides
-/// under the 32px custom title bar. Bottom/side padding stays tight.
+/// Top inset so the toast stack never rides under the 32px custom title bar.
 const OVERLAY_TOP_PAD: f32 = 48.0;
 const OVERLAY_SIDE_PAD: f32 = 16.0;
 
@@ -62,10 +61,10 @@ const OVERLAY_SIDE_PAD: f32 = 16.0;
 struct ToastTimer {
     created: Instant,
     /// Set when the auto-dismiss timer fires; the toast then fades out over
-    /// `FADE_OUT_MS` and is published once that completes.
+    /// `FADE_OUT_MS` and is published once complete.
     dismissing: Option<Instant>,
-    /// True while the cursor is over the toast — pauses the auto-dismiss
-    /// countdown and pins the visible state to "fully visible / full progress".
+    /// True while the cursor is over the toast — pauses the countdown and
+    /// pins the visible state to "fully visible".
     hovered: bool,
 }
 
@@ -85,12 +84,8 @@ impl ToastVisuals {
     };
 }
 
-/// Compute the current display alpha for a toast in `[0.0, MAX_ALPHA]`. The
-/// fade-in/out animation factors are always scaled by `MAX_ALPHA` so the peak
-/// opacity is `MAX_ALPHA`, keeping the toast a bit translucent even when
-/// "fully visible".
+/// Compute the current display alpha for a toast in `[0.0, MAX_ALPHA]`.
 fn compute_alpha(timer: &ToastTimer, now: Instant) -> f32 {
-    // While hovered, the toast is pinned at the peak opacity.
     if timer.hovered && timer.dismissing.is_none() {
         return MAX_ALPHA;
     }
@@ -110,7 +105,7 @@ fn compute_alpha(timer: &ToastTimer, now: Instant) -> f32 {
 }
 
 /// Fraction of the visible-time budget remaining: 1.0 at creation, 0.0 once
-/// the auto-dismiss fires. While hovered the progress is pinned to 1.0.
+/// auto-dismiss fires. Pinned to 1.0 while hovered.
 fn compute_progress(timer: &ToastTimer, now: Instant) -> f32 {
     if timer.hovered && timer.dismissing.is_none() {
         return 1.0;
@@ -120,7 +115,6 @@ fn compute_progress(timer: &ToastTimer, now: Instant) -> f32 {
     (1.0 - elapsed / total).clamp(0.0, 1.0)
 }
 
-/// Bundle alpha + progress in one go so callers can write the cell once.
 fn refresh_visuals(timer: &ToastTimer, now: Instant) -> ToastVisuals {
     ToastVisuals {
         alpha: compute_alpha(timer, now),
@@ -130,7 +124,6 @@ fn refresh_visuals(timer: &ToastTimer, now: Instant) -> ToastVisuals {
 
 // ── Public API ─────────────────────────────────────────────────────────────
 
-/// A user-facing notification.
 #[derive(Debug, Clone)]
 pub struct Toast {
     pub title: String,
@@ -182,12 +175,11 @@ impl ToastStatus {
         }
     }
 
-    /// Lighter tint of the severity background, used for the progress bar fill
-    /// so it sits on the same hue as the toast without being jarring.
+    /// Lighter tint of the severity background for the progress bar fill.
     fn progress_color(self, colors: &AppColors) -> Color {
         let bg = self.background(colors);
-        // Linear-RGB lerp toward white at 60%; gives a noticeably lighter
-        // version of the same hue.
+        // Linear-RGB lerp toward white at 60% — noticeably lighter on the
+        // same hue.
         const T: f32 = 0.6;
         Color {
             r: bg.r + (1.0 - bg.r) * T,
@@ -197,7 +189,6 @@ impl ToastStatus {
         }
     }
 
-    /// Bootstrap-icons codepoint for the filled severity glyph.
     fn icon(self) -> char {
         match self {
             ToastStatus::Info => icons::INFO_CIRCLE_FILL.char(),
@@ -207,7 +198,7 @@ impl ToastStatus {
         }
     }
 
-    /// Default title used when the caller passes `None` for the title slot.
+    /// Default title when the caller passes `None`.
     fn title(self) -> &'static str {
         match self {
             ToastStatus::Info => "Info",
@@ -224,10 +215,8 @@ impl ToastStatus {
 pub struct Manager<'a, Message> {
     content: Element<'a, Message, AppTheme>,
     toasts: Vec<Element<'a, Message, AppTheme>>,
-    /// Per-toast animation cells aligned 1:1 with `toasts`. Shared between the
-    /// overlay (writes on each tick) and the row's style closures (read at
-    /// draw time). Rebuilt every frame; values are re-derived from the
-    /// persisted `ToastTimer` state.
+    /// Per-toast animation cells aligned 1:1 with `toasts`. The overlay
+    /// writes on each tick; row style closures read at draw time.
     cells: Vec<Rc<Cell<ToastVisuals>>>,
     on_close: Box<dyn Fn(usize) -> Message + 'a>,
 }
@@ -241,8 +230,8 @@ where
         toasts: &'a [Toast],
         on_close: impl Fn(usize) -> Message + 'a,
     ) -> Self {
-        // Cells start hidden; `diff()` immediately reseeds them from the
-        // persisted timer state for the first draw.
+        // Cells start hidden; `diff()` reseeds them from the persisted
+        // timer state for the first draw.
         let cells: Vec<Rc<Cell<ToastVisuals>>> = toasts
             .iter()
             .map(|_| Rc::new(Cell::new(ToastVisuals::HIDDEN)))
@@ -263,9 +252,8 @@ where
     }
 }
 
-/// Build a `text::Style` closure that paints `Color::WHITE` scaled by the
-/// shared visuals cell's `alpha` (optionally further dimmed by `factor` for
-/// secondary copy like the body line).
+/// `text::Style` closure painting `Color::WHITE` scaled by the visuals
+/// cell's `alpha`, optionally further dimmed by `factor`.
 fn white_alpha_style(
     cell: Rc<Cell<ToastVisuals>>,
     factor: f32,
@@ -293,7 +281,6 @@ fn toast_view<'a, Message: 'a + Clone>(
         .size(14)
         .style(white_alpha_style(cell.clone(), 1.0));
 
-    // Body text slightly dimmer than the title for hierarchy.
     let body_elem = text(toast.body.as_str())
         .size(12)
         .style(white_alpha_style(cell.clone(), 0.92));
@@ -353,11 +340,9 @@ fn toast_view<'a, Message: 'a + Clone>(
 
 // ── Progress bar widget ───────────────────────────────────────────────────
 //
-// Tiny custom widget that paints a horizontal fill rectangle whose width is
-// proportional to the shared visuals cell's `progress`. Implementing this as
-// a widget (rather than using `container.width(Length::Fixed(...))`) lets us
-// update the fill ratio every frame WITHOUT triggering a re-layout — `draw`
-// reads the current cell value at paint time.
+// Implemented as a custom widget so the fill ratio updates per-frame
+// WITHOUT triggering re-layout — `draw` reads the cell at paint time.
+// `container.width(Length::Fixed(...))` would force a relayout per tick.
 
 struct ToastProgressBar {
     cell: Rc<Cell<ToastVisuals>>,
@@ -447,7 +432,7 @@ where
     fn diff(&self, tree: &mut Tree) {
         let timers = tree.state.downcast_mut::<Vec<Option<ToastTimer>>>();
 
-        // Drop dismissed entries (the overlay nulls out the slot when fade-out
+        // Drop dismissed entries (overlay nulls the slot when fade-out
         // completes) before re-syncing with the new toast list.
         timers.retain(Option::is_some);
 
@@ -467,10 +452,9 @@ where
             _ => {}
         }
 
-        // Seed each visuals cell from the persisted timer state so the first
-        // draw of a frame has the correct values even if the overlay's update
-        // hasn't run yet (e.g. when the rebuild was triggered by a mouse event
-        // rather than a `RedrawRequested`).
+        // Seed each visuals cell from the persisted timer state so the
+        // first draw of a frame has correct values even if the overlay's
+        // update hasn't run yet (e.g. mouse-event-triggered rebuilds).
         let now = Instant::now();
         for (cell, slot) in self.cells.iter().zip(timers.iter()) {
             let visuals = match slot {
@@ -620,8 +604,6 @@ where
     fn layout(&mut self, renderer: &iced::Renderer, bounds: Size) -> Node {
         let limits = Limits::new(Size::ZERO, bounds);
 
-        // Bigger top inset so the stack never slides under the 32px custom
-        // title bar if it grows tall.
         let padding = iced::Padding {
             top: OVERLAY_TOP_PAD,
             right: OVERLAY_SIDE_PAD,
@@ -653,12 +635,8 @@ where
         shell: &mut Shell<'_, Message>,
     ) {
         if let Event::Window(window::Event::RedrawRequested(now)) = event {
-            // Drive the per-toast animation state machine. The timer for each
-            // toast walks: appearing → visible → dismissing → dropped. Both
-            // the alpha and progress fields of the visuals cell are refreshed
-            // every tick so the next draw picks them up. We schedule another
-            // frame at ~30fps for the entire visible lifetime — the progress
-            // bar shrinks smoothly and fades stay continuous.
+            // Per-toast state machine: appearing → visible → dismissing →
+            // dropped. Alpha and progress are refreshed every tick.
             let fade_out_d = Duration::from_millis(FADE_OUT_MS);
             let cursor_pos = cursor.position();
             let mut child_layouts = layout.children();
@@ -672,10 +650,9 @@ where
                 };
 
                 // Hover detection: if the cursor is inside this toast's
-                // bounds, pin it to "fully visible / full progress" so it
-                // doesn't disappear while the user is reading it. Cancel any
-                // in-flight dismissal and slide `created` forward so when the
-                // cursor leaves, the timer naturally resumes from full.
+                // bounds, pin to fully visible. Cancel any in-flight dismissal
+                // and slide `created` forward so the timer resumes from full
+                // when the cursor leaves.
                 let cursor_over = cursor_pos
                     .map(|p| child_layout.bounds().contains(p))
                     .unwrap_or(false);
@@ -686,15 +663,14 @@ where
                     timer.created = *now - Duration::from_millis(FADE_IN_MS);
                 }
 
-                // Phase 1: kick off auto-dismiss once the visible timer expires.
+                // Phase 1: kick off auto-dismiss once visible timer expires.
                 if timer.dismissing.is_none() && timer.created.elapsed() >= TIMEOUT {
                     timer.dismissing = Some(*now);
                 }
 
-                // Phase 2: publish on_close once the fade-out completes. The
-                // toast is dropped from `App.toasts` next frame, so there's no
-                // need to write the cell here — its `Element` won't be drawn
-                // again before the rebuild.
+                // Phase 2: publish on_close once fade-out completes. The
+                // toast drops from `App.toasts` next frame, so no need to
+                // refresh the cell — its `Element` won't be drawn again.
                 if let Some(start) = timer.dismissing
                     && now.saturating_duration_since(start) >= fade_out_d
                 {
@@ -703,7 +679,6 @@ where
                     continue;
                 }
 
-                // Refresh the shared cell for the upcoming draw call.
                 cell.set(refresh_visuals(timer, *now));
 
                 shell.request_redraw_at(*now + Duration::from_millis(ANIMATION_TICK_MS));
@@ -734,7 +709,7 @@ where
 
             // Any local message (e.g. close button click) is an explicit
             // dismissal — drop the timer so the post-update sweep doesn't
-            // re-publish on_close after the toast is already gone.
+            // re-publish on_close.
             if !local_shell.is_empty() {
                 *timer_slot = None;
             }

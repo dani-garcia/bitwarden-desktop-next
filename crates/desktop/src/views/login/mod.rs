@@ -131,22 +131,15 @@ pub enum LoginMessage {
 }
 
 // ── Events ─────────────────────────────────────────────────────────────────
-//
-// Events are declarative domain facts the view bubbles up for cross-cutting
-// effects App needs to coordinate — screen switches, user swaps, toast
-// pushes. Compare with the older `Action` pattern which was imperative
-// ("App please do X"); the event form lets the view own its async lifecycle
-// and only surface the *completed* state transitions.
 
 #[derive(Debug, Clone)]
 pub enum LoginEvent {
     /// Unlock attempt completed successfully — App should flip to the vault
     /// screen and kick off the vault list load for this user.
     Unlocked { uid: UserId },
-    /// Fresh login via email + password completed successfully. Same routing
-    /// as `Unlocked` but distinguishes the flow for future analytics / error
-    /// messaging differences. Constructed only by `LoginMessage::LoginCompleted`
-    /// which is itself a stub until SDK login support lands.
+    /// Fresh login via email + password completed successfully. Constructed
+    /// only by `LoginMessage::LoginCompleted` which is a stub until SDK
+    /// login support lands.
     LoggedIn { uid: UserId },
     /// LoginView wants to show a cross-cutting toast notification.
     ToastRequested(Toast),
@@ -201,11 +194,8 @@ impl LoginView {
 
     /// Compositional MVU update. Returns a task (for async work the view
     /// owns) and an optional event (cross-cutting fact for App to route).
-    ///
     /// `client_manager` and `active_user` are injected at call-time so the
     /// view can construct `Task::perform` calls without owning shared state.
-    /// This matches Halloy's pattern — see
-    /// [investigation/halloy/src/buffer.rs:247](../../../../investigation/halloy/src/buffer.rs).
     pub fn update(&mut self, msg: LoginMessage, ctx: UpdateCtx<'_>) -> Outcome<Self> {
         let UpdateCtx {
             client_manager,
@@ -425,9 +415,6 @@ impl LoginView {
     }
 
     /// Reset the login flow to the email-entry page with empty inputs.
-    /// Called when the user picks "Add account" from either the login
-    /// screen (locally, via `AccountSwitcherMessage::AddAccount`) or the
-    /// vault screen (via `VaultEvent::AddAccountRequested` → handler).
     pub fn reset_to_email_entry(&mut self) {
         self.auth_page = AuthPage::new_login_email();
         self.unlock_in_progress = false;

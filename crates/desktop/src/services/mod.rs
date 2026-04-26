@@ -1,8 +1,7 @@
 //! Platform + stateful cross-view services.
 //!
-//! Each subfolder is one service, constructed once in `App::new` and consumed
-//! by views via `UpdateCtx`. Services may not import from `views/`, `components/`,
-//! or `app/`.
+//! Constructed once in `App::new`, consumed by views via `UpdateCtx`. Services
+//! may not import from `views/`, `components/`, or `app/`.
 
 pub mod animation;
 pub mod clipboard;

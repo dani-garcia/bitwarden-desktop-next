@@ -13,8 +13,6 @@ use super::{LoginMessage, layout};
 
 pub const LOGIN_PASSWORD_FIELD_ID: widget::Id = widget::Id::new("login-password-field");
 
-/// Renders the full center content for the login password screen:
-/// wave icon, "Welcome back" title, email subtitle, card with password field + buttons.
 pub fn view<'a>(
     email: &'a str,
     password: &'a str,

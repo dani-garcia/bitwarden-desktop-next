@@ -16,9 +16,6 @@ use super::{LoginMessage, layout};
 
 pub const LOGIN_EMAIL_FIELD_ID: widget::Id = widget::Id::new("login-email-field");
 
-/// Renders the full center content for the login email entry screen:
-/// vault icon, title, card with email field + checkbox + buttons,
-/// and "New to Bitwarden?" link below the card.
 pub fn view<'a>(
     email: &'a str,
     remember_email: bool,
@@ -34,7 +31,6 @@ pub fn view<'a>(
 
     let card = layout::auth_card(card_content(email, remember_email, colors));
 
-    // "New to Bitwarden? Create account" link below card
     // TODO: Create account navigates to registration view (not yet implemented)
     let create_account_link = row![
         text(format!("{} ", fl!("login-email-new-prompt")))

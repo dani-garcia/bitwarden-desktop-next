@@ -1,17 +1,15 @@
-//! Single-instance lock with IPC wake-up.
+//! Single-instance lock with IPC wake-up. A second launch tells the running
+//! primary to show its window instead of starting a duplicate process.
 //!
-//! Prevents a second launch from starting a duplicate process — and instead
-//! tells the already-running primary to show its window. The transport is a
-//! per-platform local IPC primitive driven by tokio (already a dep via iced):
+//! Transport is a per-platform local IPC primitive driven by tokio:
 //!
 //! - **Unix**: Unix domain socket in a per-user directory (see [`socket_path`]).
 //! - **Windows**: named pipe at `\\.\pipe\bitwarden-desktop-next`.
 //!
-//! The sync probe in [`notify_primary_if_running`] runs before iced starts
-//! (no tokio runtime yet) and uses stdlib sockets to send `b"show\n"` to a
-//! running primary. On the primary side, [`wake_stream`] is an iced
-//! [`Subscription::run`]-compatible stream that binds the listener and yields
-//! `()` for each `"show"` signal received.
+//! [`notify_primary_if_running`] runs before iced starts (no tokio runtime
+//! yet) and uses stdlib sockets to send `b"show\n"`. [`wake_stream`] is an
+//! iced [`Subscription::run`]-compatible stream that binds the listener and
+//! yields `()` per `"show"` signal received.
 
 use iced::futures::{SinkExt, Stream, channel::mpsc};
 
@@ -36,10 +34,8 @@ fn socket_path() -> std::path::PathBuf {
 const READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(1);
 
 /// Probe for an already-running primary. If one is listening, send the wake
-/// signal and return `true`; the caller should then exit cleanly.
-///
-/// Returns `false` when no primary is listening — in which case this process
-/// should go on to become the primary.
+/// signal and return `true`; the caller should then exit cleanly. Returns
+/// `false` when no primary is listening.
 pub fn notify_primary_if_running() -> bool {
     #[cfg(unix)]
     {
@@ -73,10 +69,8 @@ pub fn cleanup_stale_socket() {
     }
 }
 
-/// Iced-compatible stream that yields `()` every time another instance sends
-/// a wake signal. Feed to [`iced::Subscription::run`] with a `fn` pointer so
-/// iced can hash the subscription identity and keep the listener alive
-/// across `update()` cycles.
+/// Iced-compatible stream that yields `()` per wake signal received. Feed to
+/// [`iced::Subscription::run`] with a `fn` pointer.
 pub fn wake_stream() -> impl Stream<Item = ()> {
     iced::stream::channel(16, |out: mpsc::Sender<()>| async move {
         #[cfg(unix)]
@@ -139,9 +133,8 @@ where
         Ok(Ok(n)) if n > 0 && line.trim() == "show" => {
             let _ = out.send(()).await;
         }
-        Ok(Ok(_)) => {} // EOF or non-matching payload; ignore
+        Ok(Ok(_)) => {}
         Ok(Err(e)) => tracing::debug!(error = %e, "instance wake read error"),
         Err(_) => tracing::debug!("instance wake read timed out"),
     }
-    // `reader` drops here → stream closes immediately.
 }

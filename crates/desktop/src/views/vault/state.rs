@@ -19,32 +19,27 @@ use super::{VaultEvent, VaultMessage, widgets::cipher_edit::CipherForm};
 
 // ── View-local domain ──────────────────────────────────────────────────────
 
-/// Ratio the detail/form pane opens to the first time. `0.6` matches the
-/// old hardcoded split where the list took 60% and the detail 40%.
+/// Ratio the detail/form pane opens to the first time (list 60% / detail 40%).
 const INITIAL_DETAIL_PANE_RATIO: f32 = 0.4;
 
-/// The currently-selected vault item. An item click sets index + id and
-/// triggers an async decrypt that populates `detail`. When `form` is `Some`,
-/// the right-hand pane renders the editable form instead of the read-only
-/// detail view; `detail` stays populated throughout so cancel returns
-/// instantly without a reload.
+/// The currently-selected vault item. When `form` is `Some`, the right-hand
+/// pane renders the editable form instead of the read-only detail view;
+/// `detail` stays populated throughout so cancel returns instantly without
+/// a reload.
 #[derive(Default)]
 pub(super) struct Selection {
     pub(super) item: Option<usize>,
     pub(super) id: Option<CipherId>,
     pub(super) detail: Option<CipherView>,
     pub(super) form: Option<CipherForm>,
-    /// Armed-delete state for the detail pane's inline confirm row.
-    /// Reset when selection changes (via `clear()`), when the user cancels,
-    /// or when any non-delete detail-pane message arrives. Wrapped in a
-    /// `FadeInOut` so the modal animates in/out — call `.open()` to arm,
-    /// `.close()` to disarm.
+    /// Armed-delete state for the detail pane's inline confirm row. Reset
+    /// when selection changes, the user cancels, or any non-delete
+    /// detail-pane message arrives.
     pub(super) confirm_delete: FadeInOut,
-    /// Animates the bottom sheet (narrow-mode only) in and out. Driven by
-    /// the same setters that set `detail`: every code path that loads a
-    /// detail calls `.open()`, and `CloseCipherDetail` calls `.close()`
-    /// alongside scheduling a delayed clear so the outro has content to
-    /// render.
+    /// Bottom-sheet (narrow-mode) in/out animation. Driven alongside
+    /// `detail`: setters call `.open()`, `CloseCipherDetail` calls `.close()`
+    /// and schedules a delayed `clear()` per the FadeInOut delayed-cleanup
+    /// pattern.
     pub(super) sheet_fade: FadeInOut,
 }
 

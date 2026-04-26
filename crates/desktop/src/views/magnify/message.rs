@@ -16,13 +16,9 @@ pub enum MagnifyMessage {
     HotkeyPressed,
     /// Launcher window finished opening (first summon only).
     WindowOpened(iced::window::Id),
-    /// Search input text changed.
     QueryChanged(String),
-    /// Up arrow — move selection up one row.
     NavigateUp,
-    /// Down arrow — move selection down one row.
     NavigateDown,
-    /// User clicked a result row at the given index.
     RowClicked(usize),
     /// `Ctrl+C` — kick off async decrypt of the selected cipher's password.
     CopyPasswordRequested,

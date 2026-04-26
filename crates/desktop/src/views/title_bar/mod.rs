@@ -29,14 +29,12 @@ const WINDOW_BTN_WIDTH: f32 = 46.0;
 
 #[derive(Debug, Clone)]
 pub enum TitleBarMessage {
-    // Menu messages
     TopLevelClicked(usize),
     TopLevelHovered(usize),
     ItemClicked(usize, usize),
     SubMenuHovered(usize, usize),
     SubMenuItemClicked(usize, usize, usize),
     DismissMenu,
-    // Window control messages
     MinimizeClicked,
     MaximizeClicked,
     CloseClicked,
@@ -45,9 +43,6 @@ pub enum TitleBarMessage {
 }
 
 // ── Events ─────────────────────────────────────────────────────────────────
-//
-// Declarative facts the title bar bubbles up. The App router translates them
-// to concrete window operations or menu actions.
 
 #[derive(Debug, Clone, Copy)]
 pub enum WindowAction {
@@ -237,7 +232,6 @@ impl TitleBarView {
 
         let menu_row = row(menu_items).spacing(0).align_y(Alignment::Center);
 
-        // Window control buttons
         let minimize_btn = chrome_button(
             chrome_icon::MINIMIZE,
             chrome_icon::FONT,

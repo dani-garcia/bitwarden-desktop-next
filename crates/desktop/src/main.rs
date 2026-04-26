@@ -44,7 +44,6 @@ pub const APP_FONT: Font = Font {
     style: iced::font::Style::Normal,
 };
 
-/// Bold variant of the app font.
 pub const APP_FONT_BOLD: Font = Font {
     weight: Weight::Bold,
     ..APP_FONT
@@ -81,20 +80,10 @@ fn main() -> iced::Result {
 }
 
 fn select_backend() {
-    // Default to tiny-skia (CPU) renderer to avoid ~500 ms wgpu GPU init on
-    // startup. For a form-based UI this is fast enough, and the instant
-    // window appearance is a better UX trade-off. The `gpu` Cargo feature
-    // enables the wgpu backend; `--gpu`, the persisted
-    // `hardware_acceleration` setting, or `ICED_BACKEND` in the environment
-    // then opt into it at runtime.
-    //
-    // Precedence (highest wins):
-    //   1. `ICED_BACKEND` already set in the environment — leave it alone.
-    //   2. `--gpu` CLI flag.
-    //   3. `hardware_acceleration = true` in `data/settings.json`.
-    //   4. Default: tiny-skia.
-    //
-    // Changing the persisted setting only takes effect on the next launch
+    // Default to tiny-skia (CPU) to avoid ~500 ms wgpu init on startup.
+    // Precedence (highest wins): `ICED_BACKEND` env var, `--gpu` CLI flag,
+    // `hardware_acceleration = true` in `data/settings.json`, then tiny-skia.
+    // The persisted setting only takes effect on the next launch.
     match std::env::var_os("ICED_BACKEND") {
         Some(backend) => {
             tracing::info!("ICED_BACKEND already set in environment, honoring: {backend:?}");
@@ -115,28 +104,23 @@ fn select_backend() {
     }
 }
 
-/// Install a `tracing` subscriber driven by the `RUST_LOG` env var. The default
-/// filter (`bitwarden_desktop_next=debug,warn`) gives our crate verbose output
-/// while keeping dependency noise quiet. The SDK crates already emit
-/// `#[tracing::instrument]` spans (unlock, crypto init, vault decrypt) so once
-/// this runs they become visible for free under e.g.
+/// Install a `tracing` subscriber driven by the `RUST_LOG` env var. SDK crates
+/// emit `#[tracing::instrument]` spans (unlock, crypto init, vault decrypt) so
+/// once this runs they become visible under e.g.
 /// `RUST_LOG=bitwarden_desktop_next=debug,bitwarden_core=debug cargo run`.
 fn init_tracing() {
     use tracing_subscriber::{
         EnvFilter, Layer, fmt, layer::SubscriberExt, util::SubscriberInitExt,
     };
 
-    // Flight-recorder layer keeps the most recent events in an in-memory
-    // circular buffer that `bitwarden_logging::read_flight_recorder()` can
-    // dump for diagnostics — independent of the stderr filter below.
+    // Flight-recorder layer keeps recent events in an in-memory circular
+    // buffer that `bitwarden_logging::read_flight_recorder()` can dump for
+    // diagnostics — independent of the stderr filter below.
     let flight_recorder =
         bitwarden_logging::init_flight_recorder(bitwarden_logging::FlightRecorderConfig::default());
 
     // `EnvFilter::from_default_env()` alone falls back to `LevelFilter::ERROR`
-    // when `RUST_LOG` is unset, which silences everything we `warn!` / `debug!`
-    // in this crate. Fall back to the filter described in the doc comment so
-    // the app is legibly chatty on a fresh clone without requiring the user
-    // to remember the env var.
+    // when `RUST_LOG` is unset, which would silence our `warn!` / `debug!`.
     const DEFAULT_FILTER: &str = "bitwarden_desktop_next=debug,warn";
     let filter =
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(DEFAULT_FILTER));

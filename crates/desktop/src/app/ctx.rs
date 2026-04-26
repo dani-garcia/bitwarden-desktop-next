@@ -1,27 +1,20 @@
 //! Context bundles injected into view `update()` and `view()` calls, plus
 //! the [`Outcome`] return type that every view `update()` produces.
 //!
-//! - [`UpdateCtx`] is built by [`App::update`] and passed to each view's
-//!   `update()`. It exposes services (SDK) + session info a view legitimately
-//!   needs to spawn tasks or run logic, plus the app-level overlay cell a
-//!   view toggles to open or close its dropdown. Components MUST NOT receive
-//!   it — rendering never spawns SDK work.
-//! - [`RenderCtx`] is built by [`App::view`] and passed to each view's
-//!   `view()`. It exposes render-time state: theme colors, favicon service,
-//!   active user/email/accounts, layout hints, and the currently-open
-//!   overlay. Components are allowed to receive it.
-//! - [`Overlay`] names every app-level overlay. App holds `Option<Overlay>`
-//!   as the single source of truth so opening any overlay replaces the
-//!   previous one by construction — no explicit dismissal needed. The login
-//!   vs. vault account switcher use the same variant because only one view
-//!   is visible at a time (mutex via `Screen`).
-//! - [`Outcome`] is the return shape for view `update()`. Mutually exclusive
-//!   variants: `None` / `Task(t)` / `Event(e)`. When a view wants both a
-//!   task and user-visible feedback (e.g. "save succeeded"), enrich the
+//! - [`UpdateCtx`] — for `update()`. Exposes SDK + session + the app-level
+//!   overlay cell. Components MUST NOT receive it — rendering never spawns
+//!   SDK work. The layer boundary lives in the type system: `components/`
+//!   cannot reach `UpdateCtx`.
+//! - [`RenderCtx`] — for `view()`. Render-time state (theme colors, favicon
+//!   service, active user/email/accounts, layout hints, currently-open
+//!   overlay). Components may receive it.
+//! - [`Overlay`] — names every app-level overlay. Single source of truth so
+//!   opening one replaces the previous by construction. Login vs. vault
+//!   account switcher share a variant because only one view is visible at a
+//!   time (mutex via `Screen`).
+//! - [`Outcome`] — view `update()` return shape. `None` / `Task(t)` /
+//!   `Event(e)`. The "both task and event" case is excluded — enrich the
 //!   event so App's handler fires both effects.
-//!
-//! The layer boundary lives in the type system: `components/` cannot reach
-//! `UpdateCtx`, so a component physically cannot call `client_manager.foo()`.
 
 use std::sync::Arc;
 
@@ -42,14 +35,11 @@ use crate::{
 /// — they're local to the form and don't conflict geometrically with these.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Overlay {
-    /// Title-bar menu with an optionally-open submenu. Submenus are single-
-    /// level (one item from the top-level menu), so the submenu index refers
-    /// to a position inside `MENUS[menu].entries`.
+    /// Submenus are single-level; the submenu index refers to a position
+    /// inside `MENUS[menu].entries`.
     TitleBarMenu { menu: usize, submenu: Option<usize> },
-    /// Account switcher dropdown, shown on either the login or vault view.
-    /// Disambiguated by the currently-rendered `Screen`.
+    /// Disambiguated between login and vault by the currently-rendered `Screen`.
     AccountSwitcher,
-    /// Server selector popover on the login-email page.
     ServerSelector,
 }
 
@@ -58,16 +48,12 @@ pub enum Overlay {
 pub struct UpdateCtx<'a> {
     pub client_manager: &'a Arc<ClientManager>,
     pub active_user: Option<&'a UserId>,
-    /// The active vault filter pulled from the App-level sidebar state.
-    /// Views that filter vault ciphers (currently only `VaultView`) need
-    /// this on search-input changes, list reloads, etc.
+    /// Pulled from the App-level sidebar state; views need it on search-input
+    /// changes, list reloads, etc.
     pub active_vault_filter: VaultFilter,
-    /// The active send filter pulled from the App-level sidebar state.
-    /// Same rationale as `active_vault_filter` but for the send list.
     pub active_send_filter: SendFilter,
-    /// The single cell holding the currently-open app-level overlay. Views
-    /// toggle their dropdowns by writing `Some(Overlay::X)` / `None` here —
-    /// writing a new value automatically closes whatever was open before.
+    /// Writing here auto-closes whatever was open before (single-cell
+    /// mutual-exclusion).
     pub open_overlay: &'a mut Option<Overlay>,
 }
 
@@ -84,11 +70,9 @@ pub struct RenderCtx<'a> {
     pub open_overlay: Option<Overlay>,
 }
 
-/// Ties each view to its own Message + Event types. Implementations live
-/// alongside the view (one-liner `impl ViewTypes for LoginView { ... }`).
-/// Existence of this trait lets [`Outcome`] take a single type parameter —
-/// `Outcome<Self>` at every handler signature instead of
-/// `Outcome<LoginMessage, LoginEvent>`.
+/// Ties each view to its own Message + Event types so [`Outcome`] takes a
+/// single type parameter — `Outcome<Self>` instead of
+/// `Outcome<LoginMessage, LoginEvent>` at every handler signature.
 pub trait ViewTypes {
     type Message: 'static;
     type Event;
@@ -114,25 +98,19 @@ pub enum Outcome<V: ViewTypes> {
 }
 
 impl<V: ViewTypes> Outcome<V> {
-    /// Constructor for event-producing arms. A blanket `From<V::Event>`
-    /// impl would conflict with stdlib's reflexive `From<T> for T` (when
-    /// `V::Event = Outcome<V>` hypothetically), so call sites use this
-    /// named constructor instead.
+    /// Named constructor because a blanket `From<V::Event>` impl would
+    /// conflict with stdlib's reflexive `From<T> for T`.
     pub fn event(event: V::Event) -> Self {
         Self::Event(event)
     }
 
-    /// Constructor for task-producing arms. Use [`Outcome::spawn`] for the
-    /// async-block + completion-message pattern; this escape hatch is for
-    /// pre-built tasks (`Task::batch`, `Task::done`, widget operations such
-    /// as `widget::operation::focus`).
+    /// Escape hatch for pre-built tasks (`Task::batch`, `Task::done`, widget
+    /// operations). Prefer [`Outcome::spawn`] for the async-block pattern.
     pub fn task(task: Task<V::Message>) -> Self {
         Self::Task(task)
     }
 
-    /// Lift an `Option<Event>` into an `Outcome` — `Some(e)` becomes
-    /// `Event(e)`, `None` becomes `None`. Use when a lookup chain yields
-    /// an optional event: `Outcome::from_option(maybe_event)`.
+    /// `Some(e)` → `Event(e)`, `None` → `None`.
     pub fn from_option(event: Option<V::Event>) -> Self {
         match event {
             Some(e) => Self::Event(e),
@@ -145,9 +123,7 @@ impl<V: ViewTypes> Outcome<V>
 where
     V::Message: Send + 'static,
 {
-    /// Shorthand for spawning a future + producing the completion message.
-    /// Equivalent to `Outcome::task(Task::perform(future, on_complete))`
-    /// but hides one layer of iced-specific wrapping at the call site.
+    /// Shorthand for `Outcome::task(Task::perform(future, on_complete))`.
     pub fn spawn<T: Send + 'static>(
         future: impl std::future::Future<Output = T> + Send + 'static,
         on_complete: impl Fn(T) -> V::Message + Send + 'static,
@@ -155,9 +131,9 @@ where
         Self::Task(Task::perform(future, on_complete))
     }
 
-    /// App-side router helper. Lifts a view's local `Message` type into the
-    /// top-level `Message` via `wrap`, and routes an event through
-    /// `handle_event`. Returns the combined `Task` for App to schedule.
+    /// App-side router: lifts the view's `Message` via `wrap` and routes an
+    /// event through `handle_event`, returning a single `Task` for App to
+    /// schedule.
     pub fn dispatch<TopMsg: Send + 'static>(
         self,
         wrap: fn(V::Message) -> TopMsg,

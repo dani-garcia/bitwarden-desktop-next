@@ -1,8 +1,7 @@
 //! Platform / OS integration handlers — window chrome, system events, menu
-//! dispatch, and tray actions. Kept together because menu/tray actions
-//! frequently manipulate the window (minimize to tray, hide-to-tray on close,
-//! show on IPC wake), and the window-message handler dispatches menu actions
-//! on keyboard shortcuts.
+//! dispatch, tray actions. Kept together because menu/tray actions frequently
+//! manipulate the window and the window-message handler dispatches menu
+//! actions on keyboard shortcuts.
 
 use iced::Task;
 
@@ -49,7 +48,6 @@ impl App {
     pub(crate) fn handle_window_message(&mut self, msg: WindowMessage) -> Task<Message> {
         match msg {
             WindowMessage::Opened(id) => {
-                // Native menu only attaches to the main window.
                 if id == self.main_window_id() {
                     iced::window::raw_id::<Message>(id)
                         .map(move |raw| Message::Window(WindowMessage::GotRawId(id, raw)))
@@ -62,10 +60,9 @@ impl App {
                 Task::none()
             }
             WindowMessage::CloseRequested(id) => {
-                // OS-native close (Alt+F4, macOS red button, native title-bar
-                // X) — route to the same handler as the custom title-bar X
-                // so close-to-tray applies uniformly. Other windows (About)
-                // close normally.
+                // Route OS-native close to the same handler as the custom
+                // title-bar X so close-to-tray applies uniformly. Other
+                // windows (About) close normally.
                 if id == self.main_window_id() {
                     self.handle_window_action(WindowAction::Close)
                 } else {
@@ -91,14 +88,14 @@ impl App {
                 Task::none()
             }
             WindowMessage::KeyPressed(id, ev) => {
-                // Magnify launcher gets first crack at keys for its own window.
+                // Magnify gets first crack at keys for its own window.
                 if id == self.magnify.window
                     && let Some(task) = self.handle_magnify_key(ev.clone())
                 {
                     return task;
                 }
-                // Keyboard shortcuts only affect the main window — Ctrl+F
-                // in the About window must not trigger vault search.
+                // Shortcuts only fire on the main window — Ctrl+F in the
+                // About window must not trigger vault search.
                 if id != self.main_window_id() {
                     return Task::none();
                 }
@@ -106,8 +103,8 @@ impl App {
                     return Task::none();
                 };
                 // Escape closes the settings modal before any menu shortcut
-                // lookup — otherwise the user's Escape press would fall
-                // through to widgets behind the modal.
+                // lookup, otherwise it would fall through to widgets behind
+                // the modal.
                 if matches!(
                     key,
                     iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape)
@@ -133,9 +130,8 @@ impl App {
     pub(crate) fn handle_system_message(&mut self, msg: SystemMessage) -> Task<Message> {
         match msg {
             SystemMessage::MudaEvent(event) => {
-                // The muda receiver is shared between the native app menu
-                // and the tray context menu — resolve against both. Native
-                // menu matches always win; tray menu is the fallback.
+                // Native menu matches win; tray menu is the fallback (both
+                // share one global muda receiver).
                 if let Some(handle) = &self.native_menu
                     && let Some(action) = handle.resolve(&event.id)
                 {
@@ -185,10 +181,9 @@ impl App {
             }
             MenuAction::LockAllVaults => {
                 self.client_manager.lock_all();
-                // Drop sticky Magnify state — `results` holds Arc clones of
-                // decrypted ciphers from the now-locked vault, and any
-                // in-flight `pending_password` decrypt would deliver a
-                // freshly-decrypted secret to the (now-locked) session.
+                // `results` holds Arc clones of decrypted ciphers from the
+                // now-locked vault, and any in-flight `pending_password`
+                // decrypt would deliver a secret to the locked session.
                 self.magnify_reset_sticky();
                 self.views
                     .login
@@ -228,7 +223,6 @@ impl App {
             MenuAction::ToggleAlwaysOnTop => {}
             MenuAction::Settings => {
                 if let Some(uid) = self.active_user {
-                    // Close any open dropdown before the modal paints over it.
                     self.open_overlay = None;
 
                     let snap = SettingsSnapshot {
@@ -245,7 +239,6 @@ impl App {
                 return self.open_generator_history();
             }
             MenuAction::About => {
-                // Re-focus existing About window if already open.
                 if let Some(id) = self.about_window_id() {
                     return iced::window::gain_focus(id);
                 }
@@ -300,10 +293,9 @@ impl App {
     }
 
     /// Ask iced for the current mode and flip it. `Task::then` defers the
-    /// decision until the mode resolves — one message round-trip slower than
-    /// reading a local bool would be, imperceptible for a tray click. Iced
-    /// is the single source of truth, so we can't drift out of sync with
-    /// the OS-level window state. `Fullscreen` counts as visible.
+    /// decision until the mode resolves — one round-trip slower than reading
+    /// a local bool, but iced stays the single source of truth so we can't
+    /// drift from the OS-level window state. `Fullscreen` counts as visible.
     fn toggle_main_window_visibility(&mut self) -> Task<Message> {
         let id = self.main_window_id();
         iced::window::mode(id).then(move |mode| match mode {
@@ -317,10 +309,9 @@ impl App {
         })
     }
 
-    /// Lazily build the tray if needed. Returns `true` if a tray is available
-    /// after the call — callers that would hide the window to the tray must
-    /// check this and fall through to a normal minimize/close on `false`,
-    /// otherwise the window becomes unrecoverable (hidden with no tray icon).
+    /// Lazily build the tray. Callers hiding the window to the tray MUST
+    /// check the return: on `false`, fall through to a normal minimize/close,
+    /// otherwise the window becomes unrecoverable (hidden, no tray icon).
     fn ensure_tray(&mut self) -> bool {
         if self.tray.is_none() {
             self.tray = crate::services::tray::build();

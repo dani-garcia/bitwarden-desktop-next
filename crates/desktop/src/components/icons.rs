@@ -1,8 +1,6 @@
 // The generated `bootstrap_icons_generated.rs` below defines an `Icon`
-// constant per Bootstrap glyph; most are unused today. Suppressing at file
-// scope keeps the include site quiet without hand-annotating each constant.
-// Using `expect` over `allow` would require every constant to be genuinely
-// unused, which they aren't — many are referenced across views.
+// constant per Bootstrap glyph; most are unused. `expect` would require
+// every constant to be genuinely unused, but many are referenced.
 #![allow(dead_code)]
 
 use iced::{
@@ -10,7 +8,7 @@ use iced::{
     widget::{text, text_input},
 };
 
-/// Bootstrap Icons font, loaded in main.rs via `.font()`
+/// Bootstrap Icons font, loaded in main.rs via `.font()`.
 pub const FONT: Font = Font::new("bootstrap-icons");
 
 /// A typed icon identifier wrapping a Bootstrap Icons codepoint.
@@ -18,7 +16,6 @@ pub const FONT: Font = Font::new("bootstrap-icons");
 pub struct Icon(char);
 
 impl Icon {
-    /// Render this icon as an iced Element at the given size and color.
     pub fn render<'a, M: 'a, Theme: text::Catalog + 'a>(
         &self,
         size: f32,
@@ -30,7 +27,6 @@ impl Icon {
         text(self.0).font(FONT).size(size).color(color).into()
     }
 
-    /// Build a `text_input::Icon` for use with `TextInput::icon()`.
     pub fn input_icon(self, size: f32, side: text_input::Side) -> text_input::Icon<Font> {
         text_input::Icon {
             font: FONT,
@@ -49,13 +45,11 @@ impl Icon {
     }
 }
 
-// All icons + FONT_BYTES, auto-generated from the CSS at build time.
-// To update: replace assets/bootstrap-icons-*.css and *.ttf, update FONT_VERSION in build.rs.
+// Auto-generated from the CSS at build time. To update: replace
+// assets/bootstrap-icons-*.css and *.ttf, bump FONT_VERSION in build.rs.
 include!(concat!(env!("OUT_DIR"), "/bootstrap_icons_generated.rs"));
 
-// ---------------------------------------------------------------------------
-// Bitwarden Icons (bwi) font
-// ---------------------------------------------------------------------------
+// ── Bitwarden Icons (bwi) font ─────────────────────────────────────────────
 
 pub const BWI_FONT: Font = Font::new("bwi-font");
 

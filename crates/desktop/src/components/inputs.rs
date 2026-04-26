@@ -28,7 +28,7 @@ use crate::{
 
 /// Preconfigured `text_input` matching our floating-label look:
 /// transparent background + no border (the wrapping [`field_frame`] draws
-/// the border). Callers chain `.on_input`/`.on_submit`/`.secure` as needed.
+/// the border).
 pub fn bare_text_input<'a, M: Clone + 'a>(value: &'a str) -> TextInput<'a, M, AppTheme> {
     text_input("", value)
         .size(16)
@@ -46,9 +46,8 @@ pub fn bare_text_input<'a, M: Clone + 'a>(value: &'a str) -> TextInput<'a, M, Ap
 
 /// Stacked label + single-line truncated value. Read-only display for long
 /// unbroken strings (SSH keys, URIs, hashes, fingerprints) — a normal
-/// `text()` would either wrap on word boundaries (impossible on
-/// base64 / hex) or overflow the container. The full value should be
-/// reachable via a copy action placed alongside this field by the caller.
+/// `text()` would wrap on word boundaries or overflow the container. The
+/// caller should provide a copy action alongside.
 pub fn readonly_field_truncated<'a, M: 'a>(
     label: impl Into<String>,
     value: impl iced::widget::text::IntoFragment<'a>,
@@ -63,20 +62,15 @@ pub fn readonly_field_truncated<'a, M: 'a>(
             .ellipsis(Ellipsis::End),
     ]
     .spacing(2)
-    // Needed for ellipsis to actually kick in — without `Fill`, the text
-    // widget would be content-sized and iced would lay out the full
-    // un-truncated string instead of clipping it.
+    // `Fill` is required for ellipsis to kick in — without it the text
+    // widget is content-sized and lays out the full un-truncated string.
     .width(Fill)
     .into()
 }
 
 /// Wrap any content in the floating-label frame: a bordered container with
 /// a small label chip stacked on top of the border. The chip has a
-/// background matching the page, so the border visually breaks behind it.
-///
-/// `label` takes `impl Into<String>` so call sites can pass either a static
-/// `&str` literal or an owned `String` from [`crate::fl!`] — the frame
-/// owns the label text so its lifetime isn't tied to the returned Element.
+/// background matching the page so the border visually breaks behind it.
 pub fn field_frame<'a, M: 'a>(
     label: impl Into<String>,
     content: Element<'a, M, AppTheme>,
@@ -102,7 +96,6 @@ pub fn field_frame<'a, M: 'a>(
     .into()
 }
 
-/// Reusable labeled text input.
 pub fn text_field<'a, M>(
     label: impl Into<String>,
     value: &'a str,
@@ -116,9 +109,8 @@ where
 {
     let mut input = bare_text_input(value);
 
-    // Skipping `.on_input` leaves the text_input read-only (iced renders it
-    // as non-editable). We also drop `.on_submit` so Enter-spam during any
-    // in-flight task is ignored at the widget layer.
+    // Skipping `.on_input` leaves the text_input read-only. Dropping
+    // `.on_submit` ignores Enter-spam during in-flight tasks.
     if !disabled {
         input = input.on_input(on_input);
         if let Some(submit_msg) = on_submit {
@@ -129,14 +121,10 @@ where
     field_frame(label, input.into(), colors)
 }
 
-/// Number input with up/down chevron steppers stacked on the right edge —
-/// the keyboard handles arbitrary text input, the chevrons emit one
-/// `on_increment` / `on_decrement` per click. Caller is responsible for
-/// rejecting non-digit `on_input` values and for clamping the deltas.
-///
-/// Setting `disabled = true` strips both the `on_input` and the chevron
-/// `on_press` handlers so the field is fully read-only — used when a
-/// parent toggle (e.g. "include numbers") gates the field.
+/// Number input with up/down chevron steppers on the right edge. Caller
+/// is responsible for rejecting non-digit `on_input` values and clamping
+/// the deltas. `disabled = true` strips both `on_input` and the chevron
+/// `on_press` handlers.
 pub fn stepper_field<'a, M>(
     label: impl Into<String>,
     value: &'a str,
@@ -175,11 +163,9 @@ where
     field_frame(label, row_el.into(), colors)
 }
 
-/// Labeled single-select dropdown backed by iced's `pick_list`.
-///
-/// The inner `pick_list` draws its own border via `pick_list::Catalog`, so
-/// we null it out and let [`field_frame`] own the border — that's what makes
-/// the label chip cleanly "cut" the top edge.
+/// Labeled single-select dropdown backed by iced's `pick_list`. The inner
+/// `pick_list`'s border is nulled out so [`field_frame`] owns the border
+/// and the label chip can cut the top edge cleanly.
 pub fn select_field<'a, T, M>(
     label: impl Into<String>,
     selected: Option<T>,
@@ -207,16 +193,13 @@ where
     field_frame(label, picker.into(), colors)
 }
 
-/// Labeled searchable single-select backed by iced's `combo_box` — user
-/// types to filter the option list.
+/// Labeled searchable single-select backed by iced's `combo_box`.
 ///
-/// `combo_box::State<T>` has to stay on the parent struct (iced requires
-/// `&'a combo_box::State<T>` at render time and the options are loaded
-/// asynchronously), but the open/closed flag and caret direction live
-/// inside this Component. `on_close` is emitted when the combo_box loses
-/// focus so the parent can rebuild `combo_box::State` to clear the
-/// `value` field — iced exposes no public API to reset it otherwise, and
-/// leaving it populated would re-filter on the next open.
+/// `combo_box::State<T>` has to stay on the parent struct, but the
+/// open/closed flag and caret direction live inside this Component.
+/// `on_close` fires on focus loss so the parent can rebuild
+/// `combo_box::State` to clear `value` — iced exposes no public API to
+/// reset it, and leaving it populated would re-filter on the next open.
 pub fn search_select_field<'a, T, M>(
     state: &'a combo_box::State<T>,
     label: impl Into<String>,
@@ -329,8 +312,7 @@ pub fn multi_select_field<'a, M: Clone + 'a>(
     colors: &'a AppColors,
 ) -> Element<'a, M, AppTheme> {
     // Don't set a width on the DropDown — the overlay defaults to the
-    // trigger's width (see `drop_down.rs` layout). `Length::Fill` would
-    // stretch the overlay to the whole window.
+    // trigger's width. `Length::Fill` would stretch it to the whole window.
     let dd: Element<'a, M, AppTheme> = DropDown::new(trigger, panel, open)
         .alignment(crate::components::drop_down::Alignment::BelowLeft)
         .on_dismiss(on_dismiss)
@@ -342,19 +324,12 @@ pub fn multi_select_field<'a, M: Clone + 'a>(
 
 // ─── reveal_* : fields with an eye toggle ──────────────────────────────────
 //
-// `Component` is deprecation-tagged upstream, but the deprecation is
-// philosophical — the replacement is hand-rolling `Widget`, which for a
-// compound of `text_input` + button means reimplementing the bridge we
-// get here for free. Component is the right tool for widgets that genuinely
-// *should* own their transient state (whether a password is currently
-// visible has no meaning outside the widget). If it ever disappears
-// upstream we can swap in a hand-rolled `Widget`.
+// `Component` is deprecation-tagged upstream, but the replacement is
+// hand-rolling `Widget`, which for a compound of `text_input` + button
+// means reimplementing the bridge we get here for free. Component is the
+// right tool for widgets that genuinely should own their transient state.
 
 /// Build a password/hidden-value input with self-managed reveal state.
-///
-/// `label` is the floating chip. `value` is the current text. `on_input` is
-/// fired on every keystroke. `disabled=true` makes the text input read-only
-/// and the toggle inert.
 pub fn reveal_text_field<'a, Message>(
     label: impl Into<String>,
     value: &'a str,
@@ -376,10 +351,9 @@ where
     })
 }
 
-/// Variant of [`reveal_text_field`] that also fires `on_submit` when the user
-/// presses Enter inside the field. `id` lets the caller target the inner
-/// `text_input` with `widget::operation::focus(id)` — used by the login flows
-/// to put the cursor in the password / pin field as soon as the page is shown.
+/// Variant of [`reveal_text_field`] that fires `on_submit` on Enter. `id`
+/// lets the caller target the inner `text_input` via
+/// `widget::operation::focus(id)`.
 pub fn reveal_text_field_with_submit<'a, Message>(
     id: Option<iced::widget::Id>,
     label: impl Into<String>,
@@ -473,13 +447,10 @@ impl<'a, Message: Clone + 'a> Component<Message, AppTheme> for RevealTextField<'
     }
 }
 
-/// Read-only labeled field with a self-managed eye toggle.
-///
-/// Displays `value` as bullets by default; clicking the eye reveals the
-/// real text. Optional `on_copy` appends a copy icon next to the eye.
-/// Unlike [`reveal_text_field`], this renders static `text(...)` (not
-/// `text_input`) — intended for the detail pane where fields are not
-/// editable but still secret.
+/// Read-only labeled field with a self-managed eye toggle. Displays
+/// `value` as bullets by default; the eye reveals the real text. Unlike
+/// [`reveal_text_field`], this renders static `text(...)` — intended for
+/// the detail pane where fields are not editable but still secret.
 pub fn reveal_field<'a, Message>(
     label: impl Into<String>,
     value: &'a str,
@@ -530,8 +501,8 @@ impl<'a, Message: Clone + 'a> Component<Message, AppTheme> for RevealField<'a, M
     }
 
     fn view(&self, state: &RevealFieldState) -> Element<'_, RevealFieldEvent, AppTheme> {
-        // Match the bullet count to the real value's length (clamped) so the
-        // row width doesn't visibly jump when toggling.
+        // Match bullet count to the value's length (clamped) so the row
+        // width doesn't visibly jump when toggling.
         let display: String = if state.revealed {
             self.value.to_string()
         } else {

@@ -22,14 +22,11 @@ pub(super) struct Selection {
     pub(super) item: Option<usize>,
     pub(super) id: Option<SendId>,
     pub(super) form: Option<SendForm>,
-    /// Armed-delete state for the inline confirmation modal. Wrapped in a
-    /// `FadeInOut` so the modal animates in/out — call `.open()` to arm,
-    /// `.close()` to disarm.
+    /// Armed-delete state for the inline confirmation modal.
     pub(super) confirm_delete: FadeInOut,
-    /// Animates the bottom sheet (narrow-mode only) in and out. Same
-    /// pattern as the vault selection's `sheet_fade`: every form-setting
-    /// path calls `.open()` and `CloseFormPane` calls `.close()` ahead of
-    /// a delayed `clear()` so the outro keeps the form content alive.
+    /// Bottom-sheet (narrow-mode) in/out animation. Form-setting paths call
+    /// `.open()`; `CloseFormPane` calls `.close()` and schedules a delayed
+    /// `clear()` per the FadeInOut delayed-cleanup pattern.
     pub(super) sheet_fade: FadeInOut,
 }
 
@@ -39,16 +36,14 @@ impl Selection {
     }
 }
 
-/// Send item storage, per user. `all` is the full list from the (stub)
-/// SDK; `cached` is `all` with the current filter + search applied.
+/// `all` is the full list from the SDK; `cached` is `all` with the
+/// current filter + search applied.
 #[derive(Default)]
 pub(super) struct ItemCache {
     pub(super) all: Vec<Arc<SdkSendView>>,
     pub(super) cached: Vec<Arc<SdkSendView>>,
 }
 
-/// Ratio given to the form (right) pane the first time it's opened.
-/// `0.5` splits the screen evenly.
 const INITIAL_FORM_PANE_RATIO: f32 = 0.4;
 
 pub struct SendView {
@@ -95,7 +90,6 @@ impl SendView {
         self.recompute_filtered(uid, filter);
     }
 
-    /// Drop a user's cached send data on sign-out.
     pub fn remove_user_items(&mut self, uid: &UserId) {
         self.items.remove(uid);
     }

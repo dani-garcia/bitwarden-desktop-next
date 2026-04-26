@@ -18,11 +18,9 @@ use iced::{
 
 use crate::theme::RADIUS_LG;
 
-/// Drop shadow rendered behind every dropdown panel — gives popovers a
-/// "lifted off the page" feel without each call site rolling its own.
-/// Border radius matches all panels' [`RADIUS_LG`] so the shadow shape
-/// follows the panel's rounded corners; if a future panel needs a
-/// different radius, this consolidation breaks down and we'd parameterise.
+/// Drop shadow rendered behind every dropdown panel. Border radius matches
+/// [`RADIUS_LG`] so the shadow follows panels' rounded corners; if a future
+/// panel needs a different radius this would need parameterising.
 const PANEL_SHADOW: Shadow = Shadow {
     color: Color::from_rgba(0.0, 0.0, 0.0, 0.25),
     offset: Vector::new(0.0, 4.0),
@@ -130,19 +128,12 @@ where
     Message: Clone + 'a,
     Renderer: renderer::Renderer + 'a,
 {
-    /// Create a new [`DropDown`]
+    /// Create a new [`DropDown`].
     ///
-    /// The overlay element is wrapped in:
-    /// 1. A shadow-only container (radius [`RADIUS_LG`], drop shadow) so
-    ///    every dropdown reads as lifted off the page without each call
-    ///    site declaring its own shadow.
-    /// 2. [`iced::widget::opaque`] so clicks and hovers on the panel's
-    ///    empty space don't fall through to widgets beneath the open
-    ///    dropdown.
-    ///
-    /// Callers' panels should match the shadow radius (`RADIUS_LG`) so the
-    /// shadow follows their rounded corners — every existing consumer
-    /// already does.
+    /// The overlay is wrapped in a shadow container ([`RADIUS_LG`]) and
+    /// [`iced::widget::opaque`] so panel empty-space clicks don't fall
+    /// through. Caller panels should match the shadow radius so the
+    /// shadow follows their rounded corners.
     pub fn new<U, B>(underlay: U, overlay: B, expanded: bool) -> Self
     where
         U: Into<Element<'a, Message, Theme, Renderer>>,

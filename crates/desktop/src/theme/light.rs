@@ -2,7 +2,6 @@ use iced::Color;
 
 use super::AppColors;
 
-// Helper macro: hex color from literal bytes
 macro_rules! hex {
     ($r:literal, $g:literal, $b:literal) => {
         Color::from_rgb($r as f32 / 255.0, $g as f32 / 255.0, $b as f32 / 255.0)

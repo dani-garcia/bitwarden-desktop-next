@@ -50,7 +50,6 @@ pub struct MagnifyView {
     /// source `ItemCache`.
     pub(crate) results: Vec<Arc<CipherListView>>,
 
-    /// Index into `results` — the highlighted row.
     pub(crate) selected: usize,
 
     /// Render mode resolved at summon time. Default `Locked` so the first

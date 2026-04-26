@@ -1,19 +1,15 @@
 //! Compile-time embedded assets. All binary resources in one place.
 
-// Fonts
 pub const FONT_MEDIUM: &[u8] = include_bytes!("../../../assets/inter/static/Inter_18pt-Medium.ttf");
 pub const FONT_BOLD: &[u8] = include_bytes!("../../../assets/inter/static/Inter_18pt-Bold.ttf");
 pub const BWI_FONT: &[u8] = include_bytes!("../../../assets/bwi-font.ttf");
 
-// App icon
 pub const ICON_PNG: &[u8] = include_bytes!("../../../assets/icon.png");
 
 // Favicon fallback — rendered when a login cipher has no URI, the fetch is
-// still pending, or the icon service returned an error. Vendored from
-// `clients/apps/desktop/src/images/bwi-globe.png`.
+// still pending, or the icon service returned an error.
 pub const BWI_GLOBE_PNG: &[u8] = include_bytes!("../../../assets/bwi-globe.png");
 
-// SVGs
 pub const LOGO_WHITE: &[u8] = include_bytes!("../../../assets/logo-white.svg");
 pub const BG_LEFT: &[u8] = include_bytes!("../../../assets/bg-left.svg");
 pub const BG_RIGHT: &[u8] = include_bytes!("../../../assets/bg-right.svg");
@@ -24,9 +20,8 @@ pub const BITWARDEN_SHIELD: &[u8] = include_bytes!("../../../assets/bitwarden-sh
 pub const PASSWORD_MANAGER_LOGO: &[u8] =
     include_bytes!("../../../assets/password-manager-logo.svg");
 
-// Tray icon — vendored from `clients/apps/desktop/src/images/`. Per-OS so we
-// get the best asset (ICO on Windows for multi-res, template PNG on macOS for
-// menubar theming, regular PNG on Linux).
+// Tray icon — per-OS for the best asset (ICO on Windows for multi-res,
+// template PNG on macOS for menubar theming, regular PNG on Linux).
 #[cfg(target_os = "windows")]
 pub const TRAY_ICON: &[u8] = include_bytes!("../../../assets/tray/icon.ico");
 #[cfg(target_os = "macos")]

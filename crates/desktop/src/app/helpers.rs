@@ -36,9 +36,8 @@ impl App {
     }
 
     /// Repopulate the accounts snapshot + resync the native menu's enabled
-    /// state. Called from the handful of handlers that mutate SDK-side user
-    /// state (login, logout, lock, unlock, user switch, manager load) — the
-    /// invalidation set is identical for both, hence the shared entry point.
+    /// state. Called from handlers that mutate SDK-side user state (login,
+    /// logout, lock, unlock, user switch, manager load).
     pub(crate) fn refresh_accounts_cache(&mut self) {
         self.cache.accounts = self.client_manager.accounts();
 
@@ -47,26 +46,22 @@ impl App {
         }
     }
 
-    /// Assign a new screen plus the bookkeeping that always goes with a
-    /// screen transition: drop whatever overlay was open on the previous
-    /// screen, resync the accounts cache + native menu state. Callers do any
-    /// view-specific pre-work (e.g. `show_unlock_for`, `reset_to_email_entry`)
-    /// before calling this.
+    /// Assign a new screen plus standard transition bookkeeping: drop the
+    /// previous overlay, resync the accounts cache + native menu state.
+    /// Callers do view-specific pre-work (e.g. `show_unlock_for`) first.
     pub(crate) fn set_screen(&mut self, screen: Screen) {
         self.screen = screen;
         self.open_overlay = None;
         self.refresh_accounts_cache();
     }
 
-    /// Lift `VaultView::load_list_task` into a top-level `Task<Message>`.
-    /// Thin wrapper so handlers don't have to repeat the `.map(Message::vault)`
-    /// lift at each call site.
+    /// Lift `VaultView::load_list_task` into a top-level `Task<Message>`,
+    /// hiding the per-call-site `.map(Message::vault)`.
     pub(crate) fn load_vault_list_task(&self, uid: UserId) -> Task<Message> {
         crate::views::vault::VaultView::load_list_task(uid, &self.client_manager)
             .map(Message::vault)
     }
 
-    /// Mirror of `load_vault_list_task` for the Send screen.
     pub(crate) fn load_send_list_task(&self, uid: UserId) -> Task<Message> {
         crate::views::send::SendView::load_list_task(uid, &self.client_manager).map(Message::send)
     }
@@ -89,9 +84,8 @@ impl App {
 }
 
 // ── Platform-specific window settings ─────────────────────────────────────
-//
-// Used by `App::new` to configure the main window. `iced::daemon` doesn't take
-// a `.window(Settings)` — boot creates the window via `window::open`.
+// `iced::daemon` doesn't take a `.window(Settings)` — boot creates the window
+// via `window::open` and passes this through.
 
 pub(crate) fn main_window_platform_specific() -> iced::window::settings::PlatformSpecific {
     #[cfg(target_os = "windows")]

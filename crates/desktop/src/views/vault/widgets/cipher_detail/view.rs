@@ -124,9 +124,7 @@ fn header_row<'a>(
     .on_press(CipherDetailMessage::Close)
     .padding([1, 1]);
 
-    // No background fill on the header — it inherits the parent container's
-    // `card_bg`. A separate background here would mask the parent's rounded
-    // top corners (iced doesn't clip children to parent border radius).
+    // No background fill — would mask the parent's rounded top corners.
     let header =
         container(row![title, Space::new().width(Fill), close_btn].align_y(Alignment::Center))
             .padding([8, 20]);

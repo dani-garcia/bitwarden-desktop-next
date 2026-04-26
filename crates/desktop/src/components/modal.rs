@@ -1,17 +1,12 @@
 //! Centered modal overlay with a darkening backdrop.
 //!
-//! Iced-idiomatic pattern lifted from the upstream modal example:
-//! `stack![backdrop, centered(dialog)]`. The backdrop is a `mouse_area`
-//! so clicks outside the dialog fire `on_dismiss`. The dialog itself
-//! owns its own background and border radius (same rule as `bottom_sheet`:
-//! iced doesn't clip children to parent border radius).
+//! Pattern: `stack![backdrop, centered(dialog)]`. The dialog owns its own
+//! background and border radius (iced doesn't clip children to parent
+//! border radius). Compose at the App level so the overlay covers the
+//! sidebar and title bar.
 //!
-//! Compose at the App level — see CLAUDE.md's "Hoist window-level overlays"
-//! note — so the overlay covers the sidebar and title bar.
-//!
-//! Most callers should reach for [`dialog`] — it bundles the standard
-//! card shape (rounded corners + drop shadow + dismiss-on-backdrop-click)
-//! and only asks the caller for a body, a size, and a background token.
+//! Most callers should reach for [`dialog`] — it bundles the standard card
+//! shape (rounded corners + drop shadow + dismiss-on-backdrop-click).
 //! [`view`] is the lower-level primitive for non-card overlays.
 
 use iced::{
@@ -24,34 +19,26 @@ use crate::{
     theme::{AppColors, AppTheme, RADIUS_LG},
 };
 
-/// Scrim alpha at full open. Backdrop alpha is `progress * BACKDROP_ALPHA`
-/// so the scrim fades in/out alongside the dialog.
+/// Scrim alpha at full open, modulated by `progress`.
 const BACKDROP_ALPHA: f32 = 0.45;
 
-/// Drop-shadow alpha at full open — modulated by `progress` so the shadow
-/// fades together with the dialog rather than popping in.
+/// Drop-shadow alpha at full open, modulated by `progress`.
 const SHADOW_ALPHA: f32 = 0.45;
 
 /// Vertical slide distance (px) the dialog travels during the open
-/// transition. The dialog starts `SLIDE_OFFSET_PX` below its centered rest
-/// position and slides up; on close it slides back down. Implemented as a
-/// `column![Space(offset), card]` whose top spacer height tracks
-/// `(1 - progress) * SLIDE_OFFSET_PX` — iced has no transform widget, so
-/// this is the cleanest fake-translate.
+/// transition. Faked via a top-spacer column — iced has no transform widget.
 const SLIDE_OFFSET_PX: f32 = 24.0;
 
 /// Wrap `dialog` as a centered modal with a full-window darkened backdrop.
-/// Clicks on the exposed backdrop fire `on_dismiss`; clicks on the dialog
-/// itself are absorbed by z-order. The caller's `dialog` is responsible
-/// for its own background, padding, and border radius.
+/// Clicks on the exposed backdrop fire `on_dismiss`. The caller's `dialog`
+/// owns its own background, padding, and border radius.
 ///
 /// `progress` is the open animation phase, `0.0` (fully closed — caller
-/// shouldn't render at all) → `1.0` (fully open). Drives backdrop alpha
-/// and the slide-down origin. Pass `1.0` for non-animated callers.
+/// shouldn't render at all) → `1.0` (fully open). Pass `1.0` for
+/// non-animated callers.
 ///
-/// The whole overlay is wrapped in [`opaque`] so mouse moves and hovers
-/// can't reach widgets beneath — otherwise buttons below would still light
-/// up under the scrim, suggesting they're interactive.
+/// The whole overlay is wrapped in [`opaque`] so hovers can't reach widgets
+/// beneath the scrim and falsely light them up.
 pub fn view<'a, Message: Clone + 'a>(
     dialog: Element<'a, Message, AppTheme>,
     on_dismiss: Message,
@@ -68,14 +55,8 @@ pub fn view<'a, Message: Clone + 'a>(
         ))
         .on_press(on_dismiss);
 
-    // Slide origin: at progress=0 the dialog sits SLIDE_OFFSET_PX *below*
-    // its rest position, sliding up to 0 as it opens. The slide is faked
-    // with a top spacer inside the centered column — iced has no transform.
-    //
     // `opaque` on the dialog absorbs clicks on its empty/non-interactive
     // areas so they don't fall through to the backdrop's dismiss handler.
-    // The outer `opaque` further down still blocks events from reaching
-    // widgets behind the entire overlay.
     let slide_offset = (1.0 - progress) * SLIDE_OFFSET_PX;
     let slid = column![
         Space::new().height(Length::Fixed(slide_offset)),
@@ -88,15 +69,9 @@ pub fn view<'a, Message: Clone + 'a>(
 }
 
 /// Centered card-shaped modal — the default shape for app dialogs.
-///
-/// Bundles the shared visual treatment (rounded corners, drop shadow) and
-/// the standard backdrop+dismiss behavior. Each call site picks its own
-/// `bg` token via the closure so dialogs that look like content cards
-/// (`card_bg`) and dialogs that look like surfaces (`background`) can
-/// coexist without forcing a single palette.
-///
-/// `height: None` lets the dialog shrink to its content height — handy
-/// for confirmation dialogs whose size depends on the body text.
+/// Each call site picks its own `bg` token via the closure so dialogs that
+/// look like content cards (`card_bg`) and dialogs that look like surfaces
+/// (`background`) can coexist. `height: None` shrinks to content height.
 pub fn dialog<'a, M>(
     width: f32,
     height: Option<f32>,
@@ -130,11 +105,8 @@ where
 }
 
 /// Confirmation dialog with a title, body text, and primary/secondary
-/// button row (e.g. delete-this-item flows). Caller resolves its own
-/// fluent strings so the wording stays domain-specific.
-///
-/// Backdrop click + the cancel button both fire `on_cancel`. Width is
-/// fixed at 380 px and the dialog shrinks to its content height.
+/// button row. Backdrop click + cancel button both fire `on_cancel`. Width
+/// is fixed at 380 px; height shrinks to content.
 #[expect(
     clippy::too_many_arguments,
     reason = "explicit args read clearly at the call site; a struct here would be pure boilerplate"

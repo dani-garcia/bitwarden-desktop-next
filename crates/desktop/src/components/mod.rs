@@ -22,7 +22,6 @@ use iced::{
 
 use crate::theme::{AppTheme, RADIUS_LG};
 
-/// Horizontal separator line with border color and full width.
 pub fn separator_h<'a, M: 'a>() -> Element<'a, M, AppTheme> {
     rule::horizontal(1)
         .style(|theme: &AppTheme| rule::Style {
@@ -34,7 +33,6 @@ pub fn separator_h<'a, M: 'a>() -> Element<'a, M, AppTheme> {
         .into()
 }
 
-/// Vertical separator line with border color and full height.
 pub fn separator_v<'a, M: 'a>() -> Element<'a, M, AppTheme> {
     rule::vertical(1)
         .style(|theme: &AppTheme| rule::Style {
@@ -46,7 +44,6 @@ pub fn separator_v<'a, M: 'a>() -> Element<'a, M, AppTheme> {
         .into()
 }
 
-/// Card container with background color and rounded corners.
 pub fn styled_card<'a, M: 'a>(content: Element<'a, M, AppTheme>) -> Element<'a, M, AppTheme> {
     container(content)
         .padding([12, 16])
@@ -64,7 +61,6 @@ pub fn styled_card<'a, M: 'a>(content: Element<'a, M, AppTheme>) -> Element<'a, 
         .into()
 }
 
-/// Wraps a card element with bottom margin for section spacing.
 pub fn card_with_margin<'a, M: 'a>(card: Element<'a, M, AppTheme>) -> Element<'a, M, AppTheme> {
     container(card)
         .padding(Padding {

@@ -1,5 +1,3 @@
-//! `SendView::update` dispatch + per-variant handlers + filter helpers.
-
 use std::sync::Arc;
 
 use bitwarden_send::{SendId, SendType, SendView as SdkSendView};

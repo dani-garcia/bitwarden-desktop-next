@@ -48,8 +48,8 @@ pub static LANGUAGE_LOADER: LazyLock<FluentLanguageLoader> = LazyLock::new(|| {
     loader
 });
 
-/// Select the OS-preferred language from the embedded set, falling back to the
-/// loader's fallback language when no match exists. Call once at app startup.
+/// Select the OS-preferred language, falling back to the loader's fallback
+/// when no match exists. Call once at app startup.
 pub fn init() {
     let requested = DesktopLanguageRequester::requested_languages();
     if let Err(e) = i18n_embed::select(&*LANGUAGE_LOADER, &Localizations, &requested) {
@@ -57,11 +57,9 @@ pub fn init() {
     }
 }
 
-/// Switch to a specific language. Call from a message handler; iced re-renders
-/// on the next frame and every `fl!()` call picks up the new translation.
-///
-/// Falls back to English (with a warning log) if the requested language has no
-/// matching `.ftl` file under `assets/i18n/`.
+/// Switch to a specific language. iced re-renders on the next frame and every
+/// `fl!()` call picks up the new translation. Falls back to English (with a
+/// warning) if no matching `.ftl` file exists under `assets/i18n/`.
 pub fn set_language(lang: LanguageIdentifier) {
     if let Err(e) = i18n_embed::select(
         &*LANGUAGE_LOADER,
@@ -72,10 +70,9 @@ pub fn set_language(lang: LanguageIdentifier) {
     }
 }
 
-/// Languages with at least one `.ftl` file under `assets/i18n/`. Useful for
-/// populating a language picker. The list is computed from the embedded
-/// assets, so dropping a new `assets/i18n/<tag>/` directory is enough to
-/// surface a new language in the UI — no code changes.
+/// Languages with at least one `.ftl` file under `assets/i18n/`. Computed
+/// from the embedded assets, so a new `assets/i18n/<tag>/` directory surfaces
+/// in the UI without code changes.
 pub fn available_languages() -> Vec<LanguageIdentifier> {
     LANGUAGE_LOADER
         .available_languages(&Localizations)
@@ -83,11 +80,9 @@ pub fn available_languages() -> Vec<LanguageIdentifier> {
 }
 
 /// Human-readable label for a language tag, shown in the settings language
-/// picker. All native names live in the English FTL file under
-/// `language-name-<tag>` keys (marked "do not translate") — they always
-/// render in their own script regardless of the active locale. Falls back to
-/// the raw tag when no entry exists so a new locale still appears in the
-/// picker until someone adds its name to the English file.
+/// picker. Native names live in the English FTL under `language-name-<tag>`
+/// keys (marked "do not translate") so they render in their own script
+/// regardless of the active locale. Falls back to the raw tag when missing.
 pub fn language_label(tag: &str) -> String {
     let key = format!("language-name-{tag}");
     if LANGUAGE_LOADER.has(&key) {
@@ -97,10 +92,9 @@ pub fn language_label(tag: &str) -> String {
     }
 }
 
-/// Runtime key lookup. Prefer the [`fl!`][crate::fl] macro when the key is a
-/// literal — it validates the key against the `.ftl` files at compile time.
-/// Use this only when the key is known at runtime (e.g. menu labels stored in
-/// a `const` table that can't call the macro).
+/// Runtime key lookup. Prefer [`fl!`][crate::fl] for literal keys (compile-
+/// time-validated against the `.ftl` files). Use this only for keys known at
+/// runtime (e.g. menu labels in a `const` table that can't call the macro).
 pub fn lookup(key: &str) -> String {
     LANGUAGE_LOADER.get(key)
 }

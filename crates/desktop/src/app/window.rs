@@ -1,16 +1,12 @@
-//! Per-window metadata stored on `App`. Separate from `message.rs` because
-//! these types carry state, not messages — `WindowInfo` lives in a map
-//! keyed by `iced::window::Id` and is mutated on resize / maximize /
-//! fullscreen transitions.
+//! Per-window metadata stored on `App`, keyed by `iced::window::Id` and
+//! mutated on resize / maximize / fullscreen transitions.
 
-/// Per-window metadata. Keyed by `iced::window::Id` in a `HashMap` on `App`.
 #[derive(Debug)]
 pub struct WindowInfo {
     pub kind: WindowKind,
     pub fullscreen: bool,
     pub maximized: bool,
-    /// Last reported logical size. Initialized from `window::Settings.size`
-    /// at creation; updated on `window::Event::Resized`.
+    /// Last reported logical size. Updated on `window::Event::Resized`.
     pub size: iced::Size,
 }
 
@@ -25,13 +21,11 @@ impl WindowInfo {
     }
 }
 
-/// Discriminant for each kind of window the app can have open.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WindowKind {
     Main,
     About,
-    /// Magnify launcher — borderless transparent secondary window summoned
-    /// by the global hotkey. Kept alive across summons after the first
-    /// hotkey press; its visibility is toggled via `window::Mode::Hidden`.
+    /// Borderless transparent launcher summoned by the global hotkey. Kept
+    /// alive across summons; visibility toggles via `window::Mode::Hidden`.
     Magnify,
 }

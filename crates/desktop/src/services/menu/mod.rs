@@ -10,18 +10,18 @@ use tokio::sync::broadcast;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ShortcutKey {
-    Char(char), // lowercase letter or symbol
-    F(u8),      // F1..F12
+    Char(char),
+    F(u8),
 }
 
 #[derive(Clone, Copy)]
 pub struct Shortcut {
-    pub ctrl_cmd: bool, // Ctrl on Win/Linux, Cmd on macOS
+    /// Ctrl on Win/Linux, Cmd on macOS.
+    pub ctrl_cmd: bool,
     pub shift: bool,
     pub key: ShortcutKey,
 }
 
-/// Ctrl/Cmd + key
 const fn cmd(key: char) -> Shortcut {
     Shortcut {
         ctrl_cmd: true,
@@ -30,7 +30,6 @@ const fn cmd(key: char) -> Shortcut {
     }
 }
 
-/// Ctrl/Cmd + Shift + key
 const fn cmd_shift(key: char) -> Shortcut {
     Shortcut {
         ctrl_cmd: true,
@@ -39,7 +38,6 @@ const fn cmd_shift(key: char) -> Shortcut {
     }
 }
 
-/// Function key alone
 const fn fkey(n: u8) -> Shortcut {
     Shortcut {
         ctrl_cmd: false,
@@ -78,12 +76,10 @@ impl Shortcut {
         s
     }
 
-    /// Convert to a muda `Accelerator` for native menu display.
     pub fn to_accelerator(self) -> Option<muda::accelerator::Accelerator> {
         self.display().parse().ok()
     }
 
-    /// Returns true if an iced keyboard event matches this shortcut.
     pub fn matches(&self, key: &iced::keyboard::Key, modifiers: iced::keyboard::Modifiers) -> bool {
         if modifiers.command() != self.ctrl_cmd {
             return false;
@@ -125,7 +121,6 @@ impl Shortcut {
 // Enabled conditions
 // ---------------------------------------------------------------------------
 
-/// Runtime state that determines which menu items are enabled.
 #[derive(Clone, Debug)]
 pub struct MenuState {
     pub is_locked: bool,
@@ -143,7 +138,6 @@ impl Default for MenuState {
     }
 }
 
-/// Condition that determines whether a menu item is enabled.
 #[derive(Clone, Copy)]
 pub enum EnabledWhen {
     Always,
@@ -167,7 +161,6 @@ impl EnabledWhen {
 // Actions
 // ---------------------------------------------------------------------------
 
-/// Identifies an actionable menu command.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MenuAction {
     Quit,
@@ -203,7 +196,6 @@ pub struct MenuEntry {
     pub literal: bool,
 }
 
-/// Separator constant.
 const SEP: MenuEntry = MenuEntry {
     label: "",
     shortcut: None,
@@ -213,7 +205,7 @@ const SEP: MenuEntry = MenuEntry {
     literal: false,
 };
 
-/// Start building a menu entry. `label` is a Fluent message ID.
+/// `label` is a Fluent message ID.
 #[allow(non_snake_case)]
 const fn E(label: &'static str) -> MenuEntry {
     MenuEntry {
@@ -226,9 +218,8 @@ const fn E(label: &'static str) -> MenuEntry {
     }
 }
 
-/// Start building a menu entry with a **literal** label — rendered verbatim,
-/// no Fluent lookup. Use for brand names and platform names that shouldn't
-/// be translated (Chrome, Firefox, iOS, Android, …).
+/// **Literal** label — rendered verbatim, no Fluent lookup. Use for brand /
+/// platform names that shouldn't be translated (Chrome, Firefox, iOS, …).
 #[allow(non_snake_case)]
 const fn L(label: &'static str) -> MenuEntry {
     MenuEntry {
@@ -285,8 +276,6 @@ impl MenuEntry {
         self.shortcut.map(|s| s.display())
     }
 
-    /// Display string for this entry — either the literal label or the
-    /// resolved Fluent translation.
     pub fn display_label(&self) -> String {
         if self.literal {
             self.label.to_string()
@@ -303,11 +292,9 @@ impl MenuEntry {
 use EnabledWhen::*;
 use MenuAction::*;
 
-// Menu labels are Fluent message IDs (e.g. "menu-file-new-login"), resolved at
-// render time via `crate::services::i18n::lookup()`. Brand names and social/platform
-// names are stored as plain strings because they don't need translation.
-// Unlike `fl!()`, these keys aren't compile-time-checked against the .ftl —
-// the test below in `tests/menu_labels.rs` validates them at test time.
+// Menu labels are Fluent message IDs resolved via `i18n::lookup()`. Brand /
+// platform names are plain strings (no translation). Unlike `fl!()`, these
+// keys aren't compile-time-checked — `tests/menu_labels.rs` validates them.
 pub const MENUS: &[(&str, &[MenuEntry])] = &[
     (
         "menu-file",
@@ -330,7 +317,7 @@ pub const MENUS: &[(&str, &[MenuEntry])] = &[
                 .key(cmd(','))
                 .when(Unlocked)
                 .action(Settings),
-            // Lock/Log out submenus: dynamically populated with account emails at runtime
+            // Dynamically populated with account emails at runtime.
             E("menu-file-lock-vault").when(HasLockable).sub(&[]),
             E("menu-file-lock-all-vaults")
                 .key(cmd('l'))
@@ -417,7 +404,6 @@ pub const MENUS: &[(&str, &[MenuEntry])] = &[
             E("menu-help-bug"),
             E("menu-help-legal").sub(&[E("menu-help-legal-tos"), E("menu-help-legal-privacy")]),
             SEP,
-            // Social platform names: brand names, not localized — see `L()`
             E("menu-help-follow").sub(&[
                 L("Blog"),
                 L("Twitter"),
@@ -428,7 +414,6 @@ pub const MENUS: &[(&str, &[MenuEntry])] = &[
             SEP,
             E("menu-help-web-vault"),
             SEP,
-            // Mobile / browser names: not localized — see `L()` constructor
             E("menu-help-mobile-app").sub(&[L("iOS"), L("Android")]),
             E("menu-help-browser-extension").sub(&[
                 L("Chrome"),
@@ -449,11 +434,9 @@ pub const MENUS: &[(&str, &[MenuEntry])] = &[
 // Event forwarding (push callback → broadcast → iced subscription)
 // ---------------------------------------------------------------------------
 
-/// Broadcast fan-out for muda events. Installed once at startup by
-/// [`install_event_handler`]; every `MenuEvent` (from the native app menu
-/// and the tray context menu — muda shares one receiver for both) is pushed
-/// into this channel. [`muda_event_stream`] calls `.subscribe()` to get a
-/// fresh receiver per subscription instance.
+/// Broadcast fan-out for muda events. Every `MenuEvent` (from the native app
+/// menu and the tray context menu — muda shares one receiver for both) is
+/// pushed into this channel.
 static MUDA_EVENTS: OnceLock<broadcast::Receiver<muda::MenuEvent>> = OnceLock::new();
 
 /// Register muda's global event handler. Call once at startup, before any
@@ -469,13 +452,7 @@ pub fn install_event_handler() {
 }
 
 /// Iced-compatible stream of [`muda::MenuEvent`] values, one per muda-managed
-/// menu click. Subscribes to the static broadcast channel populated by the
-/// handler installed in [`install_event_handler`].
-///
-/// Use as a `fn` pointer with [`iced::Subscription::run`]; iced hashes the
-/// function identity so returning this across ticks keeps the same receiver
-/// alive. When iced drops the subscription the receiver drops cleanly — no
-/// stranded threads or stuck blocking calls.
+/// menu click. Use as a `fn` pointer with [`iced::Subscription::run`].
 pub fn muda_event_stream() -> impl Stream<Item = muda::MenuEvent> {
     use iced::futures::channel::mpsc;
     iced::stream::channel(16, |mut out: mpsc::Sender<_>| async move {
@@ -503,7 +480,6 @@ pub fn muda_event_stream() -> impl Stream<Item = muda::MenuEvent> {
 // Shortcut → action lookup (for keyboard handling)
 // ---------------------------------------------------------------------------
 
-/// Find the MenuAction for a keyboard event, checking all menus and submenus.
 pub fn find_shortcut_action(
     key: &iced::keyboard::Key,
     modifiers: iced::keyboard::Modifiers,
@@ -546,8 +522,6 @@ fn find_in_entries(
 
 use std::collections::HashMap;
 
-/// Holds the muda menu state: action mapping for event dispatch,
-/// and item handles for enabled-state sync.
 pub struct NativeMenuHandle {
     pub actions: HashMap<muda::MenuId, MenuAction>,
     pub items: Vec<(MudaMenuItem, EnabledWhen)>,
@@ -556,13 +530,12 @@ pub struct NativeMenuHandle {
 impl NativeMenuHandle {
     /// Resolve a muda `MenuId` to a `MenuAction` if it belongs to the native
     /// app menu. Returns `None` for unrelated ids (e.g. tray menu events).
-    /// The caller is responsible for draining `muda::MenuEvent::receiver()` —
-    /// a global singleton shared with the tray menu — and dispatching by id.
+    /// The caller drains `muda::MenuEvent::receiver()` — a global singleton
+    /// shared with the tray menu — and dispatches by id.
     pub fn resolve(&self, id: &muda::MenuId) -> Option<MenuAction> {
         self.actions.get(id).copied()
     }
 
-    /// Sync enabled states of native menu items to match current app state.
     pub fn sync_enabled(&self, state: &MenuState) {
         for (item, when) in &self.items {
             item.set_enabled(when.check(state));
@@ -570,8 +543,7 @@ impl NativeMenuHandle {
     }
 }
 
-/// Build and attach the native menu. Returns a handle for event dispatch
-/// and state sync, or None if native menu is not enabled.
+/// Returns `None` if native menu is not enabled.
 pub fn attach_menu(raw_id: u64) -> Option<NativeMenuHandle> {
     if !should_use_native_title_bar() {
         return None;

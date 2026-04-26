@@ -10,8 +10,7 @@ use crate::{
 
 /// Shared builder for `button::Style`. Centralizes `shadow: Shadow::default()`
 /// and `snap: false` — the latter is a mandatory field whose omission produces
-/// a confusing compile error pointing at the struct literal instead of the
-/// missing field.
+/// a confusing compile error pointing at the struct literal.
 fn style(bg: Color, text_color: Color, border: Border) -> button::Style {
     button::Style {
         background: Some(Background::Color(bg)),
@@ -23,8 +22,6 @@ fn style(bg: Color, text_color: Color, border: Border) -> button::Style {
 }
 
 /// Filled primary action button — blue bg, dark text, pill shape.
-///
-/// Returns a `Button` so callers can chain `.on_press()`, `.width()`, `.padding()`, etc.
 pub fn primary<'a, M: 'a>(content: impl Into<Element<'a, M, AppTheme>>) -> Button<'a, M, AppTheme> {
     button(content).style(|theme: &AppTheme, status| {
         let bg = match status {
@@ -59,13 +56,8 @@ pub fn secondary<'a, M: 'a>(
     })
 }
 
-/// Transparent button with hover highlight.
-/// Use for sidebar items, icon actions, menu items, etc.
-///
-/// - `is_active`: whether to show the active/selected background
-/// - `active_bg`: background color when active (e.g. `colors.sidebar_selected`)
-/// - `hover_bg`: background color on hover (e.g. `colors.item_hover` or `colors.nav_item_hover`)
-/// - `radius`: border radius
+/// Transparent button with hover highlight, used for sidebar items, icon
+/// actions, menu items, etc.
 pub fn ghost<'a, M: 'a>(
     content: impl Into<Element<'a, M, AppTheme>>,
     is_active: bool,
@@ -91,7 +83,6 @@ pub fn ghost<'a, M: 'a>(
 }
 
 /// Small icon-only ghost button (transparent, hover highlight, small radius).
-/// Shorthand for `ghost()` with no active state and content-area hover color.
 pub fn ghost_icon<'a, M: 'a>(
     content: impl Into<Element<'a, M, AppTheme>>,
     hover_bg: Color,
@@ -99,8 +90,8 @@ pub fn ghost_icon<'a, M: 'a>(
     ghost(content, false, Color::TRANSPARENT, hover_bg, RADIUS_SM)
 }
 
-/// Fully transparent button with no hover effect.
-/// Use for composite clickable areas (e.g. account switcher avatar).
+/// Fully transparent button with no hover effect; used for composite
+/// clickable areas (e.g. account switcher avatar).
 pub fn transparent<'a, M: 'a>(
     content: impl Into<Element<'a, M, AppTheme>>,
 ) -> Button<'a, M, AppTheme> {
@@ -113,8 +104,8 @@ pub fn transparent<'a, M: 'a>(
     })
 }
 
-/// Small 18 px icon button with ghost-style hover. Shorthand for the
-/// copy / launch / delete icon buttons that appear in list rows and fields.
+/// Small 18 px icon button with ghost-style hover; used for the copy /
+/// launch / delete icon buttons in list rows and fields.
 pub fn icon_button<'a, M: 'a + Clone>(
     icon: icons::BwiIcon,
     msg: M,

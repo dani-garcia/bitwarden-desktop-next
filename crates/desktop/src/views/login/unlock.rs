@@ -16,13 +16,10 @@ use super::{LoginMessage, layout};
 /// the same time, and `LoginView::auto_focus_task` only needs to find one.
 pub const UNLOCK_FIELD_ID: widget::Id = widget::Id::new("unlock-field");
 
-/// Renders the full center content for the unlock screen:
-/// lock icon, title, email, and the card with method-specific controls.
-///
 /// When `in_progress` is true (the unlock task is in flight), the input is
 /// read-only, the primary button is replaced by a spinner, and the alternate
-/// unlock methods + Log out button are hidden — same visual weight as the
-/// button so the card height doesn't jump.
+/// unlock methods + Log out button stay visible but inert — same visual
+/// weight as the button so the card height doesn't jump.
 pub fn view<'a>(
     method: UnlockMethod,
     alternatives: &[UnlockMethod],

@@ -1,28 +1,25 @@
 //! Cursor-position monitor lookup for multi-monitor window placement.
 //!
 //! Used by the Magnify launcher to summon on whichever screen the user is
-//! currently focused on rather than always on the primary monitor. The
-//! lookup is best-effort and platform-specific; today **every platform**
-//! returns `None` and the caller falls back to `Position::Centered`.
+//! currently focused on. Today **every platform** returns `None` and the
+//! caller falls back to `Position::Centered`.
 //!
-//! TODO: implement per platform. The Windows path (sketched out below in
-//! a commented block) needs `GetCursorPos` + `MonitorFromPoint` +
-//! `GetMonitorInfoW` + `GetDpiForMonitor` via `windows-sys`. macOS would
-//! use `NSEvent::mouseLocation` + `NSScreen::screens()`; Linux X11 needs
-//! `XQueryPointer` + Xinerama, and Wayland needs the input-method
-//! protocol or a desktop-environment-specific shim. See
-//! [docs/todo.md](../../../docs/todo.md) → "Magnify launcher polish →
-//! Cursor-monitor centering on summon" for the tracking entry.
+//! TODO: implement per platform. Windows uses `GetCursorPos` +
+//! `MonitorFromPoint` + `GetMonitorInfoW` + `GetDpiForMonitor` via
+//! `windows-sys` (sketched below). macOS uses `NSEvent::mouseLocation` +
+//! `NSScreen::screens()`. Linux X11 uses `XQueryPointer` + Xinerama; Wayland
+//! needs the input-method protocol or a desktop-environment-specific shim.
+//! See [docs/todo.md] → "Magnify launcher polish → Cursor-monitor centering
+//! on summon".
 //!
-//! Logical pixels here mean the value iced expects in
+//! Logical pixels here are what iced expects in
 //! [`iced::window::Position::Specific`] / [`iced::window::move_to`] —
 //! physical pixels divided by the source monitor's DPI scale factor.
 
-/// Center of the work area (taskbar-excluded) of whichever monitor the
-/// cursor is currently over, in **logical** pixels suitable for
-/// [`iced::window::Position::Specific`] / [`iced::window::move_to`].
-/// Returns `None` if the platform query fails or the platform is
-/// unsupported — callers should fall back to `Position::Centered`.
+/// Center of the work area (taskbar-excluded) of whichever monitor the cursor
+/// is currently over, in **logical** pixels. Returns `None` if the platform
+/// query fails or the platform is unsupported — callers should fall back to
+/// `Position::Centered`.
 pub fn cursor_monitor_logical_center() -> Option<(f32, f32)> {
     None
 }

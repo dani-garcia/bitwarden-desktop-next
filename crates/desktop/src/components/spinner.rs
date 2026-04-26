@@ -1,11 +1,7 @@
 //! Self-animating indeterminate spinner.
 //!
-//! Eight dots arranged in a ring, with opacity trailing the rotating "head" to
-//! give the illusion of smooth motion. Drives its own redraws — same pattern as
-//! the toast overlay in [`components::toast`] — by intercepting
-//! [`window::Event::RedrawRequested`] in `update` and calling
-//! `shell.request_redraw()` to ask for the next frame. No app-level
-//! subscription or dummy message is involved.
+//! Drives its own redraws by intercepting [`window::Event::RedrawRequested`]
+//! and calling `shell.request_redraw()` — no app-level subscription needed.
 
 use std::time::Instant;
 
@@ -89,8 +85,8 @@ impl<Message> Widget<Message, AppTheme, Renderer> for Spinner {
         let rotation = self.start.elapsed().as_secs_f32() * REV_PER_SEC * std::f32::consts::TAU;
 
         for i in 0..N_DOTS {
-            // i = 0 is the "head" (brightest); each subsequent dot trails
-            // it counter-clockwise with a dimmer alpha.
+            // i = 0 is the "head" (brightest); subsequent dots trail
+            // counter-clockwise with progressively lower alpha.
             let angle = rotation - (i as f32 / N_DOTS as f32) * std::f32::consts::TAU;
             let alpha = 1.0 - (i as f32 / N_DOTS as f32) * 0.85;
             let x = cx + angle.cos() * ring_radius - dot_size / 2.0;

@@ -59,9 +59,7 @@ pub enum VaultMessage {
     ConfirmDeleteSelected,
     /// User dismissed the delete modal (Cancel, backdrop click, etc.).
     CancelDeleteSelected,
-    /// Fires when the async `ClientManager::list_ciphers` task completes.
     ListLoaded(UserId, Result<Vec<Arc<CipherListView>>, String>),
-    /// Fires when the async `ClientManager::full_cipher` task completes.
     DetailLoaded(UserId, CipherId, Result<Box<CipherView>, String>),
     /// Fires once the cipher form's option lists (folders, organizations,
     /// collections) are all ready. Bundled into a single message because the
@@ -72,9 +70,7 @@ pub enum VaultMessage {
     /// `FolderOption` is used (not `FolderView`) because `FolderView` isn't
     /// `Clone` and `VaultMessage` must be.
     FormOptionsLoaded(UserId, FormOptions),
-    /// Fires when `ClientManager::save_cipher` finishes.
     SaveCompleted(UserId, Result<Box<CipherView>, String>),
-    /// Fires when `ClientManager::soft_delete_cipher` finishes.
     DeleteCompleted(UserId, CipherId, Result<(), String>),
     /// Internal: dispatched on a one-frame delay from screen-mount handlers
     /// (post-unlock, switch-user-already-unlocked) so the focus operation
@@ -164,7 +160,6 @@ pub enum VaultEvent {
     /// `App::handle_account_switcher_event` so login, vault, and send share
     /// one dispatch site.
     AccountSwitcher(AccountSwitcherEvent),
-    /// VaultView wants to show a cross-cutting toast notification.
     ToastRequested(Toast),
     /// A save completed successfully. App pushes a success toast and kicks
     /// off a list reload so the sidebar reflects renames / ownership moves.

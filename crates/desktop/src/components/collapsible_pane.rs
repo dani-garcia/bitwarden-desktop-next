@@ -32,38 +32,32 @@ use iced::{
 
 use crate::{components::separator_v, theme::AppTheme};
 
-/// Which side of the split each pane occupies. Used internally as the
-/// pane_grid `T` so the view function can route left/right content.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Side {
     Left,
     Right,
 }
 
-/// Split ratio that fully collapses the right pane — list takes 100 %,
-/// form 0 %. `1.0` is iced's own "all-left" end of the 0..1 range.
+/// Split ratio that fully collapses the right pane — `1.0` is iced's
+/// "all-left" end of the 0..1 range.
 const COLLAPSED: f32 = 1.0;
 
-/// Above this ratio, we treat a user drag as a "close by dragging" and
-/// don't persist it as the next open width. Below: remember as the
-/// user's preferred width.
+/// Above this ratio, treat a user drag as "close by dragging" and don't
+/// persist it as the next open width.
 const REMEMBER_UP_TO: f32 = 0.98;
 
 pub struct CollapsiblePane {
     state: pane_grid::State<Side>,
     split: Split,
-    /// Last non-collapsed ratio the user settled on via the drag handle,
-    /// or the initial open width if they've never dragged. Restored on
-    /// every `open()` so a wider/narrower preference sticks across
-    /// open/close cycles.
+    /// Last non-collapsed ratio the user settled on, restored on every
+    /// `open()` so the preference sticks across open/close cycles.
     open_ratio: f32,
     is_open: bool,
 }
 
 impl CollapsiblePane {
-    /// Construct with the given initial open width (0..1). `0.5` is an
-    /// even split. Starts collapsed so the left pane renders full-width
-    /// until someone calls `open()`.
+    /// Construct with the given initial open width (0..1). Starts
+    /// collapsed; the left pane renders full-width until `open()`.
     pub fn new(initial_open_ratio: f32) -> Self {
         let (mut state, left) = pane_grid::State::new(Side::Left);
         let (_right, split) = state
@@ -91,11 +85,10 @@ impl CollapsiblePane {
         self.is_open = false;
     }
 
-    /// Persist the ratio from a user-initiated drag. Call from the
-    /// `on_resize` message handler. Drags close to the collapsed end are
-    /// applied but not remembered — otherwise a user who dragged the
-    /// handle all the way closed would get a zero-width pane on next
-    /// open.
+    /// Persist the ratio from a user-initiated drag. Drags close to the
+    /// collapsed end are applied but not remembered — otherwise dragging
+    /// the handle all the way closed would yield a zero-width pane on
+    /// next open.
     pub fn set_ratio(&mut self, ratio: f32) {
         self.state.resize(self.split, ratio);
         if ratio < REMEMBER_UP_TO {
@@ -121,11 +114,9 @@ pub fn view<'a, M: 'a + Clone>(
     on_resize: impl Fn(ResizeEvent) -> M + 'a,
 ) -> Element<'a, M, AppTheme> {
     // `PaneGrid::new` takes `impl Fn` and calls it once per pane at
-    // construction (see `widget/src/pane_grid.rs` in the pinned iced
-    // rev, `pub fn new`). We have the Elements already built, so stash
-    // them in RefCell slots and `take()` each one on the corresponding
-    // pane. The slots make the closure compatible with the required
-    // `Fn` bound without needing to rebuild the content inside.
+    // construction. We have the Elements already built, so stash them in
+    // RefCell slots and `take()` each one — keeps the closure `Fn`-safe
+    // without rebuilding content inside.
     let left_slot = RefCell::new(Some(left));
     let right_slot = RefCell::new(right);
 
@@ -148,8 +139,8 @@ pub fn view<'a, M: 'a + Clone>(
     })
     .on_resize(6, on_resize)
     .spacing(1)
-    // min_size must be 0 so the right pane can genuinely collapse to
-    // zero width. iced's default 50 would clamp us.
+    // min_size must be 0 so the right pane can genuinely collapse to zero
+    // width — iced's default 50 would clamp us.
     .min_size(0)
     .into()
 }

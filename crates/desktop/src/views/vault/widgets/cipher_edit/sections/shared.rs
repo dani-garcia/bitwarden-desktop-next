@@ -48,7 +48,6 @@ pub(in super::super) fn item_details_card<'a>(
         colors,
     ));
 
-    // Favorite + reprompt toggles in a row so the card stays compact.
     let favorite_checkbox = checkbox(form.modified.favorite)
         .label(fl!("form-favorite"))
         .on_toggle(|_| CipherEditMessage::FavoriteToggled)
@@ -60,7 +59,6 @@ pub(in super::super) fn item_details_card<'a>(
     // Folder dropdown (personal vault only — orgs own their own folder concept)
     rows.push(selectors::folder_selector(form, colors));
 
-    // Organization dropdown (if user belongs to any orgs)
     if !form.organizations.is_empty() {
         rows.push(selectors::org_selector(form, colors));
 

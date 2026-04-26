@@ -1,6 +1,3 @@
-//! `SendView::view` + `sheet_view` / `modal_view` — parallel to the vault
-//! view's rendering pattern.
-
 use std::sync::Arc;
 
 use bitwarden_send::SendView as SdkSendView;

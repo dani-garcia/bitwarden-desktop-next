@@ -1,7 +1,6 @@
-//! Sidebar message routing. Section clicks may transition between
-//! `Screen::Vault` and `Screen::Send`; filter changes are stored on
-//! `self.sidebar` and pushed down to the affected view via its
-//! `apply_filter` method.
+//! Sidebar message routing. Section clicks may flip between `Screen::Vault`
+//! and `Screen::Send`; filter changes are stored on `self.sidebar` and pushed
+//! down via the affected view's `apply_filter`.
 
 use iced::Task;
 
@@ -39,15 +38,13 @@ impl App {
                     self.switch_to_send()
                 }
                 NavSection::Generator => {
-                    // Generator is a modal, not a screen — leave
-                    // `active_section` pointing at the underlying screen
-                    // so the sidebar highlight tracks where the user
-                    // returns when the modal closes.
+                    // Modal, not a screen — leave `active_section` pointing
+                    // at the underlying screen so the highlight tracks where
+                    // the user returns when the modal closes.
                     self.open_generator_modal()
                 }
                 NavSection::Import | NavSection::Export => {
-                    // Placeholders — no screen switch until those views
-                    // are implemented. Only the highlight changes.
+                    // Placeholders — only the highlight changes.
                     self.sidebar.active_section = section;
                     Task::none()
                 }
@@ -71,16 +68,15 @@ impl App {
         }
     }
 
-    /// Transition to the Vault screen and focus the search input. On a fresh
-    /// view change the search query is cleared (entering a new list); on a
-    /// same-screen call (filter switch) the query is preserved so the user
-    /// can refine inside the new filter.
+    /// Transition to the Vault screen and focus the search input. Same-screen
+    /// calls (filter switch) preserve the query so the user can refine inside
+    /// the new filter; cross-screen calls land via `apply_filter` reset.
     fn switch_to_vault(&mut self) -> Task<Message> {
         if self.screen == Screen::Vault {
             return self.views.vault.auto_focus_task().map(Message::vault);
         }
-        // Only switch while authenticated — clicking the sidebar while on
-        // Login shouldn't flip the screen underneath the login flow.
+        // Clicking the sidebar while on Login mustn't flip the screen
+        // underneath the login flow.
         if !matches!(self.screen, Screen::Vault | Screen::Send) {
             return Task::none();
         }

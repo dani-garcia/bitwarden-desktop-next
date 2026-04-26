@@ -22,6 +22,13 @@
 //! Every `open()` / `close()` calls [`crate::services::animation::extend`],
 //! so the App-level frame subscription auto-lights without per-modal
 //! wiring.
+//!
+//! When the underlying content needs to outlive the outro animation (e.g.
+//! a bottom sheet that should still display its cipher while sliding away),
+//! pair `close()` with a delayed cleanup: schedule a `Finalize*Close` message
+//! via `tokio::time::sleep(animation_duration)` and clear the data only when
+//! it arrives. Without that, the `view()` gate returns `Some(progress)` but
+//! the content it would render is already gone.
 
 use std::time::{Duration, Instant};
 
@@ -61,9 +68,8 @@ impl FadeInOut {
         animation::extend(DEFAULT_DURATION);
     }
 
-    /// The logical open/closed value — what the user "asked for". This
-    /// flips immediately on `open()` / `close()` (the animation runs
-    /// against this target).
+    /// The logical open/closed value — flips immediately on `open()` /
+    /// `close()` (the animation runs against this target).
     pub fn is_open(&self) -> bool {
         self.inner.value
     }

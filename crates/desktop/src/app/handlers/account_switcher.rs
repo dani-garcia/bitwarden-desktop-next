@@ -1,6 +1,5 @@
-//! Account-switcher event routing. Bubbles up from both the login and the
-//! vault/send views via their own `*Event::AccountSwitcher` variants, so the
-//! semantics live in exactly one place.
+//! Account-switcher event routing. Both the login and vault/send views bubble
+//! up `*Event::AccountSwitcher`, so the semantics live in one place.
 
 use iced::Task;
 
@@ -34,21 +33,17 @@ impl App {
     /// and, if the new user is unlocked, returns the task that repopulates
     /// both lists.
     pub(crate) fn handle_user_switch(&mut self, uid: UserId) -> Task<Message> {
-        // Drop sticky Magnify state before flipping the active user — it
-        // holds Arc clones of the previous user's decrypted ciphers in
-        // `results`, and the next summon would otherwise restore them.
+        // Magnify holds Arc clones of the previous user's decrypted ciphers
+        // in `results`; drop them before flipping the active user so the
+        // next summon doesn't restore them.
         self.magnify_reset_sticky();
         self.active_user = Some(uid);
-        // Reset the sidebar filters on user switch — "AllItems" is the most
-        // neutral entry point for a freshly-active user.
         self.sidebar.active_vault_filter = crate::components::sidebar::VaultFilter::AllItems;
         self.sidebar.active_send_filter = crate::components::sidebar::SendFilter::AllItems;
         self.views
             .vault
             .reset(&uid, self.sidebar.active_vault_filter);
         self.views.send.reset(&uid, self.sidebar.active_send_filter);
-        // Re-apply the new user's clipboard clear delay so the app-global
-        // clipboard manager matches their preference.
         let delay = self.settings.preferences_for(&uid).clear_clipboard;
         self.clipboard.set_timeout(delay.as_duration());
 

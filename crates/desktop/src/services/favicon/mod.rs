@@ -4,12 +4,10 @@
 //! `(uid, hostname)` pair returns [`IconState::Pending`] and spawns a fetch;
 //! subsequent calls are pure read-lock lookups. Fetch completions broadcast
 //! a [`FaviconMessage::IconResolved`] that the App subscription turns into
-//! a redraw. Nothing persists — matches the Angular clients (offline
-//! launches show globes).
+//! a redraw. Nothing persists — matches the Angular clients.
 //!
-//! `view()` only calls `get()` for virtualized rows currently on screen, so
-//! "first sight of a hostname in the viewport" is what triggers a fetch.
-//! Scroll naturally warms the next batch of icons.
+//! `view()` only calls `get()` for virtualized rows on screen, so "first
+//! sight of a hostname in the viewport" is what triggers a fetch.
 
 use std::{
     collections::HashMap,
@@ -26,28 +24,21 @@ use crate::domain::UserId;
 
 pub type Hostname = String;
 
-/// Rendered size for cipher-row icons (in logical pixels). Also the bitmap
-/// dimensions we bake at fetch time so the rounded-corner alpha mask lines
-/// up exactly with the rendered pixels.
+/// Rendered size for cipher-row icons (logical px). Also the bitmap dimensions
+/// we bake at fetch time so the rounded-corner alpha mask lines up exactly
+/// with the rendered pixels.
 pub const ICON_SIZE_PX: u32 = 32;
 
-/// Corner radius used for the alpha mask. Matches `theme::RADIUS_SM` so the
-/// bitmap edge and any surrounding container look identical.
+/// Matches `theme::RADIUS_SM` so the bitmap edge and any surrounding container
+/// look identical.
 const ICON_CORNER_RADIUS: f32 = 4.0;
 
-/// Max concurrent HTTP fetches. Bounds the traffic a user's unlock or fast
-/// scroll can generate against the icons server.
 const FETCH_CONCURRENCY: usize = 5;
-
-/// Per-request timeout. The icons server is usually fast; anything slower is
-/// almost always broken.
 const FETCH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
 // ── Public API ─────────────────────────────────────────────────────────────
 
-/// Cheap-to-clone handle to the service. Clones share the same internal
-/// state via `Arc`, so every field / view / handler that stores a copy sees
-/// the same cache + fetch budget + broadcast.
+/// Cheap-to-clone handle. Clones share the same internal state via `Arc`.
 #[derive(Clone)]
 pub struct FaviconService {
     inner: Arc<FaviconInner>,
@@ -64,21 +55,15 @@ struct FaviconInner {
     runtime: tokio::runtime::Handle,
 }
 
-/// In-memory state for one user. Dropped whole on sign-out.
 #[derive(Default)]
 struct UserCache {
     entries: HashMap<Hostname, IconState>,
 }
 
-/// The render path only consumes [`Self::Found`] and falls back to the globe
-/// for everything else (including no-URI, no-hostname, and Card/Identity/Note
-/// cipher types). `Pending` exists to dedupe in-flight fetches; it renders
-/// identically to `Missing`.
-///
-/// `Found` carries an already-constructed [`iced::widget::image::Handle`]
-/// built from [`image::Handle::from_rgba`] at fetch time. Clones share the
-/// internal `Id`, so iced's GPU texture cache hits on every re-render for
-/// the session.
+/// `Pending` exists to dedupe in-flight fetches; it renders identically to
+/// `Missing`. `Found` carries a [`iced::widget::image::Handle`] built from
+/// [`image::Handle::from_rgba`] at fetch time — clones share the internal `Id`
+/// so iced's GPU texture cache hits on every re-render for the session.
 #[derive(Clone)]
 pub enum IconState {
     Pending,
@@ -87,8 +72,7 @@ pub enum IconState {
 }
 
 /// Fetch-completion message delivered via [`favicon_event_stream`]. Arrival
-/// drives the row's globe→favicon swap; the payload is only used for
-/// tracing today.
+/// drives the row's globe→favicon swap.
 #[derive(Debug, Clone)]
 pub enum FaviconMessage {
     IconResolved { uid: UserId, hostname: Hostname },
@@ -117,11 +101,9 @@ impl FaviconService {
         }
     }
 
-    /// Render-time lookup. Fast path (already-known state) is a single read
-    /// lock and a clone. Slow path (first sight) claims `Pending` under a
-    /// write lock and spawns a background fetch; the fetch completion
-    /// broadcasts an [`IconResolved`] that wakes the app subscription for
-    /// a redraw.
+    /// Render-time lookup. Fast path is a single read lock and a clone. Slow
+    /// path (first sight) claims `Pending` under a write lock and spawns a
+    /// background fetch.
     pub fn get(&self, uid: &UserId, hostname: &str) -> IconState {
         {
             let caches = self
@@ -139,9 +121,9 @@ impl FaviconService {
         IconState::Pending
     }
 
-    /// Drop the in-memory entry for `uid`. Called on log-out. In-flight
-    /// fetches for this user stay alive until they finish but their results
-    /// land in `fetch_and_commit` which no-ops when the cache entry is gone.
+    /// Drop the in-memory entry for `uid`. In-flight fetches for this user
+    /// stay alive until they finish but their results no-op when the cache
+    /// entry is gone.
     pub fn evict_user(&self, uid: &UserId) {
         self.inner
             .caches
@@ -174,13 +156,11 @@ impl FaviconService {
 
 // ── Hostname extraction ────────────────────────────────────────────────────
 
-/// Extract the hostname we'd use to fetch a favicon from a raw cipher URI,
-/// or return `None` if the URI is unsuitable (non-http(s) scheme, bare IP,
-/// single-label, tor / i2p).
+/// Extract the hostname we'd use to fetch a favicon, or `None` if the URI is
+/// unsuitable (non-http(s) scheme, bare IP, single-label, tor / i2p).
 ///
-/// Matches the Angular clients' `Utils.getHostname()` (`tldts`' `getHostname`),
-/// which returns the full hostname — not eTLD+1. `mail.google.com` and
-/// `google.com` produce different cache entries.
+/// Matches the Angular clients' `Utils.getHostname()` — full hostname, not
+/// eTLD+1. `mail.google.com` and `google.com` produce different cache entries.
 pub fn hostname_for_fetch(uri: &str) -> Option<Hostname> {
     let parsed = url::Url::parse(uri)
         .or_else(|_| url::Url::parse(&format!("http://{uri}")))
@@ -204,11 +184,10 @@ pub fn hostname_for_fetch(uri: &str) -> Option<Hostname> {
 
 // ── Broadcast fan-out (iced subscription) ─────────────────────────────────
 
-/// Process-global fan-out for fetch completions. Lazily initialized on first
-/// send or subscribe — matches the [`crate::services::menu`] muda pattern. The
-/// channel's initial receiver is dropped; [`broadcast::Sender::subscribe`]
-/// still works for subsequent subscribers, and `send()` silently no-ops
-/// when there are zero active receivers (which we ignore anyway).
+/// Process-global fan-out for fetch completions. Lazily initialized — matches
+/// the [`crate::services::menu`] muda pattern. The initial receiver is dropped;
+/// `subscribe` still works for later subscribers, and `send()` no-ops with
+/// zero receivers.
 static EVENTS: OnceLock<broadcast::Sender<FaviconMessage>> = OnceLock::new();
 
 fn events() -> &'static broadcast::Sender<FaviconMessage> {
@@ -216,9 +195,7 @@ fn events() -> &'static broadcast::Sender<FaviconMessage> {
 }
 
 /// Iced-compatible stream of fetch completions. Use as a `fn` pointer with
-/// [`iced::Subscription::run`]; iced hashes the function identity so the
-/// same stream instance persists across `update()` cycles instead of
-/// rebinding each tick.
+/// [`iced::Subscription::run`].
 pub fn favicon_event_stream() -> impl Stream<Item = FaviconMessage> {
     iced::stream::channel(32, |mut out: mpsc::Sender<FaviconMessage>| async move {
         let mut rx = events().subscribe();
@@ -259,9 +236,8 @@ async fn fetch_and_commit(inner: Arc<FaviconInner>, uid: UserId, hostname: Hostn
 }
 
 async fn fetch_one(inner: &FaviconInner, uid: &UserId, hostname: &Hostname) -> IconState {
-    // Dropping the permit on return is what enforces the 5-concurrent cap.
+    // Dropping the permit on return is what enforces the concurrency cap.
     let Ok(_permit) = inner.fetch_budget.clone().acquire_owned().await else {
-        // Semaphore closed — the service is shutting down.
         return IconState::Missing;
     };
 
@@ -296,9 +272,8 @@ async fn fetch_one(inner: &FaviconInner, uid: &UserId, hostname: &Hostname) -> I
 // ── Decode + alpha-mask pipeline ──────────────────────────────────────────
 
 /// Decode raw bytes on a blocking worker, apply the rounded-rect mask, and
-/// wrap the result in a cached-Id iced handle. The `image` crate's decode is
-/// pure CPU; with up to 5 landing at once we keep the tokio runtime's worker
-/// threads free.
+/// wrap in an iced handle. `image` decode is pure CPU; with up to 5 landing
+/// at once we keep tokio's worker threads free.
 async fn decode_to_handle(raw: Vec<u8>) -> Result<IconState, DecodeError> {
     let rgba = tokio::task::spawn_blocking(move || decode_and_mask(&raw))
         .await
@@ -321,13 +296,10 @@ impl std::fmt::Display for DecodeError {
     }
 }
 
-/// Decode raw bytes, resize to the icon slot, and punch the rounded-rect
-/// alpha mask. The returned `RgbaImage` is ready to be fed into
-/// [`image::Handle::from_rgba`].
 fn decode_and_mask(raw: &[u8]) -> Result<::image::RgbaImage, ::image::ImageError> {
     let img = ::image::load_from_memory(raw)?;
-    // The icons service returns PNGs sized to the requested scale; we render
-    // at 32 px regardless, so a fixed resize keeps the alpha mask exact.
+    // We render at a fixed 32 px regardless of the source size so the alpha
+    // mask stays exact.
     let resized = img.resize_exact(
         ICON_SIZE_PX,
         ICON_SIZE_PX,
@@ -338,8 +310,8 @@ fn decode_and_mask(raw: &[u8]) -> Result<::image::RgbaImage, ::image::ImageError
     Ok(rgba)
 }
 
-/// Multiply every pixel's alpha by a rounded-rect coverage value. One-pixel
-/// wide band around the corner edge is antialiased so the result doesn't
+/// Multiply every pixel's alpha by a rounded-rect coverage value. The
+/// 1-pixel band at the corner edge is antialiased so the result doesn't
 /// shimmer at our 32px size.
 fn apply_rounded_mask(img: &mut ::image::RgbaImage, radius: f32) {
     let w = img.width() as f32;
@@ -376,9 +348,7 @@ fn apply_rounded_mask(img: &mut ::image::RgbaImage, radius: f32) {
 /// Process-wide cached globe handle. `image::Handle::from_bytes` calls
 /// `Id::unique()` internally, so naively re-constructing the handle on each
 /// render produces a fresh id every frame, defeating iced's GPU texture
-/// cache and visibly flickering the globe icon during scroll. Caching once
-/// in a `OnceLock` keeps the same id for the life of the process — clones
-/// hit the cache instantly.
+/// cache and visibly flickering the globe icon during scroll.
 static GLOBE_HANDLE: OnceLock<image::Handle> = OnceLock::new();
 
 pub fn globe_handle() -> image::Handle {

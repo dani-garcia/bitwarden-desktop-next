@@ -13,11 +13,9 @@ pub const RADIUS_LG: f32 = 8.0;
 pub const RADIUS_XL: f32 = 12.0;
 pub const RADIUS_PILL: f32 = 20.0;
 
-/// Surface translucency for the Magnify launcher window. The launcher's
-/// outer container fills with `colors.card_bg` at this alpha so a hint of
-/// what's behind shows through, matching `designs/magnify/{locked,unlocked}.jpg`.
-/// Theme-invariant today; promote to a per-theme `AppColors` token if a
-/// future theme needs a different blend.
+/// Surface translucency for the Magnify launcher window. Theme-invariant
+/// today; promote to a per-theme `AppColors` token if a future theme needs
+/// a different blend.
 pub const MAGNIFY_SURFACE_ALPHA: f32 = 0.95;
 
 /// The application's custom theme, carrying a full set of semantic colors.
@@ -29,8 +27,7 @@ pub struct AppTheme {
     /// When `true`, [`Base::base`] returns a transparent window background
     /// so the OS-level window can show through outside any container fills.
     /// Used by the Magnify launcher window so its rounded outer container
-    /// is the only visible region — pixels outside the rounded region stay
-    /// fully transparent.
+    /// is the only visible region.
     transparent_background: bool,
 }
 
@@ -45,8 +42,8 @@ pub enum ThemePreference {
 }
 
 impl ThemePreference {
-    /// Resolve the preference to a concrete `AppTheme`.
-    /// For `System`, uses the given scheme from the OS (defaults to light if unavailable).
+    /// Resolve the preference to a concrete `AppTheme`. For `System`, uses
+    /// the given OS scheme (defaults to light if unavailable).
     pub fn resolve(
         self,
         scheme: Result<system_theme::ThemeScheme, system_theme::error::Error>,
@@ -81,9 +78,8 @@ impl AppTheme {
         }
     }
 
-    /// Return a clone of this theme with `transparent_background` set so
+    /// Return a clone with `transparent_background` set so
     /// `iced::theme::Base::base()` paints a transparent window background.
-    /// Used by the Magnify launcher window.
     pub fn with_transparent_background(mut self) -> Self {
         self.transparent_background = true;
         self
@@ -146,13 +142,13 @@ pub struct AppColors {
     /// Sidebar selected item background
     pub sidebar_selected: Color,
     /// Highlight color for the selected row in the Magnify launcher.
-    /// Brighter than `accent` (Figma `#53A3FA`) so a single row reads as
-    /// strongly highlighted against the launcher's translucent dark surface.
+    /// Brighter than `accent` so a row reads as strongly highlighted
+    /// against the launcher's translucent dark surface.
     pub magnify_selected: Color,
     /// Selected row background in light-surface contexts (e.g. the settings
-    /// modal sidebar). A darker gray than `item_hover` so the selection
-    /// reads as distinct from mere hover. Separate from `sidebar_selected`
-    /// which is tuned for dark navy nav rails.
+    /// modal sidebar). Darker than `item_hover` so selection reads as
+    /// distinct from hover. Separate from `sidebar_selected` (tuned for
+    /// dark navy nav rails).
     pub surface_selected: Color,
     /// Primary action button background
     pub button_primary: Color,

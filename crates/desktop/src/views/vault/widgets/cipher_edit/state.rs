@@ -96,7 +96,6 @@ pub struct CipherForm {
     pub original: Option<CipherView>,
     pub modified: CipherView,
 
-    // All the folders/orgs/collections that the user has, used to filling the dropdowns
     pub folders: Vec<FolderOption>,
     pub organizations: Vec<OrganizationOption>,
     pub collections: Vec<CollectionOption>,

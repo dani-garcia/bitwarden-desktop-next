@@ -19,8 +19,6 @@ use std::{
     time::Duration,
 };
 
-/// Hardcoded for now. A future per-user setting will flow into
-/// `ClipboardManager::set_timeout()` when user switches happen.
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone, Copy)]
@@ -39,17 +37,15 @@ enum Command {
         value: String,
         sensitivity: Sensitivity,
     },
-    /// Update the auto-clear timeout. `None` disables auto-clear AND
-    /// clear-on-close — the worker drops any outstanding tracked value
-    /// (without clearing it) and stops starting new timers.
+    /// `None` disables auto-clear AND clear-on-close — the worker drops any
+    /// outstanding tracked value (without clearing it) and stops starting timers.
     SetTimeout(Option<Duration>),
 }
 
 pub struct ClipboardManager {
-    /// `Option` so `Drop` can drop the sender (signals worker to
-    /// terminate) before joining.
+    /// `Option` so `Drop` can drop the sender (signals worker to terminate)
+    /// before joining.
     tx: Option<mpsc::Sender<Command>>,
-    /// Kept so `Drop` can poll `is_finished` and then `join` the thread.
     worker: Option<JoinHandle<()>>,
 }
 
@@ -57,8 +53,6 @@ impl ClipboardManager {
     pub fn new() -> Self {
         let (cmd_tx, cmd_rx) = mpsc::channel();
 
-        // Default until per-user config is loaded; callers can override
-        // at any time via `set_timeout`.
         let timeout = Some(DEFAULT_TIMEOUT);
         let worker = thread::Builder::new()
             .name("clipboard".into())
@@ -75,12 +69,9 @@ impl ClipboardManager {
         self.send(Command::Copy { value, sensitivity });
     }
 
-    /// Change the auto-clear timeout. `None` disables auto-clear AND
-    /// clear-on-close: the worker drops any outstanding tracked value
-    /// (without clearing it) and future copies won't schedule a timer.
-    /// Passing `Some` re-enables tracking for future copies; a copy that
-    /// was already in the clipboard before this call is not retroactively
-    /// tracked.
+    /// `None` disables auto-clear AND clear-on-close. Passing `Some` re-enables
+    /// tracking for future copies; a copy already in the clipboard before this
+    /// call is not retroactively tracked.
     pub fn set_timeout(&self, timeout: Option<Duration>) {
         self.send(Command::SetTimeout(timeout));
     }
@@ -90,7 +81,6 @@ impl ClipboardManager {
             return;
         };
         if let Err(e) = tx.send(cmd) {
-            // The worker thread panicked or exited. Not much we can do.
             tracing::error!(%e, "clipboard worker unreachable");
         }
     }
@@ -98,9 +88,9 @@ impl ClipboardManager {
 
 impl Drop for ClipboardManager {
     fn drop(&mut self) {
-        // Drop the sender → worker sees `Disconnected`, runs its final
-        // clear, and exits. This is also our clear-on-close path: `App`
-        // drop runs during iced's shutdown, before the process exits.
+        // Drop the sender → worker sees `Disconnected`, runs its final clear,
+        // and exits. This is also our clear-on-close path: `App` drop runs
+        // during iced's shutdown, before the process exits.
         self.tx = None;
 
         let Some(worker) = self.worker.take() else {
@@ -119,9 +109,7 @@ fn worker_loop(cmd_rx: mpsc::Receiver<Command>, initial_timeout: Option<Duration
         }
     };
 
-    // The value currently held in the clipboard by us.
     let mut last: Option<String> = None;
-    // The timeout for auto-clearing the clipboard. `None` disables auto-clear
     let mut timeout = initial_timeout;
 
     loop {
@@ -139,7 +127,6 @@ fn worker_loop(cmd_rx: mpsc::Receiver<Command>, initial_timeout: Option<Duration
                     continue;
                 }
 
-                // Track the copied value when an auto-clear timeout is active.
                 if timeout.is_some() {
                     last = Some(value);
                 } else {
@@ -148,13 +135,12 @@ fn worker_loop(cmd_rx: mpsc::Receiver<Command>, initial_timeout: Option<Duration
             }
             Ok(Command::SetTimeout(new_timeout)) => {
                 timeout = new_timeout;
-                // If we're disabling the timeout, we don't care about tracking the value anymore.
                 if timeout.is_none() {
                     last = None;
                 }
             }
             Err(e) => {
-                // Clear the clipboard on timeout/exit and the value is still there.
+                // Clear on timeout/exit if our last-written value is still there.
                 if let Some(expected) = last.take()
                     && clipboard.get_text().unwrap_or_default() == expected
                     && let Err(e) = clipboard.clear()
@@ -208,10 +194,9 @@ fn arboard_write(
 
 // ── URL launching ─────────────────────────────────────────────────────────
 
-/// Open `uri` in the default browser, but only if the scheme is `http`
-/// or `https` and the host is non-empty. Anything else is silently
-/// ignored — `file://`, `javascript:`, and `data:` must never be handed
-/// to `open::that_detached`.
+/// Open `uri` in the default browser, but only if the scheme is `http` or
+/// `https` and the host is non-empty. `file://`, `javascript:`, and `data:`
+/// must never be handed to `open::that_detached`.
 ///
 /// Bitwarden frequently stores URIs without a scheme (e.g.
 /// `acmecorp.atlassian.net`). If the first parse fails, retry with

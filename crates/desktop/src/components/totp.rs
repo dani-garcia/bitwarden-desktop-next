@@ -1,18 +1,13 @@
 //! TOTP code display with a self-animating circular countdown ring.
 //!
-//! The code + ring live inside a single [`CountdownField`] widget that
-//! intercepts [`window::Event::RedrawRequested`] and schedules its own next
-//! tick via `shell.request_redraw_at`, aligned to the next whole UNIX
-//! second. No app-level `time::every` subscription is involved, so the rest
-//! of the window doesn't rebuild and repaint once per second just to
-//! advance the countdown.
+//! [`CountdownField`] intercepts [`window::Event::RedrawRequested`] and
+//! schedules its next tick via `shell.request_redraw_at`, aligned to the
+//! next whole UNIX second — so the rest of the window doesn't rebuild
+//! once per second just to advance the countdown.
 //!
-//! The code text is rendered via canvas so it can't be selected; the
-//! widget hit-tests clicks against the code-text region (everything except
-//! the ring on the right edge) and emits the same `on_copy` message the
-//! copy button does. The caller is expected to recompute the TOTP from the
-//! secret at copy time so the clipboard always holds a value that's still
-//! valid.
+//! The code text is rendered via canvas (non-selectable). Clicks on the
+//! code-text region emit `on_copy`; the caller recomputes the TOTP at
+//! copy time so the clipboard always holds a still-valid value.
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -41,20 +36,18 @@ use crate::{
     theme::{AppColors, AppTheme},
 };
 
-/// Diameter of the countdown ring in logical pixels.
 const RING_SIZE: f32 = 30.0;
 const RING_STROKE: f32 = 3.0;
-/// Flip the arc + code colour to red when this many seconds or fewer
-/// remain in the current TOTP period.
+/// Flip the arc + code colour to red at this many seconds remaining.
 const URGENT_THRESHOLD: u32 = 5;
 const URGENT_COLOR: Color = Color::from_rgb(0.91, 0.28, 0.28);
 const CODE_FONT_SIZE: f32 = 18.0;
-/// Extra slack on top of the next-whole-second instant so we tick *past*
-/// the boundary and read the new integer second, not the old one.
+/// Slack past the next-whole-second instant so we read the new integer
+/// second, not the old one.
 const BOUNDARY_SLACK: Duration = Duration::from_millis(10);
 
-/// Format a 6-digit TOTP as "123 456" (or leave untouched if the length
-/// doesn't match the standard — e.g. Steam codes).
+/// Format a 6-digit TOTP as "123 456"; leave non-standard codes (e.g.
+/// Steam) untouched.
 fn format_code(code: &str) -> String {
     if code.len() == 6 && code.chars().all(|c| c.is_ascii_digit()) {
         format!("{} {}", &code[..3], &code[3..])
@@ -63,7 +56,6 @@ fn format_code(code: &str) -> String {
     }
 }
 
-/// Build the TOTP field: label + self-animating code/ring + copy button.
 pub fn view<'a, Message: 'a + Clone>(
     secret: &'a str,
     on_copy: Message,
@@ -73,9 +65,6 @@ pub fn view<'a, Message: 'a + Clone>(
         .size(12)
         .color(colors.text_muted);
 
-    // Canvas text isn't selectable; the widget itself handles click-to-copy
-    // on the code region (left of the ring) and renders a pointer cursor
-    // over that region. The ring is non-interactive.
     let field: Element<'a, Message, AppTheme> = Element::new(CountdownField {
         secret,
         colors,
@@ -83,9 +72,9 @@ pub fn view<'a, Message: 'a + Clone>(
     });
     let copy_btn = icon_button(icons::BWI_COPY, on_copy, colors);
 
-    // Label sits on its own row; the field (code + ring) and copy button
-    // share the row below so the copy button aligns with the ring rather
-    // than the taller label-plus-field column's midpoint.
+    // Field + copy button share a row below the label so the copy button
+    // aligns with the ring rather than the taller label-plus-field
+    // column's midpoint.
     column![
         label,
         row![field, copy_btn]
@@ -106,9 +95,9 @@ struct CountdownField<'a, Message> {
 }
 
 impl<Message> CountdownField<'_, Message> {
-    /// Recompute code + seconds-remaining from the current system clock.
-    /// `None` when the secret can't be parsed by the SDK — we'll render the
-    /// "Invalid code" fallback and skip scheduling further redraws.
+    /// Recompute code + seconds-remaining from the system clock. `None`
+    /// when the secret can't be parsed — render "Invalid code" and stop
+    /// scheduling redraws.
     fn current(&self) -> Option<(TotpResponse, u32, bool)> {
         let resp = generate_totp(self.secret.to_owned(), None).ok()?;
         let rem = seconds_remaining_from(resp.period);
@@ -116,13 +105,12 @@ impl<Message> CountdownField<'_, Message> {
     }
 }
 
-/// Hit area for click-to-copy: should be close enough to the code text bounds,
-/// without having to calculate the text width.
+/// Hit area for click-to-copy. Approximate width avoids measuring text.
 fn code_hit_bounds(bounds: Rectangle) -> Rectangle {
     Rectangle {
         x: bounds.x,
         y: bounds.y,
-        width: CODE_FONT_SIZE * 5.0, // Good enough for 8 chars at least.
+        width: CODE_FONT_SIZE * 5.0,
         height: bounds.height,
     }
 }
@@ -137,8 +125,7 @@ fn seconds_remaining_from(period: u32) -> u32 {
     u32::try_from(u64::from(period) - elapsed).unwrap_or(period)
 }
 
-/// Wall-clock delay until the next whole UNIX second, plus a small slack
-/// so the scheduled redraw reads the post-boundary integer second.
+/// Wall-clock delay until the next whole UNIX second, plus a small slack.
 fn delay_to_next_second() -> Duration {
     let subsec = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -228,7 +215,6 @@ where
                     self.colors.accent
                 };
 
-                // Code text — left-aligned, centred vertically.
                 frame.fill_text(CanvasText {
                     content: format_code(&resp.code),
                     position: Point::new(0.0, bounds.height / 2.0),
@@ -246,7 +232,6 @@ where
                 );
                 let radius = (RING_SIZE / 2.0 - RING_STROKE / 2.0 - 1.0).round();
 
-                // Background track — full circle.
                 frame.stroke(
                     &Path::circle(center, radius),
                     Stroke::default()
@@ -255,8 +240,7 @@ where
                         .with_line_cap(LineCap::Butt),
                 );
 
-                // Foreground arc — starts at 12 o'clock, sweeps clockwise,
-                // length proportional to time remaining.
+                // Foreground arc — starts at 12 o'clock, sweeps clockwise.
                 let fraction = (rem as f32 / resp.period.max(1) as f32).clamp(0.0, 1.0);
                 if fraction > 0.0 {
                     let start = -std::f32::consts::FRAC_PI_2;
@@ -278,7 +262,6 @@ where
                     );
                 }
 
-                // Seconds-remaining number centred inside the ring.
                 frame.fill_text(CanvasText {
                     content: format!("{rem}"),
                     position: center,
@@ -291,9 +274,8 @@ where
                 });
             }
             None => {
-                // Fallback — secret couldn't be parsed (bad base32, malformed
-                // otpauth URI, …). No redraw is scheduled in `update` for
-                // this branch so the widget stays still.
+                // Secret couldn't be parsed (bad base32, malformed otpauth
+                // URI). No redraw is scheduled — the widget stays still.
                 frame.fill_text(CanvasText {
                     content: fl!("detail-totp-invalid"),
                     position: Point::new(0.0, bounds.height / 2.0),

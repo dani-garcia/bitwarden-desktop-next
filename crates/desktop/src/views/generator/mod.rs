@@ -233,9 +233,7 @@ pub enum GeneratorEvent {
     /// calls `ClientManager::generate_*` and pipes the result back through
     /// [`GeneratorMessage::Generated`].
     Generate(GenerateKind),
-    /// User clicked the "Clear history" button inside the history panel.
     ClearHistory,
-    /// Copy to clipboard + fire the "copied" toast.
     Copy(String),
     /// Generic toast request (currently only used on SDK error).
     Toast(Toast),
@@ -497,7 +495,6 @@ impl GeneratorView {
             Mode::History => history::view(&self.history, colors),
         };
 
-        // Header: title on left, X close on right. Title varies with mode.
         let title_label = match self.mode {
             Mode::Generator => fl!("generator-title"),
             Mode::History => fl!("generator-history-title"),

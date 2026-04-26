@@ -18,13 +18,10 @@ use global_hotkey::{
 use iced::futures::{SinkExt, Stream};
 use tokio::sync::broadcast;
 
-/// One unit value per matched global-hotkey press. Only `Pressed` transitions
-/// are forwarded — releases are dropped so subscribers don't have to filter.
+/// One unit value per hotkey press. Only `Pressed` transitions are forwarded.
 #[derive(Debug, Clone, Copy)]
 pub struct MagnifyToggle;
 
-/// Broadcast fan-out for hotkey events. Populated by the callback registered
-/// in [`install_event_handler`]; consumed via [`event_stream`].
 static HOTKEY_EVENTS: OnceLock<broadcast::Receiver<MagnifyToggle>> = OnceLock::new();
 
 /// Register the global-hotkey event callback and bind the V1 default
@@ -74,10 +71,8 @@ pub fn install_event_handler() {
     std::mem::forget(manager);
 }
 
-/// Iced-compatible stream of [`MagnifyToggle`]s, one per hotkey press.
-/// Subscribes to the static broadcast channel populated by the handler
-/// installed in [`install_event_handler`]. If the installer failed (e.g.
-/// Wayland), the channel will never have been initialised and the stream
+/// Iced-compatible stream of [`MagnifyToggle`]s. If [`install_event_handler`]
+/// failed (e.g. Wayland), the channel was never initialised and the stream
 /// terminates immediately — leaving the subscription idle.
 pub fn event_stream() -> impl Stream<Item = MagnifyToggle> {
     use iced::futures::channel::mpsc;

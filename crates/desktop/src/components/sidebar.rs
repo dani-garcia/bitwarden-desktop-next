@@ -1,12 +1,9 @@
 //! App-level sidebar chrome shared between the Vault and Send screens.
 //!
-//! The sidebar is logically one widget that persists across authenticated
-//! screens, so its state (collapsed/expanded mode, tree open flags, active
-//! filters for each screen) lives on `App` rather than inside a view. Each
-//! authenticated screen renders this widget alongside its own content area
-//! via `App::view_main`. Sidebar messages are handled by `App`: section
-//! clicks may trigger a screen switch, and per-screen filter changes are
-//! forwarded to the view that owns the filter's semantics.
+//! State (mode, tree open flags, active filters) lives on `App` since the
+//! sidebar persists across authenticated screens. Sidebar messages are
+//! handled by `App`: section clicks may trigger a screen switch, and
+//! per-screen filter changes are forwarded to the view that owns them.
 
 use bitwarden_core::OrganizationId;
 use bitwarden_vault::CipherType;
@@ -37,9 +34,8 @@ pub enum SidebarMode {
     Expanded,
 }
 
-/// The "which screen / module am I in" nav facet. Vault and Send are full
-/// screens; Generator / Import / Export are placeholders highlighted in the
-/// rail + standalone items but don't yet have their own screens.
+/// The "which screen / module am I in" nav facet. Generator / Import /
+/// Export are placeholders without their own screens yet.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NavSection {
     Vault,
@@ -56,7 +52,6 @@ pub enum VaultFilter {
     AllItems,
     /// "My Vault" — personal ciphers only (not owned by an organization).
     Personal,
-    /// Ciphers owned by a specific organization.
     Organization(OrganizationId),
     Favorites,
     Category(CipherType),
@@ -73,9 +68,7 @@ pub enum SendFilter {
     File,
 }
 
-/// Sidebar chrome state that persists across screen switches. Lives on
-/// `App`; views read it through render context when they need to know the
-/// currently-active filter.
+/// Sidebar chrome state that persists across screen switches.
 pub struct SidebarState {
     pub mode: SidebarMode,
     pub active_section: NavSection,
@@ -211,7 +204,6 @@ fn expanded_panel<'a>(
 
     let mut items: Vec<Element<'a, SidebarMessage, AppTheme>> = Vec::new();
 
-    // Logo header
     let logo = container(
         svg(svg::Handle::from_memory(
             crate::assets::PASSWORD_MANAGER_LOGO,
@@ -227,7 +219,6 @@ fn expanded_panel<'a>(
     });
     items.push(logo.into());
 
-    // "Vault" parent row (split label + chevron)
     items.push(parent_header_row(
         fl!("sidebar-section-vault"),
         icons::BWI_VAULT,
@@ -318,7 +309,6 @@ fn expanded_panel<'a>(
         ));
     }
 
-    // "Send" parent row (split label + chevron, matches Vault)
     items.push(parent_header_row(
         fl!("sidebar-section-send"),
         icons::BWI_SEND,
@@ -351,7 +341,6 @@ fn expanded_panel<'a>(
         ));
     }
 
-    // Standalone nav items
     items.push(standalone_item(
         fl!("sidebar-item-generator"),
         icons::BWI_GENERATE.render(17.0, colors.nav_text),
@@ -374,7 +363,6 @@ fn expanded_panel<'a>(
         colors,
     ));
 
-    // Collapse chevron at bottom
     let separator = container(components::separator_h()).padding([4.0, SIDEBAR_H_PAD]);
 
     let collapse_btn: Element<'a, SidebarMessage, AppTheme> = buttons::ghost_icon(
@@ -403,10 +391,10 @@ fn expanded_panel<'a>(
 
 // ── Shared row helpers ─────────────────────────────────────────────────────
 
-/// Parent row for a collapsible section ("Vault", "Send"). The label side
-/// is a selectable filter (the `select_msg`); the chevron on the right
-/// toggles the tree (`toggle_msg`). When `is_selected`, an outer container
-/// paints the darkened background across both halves.
+/// Parent row for a collapsible section. The label side is a selectable
+/// filter (`select_msg`); the chevron toggles the tree (`toggle_msg`). When
+/// `is_selected`, an outer container paints the darkened background across
+/// both halves.
 fn parent_header_row<'a>(
     label: String,
     icon: icons::BwiIcon,
@@ -417,8 +405,8 @@ fn parent_header_row<'a>(
     colors: &AppColors,
 ) -> Element<'a, SidebarMessage, AppTheme> {
     // When already selected, clicking the label is a no-op — suppress the
-    // hover highlight so it doesn't read as an action. The chevron button
-    // stays hoverable because its action (toggle tree) is still meaningful.
+    // hover highlight. The chevron stays hoverable since toggling the tree
+    // is still meaningful.
     let label_hover_bg = if is_selected {
         Color::TRANSPARENT
     } else {

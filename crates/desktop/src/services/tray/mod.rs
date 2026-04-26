@@ -1,9 +1,6 @@
-//! System-tray icon + context menu.
-//!
-//! Uses the `tray-icon` crate (sister crate to `muda`). The tray's menu is
-//! built from `tray_icon::menu::*` (muda re-exported) so menu clicks land on
-//! the same `MenuEvent::receiver()` the native app menu already polls — see
-//! [`poll_menu_action`].
+//! System-tray icon + context menu via `tray-icon` (sister crate to `muda`).
+//! Tray menu items use `tray_icon::menu::*` (muda re-exports) so clicks land
+//! on the same `MenuEvent::receiver()` the native app menu polls.
 //!
 //! ## Linux runtime requirement
 //!
@@ -16,8 +13,7 @@
 //! ## macOS
 //!
 //! On macOS the icon is a **template image** (monochrome) so NSStatusBar can
-//! recolour it for light and dark menubar modes. We flip the `icon_is_template`
-//! builder flag accordingly.
+//! recolour it for light and dark menubar modes.
 
 use std::{collections::HashMap, sync::OnceLock};
 
@@ -28,9 +24,8 @@ use tray_icon::{
     menu::{Menu, MenuId, MenuItem},
 };
 
-/// Actions the tray can emit — resolved from either a menu-item click
-/// (via muda's `MenuEvent`) or a left-click on the icon itself (via
-/// `tray_icon::TrayIconEvent`).
+/// Resolved from either a menu-item click (muda's `MenuEvent`) or a left-click
+/// on the icon (via `tray_icon::TrayIconEvent`).
 #[derive(Clone, Copy, Debug)]
 pub enum TrayAction {
     ToggleShowHide,
@@ -46,18 +41,15 @@ pub struct TrayHandle {
 
 impl TrayHandle {
     /// Resolve a muda `MenuId` to a `TrayAction` if it belongs to the tray
-    /// menu. Returns `None` for unrelated ids. The caller is responsible for
-    /// draining `muda::MenuEvent::receiver()` — a global singleton shared
-    /// between the tray menu and the app's native menu — and dispatching
-    /// by id.
+    /// menu. The caller drains `muda::MenuEvent::receiver()` — a global
+    /// singleton shared with the app's native menu — and dispatches by id.
     pub fn resolve(&self, id: &MenuId) -> Option<TrayAction> {
         self.actions.get(id).copied()
     }
 }
 
-/// Build the tray icon + context menu. Returns `None` on failure (e.g. Linux
-/// without an SNI host). The caller logs a warning and continues without a
-/// tray — the tray-dependent settings are all checked against `Option::is_some`.
+/// Returns `None` on failure (e.g. Linux without an SNI host); tray-dependent
+/// settings are all `Option::is_some` checked.
 pub fn build() -> Option<TrayHandle> {
     let icon = match decode_icon() {
         Ok(i) => i,
@@ -91,7 +83,7 @@ pub fn build() -> Option<TrayHandle> {
         .with_tooltip("Bitwarden")
         .with_menu_on_left_click(false);
 
-    // macOS template image — NSStatusBar recolours for light/dark menubar.
+    // Template image — NSStatusBar recolours for light/dark menubar.
     #[cfg(target_os = "macos")]
     let builder = builder.with_icon_as_template(true);
 
@@ -109,11 +101,9 @@ pub fn build() -> Option<TrayHandle> {
     })
 }
 
-/// Broadcast fan-out for filtered tray-icon clicks. Installed once by
-/// [`install_event_handler`]; a click that matches the "left button released"
-/// filter is published as a [`TrayAction::ToggleShowHide`] for subscribers to
-/// pick up. Non-matching events (right-click, enter/leave, button-down) are
-/// dropped in the handler.
+/// Broadcast fan-out for filtered tray-icon clicks. A "left button released"
+/// click publishes [`TrayAction::ToggleShowHide`]; non-matching events
+/// (right-click, enter/leave, button-down) are dropped in the handler.
 static TRAY_EVENTS: OnceLock<broadcast::Receiver<TrayAction>> = OnceLock::new();
 
 /// Register `tray-icon`'s global event handler. Call once at startup, before
@@ -137,12 +127,8 @@ pub fn install_event_handler() {
     }));
 }
 
-/// Iced-compatible stream of [`TrayAction`]s derived from tray-icon clicks.
-/// Subscribes to the static broadcast channel populated by the handler
-/// installed in [`install_event_handler`].
-///
-/// Use as a `fn` pointer with [`iced::Subscription::run`]; when iced drops
-/// the subscription the receiver drops cleanly — no stranded threads.
+/// Iced-compatible stream of [`TrayAction`]s. Use as a `fn` pointer with
+/// [`iced::Subscription::run`].
 pub fn click_stream() -> impl Stream<Item = TrayAction> {
     use iced::futures::channel::mpsc;
     iced::stream::channel(16, |mut out: mpsc::Sender<_>| async move {

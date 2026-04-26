@@ -99,7 +99,6 @@ pub(super) fn collections_selector<'a>(
         CipherEditMessage::CollectionsDropdownToggled
     });
 
-    // Checkbox list panel
     let mut options: Vec<Element<'a, CipherEditMessage, AppTheme>> = Vec::new();
     if scoped.is_empty() {
         options.push(

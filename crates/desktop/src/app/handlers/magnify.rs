@@ -1,9 +1,6 @@
 //! Magnify launcher dispatch — hotkey handling, summon / hide, async copy.
-//!
-//! Magnify lives in its own window so it can't ride the screen-driven
-//! `ViewMessage` routing the other views use. Instead, `Message::Magnify`
-//! arrives directly here and we mutate `App::magnify` plus return a
-//! `Task<Message>` for any window / clipboard / decrypt work.
+//! Lives in its own window so it can't ride `ViewMessage` like screen views;
+//! `Message::Magnify` arrives directly here.
 
 use std::time::Instant;
 
@@ -21,17 +18,15 @@ impl App {
         match msg {
             MagnifyMessage::HotkeyPressed => self.magnify_hotkey(),
             MagnifyMessage::WindowOpened(_id) => {
-                // Window is created hidden at startup in `App::new`. The first
-                // hotkey press goes through `magnify_hotkey`'s toggle path,
-                // which handles focus / select-all / scroll when the window
-                // actually becomes visible — nothing to do here.
+                // Window is pre-created hidden in `App::new`. First focus /
+                // select-all / scroll happens inside `magnify_hotkey`'s
+                // toggle path when the window actually becomes visible.
                 Task::none()
             }
             MagnifyMessage::QueryChanged(query) => {
                 self.magnify.query = query;
-                // Fresh search — reset selection + scroll because the
-                // result set is about to change. `recompute` only clamps;
-                // it preserves selection for sticky-restore summons.
+                // Fresh search — reset selection + scroll. `recompute` only
+                // clamps; it preserves selection for sticky-restore summons.
                 self.magnify.selected = 0;
                 self.magnify.scroll_offset_y = 0.0;
                 self.magnify_recompute();
@@ -71,11 +66,9 @@ impl App {
             }
             MagnifyMessage::CopyPasswordRequested => self.magnify_copy_password(),
             MagnifyMessage::PasswordDecryptCompleted(uid, cipher_id, result) => {
-                // Stale completion: cipher id doesn't match the one we
-                // requested, OR the active user changed mid-decrypt, OR the
-                // user is no longer unlocked (locked between request and
-                // completion — must NOT copy a freshly-decrypted secret to
-                // a now-locked session). Crucially, do NOT clear
+                // Stale completion: id mismatch, active-user changed, or user
+                // re-locked mid-decrypt — must NOT copy a freshly-decrypted
+                // secret to a now-locked session. Crucially, do NOT clear
                 // `pending_password` here: a *different* in-flight decrypt's
                 // completion would clobber a still-valid pending request.
                 if self.magnify.pending_password != Some(cipher_id)
@@ -96,8 +89,6 @@ impl App {
                         // No toast: the main window is likely hidden (the
                         // launcher dismissed itself when the user pressed
                         // Ctrl+C), so a toast there would never be seen.
-                        // Tray-level error reporting is a separate
-                        // problem; for now the warning is enough.
                         tracing::warn!(error = %e, %cipher_id, "magnify: password decrypt failed");
                     }
                 }
@@ -118,9 +109,8 @@ impl App {
         }
     }
 
-    /// Routes a key press inside the magnify window to the appropriate
-    /// `MagnifyMessage`. Called from the central `WindowMessage::KeyPressed`
-    /// handler when `id == magnify.window`.
+    /// Routes a magnify-window key press to the appropriate `MagnifyMessage`.
+    /// Called from `WindowMessage::KeyPressed` when `id == magnify.window`.
     pub(crate) fn handle_magnify_key(
         &mut self,
         ev: iced::keyboard::Event,
@@ -133,9 +123,8 @@ impl App {
 
         let msg = match (&key, modifiers.command(), modifiers.shift()) {
             (Key::Named(Named::Escape), _, _) => MagnifyMessage::Hide,
-            // Enter triggers the locked-state action (Open Bitwarden →
-            // unlock screen). In `Mode::Unlocked` Enter is reserved for the
-            // future autotype hand-off and stays a no-op here.
+            // In `Mode::Unlocked` Enter is reserved for a future autotype
+            // hand-off and stays a no-op here.
             (Key::Named(Named::Enter), _, _) if matches!(self.magnify.mode, Mode::Locked) => {
                 MagnifyMessage::OpenMainWindow
             }
@@ -172,9 +161,8 @@ impl App {
             Mode::Locked
         };
 
-        // Reset sticky state when the user changed, the active user is locked,
-        // or the 5-minute TTL expired. Otherwise restore the previous query
-        // and selection.
+        // Reset sticky state when the user changed, locked, or the 5-minute
+        // TTL expired; otherwise restore the previous query and selection.
         let user_changed = self.magnify.anchored_user != active;
         let stale = !self.magnify.sticky_state_fresh(now);
         if user_changed || !unlocked || stale {
@@ -182,26 +170,19 @@ impl App {
         }
         self.magnify.anchored_user = active;
 
-        // Refresh results against the latest item cache (covers items added
-        // since the last summon AND first-time recompute when sticky state
-        // was preserved).
         self.magnify_recompute();
 
         let id = self.magnify.window;
-        // Resize to match the current results count *before* the OS
-        // window becomes visible — avoids a one-frame flash at the old
-        // height before the resize lands.
+        // Resize *before* the window becomes visible — avoids a one-frame
+        // flash at the old height before the resize lands.
         let height = dims::height_for(self.magnify.results.len());
         let resize = iced::window::resize::<Message>(id, iced::Size::new(dims::WIDTH, height));
-        // Reposition onto the cursor's monitor so the launcher follows
-        // the user across multi-monitor setups. Falls back to no-op on
-        // platforms where the lookup isn't implemented; the window
-        // stays where it last was.
+        // Falls back to no-op where the cursor-monitor lookup is unimplemented;
+        // the window then stays where it last was.
         let reposition = magnify_reposition_for_cursor(id, height);
-        // Scroll the selected row into view. Safe to fire regardless
-        // of show/hide — operating on a hidden scrollable just
-        // updates its offset for the next show. `Task` is not `Clone`
-        // so this lives outside the `mode` continuation.
+        // Safe to fire while hidden — operating on a hidden scrollable just
+        // updates its offset for the next show. Lives outside the `mode`
+        // continuation because `Task` isn't `Clone`.
         let scroll = self.magnify_keep_selected_visible();
         Task::batch([
             resize,
@@ -292,13 +273,9 @@ impl App {
         iced::window::resize(self.magnify.window, iced::Size::new(dims::WIDTH, height))
     }
 
-    /// Scroll the results list so the selected row is at least partially
-    /// visible. Returns a `scroll_to` Task only if the selected row would
-    /// otherwise sit above or below the viewport — minimal scroll, no
-    /// jumping when the user navigates within the visible window. Used
-    /// both on arrow navigation and on summon (callers reset
-    /// `scroll_offset_y` to 0 first when the scrollable was freshly
-    /// mounted).
+    /// Scroll the selected row into view, or no-op if it's already visible
+    /// (so navigation within the visible window doesn't jump). Callers reset
+    /// `scroll_offset_y` to 0 first if the scrollable was freshly mounted.
     fn magnify_keep_selected_visible(&mut self) -> Task<Message> {
         if self.magnify.results.is_empty() {
             return Task::none();
@@ -321,8 +298,7 @@ impl App {
         match new_offset_y {
             Some(y) => {
                 // Update the cached offset eagerly so a second arrow press
-                // before the `on_scroll` callback round-trips makes the
-                // right decision.
+                // before the `on_scroll` callback round-trips sees it.
                 self.magnify.scroll_offset_y = y;
                 iced::widget::operation::scroll_to(
                     MAGNIFY_RESULTS_SCROLL_ID,
@@ -336,9 +312,8 @@ impl App {
         }
     }
 
-    /// Reset the launcher's sticky state when the active user changes or
-    /// transitions to locked. Called from the lock / log-out / user-switch
-    /// handlers so the next summon doesn't restore another user's query.
+    /// Called from lock / log-out / user-switch handlers so the next summon
+    /// doesn't restore another user's query.
     pub(crate) fn magnify_reset_sticky(&mut self) {
         self.magnify.reset_search();
         self.magnify.anchored_user = self.active_user;
@@ -346,16 +321,13 @@ impl App {
     }
 }
 
-/// Opens the launcher window hidden at app startup so that subsequent hotkey
-/// presses just toggle visibility instead of paying for window creation.
-/// `Position::Centered` matches the previous first-summon fallback used when
-/// the cursor-monitor lookup is unavailable — every hotkey still calls
-/// `magnify_reposition_for_cursor`, so once that stub is implemented per
-/// platform the launcher will follow the cursor's monitor on first show.
-/// `min_size` / `max_size` bracket the dynamic-resize range so later
-/// `window::resize` calls grow / shrink freely without OS clamping. Returns
-/// the new id, the initial size (so the caller can register a `WindowInfo`),
-/// and the open-task pre-mapped onto `MagnifyMessage::WindowOpened`.
+/// Opens the launcher window hidden at startup so subsequent hotkey presses
+/// just toggle visibility. `Position::Centered` is the first-summon fallback
+/// used when the cursor-monitor lookup is unavailable. `min_size`/`max_size`
+/// bracket the dynamic-resize range so later `window::resize` calls grow or
+/// shrink freely without OS clamping. Returns the new id, the initial size
+/// (so the caller can register a `WindowInfo`), and the open-task pre-mapped
+/// onto `MagnifyMessage::WindowOpened`.
 pub(crate) fn open_magnify_window() -> (iced::window::Id, iced::Size, Task<Message>) {
     let height = dims::height_for(0);
     let size = iced::Size::new(dims::WIDTH, height);
@@ -383,9 +355,8 @@ pub(crate) fn open_magnify_window() -> (iced::window::Id, iced::Size, Task<Messa
     )
 }
 
-/// `move_to` task that puts the launcher's top-left at the cursor monitor's
-/// work-area center minus half the window. Returns `Task::none()` when the
-/// platform lookup is unavailable so the window stays where it last was.
+/// Centers the launcher on the cursor's monitor. `Task::none()` when the
+/// platform lookup is unavailable, so the window stays where it last was.
 fn magnify_reposition_for_cursor(id: iced::window::Id, height: f32) -> Task<Message> {
     match cursor_monitor::cursor_monitor_logical_center() {
         Some((cx, cy)) => {
@@ -396,10 +367,9 @@ fn magnify_reposition_for_cursor(id: iced::window::Id, height: f32) -> Task<Mess
     }
 }
 
-/// Per-platform window settings for the launcher. Disable Windows' native
-/// rounded corners so the iced-side rounded container we draw isn't doubled
-/// (the OS rounding clips the transparent edges differently than our
-/// container's border radius).
+/// Disable Windows' native rounded corners so the iced-side rounded
+/// container isn't doubled (OS rounding clips the transparent edges
+/// differently than our container's border radius).
 fn magnify_platform_specific() -> iced::window::settings::PlatformSpecific {
     #[cfg(target_os = "windows")]
     {

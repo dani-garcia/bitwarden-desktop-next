@@ -2,7 +2,6 @@ use iced::Color;
 
 use super::AppColors;
 
-// Helper macro: hex color from literal bytes
 macro_rules! hex {
     ($r:literal, $g:literal, $b:literal) => {
         Color::from_rgb($r as f32 / 255.0, $g as f32 / 255.0, $b as f32 / 255.0)
@@ -10,7 +9,7 @@ macro_rules! hex {
 }
 
 impl AppColors {
-    /// Dark theme — colors picked from the actual running Bitwarden app.
+    /// Dark theme — colors picked from the running Bitwarden app.
     pub fn dark() -> Self {
         Self {
             background: hex!(0x20, 0x27, 0x33),
