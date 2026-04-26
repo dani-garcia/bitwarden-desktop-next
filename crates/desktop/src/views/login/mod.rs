@@ -5,7 +5,7 @@ mod login_password;
 mod server_selector;
 mod unlock;
 
-use iced::Element;
+use iced::{Element, Task};
 
 use crate::{
     app::{Outcome, UpdateCtx, ViewTypes},
@@ -16,6 +16,10 @@ use crate::{
     domain::{UnlockMethod, UserId},
     services::sdk::ClientManager,
     theme::AppTheme,
+    views::login::{
+        login_email::LOGIN_EMAIL_FIELD_ID, login_password::LOGIN_PASSWORD_FIELD_ID,
+        unlock::UNLOCK_FIELD_ID,
+    },
 };
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -299,6 +303,7 @@ impl LoginView {
                 self.auth_page = AuthPage::new_unlock(method);
                 self.unlock_in_progress = false;
                 self.refresh_unlock_alternatives(active_user, client_manager);
+                return Outcome::task(self.auto_focus_task());
             }
 
             // ── Login: email entry ─────────────────────────────────────────
@@ -323,6 +328,7 @@ impl LoginView {
                     let server = selected_server.clone();
                     self.auth_page = AuthPage::new_login_password(email, server);
                     self.unlock_alternatives.clear();
+                    return Outcome::task(self.auto_focus_task());
                 }
             }
             LoginMessage::UseSingleSignOn => {
@@ -383,6 +389,7 @@ impl LoginView {
                     selected_server: server,
                 };
                 self.unlock_alternatives.clear();
+                return Outcome::task(self.auto_focus_task());
             }
             LoginMessage::GetPasswordHint => {
                 // TODO: password hint request flow
@@ -439,6 +446,31 @@ impl LoginView {
         self.auth_page = AuthPage::new_unlock(preferred);
         self.unlock_in_progress = false;
         self.refresh_unlock_alternatives(uid, mgr);
+    }
+
+    /// Focus task for whichever input belongs to the currently-shown auth
+    /// page so the user can start typing as soon as the page appears. Returns
+    /// `Task::none()` for unlock methods that have no text input (Biometrics).
+    /// Callers should fire this whenever they transition into / between login
+    /// pages (App-side after `show_unlock_for` / `reset_to_email_entry`, and
+    /// inside the in-page transition arms of `update`).
+    pub fn auto_focus_task(&self) -> Task<LoginMessage> {
+        match &self.auth_page {
+            AuthPage::LoginEmail { .. } => {
+                iced::widget::operation::focus(LOGIN_EMAIL_FIELD_ID)
+            }
+            AuthPage::LoginPassword { .. } => {
+                iced::widget::operation::focus(LOGIN_PASSWORD_FIELD_ID)
+            }
+            AuthPage::Unlock {
+                method: UnlockMethod::MasterPassword | UnlockMethod::Pin,
+                ..
+            } => iced::widget::operation::focus(UNLOCK_FIELD_ID),
+            AuthPage::Unlock {
+                method: UnlockMethod::Biometrics,
+                ..
+            } => Task::none(),
+        }
     }
 
     pub fn view<'a>(

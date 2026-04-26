@@ -142,4 +142,25 @@ impl VaultView {
         self.search_query.clear();
         iced::widget::operation::focus(super::widgets::search_bar::SEARCH_ID)
     }
+
+    /// Focus the search input *without* clearing the query. Fired on every
+    /// transition into the Vault screen (sidebar tab, post-unlock route,
+    /// user switch) so the user can type immediately. Differs from
+    /// `focus_search_task` which is a deliberate "fresh search" action.
+    pub(crate) fn auto_focus_task(&self) -> Task<VaultMessage> {
+        iced::widget::operation::focus(super::widgets::search_bar::SEARCH_ID)
+    }
+
+    /// Variant of [`auto_focus_task`] for screen-mount transitions where
+    /// the vault widget tree wasn't on screen the moment the focus task
+    /// was queued — the operation would otherwise walk the outgoing
+    /// screen's tree and miss the search input. The brief sleep yields to
+    /// iced's runtime so view() rebuilds the tree (and pane_grid mounts
+    /// its panes) before the focus operation runs.
+    pub(crate) fn delayed_auto_focus_task() -> Task<VaultMessage> {
+        Task::perform(
+            tokio::time::sleep(std::time::Duration::from_millis(50)),
+            |_| VaultMessage::AutoFocusSearchDelayed,
+        )
+    }
 }

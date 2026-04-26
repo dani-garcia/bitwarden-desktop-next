@@ -76,6 +76,13 @@ pub enum VaultMessage {
     SaveCompleted(UserId, Result<Box<CipherView>, String>),
     /// Fires when `ClientManager::soft_delete_cipher` finishes.
     DeleteCompleted(UserId, CipherId, Result<(), String>),
+    /// Internal: dispatched on a one-frame delay from screen-mount handlers
+    /// (post-unlock, switch-user-already-unlocked) so the focus operation
+    /// runs against the freshly-mounted vault widget tree rather than the
+    /// outgoing screen's tree. See CLAUDE.md "Iced Gotchas" → pane_grid
+    /// first-mount behavior. Outside a fresh-mount context, the synchronous
+    /// `auto_focus_task` / `focus_search_task` are sufficient.
+    AutoFocusSearchDelayed,
 }
 
 impl std::fmt::Debug for VaultMessage {
@@ -140,6 +147,7 @@ impl std::fmt::Debug for VaultMessage {
                 .field(id)
                 .field(result)
                 .finish(),
+            Self::AutoFocusSearchDelayed => f.write_str("AutoFocusSearchDelayed"),
         }
     }
 }

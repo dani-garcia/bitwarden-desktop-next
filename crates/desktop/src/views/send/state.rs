@@ -100,14 +100,18 @@ impl SendView {
         self.items.remove(uid);
     }
 
-    /// Clear the search and focus the input. Intended for a future
-    /// `File → Search Sends` menu item; the vault side has the same helper.
-    #[expect(
-        dead_code,
-        reason = "wired up when the File menu gains a Search Sends item"
-    )]
+    /// Clear the search and focus the input. Used on every transition into
+    /// the Send screen (sidebar tab, user switch) and by the future
+    /// `File → Search Sends` menu item.
     pub(crate) fn focus_search_task(&mut self) -> Task<SendMessage> {
         self.search_query.clear();
+        iced::widget::operation::focus(super::widgets::send_list::SEND_SEARCH_ID)
+    }
+
+    /// Focus the search input *without* clearing the query. Fired on every
+    /// transition into the Send screen (sidebar tab, user switch) so the
+    /// user can type immediately. Mirrors `VaultView::auto_focus_task`.
+    pub(crate) fn auto_focus_task(&self) -> Task<SendMessage> {
         iced::widget::operation::focus(super::widgets::send_list::SEND_SEARCH_ID)
     }
 }

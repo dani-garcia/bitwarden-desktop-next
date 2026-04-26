@@ -245,7 +245,8 @@ impl App {
             .login
             .show_unlock_for(self.active_user.as_ref(), &self.client_manager);
         self.set_screen(Screen::Login);
-        Task::batch([hide, show])
+        let focus = self.views.login.auto_focus_task().map(Message::login);
+        Task::batch([hide, show, focus])
     }
 
     fn magnify_copy_password(&mut self) -> Task<Message> {

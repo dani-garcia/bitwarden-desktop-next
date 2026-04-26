@@ -1,6 +1,6 @@
 use iced::{
     Alignment, Element, Fill,
-    widget::{Space, column, container, svg, text},
+    widget::{self, Space, column, container, svg, text},
 };
 
 use crate::{
@@ -11,6 +11,11 @@ use crate::{
 };
 
 use super::{LoginMessage, layout};
+
+/// Widget id for whichever unlock input is currently rendered (master
+/// password or PIN — never both at once). Used by `LoginView::auto_focus_task`
+/// to put the cursor in the field as soon as the unlock page is shown.
+pub const UNLOCK_FIELD_ID: widget::Id = widget::Id::new("unlock-field");
 
 /// Renders the full center content for the unlock screen:
 /// lock icon, title, email, and the card with method-specific controls.
@@ -76,6 +81,7 @@ fn card_content<'a>(
         }
         UnlockMethod::Pin => {
             items.push(reveal_text_field_with_submit(
+                Some(UNLOCK_FIELD_ID),
                 fl!("login-unlock-pin-placeholder"),
                 pin,
                 LoginMessage::PinChanged,
@@ -92,6 +98,7 @@ fn card_content<'a>(
         }
         UnlockMethod::MasterPassword => {
             items.push(reveal_text_field_with_submit(
+                Some(UNLOCK_FIELD_ID),
                 fl!("login-unlock-password-placeholder"),
                 password,
                 LoginMessage::PasswordChanged,

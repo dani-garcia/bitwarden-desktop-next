@@ -134,6 +134,9 @@ impl VaultView {
             VaultMessage::DetailLoaded(uid, id, res) => {
                 return self.handle_detail_loaded(uid, id, res, active_user);
             }
+            VaultMessage::AutoFocusSearchDelayed => {
+                return Outcome::task(self.auto_focus_task());
+            }
         }
         Outcome::None
     }

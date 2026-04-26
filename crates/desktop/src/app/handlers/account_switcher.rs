@@ -21,7 +21,7 @@ impl App {
             AccountSwitcherEvent::AddAccount => {
                 self.views.login.reset_to_email_entry();
                 self.set_screen(Screen::Login);
-                Task::none()
+                self.views.login.auto_focus_task().map(Message::login)
             }
             AccountSwitcherEvent::LockAll => self.handle_menu_action(MenuAction::LockAllVaults),
             AccountSwitcherEvent::Settings => self.handle_menu_action(MenuAction::Settings),
@@ -57,12 +57,13 @@ impl App {
                 .login
                 .show_unlock_for(Some(&uid), &self.client_manager);
             self.set_screen(Screen::Login);
-            Task::none()
+            self.views.login.auto_focus_task().map(Message::login)
         } else {
             self.set_screen(Screen::Vault);
             Task::batch([
                 self.load_vault_list_task(uid),
                 self.load_send_list_task(uid),
+                crate::views::vault::VaultView::delayed_auto_focus_task().map(Message::vault),
             ])
         }
     }

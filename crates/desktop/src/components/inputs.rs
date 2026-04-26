@@ -366,6 +366,7 @@ where
     Message: Clone + 'a,
 {
     component(RevealTextField {
+        id: None,
         label: label.into(),
         value,
         on_input: Box::new(on_input),
@@ -376,8 +377,11 @@ where
 }
 
 /// Variant of [`reveal_text_field`] that also fires `on_submit` when the user
-/// presses Enter inside the field.
+/// presses Enter inside the field. `id` lets the caller target the inner
+/// `text_input` with `widget::operation::focus(id)` — used by the login flows
+/// to put the cursor in the password / pin field as soon as the page is shown.
 pub fn reveal_text_field_with_submit<'a, Message>(
+    id: Option<iced::widget::Id>,
     label: impl Into<String>,
     value: &'a str,
     on_input: impl Fn(String) -> Message + 'a,
@@ -389,6 +393,7 @@ where
     Message: Clone + 'a,
 {
     component(RevealTextField {
+        id,
         label: label.into(),
         value,
         on_input: Box::new(on_input),
@@ -399,6 +404,7 @@ where
 }
 
 struct RevealTextField<'a, Message> {
+    id: Option<iced::widget::Id>,
     label: String,
     value: &'a str,
     on_input: Box<dyn Fn(String) -> Message + 'a>,
@@ -436,6 +442,9 @@ impl<'a, Message: Clone + 'a> Component<Message, AppTheme> for RevealTextField<'
 
     fn view(&self, state: &RevealTextState) -> Element<'_, RevealTextEvent, AppTheme> {
         let mut input = bare_text_input(self.value);
+        if let Some(id) = self.id.clone() {
+            input = input.id(id);
+        }
         if !self.disabled {
             input = input.on_input(RevealTextEvent::Input);
             if self.on_submit.is_some() {

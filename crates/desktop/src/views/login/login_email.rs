@@ -1,15 +1,22 @@
 use iced::{
     Alignment, Element, Fill,
-    widget::{Space, checkbox, column, container, row, svg, text},
+    widget::{self, Space, checkbox, column, container, row, svg, text},
 };
 
 use crate::{
-    components::{buttons, icons, inputs::text_field},
+    components::{
+        buttons, icons,
+        inputs::{bare_text_input, field_frame},
+    },
     fl,
     theme::{AppColors, AppTheme},
 };
 
 use super::{LoginMessage, layout};
+
+/// Widget id for the email text input. Used by `LoginView::auto_focus_task`
+/// to put the cursor in this field as soon as the login email page is shown.
+pub const LOGIN_EMAIL_FIELD_ID: widget::Id = widget::Id::new("login-email-field");
 
 /// Renders the full center content for the login email entry screen:
 /// vault icon, title, card with email field + checkbox + buttons,
@@ -59,12 +66,13 @@ fn card_content<'a>(
     remember_email: bool,
     colors: &'a AppColors,
 ) -> Element<'a, LoginMessage, AppTheme> {
-    let email_field = text_field(
+    let email_field = field_frame(
         fl!("login-email-placeholder"),
-        email,
-        LoginMessage::EmailChanged,
-        Some(LoginMessage::ContinueWithEmail),
-        false,
+        bare_text_input(email)
+            .id(LOGIN_EMAIL_FIELD_ID)
+            .on_input(LoginMessage::EmailChanged)
+            .on_submit(LoginMessage::ContinueWithEmail)
+            .into(),
         colors,
     );
 

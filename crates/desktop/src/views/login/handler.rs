@@ -19,7 +19,11 @@ impl App {
                 }
                 self.set_screen(Screen::Vault);
                 tracing::info!(%uid, "unlock succeeded; loading vault list");
-                self.load_vault_list_task(uid)
+                Task::batch([
+                    self.load_vault_list_task(uid),
+                    crate::views::vault::VaultView::delayed_auto_focus_task()
+                        .map(Message::vault),
+                ])
             }
             LoginEvent::AccountSwitcher(e) => self.handle_account_switcher_event(e),
             LoginEvent::ToastRequested(t) => {
@@ -45,7 +49,7 @@ impl App {
             .login
             .show_unlock_for(Some(&uid), &self.client_manager);
         self.set_screen(Screen::Login);
-        Task::none()
+        self.views.login.auto_focus_task().map(Message::login)
     }
 
     /// Sign the active user out: drop their decrypted vault cache, remove
@@ -73,7 +77,7 @@ impl App {
                 self.active_user = None;
                 self.views.login.reset_to_email_entry();
                 self.set_screen(Screen::Login);
-                Task::none()
+                self.views.login.auto_focus_task().map(Message::login)
             }
         }
     }

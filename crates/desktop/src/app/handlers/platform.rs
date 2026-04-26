@@ -169,7 +169,7 @@ impl App {
                     .login
                     .show_unlock_for(self.active_user.as_ref(), &self.client_manager);
                 self.set_screen(Screen::Login);
-                Task::none()
+                self.views.login.auto_focus_task().map(Message::login)
             }
             SystemMessage::InstanceWakeRequested => self.show_main_window(),
         }
@@ -197,6 +197,7 @@ impl App {
                     .login
                     .show_unlock_for(self.active_user.as_ref(), &self.client_manager);
                 self.set_screen(Screen::Login);
+                return self.views.login.auto_focus_task().map(Message::login);
             }
             MenuAction::ToggleFullScreen => {
                 let id = self.main_window_id();

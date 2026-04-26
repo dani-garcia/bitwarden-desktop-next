@@ -1,6 +1,6 @@
 use iced::{
     Alignment, Element, Fill,
-    widget::{Space, column, container, svg, text},
+    widget::{self, Space, column, container, svg, text},
 };
 
 use crate::{
@@ -10,6 +10,11 @@ use crate::{
 };
 
 use super::{LoginMessage, layout};
+
+/// Widget id for the password text input. Used by `LoginView::auto_focus_task`
+/// to put the cursor in this field after the user advances from the email
+/// page (and when navigating Back-then-Continue from the email page).
+pub const LOGIN_PASSWORD_FIELD_ID: widget::Id = widget::Id::new("login-password-field");
 
 /// Renders the full center content for the login password screen:
 /// wave icon, "Welcome back" title, email subtitle, card with password field + buttons.
@@ -41,6 +46,7 @@ fn card_content<'a>(
     colors: &'a AppColors,
 ) -> Element<'a, LoginMessage, AppTheme> {
     let password_field = reveal_text_field_with_submit(
+        Some(LOGIN_PASSWORD_FIELD_ID),
         fl!("login-password-placeholder"),
         password,
         LoginMessage::LoginPasswordChanged,

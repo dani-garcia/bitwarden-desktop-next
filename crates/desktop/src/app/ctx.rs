@@ -122,14 +122,10 @@ impl<V: ViewTypes> Outcome<V> {
         Self::Event(event)
     }
 
-    /// Constructor for task-producing arms. Today every call site wraps
-    /// an `async` block and uses [`Outcome::spawn`] — this escape hatch
-    /// exists for pre-built tasks (`Task::batch`, `Task::done`, etc.)
-    /// when a future feature needs them.
-    #[expect(
-        dead_code,
-        reason = "API completeness: escape hatch for pre-built Tasks"
-    )]
+    /// Constructor for task-producing arms. Use [`Outcome::spawn`] for the
+    /// async-block + completion-message pattern; this escape hatch is for
+    /// pre-built tasks (`Task::batch`, `Task::done`, widget operations such
+    /// as `widget::operation::focus`).
     pub fn task(task: Task<V::Message>) -> Self {
         Self::Task(task)
     }
