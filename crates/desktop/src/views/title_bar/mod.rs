@@ -213,7 +213,7 @@ impl TitleBarView {
 
                 let panel = dropdown::menu_panel(entries, i, open_submenu, menu_state, colors);
                 let dd: Element<'_, TitleBarMessage, AppTheme> =
-                    crate::components::drop_down::DropDown::new(btn, panel, is_open)
+                    crate::components::drop_down::DropDown::new_no_shadow(btn, panel, is_open)
                         .on_dismiss(TitleBarMessage::DismissMenu)
                         .alignment(crate::components::drop_down::Alignment::BelowLeft)
                         .width(iced::Length::Shrink)

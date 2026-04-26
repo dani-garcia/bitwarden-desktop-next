@@ -18,10 +18,13 @@ use iced::{
 
 use crate::theme::RADIUS_LG;
 
-/// Drop shadow rendered behind every dropdown panel. Border radius matches
-/// [`RADIUS_LG`] so the shadow follows panels' rounded corners; if a future
-/// panel needs a different radius this would need parameterising.
-const PANEL_SHADOW: Shadow = Shadow {
+/// Drop shadow applied by [`DropDown::new`] behind panels. Border radius
+/// matches [`RADIUS_LG`] so the shadow follows panels' rounded corners.
+/// Composite overlays that paint more than one visual panel (e.g. the title
+/// bar's menu + open submenu) should use [`DropDown::new_no_shadow`] and
+/// apply this shadow per-panel instead — a single wrapping shadow would
+/// span the gap between panels and any layout offsets.
+pub const PANEL_SHADOW: Shadow = Shadow {
     color: Color::from_rgba(0.0, 0.0, 0.0, 0.25),
     offset: Vector::new(0.0, 4.0),
     blur_radius: 16.0,
@@ -146,9 +149,22 @@ where
             border: Border::default().rounded(RADIUS_LG),
             ..container::Style::default()
         });
+        Self::new_no_shadow(underlay, shadowed, expanded)
+    }
+
+    /// Like [`new`](Self::new) but without the auto-shadow wrap. Use this
+    /// when the overlay paints more than one visual panel side-by-side
+    /// (e.g. a menu with an open submenu) and each panel needs its own
+    /// shadow — apply [`PANEL_SHADOW`] inside each panel's container style.
+    pub fn new_no_shadow<U, B>(underlay: U, overlay: B, expanded: bool) -> Self
+    where
+        U: Into<Element<'a, Message, Theme, Renderer>>,
+        B: Into<Element<'a, Message, Theme, Renderer>>,
+        Theme: 'a,
+    {
         DropDown {
             underlay: underlay.into(),
-            overlay: iced::widget::opaque(shadowed),
+            overlay: iced::widget::opaque(overlay),
             expanded,
             on_dismiss: None,
             width: None,
