@@ -14,8 +14,6 @@ use crate::{
 
 use super::{LoginMessage, layout};
 
-/// Widget id for the email text input. Used by `LoginView::auto_focus_task`
-/// to put the cursor in this field as soon as the login email page is shown.
 pub const LOGIN_EMAIL_FIELD_ID: widget::Id = widget::Id::new("login-email-field");
 
 /// Renders the full center content for the login email entry screen:

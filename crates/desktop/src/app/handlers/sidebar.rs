@@ -58,13 +58,7 @@ impl App {
                 if let Some(uid) = self.active_user {
                     self.views.vault.apply_filter(&uid, filter);
                 }
-                // Already-on-Vault filter switch keeps the user's query so
-                // they can refine inside the new filter. View changes
-                // (handled in `switch_to_vault`) clear the query because
-                // crossing into a different list semantically resets search.
-                let switch = self.switch_to_vault();
-                let focus = self.views.vault.auto_focus_task().map(Message::vault);
-                Task::batch([switch, focus])
+                self.switch_to_vault()
             }
             SidebarMessage::SendFilterSelected(filter) => {
                 self.sidebar.active_send_filter = filter;
@@ -72,20 +66,18 @@ impl App {
                 if let Some(uid) = self.active_user {
                     self.views.send.apply_filter(&uid, filter);
                 }
-                let switch = self.switch_to_send();
-                let focus = self.views.send.auto_focus_task().map(Message::send);
-                Task::batch([switch, focus])
+                self.switch_to_send()
             }
         }
     }
 
-    /// Transition to the Vault screen. No-op when already there; otherwise
-    /// refresh the cipher list so it reflects any changes that happened
-    /// while the user was on a different screen, clear the search query,
-    /// and focus the search input.
+    /// Transition to the Vault screen and focus the search input. On a fresh
+    /// view change the search query is cleared (entering a new list); on a
+    /// same-screen call (filter switch) the query is preserved so the user
+    /// can refine inside the new filter.
     fn switch_to_vault(&mut self) -> Task<Message> {
         if self.screen == Screen::Vault {
-            return Task::none();
+            return self.views.vault.auto_focus_task().map(Message::vault);
         }
         // Only switch while authenticated — clicking the sidebar while on
         // Login shouldn't flip the screen underneath the login flow.
@@ -102,7 +94,7 @@ impl App {
 
     fn switch_to_send(&mut self) -> Task<Message> {
         if self.screen == Screen::Send {
-            return Task::none();
+            return self.views.send.auto_focus_task().map(Message::send);
         }
         if !matches!(self.screen, Screen::Vault | Screen::Send) {
             return Task::none();

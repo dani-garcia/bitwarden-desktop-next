@@ -12,9 +12,8 @@ use crate::{
 
 use super::{LoginMessage, layout};
 
-/// Widget id for whichever unlock input is currently rendered (master
-/// password or PIN — never both at once). Used by `LoginView::auto_focus_task`
-/// to put the cursor in the field as soon as the unlock page is shown.
+/// Master-password and PIN inputs share the id — they're never rendered at
+/// the same time, and `LoginView::auto_focus_task` only needs to find one.
 pub const UNLOCK_FIELD_ID: widget::Id = widget::Id::new("unlock-field");
 
 /// Renders the full center content for the unlock screen:

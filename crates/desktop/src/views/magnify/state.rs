@@ -35,13 +35,10 @@ pub enum Mode {
     Unlocked,
 }
 
-#[derive(Default)]
 pub struct MagnifyView {
     /// Iced window id for the launcher. Created hidden in `App::new` so
-    /// every hotkey press is a cheap show / hide; remains `Some` for the
-    /// lifetime of the app. Stays `Option` only because `Default::default()`
-    /// has nothing meaningful to put here.
-    pub(crate) window: Option<iced::window::Id>,
+    /// every hotkey press is a cheap show / hide.
+    pub(crate) window: iced::window::Id,
 
     /// Search query. Persists across summons subject to the sticky-search
     /// rules — see `App::handle_magnify_hotkey`.
@@ -81,8 +78,18 @@ pub struct MagnifyView {
 }
 
 impl MagnifyView {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(window: iced::window::Id) -> Self {
+        Self {
+            window,
+            query: String::new(),
+            results: Vec::new(),
+            selected: 0,
+            mode: Mode::default(),
+            last_used: None,
+            anchored_user: None,
+            pending_password: None,
+            scroll_offset_y: 0.0,
+        }
     }
 
     /// Whether `last_used` is within `STICKY_SEARCH_TTL` of `now`.

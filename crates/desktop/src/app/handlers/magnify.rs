@@ -187,11 +187,7 @@ impl App {
         // was preserved).
         self.magnify_recompute();
 
-        // Window is created at startup in `App::new`, so id is always set.
-        let Some(id) = self.magnify.window else {
-            tracing::error!("magnify: hotkey fired before window was created");
-            return Task::none();
-        };
+        let id = self.magnify.window;
         // Resize to match the current results count *before* the OS
         // window becomes visible — avoids a one-frame flash at the old
         // height before the resize lands.
@@ -227,11 +223,7 @@ impl App {
 
     fn magnify_hide(&mut self) -> Task<Message> {
         self.magnify.touch();
-        if let Some(id) = self.magnify.window {
-            iced::window::set_mode(id, iced::window::Mode::Hidden)
-        } else {
-            Task::none()
-        }
+        iced::window::set_mode(self.magnify.window, iced::window::Mode::Hidden)
     }
 
     fn magnify_open_main(&mut self) -> Task<Message> {
@@ -296,11 +288,8 @@ impl App {
     }
 
     fn magnify_resize_task(&self) -> Task<Message> {
-        let Some(id) = self.magnify.window else {
-            return Task::none();
-        };
         let height = dims::height_for(self.magnify.results.len());
-        iced::window::resize(id, iced::Size::new(dims::WIDTH, height))
+        iced::window::resize(self.magnify.window, iced::Size::new(dims::WIDTH, height))
     }
 
     /// Scroll the results list so the selected row is at least partially

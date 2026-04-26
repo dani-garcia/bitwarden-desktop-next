@@ -75,9 +75,6 @@ impl App {
             WindowMessage::Closed(id) => {
                 let was_main = id == self.main_window_id();
                 self.windows.remove(&id);
-                if Some(id) == self.magnify.window {
-                    self.magnify.window = None;
-                }
                 if was_main { iced::exit() } else { Task::none() }
             }
             WindowMessage::Resized(id, size) => {
@@ -87,7 +84,7 @@ impl App {
                 Task::none()
             }
             WindowMessage::Unfocused(id) => {
-                if Some(id) == self.magnify.window {
+                if id == self.magnify.window {
                     return self
                         .handle_magnify_message(crate::views::magnify::MagnifyMessage::Hide);
                 }
@@ -95,7 +92,7 @@ impl App {
             }
             WindowMessage::KeyPressed(id, ev) => {
                 // Magnify launcher gets first crack at keys for its own window.
-                if Some(id) == self.magnify.window
+                if id == self.magnify.window
                     && let Some(task) = self.handle_magnify_key(ev.clone())
                 {
                     return task;

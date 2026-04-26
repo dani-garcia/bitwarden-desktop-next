@@ -270,11 +270,7 @@ impl App {
             toasts: Vec::new(),
             open_overlay: None,
             clipboard: ClipboardManager::new(),
-            magnify: {
-                let mut m = magnify::MagnifyView::new();
-                m.window = Some(magnify_id);
-                m
-            },
+            magnify: magnify::MagnifyView::new(magnify_id),
         };
 
         (
