@@ -42,7 +42,7 @@ All 24 settings in the Appearance / Security / Integrations / Autotype / Advance
   - Open at device login — write to platform autostart (registry on Windows, LaunchAgent on macOS, `.desktop` file on Linux).
   - Minimize on copy — flip a flag read by `ClipboardManager::copy` call-sites.
   - Always show dock (macOS) — `NSApplication.setActivationPolicy`.
-  - Enable hardware acceleration — read on startup before `ICED_BACKEND` selection; requires app restart (surface in UI).
+  - Enable hardware acceleration — Help → Troubleshooting → Toggle hardware acceleration now flips `Settings::hardware_acceleration`, persists, and toasts that a restart is required. The Advanced settings-tab checkbox still saves silently — give it the same restart toast. Also note that the `gpu` cargo feature must be built in for the persisted flag to do anything (`main::select_backend` falls back to tiny-skia when the feature is off).
   - Allow screenshots — Windows `SetWindowDisplayAffinity`; macOS / Linux set at window creation, so also restart-required.
   - Show favicons — list renders real favicons via the lazy service in
     [crates/desktop/src/favicon.rs](../crates/desktop/src/favicon.rs).

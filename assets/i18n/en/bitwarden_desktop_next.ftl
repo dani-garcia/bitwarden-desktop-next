@@ -339,6 +339,8 @@ menu-help-mobile-app = Get mobile app
 menu-help-browser-extension = Get browser extension
 menu-help-troubleshooting = Troubleshooting
 menu-help-troubleshooting-gpu = Toggle hardware acceleration
+menu-help-toast-hw-accel-on = Hardware acceleration enabled. Restart Bitwarden to apply.
+menu-help-toast-hw-accel-off = Hardware acceleration disabled. Restart Bitwarden to apply.
 menu-help-about = About Bitwarden
 
 ## Tray

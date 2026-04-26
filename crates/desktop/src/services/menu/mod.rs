@@ -177,6 +177,7 @@ pub enum MenuAction {
     Settings,
     Generator,
     GeneratorHistory,
+    ToggleHardwareAcceleration,
 }
 
 // ---------------------------------------------------------------------------
@@ -423,7 +424,9 @@ pub const MENUS: &[(&str, &[MenuEntry])] = &[
                 L("Safari"),
             ]),
             SEP,
-            E("menu-help-troubleshooting").sub(&[E("menu-help-troubleshooting-gpu")]),
+            E("menu-help-troubleshooting").sub(&[
+                E("menu-help-troubleshooting-gpu").action(ToggleHardwareAcceleration),
+            ]),
             SEP,
             E("menu-help-about").action(About),
         ],

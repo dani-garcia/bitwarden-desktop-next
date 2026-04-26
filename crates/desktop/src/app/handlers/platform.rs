@@ -238,6 +238,20 @@ impl App {
             MenuAction::GeneratorHistory => {
                 return self.open_generator_history();
             }
+            MenuAction::ToggleHardwareAcceleration => {
+                // The renderer backend is selected once at startup
+                // (`main::select_backend`), so flipping the bit here only
+                // takes effect on next launch. Persist + toast so the user
+                // knows a restart is needed.
+                self.settings.hardware_acceleration = !self.settings.hardware_acceleration;
+                self.settings.save();
+                let toast_msg = if self.settings.hardware_acceleration {
+                    crate::fl!("menu-help-toast-hw-accel-on")
+                } else {
+                    crate::fl!("menu-help-toast-hw-accel-off")
+                };
+                self.push_toast(crate::components::toast::Toast::info(toast_msg, None));
+            }
             MenuAction::About => {
                 if let Some(id) = self.about_window_id() {
                     return iced::window::gain_focus(id);
