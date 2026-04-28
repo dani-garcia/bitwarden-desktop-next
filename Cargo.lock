@@ -697,7 +697,7 @@ dependencies = [
 [[package]]
 name = "bitwarden-api-api"
 version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=e352a06cdfc9e179b21d4b7b502b545fcc68b341#e352a06cdfc9e179b21d4b7b502b545fcc68b341"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
 dependencies = [
  "async-trait",
  "bitwarden-api-base",
@@ -713,7 +713,7 @@ dependencies = [
 [[package]]
 name = "bitwarden-api-base"
 version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=e352a06cdfc9e179b21d4b7b502b545fcc68b341#e352a06cdfc9e179b21d4b7b502b545fcc68b341"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
 dependencies = [
  "http",
  "reqwest",
@@ -726,7 +726,7 @@ dependencies = [
 [[package]]
 name = "bitwarden-api-identity"
 version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=e352a06cdfc9e179b21d4b7b502b545fcc68b341#e352a06cdfc9e179b21d4b7b502b545fcc68b341"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
 dependencies = [
  "async-trait",
  "bitwarden-api-base",
@@ -742,7 +742,7 @@ dependencies = [
 [[package]]
 name = "bitwarden-api-key-connector"
 version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=e352a06cdfc9e179b21d4b7b502b545fcc68b341#e352a06cdfc9e179b21d4b7b502b545fcc68b341"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
 dependencies = [
  "async-trait",
  "bitwarden-api-base",
@@ -757,7 +757,7 @@ dependencies = [
 [[package]]
 name = "bitwarden-auth"
 version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=e352a06cdfc9e179b21d4b7b502b545fcc68b341#e352a06cdfc9e179b21d4b7b502b545fcc68b341"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
 dependencies = [
  "async-trait",
  "bitwarden-api-api",
@@ -768,6 +768,7 @@ dependencies = [
  "bitwarden-encoding",
  "bitwarden-error",
  "bitwarden-policies",
+ "bitwarden-state",
  "chrono",
  "http",
  "reqwest",
@@ -783,7 +784,7 @@ dependencies = [
 [[package]]
 name = "bitwarden-collections"
 version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=e352a06cdfc9e179b21d4b7b502b545fcc68b341#e352a06cdfc9e179b21d4b7b502b545fcc68b341"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
 dependencies = [
  "bitwarden-api-api",
  "bitwarden-core",
@@ -799,7 +800,7 @@ dependencies = [
 [[package]]
 name = "bitwarden-core"
 version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=e352a06cdfc9e179b21d4b7b502b545fcc68b341#e352a06cdfc9e179b21d4b7b502b545fcc68b341"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
 dependencies = [
  "async-trait",
  "bitwarden-api-api",
@@ -835,7 +836,7 @@ dependencies = [
 [[package]]
 name = "bitwarden-core-macro"
 version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=e352a06cdfc9e179b21d4b7b502b545fcc68b341#e352a06cdfc9e179b21d4b7b502b545fcc68b341"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -845,7 +846,7 @@ dependencies = [
 [[package]]
 name = "bitwarden-crypto"
 version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=e352a06cdfc9e179b21d4b7b502b545fcc68b341#e352a06cdfc9e179b21d4b7b502b545fcc68b341"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
 dependencies = [
  "aes",
  "argon2",
@@ -861,6 +862,7 @@ dependencies = [
  "hkdf",
  "hmac 0.13.0",
  "hybrid-array",
+ "ml-dsa",
  "num-bigint",
  "num-traits",
  "pbkdf2 0.13.0",
@@ -923,7 +925,7 @@ dependencies = [
 [[package]]
 name = "bitwarden-encoding"
 version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=e352a06cdfc9e179b21d4b7b502b545fcc68b341#e352a06cdfc9e179b21d4b7b502b545fcc68b341"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
 dependencies = [
  "data-encoding",
  "data-encoding-macro",
@@ -934,7 +936,7 @@ dependencies = [
 [[package]]
 name = "bitwarden-error"
 version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=e352a06cdfc9e179b21d4b7b502b545fcc68b341#e352a06cdfc9e179b21d4b7b502b545fcc68b341"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
 dependencies = [
  "bitwarden-error-macro",
 ]
@@ -942,7 +944,7 @@ dependencies = [
 [[package]]
 name = "bitwarden-error-macro"
 version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=e352a06cdfc9e179b21d4b7b502b545fcc68b341#e352a06cdfc9e179b21d4b7b502b545fcc68b341"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
 dependencies = [
  "darling 0.20.11",
  "proc-macro2",
@@ -953,7 +955,7 @@ dependencies = [
 [[package]]
 name = "bitwarden-exporters"
 version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=e352a06cdfc9e179b21d4b7b502b545fcc68b341#e352a06cdfc9e179b21d4b7b502b545fcc68b341"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
 dependencies = [
  "bitwarden-collections",
  "bitwarden-core",
@@ -977,7 +979,7 @@ dependencies = [
 [[package]]
 name = "bitwarden-fido"
 version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=e352a06cdfc9e179b21d4b7b502b545fcc68b341#e352a06cdfc9e179b21d4b7b502b545fcc68b341"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
 dependencies = [
  "async-trait",
  "bitwarden-core",
@@ -986,7 +988,7 @@ dependencies = [
  "bitwarden-vault",
  "chrono",
  "coset",
- "itertools 0.14.0",
+ "itertools 0.13.0",
  "p256 0.13.2",
  "passkey",
  "passkey-client",
@@ -1001,7 +1003,7 @@ dependencies = [
 [[package]]
 name = "bitwarden-generators"
 version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=e352a06cdfc9e179b21d4b7b502b545fcc68b341#e352a06cdfc9e179b21d4b7b502b545fcc68b341"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
 dependencies = [
  "bitwarden-core",
  "bitwarden-crypto",
@@ -1017,7 +1019,7 @@ dependencies = [
 [[package]]
 name = "bitwarden-logging"
 version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=e352a06cdfc9e179b21d4b7b502b545fcc68b341#e352a06cdfc9e179b21d4b7b502b545fcc68b341"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
 dependencies = [
  "chrono",
  "serde",
@@ -1027,9 +1029,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "bitwarden-organizations"
+version = "2.0.0"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
+dependencies = [
+ "bitwarden-core",
+ "chrono",
+ "serde",
+ "serde_repr",
+ "uuid",
+]
+
+[[package]]
 name = "bitwarden-pm"
 version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=e352a06cdfc9e179b21d4b7b502b545fcc68b341#e352a06cdfc9e179b21d4b7b502b545fcc68b341"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
 dependencies = [
  "async-trait",
  "bitwarden-auth",
@@ -1049,20 +1063,20 @@ dependencies = [
 [[package]]
 name = "bitwarden-policies"
 version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=e352a06cdfc9e179b21d4b7b502b545fcc68b341#e352a06cdfc9e179b21d4b7b502b545fcc68b341"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
 dependencies = [
  "bitwarden-api-api",
  "bitwarden-core",
+ "bitwarden-organizations",
  "serde",
  "serde_json",
- "serde_repr",
  "uuid",
 ]
 
 [[package]]
 name = "bitwarden-send"
 version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=e352a06cdfc9e179b21d4b7b502b545fcc68b341#e352a06cdfc9e179b21d4b7b502b545fcc68b341"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
 dependencies = [
  "bitwarden-api-api",
  "bitwarden-core",
@@ -1083,7 +1097,7 @@ dependencies = [
 [[package]]
 name = "bitwarden-server-communication-config"
 version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=e352a06cdfc9e179b21d4b7b502b545fcc68b341#e352a06cdfc9e179b21d4b7b502b545fcc68b341"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
 dependencies = [
  "async-trait",
  "bitwarden-error",
@@ -1100,7 +1114,7 @@ dependencies = [
 [[package]]
 name = "bitwarden-ssh"
 version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=e352a06cdfc9e179b21d4b7b502b545fcc68b341#e352a06cdfc9e179b21d4b7b502b545fcc68b341"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
 dependencies = [
  "bitwarden-error",
  "bitwarden-vault",
@@ -1124,7 +1138,7 @@ dependencies = [
 [[package]]
 name = "bitwarden-state"
 version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=e352a06cdfc9e179b21d4b7b502b545fcc68b341#e352a06cdfc9e179b21d4b7b502b545fcc68b341"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
 dependencies = [
  "async-trait",
  "bitwarden-error",
@@ -1142,7 +1156,7 @@ dependencies = [
 [[package]]
 name = "bitwarden-sync"
 version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=e352a06cdfc9e179b21d4b7b502b545fcc68b341#e352a06cdfc9e179b21d4b7b502b545fcc68b341"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
 dependencies = [
  "async-trait",
  "bitwarden-api-api",
@@ -1155,7 +1169,7 @@ dependencies = [
 [[package]]
 name = "bitwarden-threading"
 version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=e352a06cdfc9e179b21d4b7b502b545fcc68b341#e352a06cdfc9e179b21d4b7b502b545fcc68b341"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
 dependencies = [
  "bitwarden-error",
  "serde",
@@ -1168,7 +1182,7 @@ dependencies = [
 [[package]]
 name = "bitwarden-user-crypto-management"
 version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=e352a06cdfc9e179b21d4b7b502b545fcc68b341#e352a06cdfc9e179b21d4b7b502b545fcc68b341"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
 dependencies = [
  "bitwarden-api-api",
  "bitwarden-api-key-connector",
@@ -1191,7 +1205,7 @@ dependencies = [
 [[package]]
 name = "bitwarden-uuid"
 version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=e352a06cdfc9e179b21d4b7b502b545fcc68b341#e352a06cdfc9e179b21d4b7b502b545fcc68b341"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
 dependencies = [
  "bitwarden-uuid-macro",
 ]
@@ -1199,7 +1213,7 @@ dependencies = [
 [[package]]
 name = "bitwarden-uuid-macro"
 version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=e352a06cdfc9e179b21d4b7b502b545fcc68b341#e352a06cdfc9e179b21d4b7b502b545fcc68b341"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
 dependencies = [
  "quote",
  "syn 2.0.117",
@@ -1208,7 +1222,7 @@ dependencies = [
 [[package]]
 name = "bitwarden-vault"
 version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=e352a06cdfc9e179b21d4b7b502b545fcc68b341#e352a06cdfc9e179b21d4b7b502b545fcc68b341"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
 dependencies = [
  "async-trait",
  "bitwarden-api-api",
@@ -1844,9 +1858,9 @@ dependencies = [
 
 [[package]]
 name = "cosmic-text"
-version = "0.18.2"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbe782a9e7520cc7de2232c957a47f99d3a35e855552677d07a557bc1a3b66ed"
+checksum = "be17b688510d934ce13f48a2beba700e11583e281e0fda99c22bb256a14eda73"
 dependencies = [
  "bitflags 2.11.1",
  "fontdb",
@@ -1954,7 +1968,7 @@ checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 [[package]]
 name = "cryoglyph"
 version = "0.1.0"
-source = "git+https://github.com/iced-rs/cryoglyph.git?rev=1d68895e9c4c9b73739f826e81c2e3012c155cce#1d68895e9c4c9b73739f826e81c2e3012c155cce"
+source = "git+https://github.com/iced-rs/cryoglyph.git?rev=e429a025df36ab8145708acb309080ae3deec17a#e429a025df36ab8145708acb309080ae3deec17a"
 dependencies = [
  "cosmic-text",
  "etagere",
@@ -3668,6 +3682,7 @@ version = "0.4.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3944cf8cf766b40e2a1a333ee5e9b563f854d5fa49d6a8ca2764e97c6eddb214"
 dependencies = [
+ "serde",
  "subtle",
  "typenum",
  "zeroize",
@@ -3827,7 +3842,7 @@ dependencies = [
 [[package]]
 name = "iced"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=ac1b2c7123ad82643482c0b3a4a776246c966697#ac1b2c7123ad82643482c0b3a4a776246c966697"
+source = "git+https://github.com/iced-rs/iced?rev=4e0bdcf54aeaadec6753fffd1b1185087bf03b67#4e0bdcf54aeaadec6753fffd1b1185087bf03b67"
 dependencies = [
  "iced_core",
  "iced_debug",
@@ -3845,7 +3860,7 @@ dependencies = [
 [[package]]
 name = "iced_beacon"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=ac1b2c7123ad82643482c0b3a4a776246c966697#ac1b2c7123ad82643482c0b3a4a776246c966697"
+source = "git+https://github.com/iced-rs/iced?rev=4e0bdcf54aeaadec6753fffd1b1185087bf03b67#4e0bdcf54aeaadec6753fffd1b1185087bf03b67"
 dependencies = [
  "bincode",
  "futures",
@@ -3860,7 +3875,7 @@ dependencies = [
 [[package]]
 name = "iced_core"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=ac1b2c7123ad82643482c0b3a4a776246c966697#ac1b2c7123ad82643482c0b3a4a776246c966697"
+source = "git+https://github.com/iced-rs/iced?rev=4e0bdcf54aeaadec6753fffd1b1185087bf03b67#4e0bdcf54aeaadec6753fffd1b1185087bf03b67"
 dependencies = [
  "bitflags 2.11.1",
  "bytes",
@@ -3878,7 +3893,7 @@ dependencies = [
 [[package]]
 name = "iced_debug"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=ac1b2c7123ad82643482c0b3a4a776246c966697#ac1b2c7123ad82643482c0b3a4a776246c966697"
+source = "git+https://github.com/iced-rs/iced?rev=4e0bdcf54aeaadec6753fffd1b1185087bf03b67#4e0bdcf54aeaadec6753fffd1b1185087bf03b67"
 dependencies = [
  "iced_beacon",
  "iced_core",
@@ -3889,7 +3904,7 @@ dependencies = [
 [[package]]
 name = "iced_devtools"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=ac1b2c7123ad82643482c0b3a4a776246c966697#ac1b2c7123ad82643482c0b3a4a776246c966697"
+source = "git+https://github.com/iced-rs/iced?rev=4e0bdcf54aeaadec6753fffd1b1185087bf03b67#4e0bdcf54aeaadec6753fffd1b1185087bf03b67"
 dependencies = [
  "iced_debug",
  "iced_program",
@@ -3900,7 +3915,7 @@ dependencies = [
 [[package]]
 name = "iced_futures"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=ac1b2c7123ad82643482c0b3a4a776246c966697#ac1b2c7123ad82643482c0b3a4a776246c966697"
+source = "git+https://github.com/iced-rs/iced?rev=4e0bdcf54aeaadec6753fffd1b1185087bf03b67#4e0bdcf54aeaadec6753fffd1b1185087bf03b67"
 dependencies = [
  "futures",
  "iced_core",
@@ -3914,7 +3929,7 @@ dependencies = [
 [[package]]
 name = "iced_graphics"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=ac1b2c7123ad82643482c0b3a4a776246c966697#ac1b2c7123ad82643482c0b3a4a776246c966697"
+source = "git+https://github.com/iced-rs/iced?rev=4e0bdcf54aeaadec6753fffd1b1185087bf03b67#4e0bdcf54aeaadec6753fffd1b1185087bf03b67"
 dependencies = [
  "bitflags 2.11.1",
  "bytemuck",
@@ -3935,7 +3950,7 @@ dependencies = [
 [[package]]
 name = "iced_program"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=ac1b2c7123ad82643482c0b3a4a776246c966697#ac1b2c7123ad82643482c0b3a4a776246c966697"
+source = "git+https://github.com/iced-rs/iced?rev=4e0bdcf54aeaadec6753fffd1b1185087bf03b67#4e0bdcf54aeaadec6753fffd1b1185087bf03b67"
 dependencies = [
  "iced_graphics",
  "iced_runtime",
@@ -3944,7 +3959,7 @@ dependencies = [
 [[package]]
 name = "iced_renderer"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=ac1b2c7123ad82643482c0b3a4a776246c966697#ac1b2c7123ad82643482c0b3a4a776246c966697"
+source = "git+https://github.com/iced-rs/iced?rev=4e0bdcf54aeaadec6753fffd1b1185087bf03b67#4e0bdcf54aeaadec6753fffd1b1185087bf03b67"
 dependencies = [
  "iced_graphics",
  "iced_tiny_skia",
@@ -3956,7 +3971,7 @@ dependencies = [
 [[package]]
 name = "iced_runtime"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=ac1b2c7123ad82643482c0b3a4a776246c966697#ac1b2c7123ad82643482c0b3a4a776246c966697"
+source = "git+https://github.com/iced-rs/iced?rev=4e0bdcf54aeaadec6753fffd1b1185087bf03b67#4e0bdcf54aeaadec6753fffd1b1185087bf03b67"
 dependencies = [
  "bytes",
  "iced_core",
@@ -3968,7 +3983,7 @@ dependencies = [
 [[package]]
 name = "iced_selector"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=ac1b2c7123ad82643482c0b3a4a776246c966697#ac1b2c7123ad82643482c0b3a4a776246c966697"
+source = "git+https://github.com/iced-rs/iced?rev=4e0bdcf54aeaadec6753fffd1b1185087bf03b67#4e0bdcf54aeaadec6753fffd1b1185087bf03b67"
 dependencies = [
  "iced_core",
 ]
@@ -3976,7 +3991,7 @@ dependencies = [
 [[package]]
 name = "iced_test"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=ac1b2c7123ad82643482c0b3a4a776246c966697#ac1b2c7123ad82643482c0b3a4a776246c966697"
+source = "git+https://github.com/iced-rs/iced?rev=4e0bdcf54aeaadec6753fffd1b1185087bf03b67#4e0bdcf54aeaadec6753fffd1b1185087bf03b67"
 dependencies = [
  "iced_futures",
  "iced_program",
@@ -3992,7 +4007,7 @@ dependencies = [
 [[package]]
 name = "iced_tester"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=ac1b2c7123ad82643482c0b3a4a776246c966697#ac1b2c7123ad82643482c0b3a4a776246c966697"
+source = "git+https://github.com/iced-rs/iced?rev=4e0bdcf54aeaadec6753fffd1b1185087bf03b67#4e0bdcf54aeaadec6753fffd1b1185087bf03b67"
 dependencies = [
  "iced_test",
  "iced_widget",
@@ -4003,7 +4018,7 @@ dependencies = [
 [[package]]
 name = "iced_tiny_skia"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=ac1b2c7123ad82643482c0b3a4a776246c966697#ac1b2c7123ad82643482c0b3a4a776246c966697"
+source = "git+https://github.com/iced-rs/iced?rev=4e0bdcf54aeaadec6753fffd1b1185087bf03b67#4e0bdcf54aeaadec6753fffd1b1185087bf03b67"
 dependencies = [
  "bytemuck",
  "cosmic-text",
@@ -4020,7 +4035,7 @@ dependencies = [
 [[package]]
 name = "iced_wgpu"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=ac1b2c7123ad82643482c0b3a4a776246c966697#ac1b2c7123ad82643482c0b3a4a776246c966697"
+source = "git+https://github.com/iced-rs/iced?rev=4e0bdcf54aeaadec6753fffd1b1185087bf03b67#4e0bdcf54aeaadec6753fffd1b1185087bf03b67"
 dependencies = [
  "bitflags 2.11.1",
  "bytemuck",
@@ -4041,7 +4056,7 @@ dependencies = [
 [[package]]
 name = "iced_widget"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=ac1b2c7123ad82643482c0b3a4a776246c966697#ac1b2c7123ad82643482c0b3a4a776246c966697"
+source = "git+https://github.com/iced-rs/iced?rev=4e0bdcf54aeaadec6753fffd1b1185087bf03b67#4e0bdcf54aeaadec6753fffd1b1185087bf03b67"
 dependencies = [
  "iced_renderer",
  "log",
@@ -4055,7 +4070,7 @@ dependencies = [
 [[package]]
 name = "iced_winit"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=ac1b2c7123ad82643482c0b3a4a776246c966697#ac1b2c7123ad82643482c0b3a4a776246c966697"
+source = "git+https://github.com/iced-rs/iced?rev=4e0bdcf54aeaadec6753fffd1b1185087bf03b67#4e0bdcf54aeaadec6753fffd1b1185087bf03b67"
 dependencies = [
  "arboard",
  "iced_debug",
@@ -4494,6 +4509,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fb9652713a34bd7a2f539adcab233163943bed9c685970db62eb3cb264d625a1"
 
 [[package]]
+name = "keccak"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e24a010dd405bd7ed803e5253182815b41bf2e6a80cc3bfc066658e03a198aa"
+dependencies = [
+ "cfg-if",
+ "cpufeatures 0.3.0",
+]
+
+[[package]]
 name = "keyboard-types"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4924,6 +4949,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "ml-dsa"
+version = "0.1.0-rc.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f5b2bb0ad6fa2b40396775bd56f51345171490fef993f46f91a876ecdbdaea55"
+dependencies = [
+ "const-oid 0.10.2",
+ "ctutils",
+ "hybrid-array",
+ "module-lattice",
+ "pkcs8 0.11.0-rc.11",
+ "rand_core 0.10.1",
+ "sha3",
+ "signature 3.0.0-rc.10",
+ "zeroize",
+]
+
+[[package]]
 name = "mockall"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4947,6 +4989,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "module-lattice"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc7c90d33a0dac244570c26461d761ffaeadb3bfc2b17cc625ae2185cafdffae"
+dependencies = [
+ "hybrid-array",
+ "num-traits",
+ "zeroize",
 ]
 
 [[package]]
@@ -7563,6 +7616,16 @@ dependencies = [
  "cfg-if",
  "cpufeatures 0.3.0",
  "digest 0.11.2",
+]
+
+[[package]]
+name = "sha3"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be176f1a57ce4e3d31c1a166222d9768de5954f811601fb7ca06fc8203905ce1"
+dependencies = [
+ "digest 0.11.2",
+ "keccak",
 ]
 
 [[package]]

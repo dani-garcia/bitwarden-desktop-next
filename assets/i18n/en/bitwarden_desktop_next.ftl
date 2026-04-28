@@ -111,6 +111,7 @@ detail-header-card = View card
 detail-header-identity = View identity
 detail-header-note = View note
 detail-header-ssh-key = View SSH key
+detail-header-bank-account = View bank account
 
 ## Detail pane — section labels
 detail-section-item-details = Item details
@@ -159,6 +160,7 @@ form-title-edit-card = Edit card
 form-title-edit-identity = Edit identity
 form-title-edit-note = Edit note
 form-title-edit-ssh-key = Edit SSH key
+form-title-edit-bank-account = Edit bank account
 
 ## Cipher form — buttons
 form-save = Save

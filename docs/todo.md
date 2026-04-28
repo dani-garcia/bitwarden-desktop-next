@@ -99,6 +99,16 @@ The tray itself ships as of this change (see `crates/desktop/src/tray.rs`, four 
 
 **Note:** iced [PR #3021](https://github.com/iced-rs/iced/pull/3021) adds native tray support but is still open (targeting 1.0). If it lands on our pin, re-evaluate swapping our `tray-icon` dep for the native path.
 
+### Bank-account cipher type
+
+The SDK exposes `CipherType::BankAccount` (and `CipherListViewType::BankAccount`) but the desktop UI doesn't have any of the supporting plumbing yet. Currently stubbed out at every match site (search `TODO(bank-account)`) so existing items don't crash the app — they render with the shared item-details + custom-fields cards but no type-specific section, and the magnify launcher uses the credit-card icon as a stand-in. Work needed:
+
+- **Detail pane section.** New `bank_account` module under [cipher_detail/](../crates/desktop/src/views/vault/widgets/cipher_detail/) mirroring the `card` / `identity` modules, plus a `CipherType::BankAccount` arm in the `match` at [view.rs:34](../crates/desktop/src/views/vault/widgets/cipher_detail/view.rs).
+- **Edit form sections + sub-struct.** Equivalent module under [cipher_edit/sections/](../crates/desktop/src/views/vault/widgets/cipher_edit/sections/), plus a `CipherType::BankAccount` arm in [cipher_edit/view.rs:29](../crates/desktop/src/views/vault/widgets/cipher_edit/view.rs) and an `ensure_sub_structs` arm in [state.rs:186](../crates/desktop/src/views/vault/widgets/cipher_edit/state.rs) that creates the `BankAccountView` placeholder.
+- **Dedicated icon.** Add a `BWI_BANK` glyph to [components/icons.rs](../crates/desktop/src/components/icons.rs) and use it from the magnify launcher row + cipher-detail header.
+- **Type-picker entry.** "New bank account" should appear in the new-item dropdown (wherever the existing types are listed).
+- **Localization.** `detail-header-bank-account` / `form-title-edit-bank-account` already exist in en + es; expand once section labels and field strings are fleshed out.
+
 ### Right-click context menu for text inputs
 
 Standard cut / copy / paste / select-all on `TextInput` fields and the notes `TextEditor` in `cipher_form`. Iced 0.15 doesn't provide this out of the box — every text widget silently swallows right-clicks. Shape: a `components::context_menu` wrapper that stacks `MouseArea::on_right_press` over the child and shows our `DropDown` with the four actions. `TextEditor` already takes `Action::{Copy,Cut,Paste,SelectAll}` via its `on_action` callback, so the notes field is a direct wire-up. `TextInput` needs a `widget::Id` per field + `widget::operation::text_input::{select_all, ...}` dispatched as `Task`s; paste reuses iced's clipboard shell. Simplest first pass anchors the menu to the field (our `DropDown` is widget-anchored, not cursor-anchored); a cursor-anchored variant would need a small `DropDown` extension for absolute-offset placement.

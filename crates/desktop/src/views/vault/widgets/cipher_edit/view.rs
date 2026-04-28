@@ -78,6 +78,9 @@ pub fn view<'a>(
             ));
             sections.push(sections::ssh_key::ssh_key_card(form, colors));
         }
+        // TODO(bank-account): no type-specific section yet — only the shared
+        // additional-options + custom-fields cards render. See docs/todo.md.
+        CipherType::BankAccount => {}
     }
 
     sections.push(sections::shared::section_label(
@@ -120,6 +123,7 @@ fn header_row<'a>(
             CipherType::Identity => fl!("form-title-edit-identity"),
             CipherType::SecureNote => fl!("form-title-edit-note"),
             CipherType::SshKey => fl!("form-title-edit-ssh-key"),
+            CipherType::BankAccount => fl!("form-title-edit-bank-account"),
         }
     } else {
         fl!("form-title-new-item")

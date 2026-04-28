@@ -233,6 +233,8 @@ impl CipherForm {
                 });
             }
             CipherType::SshKey => { /* SSH key fields read-only for now */ }
+            // TODO(bank-account): no editable sub-struct yet. See docs/todo.md.
+            CipherType::BankAccount => {}
         }
     }
 }

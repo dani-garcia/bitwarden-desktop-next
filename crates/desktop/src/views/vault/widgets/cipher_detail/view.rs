@@ -79,6 +79,9 @@ pub fn view<'a>(
                 sections.push(ssh_key::ssh_key_card(key, colors));
             }
         }
+        // TODO(bank-account): no type-specific section yet — only the shared
+        // item-details + custom-fields cards render. See docs/todo.md.
+        CipherType::BankAccount => {}
     }
 
     if let Some(fields) = item.fields.as_deref().filter(|f| !f.is_empty()) {
@@ -113,6 +116,7 @@ fn header_row<'a>(
         CipherType::Identity => fl!("detail-header-identity"),
         CipherType::SecureNote => fl!("detail-header-note"),
         CipherType::SshKey => fl!("detail-header-ssh-key"),
+        CipherType::BankAccount => fl!("detail-header-bank-account"),
     };
 
     let title = text(category_label).size(18).color(colors.text_primary);

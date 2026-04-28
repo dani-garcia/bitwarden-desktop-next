@@ -158,6 +158,9 @@ fn icon_for<'a>(
                 CipherListViewType::SecureNote => icons::BWI_NOTE,
                 CipherListViewType::SshKey => icons::BWI_KEY,
                 CipherListViewType::Login(_) => icons::BWI_LOGIN,
+                // TODO(bank-account): borrow the credit-card glyph until the
+                // type is properly supported (see docs/todo.md).
+                CipherListViewType::BankAccount => icons::BWI_CREDIT_CARD,
             };
             container(icon.render(20.0, colors.text_primary))
                 .width(32)
