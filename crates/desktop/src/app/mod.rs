@@ -328,6 +328,11 @@ impl App {
         let wake_sub = Subscription::run(crate::services::instance_lock::wake_stream)
             .map(|_| Message::System(SystemMessage::InstanceWakeRequested));
 
+        // OS session state (screen lock, suspend). Bound once; the platform
+        // module owns the OS-side observer registration.
+        let session_sub = Subscription::run(session_events::event_stream)
+            .map(|ev| Message::System(SystemMessage::SessionEvent(ev)));
+
         // Idle when OS-side hotkey registration failed (Wayland, missing
         // permissions) — the stream terminates and the subscription stays
         // dormant.
@@ -356,6 +361,7 @@ impl App {
             tray_sub,
             theme_sub,
             wake_sub,
+            session_sub,
             favicon_sub,
             anim_sub,
             magnify_sub,

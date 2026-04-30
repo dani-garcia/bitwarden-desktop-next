@@ -55,6 +55,30 @@ impl App {
         self.refresh_accounts_cache();
     }
 
+    /// Lock a user's keystore. If `uid` is the active user, also transitions
+    /// to the login screen with their unlock prompt; otherwise the call is
+    /// silent and the lock is reflected next time the user is selected.
+    pub(crate) fn lock_user(&mut self, uid: &UserId) -> Task<Message> {
+        self.client_manager.lock(uid);
+        if self.active_user.as_ref() == Some(uid) {
+            self.show_login_after_lock()
+        } else {
+            Task::none()
+        }
+    }
+
+    /// Standard post-lock transition: drop sticky Magnify state, route the
+    /// login view to the active user's unlock prompt, switch to
+    /// [`Screen::Login`], and return the auto-focus task.
+    fn show_login_after_lock(&mut self) -> Task<Message> {
+        self.magnify_reset_sticky();
+        self.views
+            .login
+            .show_unlock_for(self.active_user.as_ref(), &self.client_manager);
+        self.set_screen(Screen::Login);
+        self.views.login.auto_focus_task().map(Message::login)
+    }
+
     /// Lift `VaultView::load_list_task` into a top-level `Task<Message>`,
     /// hiding the per-call-site `.map(Message::vault)`.
     pub(crate) fn load_vault_list_task(&self, uid: UserId) -> Task<Message> {

@@ -366,6 +366,7 @@ settings-security-unlock-touch = Desbloquear con Touch ID
 settings-security-session-timeout = Tiempo de sesión
 settings-security-lock-after = Bloquear tras
 settings-security-logout-after = Cerrar sesión tras
+settings-security-lock-on-system-lock = Bloquear cuando se bloquee el sistema
 
 # Cadenas de duración compartidas entre los desplegables de tiempo (bloquear,
 # cerrar sesión, borrar portapapeles). Los plurales los resuelve Fluent.

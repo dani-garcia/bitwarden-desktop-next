@@ -311,13 +311,6 @@ impl ClientManager {
         }
     }
 
-    pub fn lock_all(&self) {
-        let users = self.users.read().unwrap();
-        for entry in users.values() {
-            entry.client.lock();
-        }
-    }
-
     /// Clear the user's keystore and remove the entry. Named `log_out` (not
     /// `remove`) because the SDK will want server-side token revocation and
     /// local SQLite cleanup on this transition in the future.

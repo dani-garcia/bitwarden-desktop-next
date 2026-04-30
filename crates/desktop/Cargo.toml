@@ -55,6 +55,7 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 rust-embed = "8"
 serde = { workspace = true }
 serde_json = { workspace = true }
+session-events = { path = "../session-events" }
 system-theme = "0.3"
 tokio = { workspace = true, features = ["rt", "net", "io-util", "time", "fs"] }
 tray-icon = "0.22"

@@ -18,6 +18,7 @@ pub struct UserPreferences {
     pub touch_id_unlock: bool,
     pub lock_after: DurationSecs,
     pub logout_after: DurationSecs,
+    pub lock_on_system_lock: bool,
 
     // Integrations
     pub ssh_prompt_behavior: SshPromptBehavior,
@@ -34,6 +35,7 @@ impl Default for UserPreferences {
             touch_id_unlock: false,
             lock_after: DurationSecs(900),
             logout_after: DurationSecs::NEVER,
+            lock_on_system_lock: false,
             ssh_prompt_behavior: SshPromptBehavior::Always,
             clear_clipboard: DurationSecs(30),
             minimize_on_copy: false,

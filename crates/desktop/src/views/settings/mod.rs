@@ -115,6 +115,7 @@ pub enum SettingChange {
     TouchIdUnlock(bool),
     LockAfter(DurationSecs),
     LogoutAfter(DurationSecs),
+    LockOnSystemLock(bool),
     // Integrations
     BrowserIntegration(bool),
     BrowserIntegrationFingerprint(bool),
@@ -200,6 +201,7 @@ impl SettingsView {
             SettingChange::TouchIdUnlock(v) => p.touch_id_unlock = *v,
             SettingChange::LockAfter(v) => p.lock_after = *v,
             SettingChange::LogoutAfter(v) => p.logout_after = *v,
+            SettingChange::LockOnSystemLock(v) => p.lock_on_system_lock = *v,
             SettingChange::BrowserIntegration(v) => s.browser_integration = *v,
             SettingChange::BrowserIntegrationFingerprint(v) => {
                 s.browser_integration_fingerprint = *v

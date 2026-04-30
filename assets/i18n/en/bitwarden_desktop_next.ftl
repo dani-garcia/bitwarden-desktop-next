@@ -376,6 +376,7 @@ settings-security-unlock-touch = Unlock with Touch ID
 settings-security-session-timeout = Session timeout
 settings-security-lock-after = Lock after
 settings-security-logout-after = Log out after
+settings-security-lock-on-system-lock = Lock when the system is locked
 
 # Shared duration strings used by all the time-based dropdowns (lock after,
 # log out after, clear clipboard after). Plurals come from Fluent selectors

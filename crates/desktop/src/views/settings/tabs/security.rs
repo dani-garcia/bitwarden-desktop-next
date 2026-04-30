@@ -57,6 +57,12 @@ pub fn view<'a>(
         colors,
     );
 
+    let lock_on_system_lock = setting_checkbox(
+        snap.prefs.lock_on_system_lock,
+        fl!("settings-security-lock-on-system-lock"),
+        SettingChange::LockOnSystemLock,
+    );
+
     column![
         access_heading,
         Space::new().height(8),
@@ -65,6 +71,8 @@ pub fn view<'a>(
         timeout_heading,
         Space::new().height(8),
         column![lock_after, logout_after].spacing(16),
+        Space::new().height(10),
+        lock_on_system_lock,
     ]
     .spacing(0)
     .width(Fill)

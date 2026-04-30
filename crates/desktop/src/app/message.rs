@@ -111,6 +111,11 @@ pub enum SystemMessage {
     ClientManagerLoaded(Arc<ClientManager>),
     /// Single-instance listener forwarded a "show" signal from a second launch.
     InstanceWakeRequested,
+    /// OS session state change (screen lock/unlock, suspend/resume). The
+    /// handler locks every vault when any user has
+    /// [`UserPreferences::lock_on_system_lock`][crate::services::preferences::UserPreferences::lock_on_system_lock]
+    /// enabled.
+    SessionEvent(session_events::SessionEvent),
     /// `iced::system::information()` resolved with the actual graphics backend
     /// wgpu picked. Used to populate `Settings::wgpu_backend_verified` so the
     /// next launch can skip multi-backend enumeration. Empty/unknown payloads

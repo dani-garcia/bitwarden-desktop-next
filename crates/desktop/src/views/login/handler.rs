@@ -32,23 +32,12 @@ impl App {
         }
     }
 
-    /// Lock the active user's keystore. If it was the active user (it
-    /// always is when this is triggered from the active-account card),
-    /// route to the unlock screen for that account.
+    /// Lock the active user's keystore and route to its unlock screen.
     pub(crate) fn handle_lock_active(&mut self) -> Task<Message> {
         let Some(uid) = self.active_user else {
             return Task::none();
         };
-        self.client_manager.lock(&uid);
-        // Drop sticky Magnify state — `results` holds Arc clones of
-        // decrypted ciphers and `pending_password` could deliver a
-        // newly-decrypted secret to a now-locked session.
-        self.magnify_reset_sticky();
-        self.views
-            .login
-            .show_unlock_for(Some(&uid), &self.client_manager);
-        self.set_screen(Screen::Login);
-        self.views.login.auto_focus_task().map(Message::login)
+        self.lock_user(&uid)
     }
 
     /// Sign the active user out: drop their decrypted vault cache, remove

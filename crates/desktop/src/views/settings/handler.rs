@@ -60,10 +60,13 @@ impl App {
             // takes effect. `MinimizeOnCopy` is consumed in the vault
             // clipboard handler; `ShowFavicons` is consumed by the item-list
             // renderer; `HardwareAcceleration` is read once at startup (see
-            // `main.rs`) and only takes effect on restart.
+            // `main.rs`) and only takes effect on restart;
+            // `LockOnSystemLock` is read by the session-event handler in
+            // `app/handlers/platform.rs` when an event fires.
             SettingChange::MinimizeOnCopy(_)
             | SettingChange::ShowFavicons(_)
-            | SettingChange::HardwareAcceleration(_) => {}
+            | SettingChange::HardwareAcceleration(_)
+            | SettingChange::LockOnSystemLock(_) => {}
 
             // Every remaining variant is currently unwired — the value was
             // persisted above, but the feature doesn't react yet. Let the

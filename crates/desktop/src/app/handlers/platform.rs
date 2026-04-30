@@ -165,6 +165,21 @@ impl App {
                 self.views.login.auto_focus_task().map(Message::login)
             }
             SystemMessage::InstanceWakeRequested => self.show_main_window(),
+            SystemMessage::SessionEvent(ev) => {
+                use session_events::SessionEvent;
+                if !matches!(ev, SessionEvent::Locked | SessionEvent::Suspended) {
+                    return Task::none();
+                }
+                let to_lock: Vec<_> = self
+                    .settings
+                    .user_preferences
+                    .iter()
+                    .filter(|(_, p)| p.lock_on_system_lock)
+                    .map(|(uid, _)| *uid)
+                    .collect();
+                let tasks: Vec<_> = to_lock.iter().map(|uid| self.lock_user(uid)).collect();
+                Task::batch(tasks)
+            }
             #[cfg(feature = "gpu")]
             SystemMessage::WgpuBackendDiscovered(backend) => {
                 // We've reached first paint, so whatever wgpu picked is
@@ -207,16 +222,9 @@ impl App {
                 return iced::exit();
             }
             MenuAction::LockAllVaults => {
-                self.client_manager.lock_all();
-                // `results` holds Arc clones of decrypted ciphers from the
-                // now-locked vault, and any in-flight `pending_password`
-                // decrypt would deliver a secret to the locked session.
-                self.magnify_reset_sticky();
-                self.views
-                    .login
-                    .show_unlock_for(self.active_user.as_ref(), &self.client_manager);
-                self.set_screen(Screen::Login);
-                return self.views.login.auto_focus_task().map(Message::login);
+                let uids = self.client_manager.user_ids();
+                let tasks: Vec<_> = uids.iter().map(|uid| self.lock_user(uid)).collect();
+                return Task::batch(tasks);
             }
             MenuAction::ToggleFullScreen => {
                 let id = self.main_window_id();
