@@ -42,7 +42,7 @@ use bitwarden_state::{
     registry::StateRegistry,
     repository::{Repository, RepositoryError, RepositoryItem},
 };
-use bitwarden_vault::{Cipher, CipherId, CipherListView, CipherView, Folder, FolderView};
+use bitwarden_vault::{Cipher, CipherId, CipherListView, CipherView, FolderView};
 use serde::Deserialize;
 
 use crate::domain::UnlockMethods;
@@ -398,22 +398,23 @@ impl ClientManager {
             .cloned()
             .ok_or_else(|| format!("unknown user {user_id}"))?;
 
-        let repo = entry
-            .client
-            .platform()
-            .state()
-            .get::<Cipher>()
-            .map_err(|e| e.to_string())?;
-        let ciphers = repo.list().await.map_err(|e| e.to_string())?;
-
-        let mut list: Vec<CipherListView> = entry
+        let result = entry
             .client
             .vault()
             .ciphers()
-            .decrypt_list(ciphers)
+            .list()
             .await
             .map_err(|e| e.to_string())?;
 
+        if !result.failures.is_empty() {
+            tracing::warn!(
+                user_id = %user_id,
+                count = result.failures.len(),
+                "some ciphers failed to decrypt"
+            );
+        }
+
+        let mut list = result.successes;
         list.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(list)
     }
@@ -545,19 +546,12 @@ impl ClientManager {
             .cloned()
             .ok_or_else(|| format!("unknown user {user_id}"))?;
 
-        let repo = entry
-            .client
-            .platform()
-            .state()
-            .get::<Folder>()
-            .map_err(|e| e.to_string())?;
-        let folders = repo.list().await.map_err(|e| e.to_string())?;
-
         entry
             .client
             .vault()
             .folders()
-            .decrypt_list(folders)
+            .list()
+            .await
             .map_err(|e| e.to_string())
     }
 

@@ -340,7 +340,12 @@ async fn build_user(spec: &UserSpec, data_dir: &Path) -> Result<MockUserMeta, Bo
     let folder_views = (spec.folders)();
     let mut folders = Vec::with_capacity(folder_views.len());
     for view in folder_views {
-        folders.push(client.vault().folders().encrypt(view)?);
+        // `encrypt(view)` is deprecated in favour of `create()`/`edit()`, but
+        // those go through the API. We're generating offline fixtures, so we
+        // need the raw key-store path here.
+        #[expect(deprecated)]
+        let folder = client.vault().folders().encrypt(view)?;
+        folders.push(folder);
     }
 
     // Persist ciphers and folders to SQLite via the SDK-managed repo. Encrypt
@@ -467,6 +472,7 @@ fn cipher_with(name: &str, notes: Option<String>, kind: CipherKind) -> CipherVie
         card,
         secure_note,
         ssh_key,
+        bank_account: None,
         favorite: false,
         reprompt: CipherRepromptType::None,
         organization_use_totp: false,
