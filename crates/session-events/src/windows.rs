@@ -23,18 +23,17 @@ use tokio::sync::mpsc;
 use windows::core::{PCWSTR, w};
 use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-use windows::Win32::System::Power::{
-    PBT_APMRESUMEAUTOMATIC, PBT_APMRESUMESUSPEND, PBT_APMSUSPEND,
-};
 use windows::Win32::System::RemoteDesktop::{
     NOTIFY_FOR_THIS_SESSION, WTSRegisterSessionNotification, WTSUnRegisterSessionNotification,
 };
 use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GWLP_USERDATA, GetMessageW,
-    GetWindowLongPtrW, HWND_MESSAGE, MSG, PostThreadMessageW, RegisterClassW, SetWindowLongPtrW,
-    TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE, WM_DESTROY, WM_POWERBROADCAST, WM_QUIT,
-    WM_WTSSESSION_CHANGE, WNDCLASSW, WTS_SESSION_LOCK, WTS_SESSION_UNLOCK,
+    GetWindowLongPtrW, HWND_MESSAGE, MSG, PBT_APMRESUMEAUTOMATIC, PBT_APMRESUMESUSPEND,
+    PBT_APMSUSPEND, PM_NOREMOVE, PeekMessageW, PostThreadMessageW, RegisterClassW,
+    SetWindowLongPtrW, TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE, WM_DESTROY,
+    WM_POWERBROADCAST, WM_QUIT, WM_WTSSESSION_CHANGE, WNDCLASSW, WTS_SESSION_LOCK,
+    WTS_SESSION_UNLOCK,
 };
 
 use crate::SessionEvent;
@@ -89,12 +88,22 @@ fn run_message_loop(tx: mpsc::Sender<SessionEvent>, tid_tx: std_mpsc::SyncSender
     // the body is documented Win32 with checked error paths.
     unsafe {
         let tid = GetCurrentThreadId();
+
+        // Force the system to create a message queue for this thread before
+        // handing the TID back. PostThreadMessageW fails with
+        // ERROR_INVALID_THREAD_ID if the queue doesn't exist yet, and the
+        // queue is only created on the first User/GDI call (RegisterClassW
+        // below). A consumer that drops the stream before we get there would
+        // lose its WM_QUIT and the loop would run until process exit.
+        let mut throwaway = MSG::default();
+        let _ = PeekMessageW(&mut throwaway, None, 0, 0, PM_NOREMOVE);
+
         if tid_tx.send(tid).is_err() {
             return;
         }
 
-        let hinstance = match GetModuleHandleW(None) {
-            Ok(h) => HINSTANCE(h.0),
+        let hinstance: HINSTANCE = match GetModuleHandleW(None) {
+            Ok(h) => h.into(),
             Err(e) => {
                 tracing::debug!(error = %e, "GetModuleHandleW failed");
                 return;

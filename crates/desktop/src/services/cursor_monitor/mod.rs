@@ -26,6 +26,12 @@ pub fn cursor_monitor_logical_center() -> Option<(f32, f32)> {
     // SAFETY: every Win32 call below is documented to be safe to invoke from
     // any thread; pointers we hand in are stack-allocated and outlive the
     // call. Failures are handled by returning `None`.
+    //
+    // Assumes the process is Per-Monitor V2 DPI aware (winit/iced sets that
+    // during init). Under PMv2, GetCursorPos / MonitorFromPoint / rcWork all
+    // come back in physical pixels and dividing by per-monitor DPI yields the
+    // logical coordinates iced expects. In other awareness modes rcWork is
+    // pre-scaled and this math would over-correct on high-DPI displays.
     unsafe {
         let mut pt = POINT { x: 0, y: 0 };
         if GetCursorPos(&mut pt) == 0 {
@@ -48,11 +54,12 @@ pub fn cursor_monitor_logical_center() -> Option<(f32, f32)> {
         let mut dpi_x: u32 = 96;
         let mut dpi_y: u32 = 96;
         let _ = GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &mut dpi_x, &mut dpi_y);
-        let scale = dpi_x.max(96) as f32 / 96.0;
+        let scale_x = dpi_x.max(96) as f32 / 96.0;
+        let scale_y = dpi_y.max(96) as f32 / 96.0;
 
         let cx_phys = (info.rcWork.left + info.rcWork.right) as f32 / 2.0;
         let cy_phys = (info.rcWork.top + info.rcWork.bottom) as f32 / 2.0;
-        Some((cx_phys / scale, cy_phys / scale))
+        Some((cx_phys / scale_x, cy_phys / scale_y))
     }
 }
 
