@@ -42,7 +42,7 @@ arboard = { version = "3.6", default-features = false, features = [
     "wayland-data-control",
 ] }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
-global-hotkey = "0.7"
+global-hotkey = "0.8"
 image = "0.25"
 i18n-embed = { version = "0.16", features = [
     "fluent-system",
@@ -50,7 +50,7 @@ i18n-embed = { version = "0.16", features = [
 ] }
 i18n-embed-fl = "0.10"
 lilt = "0.8"
-muda = "0.17"
+muda = "0.19"
 open = "5"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 rust-embed = "8"
@@ -59,7 +59,7 @@ serde_json = { workspace = true }
 session-events = { path = "../session-events" }
 system-theme = "0.3"
 tokio = { workspace = true, features = ["rt", "net", "io-util", "time", "fs"] }
-tray-icon = "0.22"
+tray-icon = "0.23"
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 url = "2"
