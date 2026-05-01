@@ -20,7 +20,7 @@ DEV_BOTH_MENUS=1 cargo run                                            # Native +
 RUST_LOG=bitwarden_desktop_next=debug,bitwarden_core=debug cargo run  # Full SDK tracing
 ```
 
-`--gpu` is gated by `cfg!(feature = "gpu")` in `main.rs`; enable wgpu by uncommenting `"wgpu"` in iced features in `crates/desktop/Cargo.toml` and rebuilding.
+The `gpu` cargo feature (on by default) compiles wgpu into the binary. The runtime backend is selected by `settings.hardware_acceleration` in `main.rs::select_backend()` — toggled from the in-app settings dialog, not a CLI flag.
 
 ## Docs (READ BEFORE CHANGES)
 

@@ -17,11 +17,11 @@ impl App {
     pub(crate) fn handle_magnify_message(&mut self, msg: MagnifyMessage) -> Task<Message> {
         match msg {
             MagnifyMessage::HotkeyPressed => self.magnify_hotkey(),
-            MagnifyMessage::WindowOpened(_id) => {
+            MagnifyMessage::WindowOpened(id) => {
                 // Window is pre-created hidden in `App::new`. First focus /
                 // select-all / scroll happens inside `magnify_hotkey`'s
                 // toggle path when the window actually becomes visible.
-                Task::none()
+                apply_macos_window_fix(id)
             }
             MagnifyMessage::QueryChanged(query) => {
                 self.magnify.query = query;
@@ -184,10 +184,16 @@ impl App {
         // updates its offset for the next show. Lives outside the `mode`
         // continuation because `Task` isn't `Clone`.
         let scroll = self.magnify_keep_selected_visible();
+        // Re-applied on every hotkey press because `WindowOpened` fires
+        // before the renderer surface (and thus the CAMetalLayer sublayer
+        // for `magnify-fix-opaque`) is configured. Idempotent — both setters
+        // are property writes.
+        let macos_fix = apply_macos_window_fix(id);
         Task::batch([
             resize,
             reposition,
             scroll,
+            macos_fix,
             iced::window::mode(id).then(move |mode| match mode {
                 iced::window::Mode::Hidden => Task::batch([
                     iced::window::set_mode(id, iced::window::Mode::Windowed),
@@ -353,6 +359,22 @@ pub(crate) fn open_magnify_window() -> (iced::window::Id, iced::Size, Task<Messa
         size,
         open_task.map(|id| Message::Magnify(MagnifyMessage::WindowOpened(id))),
     )
+}
+
+/// Apply macOS magnify-window transparency fixes. See
+/// [`super::magnify_macos_fix`] for context. No-op on other platforms.
+#[cfg(target_os = "macos")]
+fn apply_macos_window_fix(id: iced::window::Id) -> Task<Message> {
+    use crate::theme::RADIUS_XL;
+    iced::window::run(id, |w| {
+        super::magnify_macos_fix::apply(w, RADIUS_XL);
+    })
+    .discard()
+}
+
+#[cfg(not(target_os = "macos"))]
+fn apply_macos_window_fix(_id: iced::window::Id) -> Task<Message> {
+    Task::none()
 }
 
 /// Centers the launcher on the cursor's monitor. `Task::none()` when the

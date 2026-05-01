@@ -16,8 +16,9 @@ dev = ["iced/debug"]
 test = ["iced/tester"]
 
 # GPU rendering backend (wgpu). Adds ~9 MB binary size + ~500 ms startup.
-# Without this feature, `--gpu` at runtime is a no-op.
-# Usage: cargo run --features gpu -- --gpu
+# Compiles wgpu into the binary; the active backend is chosen at runtime by
+# `settings.hardware_acceleration` (toggle in app settings), so building
+# without this feature forces tiny-skia regardless of the in-app toggle.
 gpu = ["iced/wgpu"]
 
 [dependencies]
@@ -74,6 +75,17 @@ bitwarden-pm = { workspace = true }
 bitwarden-send = { workspace = true }
 bitwarden-state = { workspace = true }
 bitwarden-vault = { workspace = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = [
+    "NSResponder",
+    "NSView",
+    "objc2-quartz-core",
+] }
+objc2-quartz-core = { version = "0.3", default-features = false, features = [
+    "CALayer",
+] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt"] }
