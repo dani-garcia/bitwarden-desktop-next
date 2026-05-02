@@ -43,5 +43,5 @@ pub(in super::super) fn ssh_key_card<'a>(
             colors,
         ),
     ];
-    card_with_margin(styled_card(column(fields).spacing(12).width(Fill).into()))
+    card_with_margin(styled_card(column(fields).spacing(12).width(Fill)))
 }

@@ -40,7 +40,7 @@ const SLIDE_OFFSET_PX: f32 = 24.0;
 /// The whole overlay is wrapped in [`opaque`] so hovers can't reach widgets
 /// beneath the scrim and falsely light them up.
 pub fn view<'a, Message: Clone + 'a>(
-    dialog: Element<'a, Message, AppTheme>,
+    dialog: impl Into<Element<'a, Message, AppTheme>>,
     on_dismiss: Message,
     progress: f32,
 ) -> Element<'a, Message, AppTheme> {
@@ -60,7 +60,7 @@ pub fn view<'a, Message: Clone + 'a>(
     let slide_offset = (1.0 - progress) * SLIDE_OFFSET_PX;
     let slid = column![
         Space::new().height(Length::Fixed(slide_offset)),
-        opaque(dialog),
+        opaque(dialog.into()),
     ];
 
     let centered = center(slid).width(Length::Fill).height(Length::Fill);
@@ -77,7 +77,7 @@ pub fn dialog<'a, M>(
     height: Option<f32>,
     bg: impl Fn(&AppColors) -> Color + Copy + 'static,
     progress: f32,
-    body: Element<'a, M, AppTheme>,
+    body: impl Into<Element<'a, M, AppTheme>>,
     on_dismiss: M,
 ) -> Element<'a, M, AppTheme>
 where
@@ -101,7 +101,7 @@ where
                 .border(Border::default().rounded(RADIUS_LG))
                 .shadow(shadow)
         });
-    view(card.into(), on_dismiss, progress)
+    view(card, on_dismiss, progress)
 }
 
 /// Confirmation dialog with a title, body text, and primary/secondary
@@ -153,7 +153,7 @@ where
         None,
         |c| c.card_bg,
         progress,
-        inner.into(),
+        inner,
         on_cancel,
     )
 }

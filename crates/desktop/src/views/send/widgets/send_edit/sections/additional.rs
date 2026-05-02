@@ -81,5 +81,5 @@ fn notes_field<'a>(
     if !form.saving {
         editor = editor.on_action(SendEditMessage::NotesAction);
     }
-    inputs::field_frame(fl!("send-form-private-note"), editor.into(), colors)
+    inputs::field_frame(fl!("send-form-private-note"), editor, colors)
 }

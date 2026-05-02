@@ -119,7 +119,7 @@ pub fn auth_page_shell<'a>(
 
 /// The standard card container used on all auth screens.
 pub fn auth_card<'a>(
-    content: Element<'a, LoginMessage, AppTheme>,
+    content: impl Into<Element<'a, LoginMessage, AppTheme>>,
 ) -> Element<'a, LoginMessage, AppTheme> {
     container(content)
         .max_width(450)

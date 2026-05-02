@@ -78,7 +78,7 @@ pub(in super::super) fn login_card<'a>(
         );
     }
 
-    card_with_margin(styled_card(column(fields).spacing(16).width(Fill).into()))
+    card_with_margin(styled_card(column(fields).spacing(16).width(Fill)))
 }
 
 pub(in super::super) fn autofill_card<'a>(
@@ -90,7 +90,7 @@ pub(in super::super) fn autofill_card<'a>(
         .copied()
         .map(|(idx, uri)| autofill_row(idx, uri, colors))
         .collect();
-    card_with_margin(styled_card(column(rows).spacing(12).width(Fill).into()))
+    card_with_margin(styled_card(column(rows).spacing(12).width(Fill)))
 }
 
 fn autofill_row<'a>(

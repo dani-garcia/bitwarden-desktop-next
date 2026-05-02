@@ -69,7 +69,7 @@ pub fn view<'a>(
             if let Some(notes) = item.notes.as_deref() {
                 sections.push(section_label(fl!("detail-section-note"), colors));
                 sections.push(card_with_margin(styled_card(
-                    text(notes).size(14).color(colors.text_primary).into(),
+                    text(notes).size(14).color(colors.text_primary),
                 )));
             }
         }

@@ -90,7 +90,7 @@ fn name_field<'a>(
     if !form.saving {
         input = input.on_input(SendEditMessage::NameChanged);
     }
-    inputs::field_frame(fl!("send-form-name"), input.into(), colors)
+    inputs::field_frame(fl!("send-form-name"), input, colors)
 }
 
 fn text_to_share_field<'a>(
@@ -105,7 +105,7 @@ fn text_to_share_field<'a>(
     if !form.saving {
         editor = editor.on_action(SendEditMessage::TextAction);
     }
-    inputs::field_frame(fl!("send-form-text"), editor.into(), colors)
+    inputs::field_frame(fl!("send-form-text"), editor, colors)
 }
 
 fn file_section<'a>(
@@ -127,28 +127,17 @@ fn file_section<'a>(
             .align_y(Alignment::Center)
             .into()
     } else {
-        // Editing existing file: show name + size, non-editable. The
-        // callbacks are no-ops since `disabled: true` blocks input at the
-        // widget layer — a single uniform `|_|` keeps the closure types
-        // identical across both fields so iced's type inference settles
-        // on one `Element` type.
-        let noop = |_: String| SendEditMessage::ChooseFilePressed;
-        let name = inputs::text_field(
-            fl!("send-form-file-name"),
-            &form.file_name,
-            noop,
-            None,
-            true,
-            colors,
-        );
+        // Editing existing file: show name + size, non-editable. Skipping
+        // `.on_input` is what makes the field readonly — no placeholder
+        // closure needed.
+        let name = inputs::text_field(fl!("send-form-file-name"), &form.file_name, colors)
+            .disabled(true);
         let size = inputs::text_field(
             fl!("send-form-file-size"),
             form.file_size_name.as_deref().unwrap_or(""),
-            noop,
-            None,
-            true,
             colors,
-        );
+        )
+        .disabled(true);
         column![name, size].spacing(12).into()
     }
 }
@@ -219,7 +208,7 @@ fn password_field<'a>(
 
     let row_el = row![input, eye_btn, regen_btn, copy_btn].align_y(Alignment::Center);
 
-    inputs::field_frame(fl!("send-form-password"), row_el.into(), colors)
+    inputs::field_frame(fl!("send-form-password"), row_el, colors)
 }
 
 fn emails_field<'a>(
@@ -234,7 +223,7 @@ fn emails_field<'a>(
     if !form.saving {
         editor = editor.on_action(SendEditMessage::EmailsAction);
     }
-    inputs::field_frame(fl!("send-form-emails"), editor.into(), colors)
+    inputs::field_frame(fl!("send-form-emails"), editor, colors)
 }
 
 fn send_link_field<'a>(
@@ -260,7 +249,7 @@ fn send_link_field<'a>(
     .on_press(SendEditMessage::CopyLinkPressed)
     .padding([10, 8]);
     let row_el = row![input, copy].align_y(Alignment::Center);
-    inputs::field_frame(fl!("send-form-send-link"), row_el.into(), colors)
+    inputs::field_frame(fl!("send-form-send-link"), row_el, colors)
 }
 
 // ── Label helpers ─────────────────────────────────────────────────────────

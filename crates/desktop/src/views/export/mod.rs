@@ -213,7 +213,7 @@ impl ExportView {
                 .on_input(ExportMessage::PasswordChanged);
             body = body.push(inputs::field_frame_on(
                 fl!("export-modal-password-label"),
-                password_input.into(),
+                password_input,
                 |c| c.card_bg,
                 colors,
             ));
@@ -245,7 +245,7 @@ impl ExportView {
             None,
             |c| c.card_bg,
             progress,
-            container(body).into(),
+            container(body),
             ExportMessage::Close,
         ))
     }

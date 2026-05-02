@@ -190,7 +190,7 @@ fn icon_for<'a>(
 /// stays legible against either the launcher's translucent dark surface or
 /// the bright-blue selected row. Matches `designs/magnify/searching.jpg`.
 fn icon_backdrop<'a>(
-    inner: Element<'a, MagnifyMessage, AppTheme>,
+    inner: impl Into<Element<'a, MagnifyMessage, AppTheme>>,
 ) -> Element<'a, MagnifyMessage, AppTheme> {
     container(inner)
         .padding(2)

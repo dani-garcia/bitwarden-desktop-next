@@ -577,7 +577,7 @@ impl GeneratorView {
             Some(620.0),
             |c| c.card_bg,
             progress,
-            body.into(),
+            body,
             GeneratorMessage::Close,
         ))
     }
@@ -816,8 +816,7 @@ fn value_card<'a>(
     components::styled_card(
         row![value_text, Space::new().width(Fill), refresh, copy]
             .align_y(Alignment::Center)
-            .spacing(4)
-            .into(),
+            .spacing(4),
     )
 }
 

@@ -45,7 +45,9 @@ pub fn separator_v<'a, M: 'a>() -> Element<'a, M, AppTheme> {
         .into()
 }
 
-pub fn styled_card<'a, M: 'a>(content: Element<'a, M, AppTheme>) -> Element<'a, M, AppTheme> {
+pub fn styled_card<'a, M: 'a>(
+    content: impl Into<Element<'a, M, AppTheme>>,
+) -> Element<'a, M, AppTheme> {
     container(content)
         .padding([12, 16])
         .width(Fill)
@@ -62,7 +64,9 @@ pub fn styled_card<'a, M: 'a>(content: Element<'a, M, AppTheme>) -> Element<'a, 
         .into()
 }
 
-pub fn card_with_margin<'a, M: 'a>(card: Element<'a, M, AppTheme>) -> Element<'a, M, AppTheme> {
+pub fn card_with_margin<'a, M: 'a>(
+    card: impl Into<Element<'a, M, AppTheme>>,
+) -> Element<'a, M, AppTheme> {
     container(card)
         .padding(Padding {
             top: 0.0,

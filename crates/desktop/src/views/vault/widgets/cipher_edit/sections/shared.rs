@@ -37,37 +37,31 @@ pub(in super::super) fn item_details_card<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
 ) -> Element<'a, CipherEditMessage, AppTheme> {
-    let mut rows: Vec<Element<'a, CipherEditMessage, AppTheme>> = Vec::new();
-
-    rows.push(text_field(
-        fl!("form-name"),
-        &form.modified.name,
-        CipherEditMessage::NameChanged,
-        None,
-        form.saving,
-        colors,
-    ));
-
     let favorite_checkbox = checkbox(form.modified.favorite)
         .label(fl!("form-favorite"))
         .on_toggle(|_| CipherEditMessage::FavoriteToggled)
         .size(18)
         .spacing(8);
 
-    rows.push(favorite_checkbox.into());
-
-    // Folder dropdown (personal vault only — orgs own their own folder concept)
-    rows.push(selectors::folder_selector(form, colors));
+    let mut body = column![
+        text_field(fl!("form-name"), &form.modified.name, colors)
+            .on_input(CipherEditMessage::NameChanged)
+            .disabled(form.saving),
+        favorite_checkbox,
+        // Folder dropdown (personal vault only — orgs own their own folder concept)
+        selectors::folder_selector(form, colors),
+    ]
+    .spacing(12);
 
     if !form.organizations.is_empty() {
-        rows.push(selectors::org_selector(form, colors));
+        body = body.push(selectors::org_selector(form, colors));
 
         if form.modified.organization_id.is_some() {
-            rows.push(selectors::collections_selector(form, colors));
+            body = body.push(selectors::collections_selector(form, colors));
         }
     }
 
-    card_with_margin(styled_card(column(rows).spacing(12).into()))
+    card_with_margin(styled_card(body))
 }
 
 pub(in super::super) fn additional_options_card<'a>(
@@ -87,7 +81,7 @@ pub(in super::super) fn additional_options_card<'a>(
         notes_editor = notes_editor.on_action(CipherEditMessage::NotesAction);
     }
     let notes =
-        crate::components::inputs::field_frame(fl!("form-notes"), notes_editor.into(), colors);
+        crate::components::inputs::field_frame(fl!("form-notes"), notes_editor, colors);
 
     let reprompt_checkbox = checkbox(matches!(
         form.modified.reprompt,
@@ -98,29 +92,28 @@ pub(in super::super) fn additional_options_card<'a>(
     .size(18)
     .spacing(8);
 
-    let rows: Vec<Element<'a, CipherEditMessage, AppTheme>> = vec![notes, reprompt_checkbox.into()];
+    let body = column![notes, reprompt_checkbox].spacing(12);
 
-    card_with_margin(styled_card(column(rows).spacing(12).into()))
+    card_with_margin(styled_card(body))
 }
 
 pub(in super::super) fn custom_fields_card<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
 ) -> Element<'a, CipherEditMessage, AppTheme> {
-    let mut rows: Vec<Element<'a, CipherEditMessage, AppTheme>> = Vec::new();
-
     let fields = form.modified.fields.as_deref().unwrap_or(&[]);
 
+    let mut body = column![].spacing(12);
+
     if fields.is_empty() {
-        rows.push(
+        body = body.push(
             text(fl!("form-custom-field-empty"))
                 .size(14)
-                .color(colors.text_muted)
-                .into(),
+                .color(colors.text_muted),
         );
     } else {
         for (idx, f) in fields.iter().enumerate() {
-            rows.push(custom_field_row(idx, f, form, colors));
+            body = body.push(custom_field_row(idx, f, form, colors));
         }
     }
 
@@ -134,9 +127,9 @@ pub(in super::super) fn custom_fields_card<'a>(
     )
     .on_press(CipherEditMessage::CustomFieldAdded)
     .padding([6, 12]);
-    rows.push(add_btn.into());
+    body = body.push(add_btn);
 
-    card_with_margin(styled_card(column(rows).spacing(12).into()))
+    card_with_margin(styled_card(body))
 }
 
 fn custom_field_row<'a>(
@@ -164,21 +157,20 @@ fn custom_field_row<'a>(
     let name_input = text_field(
         fl!("form-custom-field-name"),
         f.name.as_deref().unwrap_or(""),
-        move |s| CipherEditMessage::CustomFieldNameChanged(idx, s),
-        None,
-        form.saving,
         colors,
-    );
+    )
+    .on_input(move |s| CipherEditMessage::CustomFieldNameChanged(idx, s))
+    .disabled(form.saving);
 
     let value_widget: Element<'a, CipherEditMessage, AppTheme> = match f.r#type {
         FieldType::Text => text_field(
             fl!("form-custom-field-value"),
             f.value.as_deref().unwrap_or(""),
-            move |s| CipherEditMessage::CustomFieldValueChanged(idx, s),
-            None,
-            form.saving,
             colors,
-        ),
+        )
+        .on_input(move |s| CipherEditMessage::CustomFieldValueChanged(idx, s))
+        .disabled(form.saving)
+        .into(),
         FieldType::Hidden => reveal_text_field(
             fl!("form-custom-field-value"),
             f.value.as_deref().unwrap_or(""),

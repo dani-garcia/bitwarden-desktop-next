@@ -25,15 +25,14 @@ pub(in super::super) fn login_card<'a>(
 ) -> Element<'a, CipherEditMessage, AppTheme> {
     let login = form.modified.login.as_ref().expect("ensure_sub_structs");
 
-    let mut rows: Vec<Element<'a, CipherEditMessage, AppTheme>> = vec![
+    let mut body = column![
         text_field(
             fl!("form-username"),
             login.username.as_deref().unwrap_or(""),
-            CipherEditMessage::UsernameChanged,
-            None,
-            form.saving,
             colors,
-        ),
+        )
+        .on_input(CipherEditMessage::UsernameChanged)
+        .disabled(form.saving),
         reveal_text_field(
             fl!("form-password"),
             login.password.as_deref().unwrap_or(""),
@@ -41,15 +40,11 @@ pub(in super::super) fn login_card<'a>(
             form.saving,
             colors,
         ),
-        text_field(
-            fl!("form-totp"),
-            login.totp.as_deref().unwrap_or(""),
-            CipherEditMessage::TotpChanged,
-            None,
-            form.saving,
-            colors,
-        ),
-    ];
+        text_field(fl!("form-totp"), login.totp.as_deref().unwrap_or(""), colors)
+            .on_input(CipherEditMessage::TotpChanged)
+            .disabled(form.saving),
+    ]
+    .spacing(16);
 
     // Passkey rows — read-only display of creation date plus a delete
     if let Some(creds) = login.fido2_credentials.as_deref() {
@@ -69,24 +64,21 @@ pub(in super::super) fn login_card<'a>(
             .on_press(CipherEditMessage::PasskeyRemoved(idx))
             .padding([6, 6]);
 
-            rows.push(
+            body = body.push(
                 row![container(info).width(Fill), remove_btn]
                     .spacing(6)
-                    .align_y(Alignment::Center)
-                    .into(),
+                    .align_y(Alignment::Center),
             );
         }
     }
 
-    card_with_margin(styled_card(column(rows).spacing(16).into()))
+    card_with_margin(styled_card(body))
 }
 
 pub(in super::super) fn autofill_card<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
 ) -> Element<'a, CipherEditMessage, AppTheme> {
-    let mut rows: Vec<Element<'a, CipherEditMessage, AppTheme>> = Vec::new();
-
     let uris = form
         .modified
         .login
@@ -94,24 +86,20 @@ pub(in super::super) fn autofill_card<'a>(
         .and_then(|l| l.uris.as_deref())
         .unwrap_or(&[]);
 
+    let mut body = column![].spacing(12);
+
     if uris.is_empty() {
-        rows.push(
+        body = body.push(
             text(fl!("form-uri-empty"))
                 .size(14)
-                .color(colors.text_muted)
-                .into(),
+                .color(colors.text_muted),
         );
     } else {
         for (idx, uri) in uris.iter().enumerate() {
             let value = uri.uri.as_deref().unwrap_or("");
-            let input = text_field(
-                fl!("form-uri"),
-                value,
-                move |s| CipherEditMessage::UriChanged(idx, s),
-                None,
-                form.saving,
-                colors,
-            );
+            let input = text_field(fl!("form-uri"), value, colors)
+                .on_input(move |s| CipherEditMessage::UriChanged(idx, s))
+                .disabled(form.saving);
             let remove_btn = buttons::ghost_icon(
                 icons::BWI_TRASH.render(18.0, colors.titlebar_close_hover),
                 colors.item_hover,
@@ -119,11 +107,10 @@ pub(in super::super) fn autofill_card<'a>(
             .on_press(CipherEditMessage::UriRemoved(idx))
             .padding([6, 6]);
 
-            rows.push(
+            body = body.push(
                 row![container(input).width(Fill), remove_btn,]
                     .spacing(6)
-                    .align_y(Alignment::Center)
-                    .into(),
+                    .align_y(Alignment::Center),
             );
         }
     }
@@ -138,7 +125,7 @@ pub(in super::super) fn autofill_card<'a>(
     )
     .on_press(CipherEditMessage::UriAdded)
     .padding([6, 12]);
-    rows.push(add_btn.into());
+    body = body.push(add_btn);
 
-    card_with_margin(styled_card(column(rows).spacing(12).into()))
+    card_with_margin(styled_card(body))
 }

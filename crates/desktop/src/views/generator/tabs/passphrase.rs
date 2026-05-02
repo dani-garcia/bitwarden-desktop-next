@@ -34,11 +34,9 @@ pub(in super::super) fn view<'a>(
     let separator = inputs::text_field(
         fl!("generator-word-separator"),
         &form.word_separator,
-        GeneratorMessage::SetWordSeparator,
-        None,
-        false,
         colors,
-    );
+    )
+    .on_input(GeneratorMessage::SetWordSeparator);
 
     let capitalize = tab_checkbox(
         form.capitalize,
@@ -52,9 +50,7 @@ pub(in super::super) fn view<'a>(
     );
 
     let num_card = components::styled_card(
-        column![num_words, Space::new().height(2), num_hint]
-            .width(Fill)
-            .into(),
+        column![num_words, Space::new().height(2), num_hint].width(Fill),
     );
 
     let extras_card = components::styled_card(
@@ -65,8 +61,7 @@ pub(in super::super) fn view<'a>(
             Space::new().height(6),
             include_number,
         ]
-        .width(Fill)
-        .into(),
+        .width(Fill),
     );
 
     column![

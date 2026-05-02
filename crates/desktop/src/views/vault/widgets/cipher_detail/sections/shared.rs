@@ -36,7 +36,7 @@ pub(in super::super) fn item_details_card<'a>(
     {
         fields.push(field_readonly(fl!("detail-field-notes"), notes, colors));
     }
-    card_with_margin(styled_card(column(fields).spacing(12).width(Fill).into()))
+    card_with_margin(styled_card(column(fields).spacing(12).width(Fill)))
 }
 
 pub(in super::super) fn custom_fields_card<'a>(
@@ -48,7 +48,7 @@ pub(in super::super) fn custom_fields_card<'a>(
         .enumerate()
         .map(|(idx, f)| custom_field(idx, f, colors))
         .collect();
-    card_with_margin(styled_card(column(rows).spacing(12).width(Fill).into()))
+    card_with_margin(styled_card(column(rows).spacing(12).width(Fill)))
 }
 
 fn custom_field<'a>(

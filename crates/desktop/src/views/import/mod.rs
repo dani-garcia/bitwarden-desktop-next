@@ -385,7 +385,7 @@ impl ImportView {
             .on_action(ImportMessage::PasteAction);
         let paste_field = inputs::field_frame(
             fl!("import-modal-paste-label"),
-            paste_editor.into(),
+            paste_editor,
             colors,
         );
 
@@ -428,7 +428,7 @@ impl ImportView {
             None,
             |c| c.card_bg,
             progress,
-            container(body).into(),
+            container(body),
             ImportMessage::Close,
         ))
     }

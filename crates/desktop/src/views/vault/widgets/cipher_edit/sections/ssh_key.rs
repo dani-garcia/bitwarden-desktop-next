@@ -24,10 +24,11 @@ pub(in super::super) fn ssh_key_card<'a>(
         fingerprint: String::new(),
     };
     let k = form.modified.ssh_key.as_ref().unwrap_or(&default_key);
-    let rows: Vec<Element<'a, CipherEditMessage, AppTheme>> = vec![
+    let body = column![
         readonly_field_truncated(fl!("form-ssh-private-key"), k.private_key.clone(), colors),
         readonly_field_truncated(fl!("form-ssh-public-key"), k.public_key.clone(), colors),
         readonly_field_truncated(fl!("form-ssh-fingerprint"), k.fingerprint.clone(), colors),
-    ];
-    card_with_margin(styled_card(column(rows).spacing(12).into()))
+    ]
+    .spacing(12);
+    card_with_margin(styled_card(body))
 }

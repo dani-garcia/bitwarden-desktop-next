@@ -18,50 +18,46 @@ pub(in super::super) fn identity_personal_card<'a>(
     colors: &'a AppColors,
 ) -> Element<'a, CipherEditMessage, AppTheme> {
     let i = form.modified.identity.as_ref().expect("ensure_sub_structs");
-    let rows: Vec<Element<'a, CipherEditMessage, AppTheme>> = vec![
+    let body = column![
         title_selector(form, colors),
         text_field(
             fl!("form-identity-first-name"),
             i.first_name.as_deref().unwrap_or(""),
-            CipherEditMessage::IdentityFirstNameChanged,
-            None,
-            form.saving,
             colors,
-        ),
+        )
+        .on_input(CipherEditMessage::IdentityFirstNameChanged)
+        .disabled(form.saving),
         text_field(
             fl!("form-identity-middle-name"),
             i.middle_name.as_deref().unwrap_or(""),
-            CipherEditMessage::IdentityMiddleNameChanged,
-            None,
-            form.saving,
             colors,
-        ),
+        )
+        .on_input(CipherEditMessage::IdentityMiddleNameChanged)
+        .disabled(form.saving),
         text_field(
             fl!("form-identity-last-name"),
             i.last_name.as_deref().unwrap_or(""),
-            CipherEditMessage::IdentityLastNameChanged,
-            None,
-            form.saving,
             colors,
-        ),
+        )
+        .on_input(CipherEditMessage::IdentityLastNameChanged)
+        .disabled(form.saving),
         text_field(
             fl!("form-identity-username"),
             i.username.as_deref().unwrap_or(""),
-            CipherEditMessage::IdentityUsernameChanged,
-            None,
-            form.saving,
             colors,
-        ),
+        )
+        .on_input(CipherEditMessage::IdentityUsernameChanged)
+        .disabled(form.saving),
         text_field(
             fl!("form-identity-company"),
             i.company.as_deref().unwrap_or(""),
-            CipherEditMessage::IdentityCompanyChanged,
-            None,
-            form.saving,
             colors,
-        ),
-    ];
-    card_with_margin(styled_card(column(rows).spacing(12).into()))
+        )
+        .on_input(CipherEditMessage::IdentityCompanyChanged)
+        .disabled(form.saving),
+    ]
+    .spacing(12);
+    card_with_margin(styled_card(body))
 }
 
 pub(in super::super) fn identity_identification_card<'a>(
@@ -69,7 +65,7 @@ pub(in super::super) fn identity_identification_card<'a>(
     colors: &'a AppColors,
 ) -> Element<'a, CipherEditMessage, AppTheme> {
     let i = form.modified.identity.as_ref().expect("ensure_sub_structs");
-    let rows: Vec<Element<'a, CipherEditMessage, AppTheme>> = vec![
+    let body = column![
         reveal_text_field(
             fl!("form-identity-ssn"),
             i.ssn.as_deref().unwrap_or(""),
@@ -87,13 +83,13 @@ pub(in super::super) fn identity_identification_card<'a>(
         text_field(
             fl!("form-identity-license"),
             i.license_number.as_deref().unwrap_or(""),
-            CipherEditMessage::IdentityLicenseChanged,
-            None,
-            form.saving,
             colors,
-        ),
-    ];
-    card_with_margin(styled_card(column(rows).spacing(12).into()))
+        )
+        .on_input(CipherEditMessage::IdentityLicenseChanged)
+        .disabled(form.saving),
+    ]
+    .spacing(12);
+    card_with_margin(styled_card(body))
 }
 
 pub(in super::super) fn identity_contact_card<'a>(
@@ -101,25 +97,24 @@ pub(in super::super) fn identity_contact_card<'a>(
     colors: &'a AppColors,
 ) -> Element<'a, CipherEditMessage, AppTheme> {
     let i = form.modified.identity.as_ref().expect("ensure_sub_structs");
-    let rows: Vec<Element<'a, CipherEditMessage, AppTheme>> = vec![
+    let body = column![
         text_field(
             fl!("form-identity-email"),
             i.email.as_deref().unwrap_or(""),
-            CipherEditMessage::IdentityEmailChanged,
-            None,
-            form.saving,
             colors,
-        ),
+        )
+        .on_input(CipherEditMessage::IdentityEmailChanged)
+        .disabled(form.saving),
         text_field(
             fl!("form-identity-phone"),
             i.phone.as_deref().unwrap_or(""),
-            CipherEditMessage::IdentityPhoneChanged,
-            None,
-            form.saving,
             colors,
-        ),
-    ];
-    card_with_margin(styled_card(column(rows).spacing(12).into()))
+        )
+        .on_input(CipherEditMessage::IdentityPhoneChanged)
+        .disabled(form.saving),
+    ]
+    .spacing(12);
+    card_with_margin(styled_card(body))
 }
 
 pub(in super::super) fn identity_address_card<'a>(
@@ -127,65 +122,59 @@ pub(in super::super) fn identity_address_card<'a>(
     colors: &'a AppColors,
 ) -> Element<'a, CipherEditMessage, AppTheme> {
     let i = form.modified.identity.as_ref().expect("ensure_sub_structs");
-    let rows: Vec<Element<'a, CipherEditMessage, AppTheme>> = vec![
+    let body = column![
         text_field(
             fl!("form-identity-address1"),
             i.address1.as_deref().unwrap_or(""),
-            CipherEditMessage::IdentityAddress1Changed,
-            None,
-            form.saving,
             colors,
-        ),
+        )
+        .on_input(CipherEditMessage::IdentityAddress1Changed)
+        .disabled(form.saving),
         text_field(
             fl!("form-identity-address2"),
             i.address2.as_deref().unwrap_or(""),
-            CipherEditMessage::IdentityAddress2Changed,
-            None,
-            form.saving,
             colors,
-        ),
+        )
+        .on_input(CipherEditMessage::IdentityAddress2Changed)
+        .disabled(form.saving),
         text_field(
             fl!("form-identity-address3"),
             i.address3.as_deref().unwrap_or(""),
-            CipherEditMessage::IdentityAddress3Changed,
-            None,
-            form.saving,
             colors,
-        ),
+        )
+        .on_input(CipherEditMessage::IdentityAddress3Changed)
+        .disabled(form.saving),
         text_field(
             fl!("form-identity-city"),
             i.city.as_deref().unwrap_or(""),
-            CipherEditMessage::IdentityCityChanged,
-            None,
-            form.saving,
             colors,
-        ),
+        )
+        .on_input(CipherEditMessage::IdentityCityChanged)
+        .disabled(form.saving),
         text_field(
             fl!("form-identity-state"),
             i.state.as_deref().unwrap_or(""),
-            CipherEditMessage::IdentityStateChanged,
-            None,
-            form.saving,
             colors,
-        ),
+        )
+        .on_input(CipherEditMessage::IdentityStateChanged)
+        .disabled(form.saving),
         text_field(
             fl!("form-identity-postal"),
             i.postal_code.as_deref().unwrap_or(""),
-            CipherEditMessage::IdentityPostalCodeChanged,
-            None,
-            form.saving,
             colors,
-        ),
+        )
+        .on_input(CipherEditMessage::IdentityPostalCodeChanged)
+        .disabled(form.saving),
         text_field(
             fl!("form-identity-country"),
             i.country.as_deref().unwrap_or(""),
-            CipherEditMessage::IdentityCountryChanged,
-            None,
-            form.saving,
             colors,
-        ),
-    ];
-    card_with_margin(styled_card(column(rows).spacing(12).into()))
+        )
+        .on_input(CipherEditMessage::IdentityCountryChanged)
+        .disabled(form.saving),
+    ]
+    .spacing(12);
+    card_with_margin(styled_card(body))
 }
 
 fn title_selector<'a>(

@@ -84,7 +84,7 @@ pub fn readonly_field_truncated<'a, M: 'a>(
 /// [`crate::components::shell_scope`] for the full write-up.
 pub fn field_frame<'a, M: 'a>(
     label: impl Into<String>,
-    content: Element<'a, M, AppTheme>,
+    content: impl Into<Element<'a, M, AppTheme>>,
     colors: &'a AppColors,
 ) -> Element<'a, M, AppTheme> {
     field_frame_on(label, content, |c| c.background, colors)
@@ -99,8 +99,8 @@ pub fn field_frame<'a, M: 'a>(
 /// re-themes correctly on light/dark switches.
 pub fn field_frame_on<'a, M: 'a>(
     label: impl Into<String>,
-    content: Element<'a, M, AppTheme>,
-    chip_bg: impl Fn(&AppColors) -> Color + Copy + 'static,
+    content: impl Into<Element<'a, M, AppTheme>>,
+    chip_bg: impl Fn(&AppColors) -> Color + 'static,
     colors: &'a AppColors,
 ) -> Element<'a, M, AppTheme> {
     let floating_label = container(text(label.into()).size(14).color(colors.text_secondary))
@@ -130,7 +130,7 @@ pub fn field_frame_on<'a, M: 'a>(
 /// [`field_error_row`]) so the user knows what failed validation.
 pub fn errored_field_frame<'a, M: 'a>(
     label: impl Into<String>,
-    content: Element<'a, M, AppTheme>,
+    content: impl Into<Element<'a, M, AppTheme>>,
     colors: &'a AppColors,
 ) -> Element<'a, M, AppTheme> {
     let floating_label = container(text(label.into()).size(14).color(colors.danger))
@@ -168,29 +168,125 @@ pub fn field_error_row<'a, M: 'a>(
     .into()
 }
 
+/// Labeled single-line text input — the workhorse field builder.
+///
+/// Returns a [`TextField`] for chaining; convert to an `Element` via
+/// `.into()` (or implicitly via `column!` / `row!`). Mirrors iced's own
+/// `button(content).on_press(msg)` idiom so the absence of a knob means
+/// the default: skip `.on_input` for a readonly field, skip `.on_submit`
+/// to ignore Enter, leave `.disabled(false)` and `.errored(false)` alone.
+///
+/// Closures (`on_input`, `chip_bg`) are boxed so the struct stays
+/// non-generic over the closure type — the heap pointer per field is
+/// negligible next to the iced widget tree it produces.
 pub fn text_field<'a, M>(
     label: impl Into<String>,
     value: &'a str,
-    on_input: impl Fn(String) -> M + 'a,
-    on_submit: Option<M>,
-    disabled: bool,
     colors: &'a AppColors,
-) -> Element<'a, M, AppTheme>
+) -> TextField<'a, M>
 where
     M: Clone + 'a,
 {
-    let mut input = bare_text_input(value);
+    TextField {
+        label: label.into(),
+        value,
+        colors,
+        on_input: None,
+        on_submit: None,
+        disabled: false,
+        errored: false,
+        chip_bg: None,
+        id: None,
+    }
+}
 
-    // Skipping `.on_input` leaves the text_input read-only. Dropping
-    // `.on_submit` ignores Enter-spam during in-flight tasks.
-    if !disabled {
-        input = input.on_input(on_input);
-        if let Some(submit_msg) = on_submit {
-            input = input.on_submit(submit_msg);
-        }
+type ChipBgFn = Box<dyn Fn(&AppColors) -> Color + 'static>;
+
+pub struct TextField<'a, M> {
+    label: String,
+    value: &'a str,
+    colors: &'a AppColors,
+    on_input: Option<Box<dyn Fn(String) -> M + 'a>>,
+    on_submit: Option<M>,
+    disabled: bool,
+    errored: bool,
+    /// Defaults to `|c| c.background`. Set when the field sits on a
+    /// surface other than `colors.background` so the floating-label chip
+    /// blends. Folds in the `field_frame_on` variant.
+    chip_bg: Option<ChipBgFn>,
+    id: Option<iced::widget::Id>,
+}
+
+impl<'a, M: Clone + 'a> TextField<'a, M> {
+    pub fn on_input(mut self, on_input: impl Fn(String) -> M + 'a) -> Self {
+        self.on_input = Some(Box::new(on_input));
+        self
     }
 
-    field_frame(label, input.into(), colors)
+    pub fn on_submit(mut self, on_submit: M) -> Self {
+        self.on_submit = Some(on_submit);
+        self
+    }
+
+    pub fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
+        self
+    }
+
+    pub fn errored(mut self, errored: bool) -> Self {
+        self.errored = errored;
+        self
+    }
+
+    pub fn chip_bg(mut self, chip_bg: impl Fn(&AppColors) -> Color + 'static) -> Self {
+        self.chip_bg = Some(Box::new(chip_bg));
+        self
+    }
+
+    pub fn id(mut self, id: iced::widget::Id) -> Self {
+        self.id = Some(id);
+        self
+    }
+}
+
+impl<'a, M: Clone + 'a> From<TextField<'a, M>> for Element<'a, M, AppTheme> {
+    fn from(field: TextField<'a, M>) -> Self {
+        let TextField {
+            label,
+            value,
+            colors,
+            on_input,
+            on_submit,
+            disabled,
+            errored,
+            chip_bg,
+            id,
+        } = field;
+
+        let mut input = bare_text_input(value);
+        if let Some(id) = id {
+            input = input.id(id);
+        }
+        // Skipping `.on_input` leaves the text_input read-only. Dropping
+        // `.on_submit` ignores Enter-spam during in-flight tasks.
+        if !disabled
+            && let Some(on_input) = on_input
+        {
+            input = input.on_input(on_input);
+            if let Some(submit_msg) = on_submit {
+                input = input.on_submit(submit_msg);
+            }
+        }
+
+        let content: Element<'a, M, AppTheme> = input.into();
+        if errored {
+            errored_field_frame(label, content, colors)
+        } else if let Some(chip_bg) = chip_bg {
+            field_frame_on(label, content, move |c| chip_bg(c), colors)
+        } else {
+            field_frame(label, content, colors)
+        }
+    }
 }
 
 /// Number input with up/down chevron steppers on the right edge. Caller
@@ -232,7 +328,7 @@ where
 
     let steppers = column![inc, dec].spacing(0);
     let row_el = row![input, steppers].align_y(Alignment::Center);
-    field_frame(label, row_el.into(), colors)
+    field_frame(label, row_el, colors)
 }
 
 /// Labeled single-select dropdown backed by iced's `pick_list`. The inner
@@ -270,7 +366,7 @@ pub fn select_field_on<'a, T, M>(
     options: Vec<T>,
     to_string: impl Fn(&T) -> String + 'a,
     on_select: impl Fn(T) -> M + 'a,
-    chip_bg: impl Fn(&AppColors) -> Color + Copy + 'static,
+    chip_bg: impl Fn(&AppColors) -> Color + 'static,
     colors: &'a AppColors,
 ) -> Element<'a, M, AppTheme>
 where
@@ -289,7 +385,7 @@ where
             border: Border::default(),
         });
 
-    field_frame_on(label, picker.into(), chip_bg, colors)
+    field_frame_on(label, picker, chip_bg, colors)
 }
 
 /// Labeled searchable single-select backed by iced's `combo_box`.
@@ -395,7 +491,7 @@ where
             selection: theme.colors.accent,
         });
 
-        field_frame(self.label.clone(), picker.into(), self.colors)
+        field_frame(self.label.clone(), picker, self.colors)
     }
 }
 
@@ -404,19 +500,18 @@ where
 /// render themselves.
 pub fn multi_select_field<'a, M: Clone + 'a>(
     label: impl Into<String>,
-    trigger: Element<'a, M, AppTheme>,
-    panel: Element<'a, M, AppTheme>,
+    trigger: impl Into<Element<'a, M, AppTheme>>,
+    panel: impl Into<Element<'a, M, AppTheme>>,
     open: bool,
     on_dismiss: M,
     colors: &'a AppColors,
 ) -> Element<'a, M, AppTheme> {
     // Don't set a width on the DropDown — the overlay defaults to the
     // trigger's width. `Length::Fill` would stretch it to the whole window.
-    let dd: Element<'a, M, AppTheme> = DropDown::new(trigger, panel, open)
+    let dd = DropDown::new(trigger.into(), panel.into(), open)
         .alignment(crate::components::drop_down::Alignment::BelowLeft)
         .on_dismiss(on_dismiss)
-        .offset(4.0)
-        .into();
+        .offset(4.0);
 
     field_frame(label, dd, colors)
 }
@@ -542,7 +637,7 @@ impl<'a, Message: Clone + 'a> Component<Message, AppTheme> for RevealTextField<'
         }
 
         let input_row = row![input, toggle_button].align_y(Alignment::Center);
-        field_frame(self.label.clone(), input_row.into(), self.colors)
+        field_frame(self.label.clone(), input_row, self.colors)
     }
 }
 

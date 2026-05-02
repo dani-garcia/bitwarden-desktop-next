@@ -109,7 +109,7 @@ impl CollapsiblePane {
 /// A vertical separator is drawn at the boundary between panes.
 pub fn view<'a, M: 'a + Clone>(
     pane: &'a CollapsiblePane,
-    left: Element<'a, M, AppTheme>,
+    left: impl Into<Element<'a, M, AppTheme>>,
     right: Option<Element<'a, M, AppTheme>>,
     on_resize: impl Fn(ResizeEvent) -> M + 'a,
 ) -> Element<'a, M, AppTheme> {
@@ -117,7 +117,7 @@ pub fn view<'a, M: 'a + Clone>(
     // construction. We have the Elements already built, so stash them in
     // RefCell slots and `take()` each one — keeps the closure `Fn`-safe
     // without rebuilding content inside.
-    let left_slot = RefCell::new(Some(left));
+    let left_slot = RefCell::new(Some(left.into()));
     let right_slot = RefCell::new(right);
 
     PaneGrid::new(&pane.state, move |_pane, side, _maximized| match side {

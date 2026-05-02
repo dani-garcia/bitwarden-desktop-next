@@ -102,5 +102,5 @@ pub(in super::super) fn identity_card<'a>(
                 .into(),
         );
     }
-    card_with_margin(styled_card(column(fields).spacing(12).width(Fill).into()))
+    card_with_margin(styled_card(column(fields).spacing(12).width(Fill)))
 }

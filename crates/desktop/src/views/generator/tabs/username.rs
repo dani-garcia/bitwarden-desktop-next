@@ -46,25 +46,21 @@ pub(in super::super) fn view<'a>(
         UsernameKind::Subaddress => inputs::text_field(
             fl!("generator-username-email"),
             &form.email,
-            GeneratorMessage::SetEmail,
-            None,
-            false,
             colors,
-        ),
+        )
+        .on_input(GeneratorMessage::SetEmail)
+        .into(),
         UsernameKind::Catchall => inputs::text_field(
             fl!("generator-username-domain"),
             &form.domain,
-            GeneratorMessage::SetDomain,
-            None,
-            false,
             colors,
-        ),
+        )
+        .on_input(GeneratorMessage::SetDomain)
+        .into(),
     };
 
     let combined_card = components::styled_card(
-        column![type_picker, Space::new().height(12), sub_fields]
-            .width(Fill)
-            .into(),
+        column![type_picker, Space::new().height(12), sub_fields].width(Fill),
     );
 
     column![components::card_with_margin(combined_card)]

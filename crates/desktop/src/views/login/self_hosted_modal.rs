@@ -47,13 +47,13 @@ pub fn view<'a>(
     let url_field = if state.url_error {
         inputs::errored_field_frame(
             fl!("login-self-hosted-modal-url-label"),
-            url_input.into(),
+            url_input,
             colors,
         )
     } else {
         inputs::field_frame(
             fl!("login-self-hosted-modal-url-label"),
-            url_input.into(),
+            url_input,
             colors,
         )
     };
@@ -93,7 +93,7 @@ pub fn view<'a>(
         None,
         |c| c.background,
         progress,
-        container(body).into(),
+        container(body),
         LoginMessage::SelfHostedCancel,
     ))
 }

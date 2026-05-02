@@ -84,9 +84,7 @@ pub(in super::super) fn view<'a>(
     );
 
     let length_card = components::styled_card(
-        column![length, Space::new().height(2), length_hint]
-            .width(Fill)
-            .into(),
+        column![length, Space::new().height(2), length_hint].width(Fill),
     );
 
     let include_card = components::styled_card(
@@ -99,8 +97,7 @@ pub(in super::super) fn view<'a>(
             Space::new().height(10),
             avoid,
         ]
-        .width(Fill)
-        .into(),
+        .width(Fill),
     );
 
     column![

@@ -246,7 +246,7 @@ impl SettingsView {
             Some(440.0),
             |c| c.background,
             progress,
-            body.into(),
+            body,
             SettingsMessage::Close,
         ))
     }

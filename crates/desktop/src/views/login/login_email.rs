@@ -65,8 +65,7 @@ fn card_content<'a>(
         bare_text_input(email)
             .id(LOGIN_EMAIL_FIELD_ID)
             .on_input(LoginMessage::EmailChanged)
-            .on_submit(LoginMessage::ContinueWithEmail)
-            .into(),
+            .on_submit(LoginMessage::ContinueWithEmail),
         colors,
     );
 

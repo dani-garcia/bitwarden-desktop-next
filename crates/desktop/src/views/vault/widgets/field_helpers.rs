@@ -40,7 +40,9 @@ pub fn field_readonly<'a, M: 'a>(
 /// Wraps a card element with bottom margin for section spacing. Thin alias
 /// for `components::card_with_margin` — kept here so callers that already
 /// import `field_helpers` don't need a second import path.
-pub fn card_with_margin<'a, M: 'a>(card: Element<'a, M, AppTheme>) -> Element<'a, M, AppTheme> {
+pub fn card_with_margin<'a, M: 'a>(
+    card: impl Into<Element<'a, M, AppTheme>>,
+) -> Element<'a, M, AppTheme> {
     components::card_with_margin(card)
 }
 
@@ -49,7 +51,9 @@ pub fn card_with_margin<'a, M: 'a>(card: Element<'a, M, AppTheme>) -> Element<'a
 /// import path. Named `styled_card` (not `card`) to avoid shadowing in
 /// scopes that use `card` as a parameter name (e.g. `cipher_detail`'s
 /// `card_details_card(card: &CardView)`).
-pub fn styled_card<'a, M: 'a>(content: Element<'a, M, AppTheme>) -> Element<'a, M, AppTheme> {
+pub fn styled_card<'a, M: 'a>(
+    content: impl Into<Element<'a, M, AppTheme>>,
+) -> Element<'a, M, AppTheme> {
     components::styled_card(content)
 }
 

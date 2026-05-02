@@ -18,33 +18,30 @@ pub(in super::super) fn card_details_card<'a>(
 ) -> Element<'a, CipherEditMessage, AppTheme> {
     let c = form.modified.card.as_ref().expect("ensure_sub_structs");
 
-    let rows: Vec<Element<'a, CipherEditMessage, AppTheme>> = vec![
+    let body = column![
         text_field(
             fl!("form-card-cardholder"),
             c.cardholder_name.as_deref().unwrap_or(""),
-            CipherEditMessage::CardCardholderChanged,
-            None,
-            form.saving,
             colors,
-        ),
+        )
+        .on_input(CipherEditMessage::CardCardholderChanged)
+        .disabled(form.saving),
         brand_selector(form, colors),
         text_field(
             fl!("form-card-number"),
             c.number.as_deref().unwrap_or(""),
-            CipherEditMessage::CardNumberChanged,
-            None,
-            form.saving,
             colors,
-        ),
+        )
+        .on_input(CipherEditMessage::CardNumberChanged)
+        .disabled(form.saving),
         exp_month_selector(form, colors),
         text_field(
             fl!("form-card-exp-year"),
             c.exp_year.as_deref().unwrap_or(""),
-            CipherEditMessage::CardExpYearChanged,
-            None,
-            form.saving,
             colors,
-        ),
+        )
+        .on_input(CipherEditMessage::CardExpYearChanged)
+        .disabled(form.saving),
         reveal_text_field(
             fl!("form-card-code"),
             c.code.as_deref().unwrap_or(""),
@@ -52,9 +49,10 @@ pub(in super::super) fn card_details_card<'a>(
             form.saving,
             colors,
         ),
-    ];
+    ]
+    .spacing(12);
 
-    card_with_margin(styled_card(column(rows).spacing(12).into()))
+    card_with_margin(styled_card(body))
 }
 
 fn brand_selector<'a>(
