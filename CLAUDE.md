@@ -66,6 +66,7 @@ The `gpu` cargo feature (on by default) compiles wgpu into the binary. The runti
   - **Searchable single-select** (folder, organization) → `inputs::search_select_field` (iced `combo_box`).
   - **Checkbox panel or other custom trigger/panel content** (collection multi-select) → `inputs::multi_select_field` (our `DropDown`). Only reach for this when `pick_list` genuinely can't render what you need — the custom `DropDown`'s overlay positioning is naive (flips left past the viewport edge if the trigger sits in the right half of the window), so fields inside a right-side pane commonly misposition.
 - If you do use `DropDown` directly: always set `.on_dismiss(message)` for click-outside-to-close, and cross-view dismissal lives at the App router (see [docs/architecture.md](docs/architecture.md) → "Router + Cross-View Dismissal"). Sub-views provide `dismiss_dropdowns()` helpers; don't make sub-views aware of each other.
+- **Field chip background.** `field_frame` / `select_field` paint the floating-label chip with `colors.background` so the chip cleanly cuts the border behind it. When the field sits on a different surface (e.g. directly inside a dialog body painted with `card_bg`), the chip will read as a tile of contrasting colour. Reach for `field_frame_on` / `select_field_on` and pass the surface's colour token (`|c| c.card_bg`) so the chip blends.
 
 ### Dead Code
 - Use `#[expect(dead_code)]` (not `#[allow]`) — warns if suppression becomes unnecessary.

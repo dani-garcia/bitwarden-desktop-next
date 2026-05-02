@@ -43,11 +43,8 @@ impl App {
                     // the user returns when the modal closes.
                     self.open_generator_modal()
                 }
-                NavSection::Import | NavSection::Export => {
-                    // Placeholders — only the highlight changes.
-                    self.sidebar.active_section = section;
-                    Task::none()
-                }
+                NavSection::Import => self.open_import_modal(),
+                NavSection::Export => self.open_export_modal(),
             },
             SidebarMessage::VaultFilterSelected(filter) => {
                 self.sidebar.active_vault_filter = filter;

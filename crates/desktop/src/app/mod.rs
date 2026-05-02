@@ -26,7 +26,8 @@ use crate::{
     },
     theme::{AppTheme, ThemePreference},
     views::{
-        generator as generator_view, login, magnify, send, settings as settings_view,
+        export as export_view, generator as generator_view, import as import_view, login, magnify,
+        send, settings as settings_view,
         title_bar::{self, TitleBarMessage},
         vault,
     },
@@ -98,6 +99,8 @@ pub struct Views {
     pub(super) send: send::SendView,
     pub(super) settings: settings_view::SettingsView,
     pub(super) generator: generator_view::GeneratorView,
+    pub(super) import: import_view::ImportView,
+    pub(super) export: export_view::ExportView,
     pub(super) title_bar: title_bar::TitleBarView,
 }
 
@@ -109,6 +112,8 @@ impl Views {
             send: send::SendView::new(),
             settings: settings_view::SettingsView::new(),
             generator: generator_view::GeneratorView::new(),
+            import: import_view::ImportView::new(),
+            export: export_view::ExportView::new(),
             title_bar: title_bar::TitleBarView::new(),
         }
     }
@@ -429,6 +434,16 @@ impl App {
                         .generator
                         .update(m, uctx)
                         .dispatch(Message::generator, |e| self.handle_generator_event(e)),
+                    ViewMessage::Import(m) => self
+                        .views
+                        .import
+                        .update(m, uctx)
+                        .dispatch(Message::import, |e| self.handle_import_event(e)),
+                    ViewMessage::Export(m) => self
+                        .views
+                        .export
+                        .update(m, uctx)
+                        .dispatch(Message::export, |e| self.handle_export_event(e)),
                 }
             }
         }
@@ -590,6 +605,18 @@ impl App {
             .modal_view(colors)
             .map(|el| el.map(Message::generator));
 
+        let import_modal: Option<Element<'_, Message, AppTheme>> = self
+            .views
+            .import
+            .modal_view(colors)
+            .map(|el| el.map(Message::import));
+
+        let export_modal: Option<Element<'_, Message, AppTheme>> = self
+            .views
+            .export
+            .modal_view(colors)
+            .map(|el| el.map(Message::export));
+
         let use_custom_menu_bar = crate::services::menu::should_use_custom_menu_bar();
 
         let tb: Element<'_, Message, AppTheme> = if use_custom_menu_bar {
@@ -618,11 +645,17 @@ impl App {
         // Optional layers above `main_column`, in z-order (lowest first).
         // `flatten()` drops the `None`s so only overlays that need to render
         // this frame end up in the Vec.
-        let mut overlays: Vec<Element<'_, Message, AppTheme>> =
-            [sheet, modal, settings_modal, generator_modal]
-                .into_iter()
-                .flatten()
-                .collect();
+        let mut overlays: Vec<Element<'_, Message, AppTheme>> = [
+            sheet,
+            modal,
+            settings_modal,
+            generator_modal,
+            import_modal,
+            export_modal,
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
 
         // Drag-by-titlebar overlay sits on top when any overlay is up. Only
         // meaningful with the custom title bar — macOS native already handles

@@ -510,20 +510,27 @@ Plus, as applicable: one `Screen::Generator` variant + `view_main` branch (if th
 
 ## Sidebar + Shared Authenticated Chrome
 
-Authenticated screens (Vault, Send, future Generator) share two pieces of chrome: the **left sidebar** (`components/sidebar.rs`) and the **top-right account switcher** (`components/account_switcher.rs`). Both are rendered alongside the per-screen content in `App::view_main` — the views themselves don't re-render them.
+Authenticated screens (Vault, Send) share two pieces of chrome: the **left sidebar** (`components/sidebar.rs`) and the **top-right account switcher** (`components/account_switcher.rs`). Both are rendered alongside the per-screen content in `App::view_main` — the views themselves don't re-render them. Sidebar buttons may also open window-level modals (Generator, Import, Export) without flipping `Screen`.
 
 ### Sidebar state lives on `App`
 
 `SidebarState` (mode, active section, per-screen filters, tree-open flags) persists across screen switches, so it belongs on `App`, not inside any one view. [`app/handlers/sidebar.rs`](../crates/desktop/src/app/handlers/sidebar.rs) owns the full dispatcher: section clicks may flip `Screen`, filter clicks mutate `SidebarState` **and** push the new filter down to the owning view via its `apply_filter(&uid, filter)` method. The view never reads `SidebarState` back — App is the single writer, views are receivers.
 
-### Adding a screen as a sidebar-driven nav section
+### Adding a sidebar-driven nav section (screen *or* modal)
 
-Editing [`components/sidebar.rs`](../crates/desktop/src/components/sidebar.rs) is a single-file touch that covers every sidebar concern for a new screen. When adding a `Generator` / `Import` / `Export` screen, expect to:
+Editing [`components/sidebar.rs`](../crates/desktop/src/components/sidebar.rs) is a single-file touch that covers every sidebar concern. The sidebar treats two different shapes uniformly:
 
-1. Add a `NavSection::{YourScreen}` variant.
-2. If the screen owns a filterable list, add a `{YourScreen}Filter` enum + `active_{yourscreen}_filter` field on `SidebarState` + `{YourScreen}FilterSelected(...)` on `SidebarMessage`. Model from `SendFilter` / `VaultFilter`.
+- **Screen-typed entries** (Vault, Send): clicking flips `Screen` and the right-hand pane re-renders. The handler arm calls `switch_to_{name}()`.
+- **Modal-typed entries** (Generator, Import, Export): clicking opens a window-level modal. The handler arm calls `open_{name}_modal()`. `active_section` is **not** mutated — the highlight stays on the previously-active screen so it tracks where the user returns when the modal closes.
+
+Steps for either shape:
+
+1. Add a `NavSection::{Yours}` variant.
+2. If the entry owns a filterable list, add a `{Yours}Filter` enum + `active_{yours}_filter` field on `SidebarState` + `{Yours}FilterSelected(...)` on `SidebarMessage`. Model from `SendFilter` / `VaultFilter`. (Modals typically skip this.)
 3. Render the section in `expanded_panel()` (parent header row + nav buttons) and the icon rail.
-4. Add dispatch arms in [`app/handlers/sidebar.rs`](../crates/desktop/src/app/handlers/sidebar.rs): a `SectionSelected(NavSection::YourScreen)` arm that calls `switch_to_{yourscreen}()`, and (if applicable) a filter arm that calls `self.views.{yourscreen}.apply_filter(&uid, filter)` then the switch helper.
+4. Add a dispatch arm in [`app/handlers/sidebar.rs`](../crates/desktop/src/app/handlers/sidebar.rs):
+   - Screen entry: `self.sidebar.active_section = section; self.switch_to_{yours}()` (plus, if applicable, a filter arm calling `self.views.{yours}.apply_filter(&uid, filter)` then the switch helper).
+   - Modal entry: `self.open_{yours}_modal()` and nothing else.
 
 Sidebar-related changes are intentionally centralized — the sidebar is logically one widget. This is *not* a layering violation; it's the correct home for chrome that spans multiple screens. When it grows to the point of friction, revisit by splitting per-section sub-modules under `components/sidebar/` rather than by distributing state back into views.
 

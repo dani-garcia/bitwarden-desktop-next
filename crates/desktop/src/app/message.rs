@@ -4,9 +4,9 @@ use crate::{
     components::sidebar::SidebarMessage,
     services::{favicon::FaviconMessage, sdk::ClientManager},
     views::{
-        about::AboutMessage, generator::GeneratorMessage, login::LoginMessage,
-        magnify::MagnifyMessage, send::SendMessage, settings::SettingsMessage,
-        title_bar::TitleBarMessage, vault::VaultMessage,
+        about::AboutMessage, export::ExportMessage, generator::GeneratorMessage,
+        import::ImportMessage, login::LoginMessage, magnify::MagnifyMessage, send::SendMessage,
+        settings::SettingsMessage, title_bar::TitleBarMessage, vault::VaultMessage,
     },
 };
 
@@ -44,6 +44,8 @@ pub enum ViewMessage {
     TitleBar(TitleBarMessage),
     Settings(SettingsMessage),
     Generator(GeneratorMessage),
+    Import(ImportMessage),
+    Export(ExportMessage),
 }
 
 // Convenience constructors so call sites can use fn-pointer form
@@ -71,6 +73,14 @@ impl Message {
 
     pub fn generator(m: GeneratorMessage) -> Self {
         Self::View(ViewMessage::Generator(m))
+    }
+
+    pub fn import(m: ImportMessage) -> Self {
+        Self::View(ViewMessage::Import(m))
+    }
+
+    pub fn export(m: ExportMessage) -> Self {
+        Self::View(ViewMessage::Export(m))
     }
 }
 

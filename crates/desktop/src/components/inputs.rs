@@ -69,8 +69,10 @@ pub fn readonly_field_truncated<'a, M: 'a>(
 }
 
 /// Wrap any content in the floating-label frame: a bordered container with
-/// a small label chip stacked on top of the border. The chip has a
-/// background matching the page so the border visually breaks behind it.
+/// a small label chip stacked on top of the border. The chip's background
+/// must match whatever surface sits behind the field so the border visually
+/// breaks behind it — pass [`field_frame_on`] if the field doesn't sit on
+/// `colors.background`.
 ///
 /// The output is wrapped in a [`ShellScope`] so each field gets its own
 /// private event-status flag — without it, two `pick_list`-bearing
@@ -85,9 +87,27 @@ pub fn field_frame<'a, M: 'a>(
     content: Element<'a, M, AppTheme>,
     colors: &'a AppColors,
 ) -> Element<'a, M, AppTheme> {
+    field_frame_on(label, content, |c| c.background, colors)
+}
+
+/// [`field_frame`] with a caller-chosen chip background. Use when the
+/// field sits on a surface other than `colors.background` (e.g. directly
+/// on a dialog whose body uses `card_bg`); pass the same colour token the
+/// surrounding container paints.
+///
+/// `chip_bg` is a closure rather than a pre-resolved `Color` so the chip
+/// re-themes correctly on light/dark switches.
+pub fn field_frame_on<'a, M: 'a>(
+    label: impl Into<String>,
+    content: Element<'a, M, AppTheme>,
+    chip_bg: impl Fn(&AppColors) -> Color + Copy + 'static,
+    colors: &'a AppColors,
+) -> Element<'a, M, AppTheme> {
     let floating_label = container(text(label.into()).size(14).color(colors.text_secondary))
         .padding([0, 4])
-        .style(|theme: &AppTheme| container::Style::default().background(theme.colors.background));
+        .style(move |theme: &AppTheme| {
+            container::Style::default().background(chip_bg(&theme.colors))
+        });
 
     let bordered = container(content).width(Fill).style(|theme: &AppTheme| {
         container::Style::default().border(
@@ -230,6 +250,33 @@ where
     T: PartialEq + Clone + 'a,
     M: Clone + 'a,
 {
+    select_field_on(
+        label,
+        selected,
+        options,
+        to_string,
+        on_select,
+        |c| c.background,
+        colors,
+    )
+}
+
+/// [`select_field`] with a caller-chosen chip background. Use when the
+/// field doesn't sit on `colors.background` (e.g. directly on a dialog
+/// whose body uses `card_bg`).
+pub fn select_field_on<'a, T, M>(
+    label: impl Into<String>,
+    selected: Option<T>,
+    options: Vec<T>,
+    to_string: impl Fn(&T) -> String + 'a,
+    on_select: impl Fn(T) -> M + 'a,
+    chip_bg: impl Fn(&AppColors) -> Color + Copy + 'static,
+    colors: &'a AppColors,
+) -> Element<'a, M, AppTheme>
+where
+    T: PartialEq + Clone + 'a,
+    M: Clone + 'a,
+{
     let picker = pick_list(selected, options, to_string)
         .on_select(on_select)
         .width(Fill)
@@ -242,7 +289,7 @@ where
             border: Border::default(),
         });
 
-    field_frame(label, picker.into(), colors)
+    field_frame_on(label, picker.into(), chip_bg, colors)
 }
 
 /// Labeled searchable single-select backed by iced's `combo_box`.

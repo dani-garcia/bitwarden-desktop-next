@@ -560,3 +560,30 @@ magnify-no-results = No matching items
 magnify-copy-password = Copy password
 magnify-copy-username = Copy username
 magnify-hint-navigate = Navigate
+
+## Import modal
+import-modal-title = Import data
+import-modal-section-destination = Destination
+import-modal-vault-label = Vault (required)
+import-modal-vault-personal = My vault
+import-modal-folder-label = Folder
+import-modal-folder-placeholder = - Select a folder -
+import-modal-collection-label = Collection (required)
+import-modal-collection-placeholder = - Select a collection -
+import-modal-section-data = Data
+import-modal-file-format-label = File format (required)
+import-modal-file-helper = Select the import file
+import-modal-choose-file = Choose file
+import-modal-no-file = No file chosen
+import-modal-paste-label = or copy/paste the import file contents
+import-modal-submit = Import data
+import-modal-cancel = Cancel
+import-toast-unimplemented = Import isn't wired up yet — coming soon
+
+## Export modal
+export-modal-title = Export vault
+export-modal-banner = Only the individual vault items associated with { $email } will be exported. Organization vault items will not be included. Only vault item information will be exported and will not include associated attachments.
+export-modal-file-format-label = File format (required)
+export-modal-submit = Export
+export-modal-cancel = Cancel
+export-toast-unimplemented = Export isn't wired up yet — coming soon

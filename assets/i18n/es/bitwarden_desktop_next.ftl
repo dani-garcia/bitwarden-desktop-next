@@ -499,3 +499,30 @@ magnify-no-results = Sin coincidencias
 magnify-copy-password = Copiar contraseña
 magnify-copy-username = Copiar usuario
 magnify-hint-navigate = Navegar
+
+## Modal de importar
+import-modal-title = Importar datos
+import-modal-section-destination = Destino
+import-modal-vault-label = Bóveda (obligatorio)
+import-modal-vault-personal = Mi bóveda
+import-modal-folder-label = Carpeta
+import-modal-folder-placeholder = - Selecciona una carpeta -
+import-modal-collection-label = Colección (obligatorio)
+import-modal-collection-placeholder = - Selecciona una colección -
+import-modal-section-data = Datos
+import-modal-file-format-label = Formato de archivo (obligatorio)
+import-modal-file-helper = Selecciona el archivo a importar
+import-modal-choose-file = Elegir archivo
+import-modal-no-file = Ningún archivo elegido
+import-modal-paste-label = o pega el contenido del archivo
+import-modal-submit = Importar datos
+import-modal-cancel = Cancelar
+import-toast-unimplemented = La importación aún no está disponible
+
+## Modal de exportar
+export-modal-title = Exportar bóveda
+export-modal-banner = Solo se exportarán los elementos individuales asociados a { $email }. No se incluirán los elementos de bóvedas de organización ni los archivos adjuntos.
+export-modal-file-format-label = Formato de archivo (obligatorio)
+export-modal-submit = Exportar
+export-modal-cancel = Cancelar
+export-toast-unimplemented = La exportación aún no está disponible
