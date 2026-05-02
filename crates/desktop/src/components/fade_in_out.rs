@@ -32,12 +32,18 @@
 
 use std::time::{Duration, Instant};
 
+use iced::{Task, widget};
 use lilt::{Animated, Easing};
 
 use crate::services::animation;
 
 const DEFAULT_DURATION_MS: f32 = 180.0;
 const DEFAULT_DURATION: Duration = Duration::from_millis(DEFAULT_DURATION_MS as u64);
+
+/// Buffer past the animation duration before applying focus. Covers jitter
+/// from frame timing — the slide-in animation can drag a few frames longer
+/// than the nominal duration on a busy main thread.
+const POST_OPEN_FOCUS_BUFFER: Duration = Duration::from_millis(40);
 
 #[derive(Debug, Clone)]
 pub struct FadeInOut {
@@ -84,4 +90,32 @@ impl FadeInOut {
         let visible = self.inner.value || self.inner.in_progress(now);
         visible.then(|| self.inner.animate_bool(0.0, 1.0, now))
     }
+}
+
+/// Returns a [`Task`] that focuses the widget with the given `id` after the
+/// `FadeInOut` intro animation has settled. Pair with `fade.open()` to
+/// auto-focus an input inside a freshly-opened overlay.
+///
+/// Why this exists: applying `widget::operation::focus(id)` while the fade
+/// is still animating *appears* to focus the input — the cursor briefly
+/// shows — but the focus state gets clobbered before any keystrokes can
+/// land. The per-frame tree rebuild during the slide-in drops
+/// `text_input::is_focused` partway through. Deferring past the animation
+/// duration + a small jitter buffer lets focus stick.
+///
+/// # Example
+///
+/// ```ignore
+/// LoginMessage::OpenSelfHosted => {
+///     self.modal.fade.open();
+///     return Outcome::task(fade_in_out::focus_after_open(URL_FIELD_ID));
+/// }
+/// ```
+///
+/// No intermediate message round-trip is needed — the returned task chains
+/// the sleep with the focus operation directly.
+pub fn focus_after_open<M: Send + 'static>(id: widget::Id) -> Task<M> {
+    let delay = DEFAULT_DURATION + POST_OPEN_FOCUS_BUFFER;
+    Task::perform(tokio::time::sleep(delay), |_| ())
+        .then(move |_| iced::widget::operation::focus(id.clone()))
 }

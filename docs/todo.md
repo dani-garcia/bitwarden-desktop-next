@@ -70,10 +70,6 @@ After a successful `ContinueWithEmail`, the server may demand TOTP / Duo / WebAu
 
 "Use single sign-on" button on login email screen. Provider selection + browser redirect.
 
-### Self-hosted server URL modal `[M]`
-
-The server selector's "Self-hosted" option should open a modal to input a custom URL. Validates + persists; per-user `icons_url` (below) consumes the result.
-
 ### Per-user `icons_url` for self-hosted `[M]` `[blocked: login command]`
 
 All users currently resolve to `https://icons.bitwarden.net` via [services/favicon.rs](../crates/desktop/src/services/favicon.rs). Add `icons_url: String` on `UserEntry` ([services/sdk/](../crates/desktop/src/services/sdk/)), populate from `/api/config`'s `environment.icons` at login (cloud defaults: US `icons.bitwarden.net`, EU `icons.bitwarden.eu` per the Angular clients' `default-environment.service.ts`), expose `ClientManager::icons_url(&uid) -> Option<String>`, and swap the resolver closure in [app/mod.rs](../crates/desktop/src/app/mod.rs) (per-fetch closure → re-auth picks up the new URL without restart, fallback to US cloud when `None`).

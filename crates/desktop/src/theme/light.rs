@@ -31,6 +31,7 @@ impl AppColors {
             toast_success_bg: color!(0x3bb360),
             toast_warning_bg: color!(0xbf8b00),
             toast_error_bg: color!(0xc83c3c),
+            danger: color!(0xc83c3c),
             scrollbar_thumb: color!(0xc4c9d4),
         }
     }

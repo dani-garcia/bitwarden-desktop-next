@@ -176,6 +176,10 @@ pub struct AppColors {
     pub toast_warning_bg: Color,
     /// Toast background — error severity
     pub toast_error_bg: Color,
+    /// Form-error red — used for invalid-input borders, error icons, and
+    /// inline validation messages. Same hue as `toast_error_bg` but kept as
+    /// a separate semantic token so a future theme can decouple them.
+    pub danger: Color,
     /// Scrollbar thumb (the draggable part of the scrollable rail)
     pub scrollbar_thumb: Color,
 }

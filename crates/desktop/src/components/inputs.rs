@@ -105,6 +105,49 @@ pub fn field_frame<'a, M: 'a>(
     .into()
 }
 
+/// [`field_frame`] in the validation-error state: red border + red label
+/// chip. Pair with an inline error message rendered separately (e.g. via
+/// [`field_error_row`]) so the user knows what failed validation.
+pub fn errored_field_frame<'a, M: 'a>(
+    label: impl Into<String>,
+    content: Element<'a, M, AppTheme>,
+    colors: &'a AppColors,
+) -> Element<'a, M, AppTheme> {
+    let floating_label = container(text(label.into()).size(14).color(colors.danger))
+        .padding([0, 4])
+        .style(|theme: &AppTheme| container::Style::default().background(theme.colors.background));
+
+    let bordered = container(content).width(Fill).style(|theme: &AppTheme| {
+        container::Style::default().border(
+            Border::default()
+                .color(theme.colors.danger)
+                .width(1.0)
+                .rounded(4),
+        )
+    });
+
+    crate::components::shell_scope::ShellScope::new(stack![
+        column![Space::new().height(Length::Fixed(8.0)), bordered],
+        container(floating_label).padding([0, 12]),
+    ])
+    .into()
+}
+
+/// Inline validation-error row: filled X-circle icon + message text, both in
+/// `colors.danger`. Render directly below an [`errored_field_frame`].
+pub fn field_error_row<'a, M: 'a>(
+    message: impl Into<String>,
+    colors: &'a AppColors,
+) -> Element<'a, M, AppTheme> {
+    row![
+        icons::X_CIRCLE_FILL.render(14.0, colors.danger),
+        text(message.into()).size(12).color(colors.danger),
+    ]
+    .spacing(6)
+    .align_y(Alignment::Center)
+    .into()
+}
+
 pub fn text_field<'a, M>(
     label: impl Into<String>,
     value: &'a str,

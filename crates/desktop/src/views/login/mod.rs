@@ -2,6 +2,7 @@ mod handler;
 mod layout;
 mod login_email;
 mod login_password;
+mod self_hosted_modal;
 mod server_selector;
 mod unlock;
 
@@ -10,15 +11,16 @@ use iced::{Element, Task};
 use crate::{
     app::{Outcome, UpdateCtx, ViewTypes},
     components::{
+        FadeInOut,
         account_switcher::{AccountSwitcherEvent, AccountSwitcherMessage},
         toast::Toast,
     },
     domain::{UnlockMethod, UserId},
     services::sdk::ClientManager,
-    theme::AppTheme,
+    theme::{AppColors, AppTheme},
     views::login::{
         login_email::LOGIN_EMAIL_FIELD_ID, login_password::LOGIN_PASSWORD_FIELD_ID,
-        unlock::UNLOCK_FIELD_ID,
+        self_hosted_modal::SELF_HOSTED_URL_FIELD_ID, unlock::UNLOCK_FIELD_ID,
     },
 };
 
@@ -126,6 +128,11 @@ pub enum LoginMessage {
     ToggleServerSelector,
     SelectServer(ServerOption),
 
+    // Self-hosted environment modal
+    SelfHostedUrlChanged(String),
+    SelfHostedSave,
+    SelfHostedCancel,
+
     // Account switcher
     AccountSwitcher(AccountSwitcherMessage),
 }
@@ -162,6 +169,18 @@ pub struct LoginView {
     /// of on `App` because every input (active user, `auth_page`, method
     /// choice) is already owned or observed by this view.
     pub unlock_alternatives: Vec<UnlockMethod>,
+    /// Working URL + animation state for the self-hosted environment modal.
+    /// `fade.is_open()` is the source of truth for "modal logically open".
+    pub self_hosted_modal: SelfHostedModal,
+}
+
+#[derive(Default)]
+pub struct SelfHostedModal {
+    pub fade: FadeInOut,
+    pub url_input: String,
+    /// Set on Save when validation fails. Cleared on every keystroke so the
+    /// inline error disappears as soon as the user starts correcting.
+    pub url_error: bool,
 }
 
 impl ViewTypes for LoginView {
@@ -175,6 +194,7 @@ impl LoginView {
             auth_page: AuthPage::new_unlock(UnlockMethod::MasterPassword),
             unlock_in_progress: false,
             unlock_alternatives: Vec::new(),
+            self_hosted_modal: SelfHostedModal::default(),
         }
     }
 
@@ -394,13 +414,58 @@ impl LoginView {
                 };
             }
             LoginMessage::SelectServer(server) => {
+                *open_overlay = None;
+                // Self-hosted needs a URL — open the configuration modal
+                // instead of writing a blank URL into the auth page. Preserve
+                // any URL the user previously configured so re-opening the
+                // modal doesn't wipe it.
+                if matches!(server, ServerOption::SelfHosted(_)) {
+                    let existing = match &self.auth_page {
+                        AuthPage::LoginEmail {
+                            selected_server: ServerOption::SelfHosted(url),
+                            ..
+                        } => url.clone(),
+                        _ => String::new(),
+                    };
+                    self.self_hosted_modal.url_input = existing;
+                    self.self_hosted_modal.url_error = false;
+                    self.self_hosted_modal.fade.open();
+                    return Outcome::task(crate::components::fade_in_out::focus_after_open(
+                        SELF_HOSTED_URL_FIELD_ID,
+                    ));
+                }
                 if let AuthPage::LoginEmail {
                     selected_server, ..
                 } = &mut self.auth_page
                 {
                     *selected_server = server;
                 }
-                *open_overlay = None;
+            }
+
+            // ── Self-hosted environment modal ──────────────────────────────
+            LoginMessage::SelfHostedUrlChanged(url) => {
+                self.self_hosted_modal.url_input = url;
+                self.self_hosted_modal.url_error = false;
+            }
+            LoginMessage::SelfHostedSave => {
+                let url = self.self_hosted_modal.url_input.trim().to_string();
+                if url.is_empty() {
+                    return Outcome::None;
+                }
+                if !url.starts_with("https://") {
+                    self.self_hosted_modal.url_error = true;
+                    return Outcome::None;
+                }
+                if let AuthPage::LoginEmail {
+                    selected_server, ..
+                } = &mut self.auth_page
+                {
+                    *selected_server = ServerOption::SelfHosted(url);
+                }
+                self.self_hosted_modal.fade.close();
+            }
+            LoginMessage::SelfHostedCancel => {
+                self.self_hosted_modal.fade.close();
             }
 
             // ── Account switcher ───────────────────────────────────────────
@@ -419,6 +484,7 @@ impl LoginView {
         self.auth_page = AuthPage::new_login_email();
         self.unlock_in_progress = false;
         self.unlock_alternatives.clear();
+        self.self_hosted_modal = SelfHostedModal::default();
     }
 
     /// Show the unlock page for the given user, picking their preferred
@@ -456,6 +522,16 @@ impl LoginView {
                 ..
             } => Task::none(),
         }
+    }
+
+    /// Returns `None` when the self-hosted modal is closed so App's view
+    /// composer can take a cheap exclusive branch (CLAUDE.md → "Stack
+    /// doesn't cull").
+    pub fn modal_view<'a>(
+        &'a self,
+        colors: &'a AppColors,
+    ) -> Option<Element<'a, LoginMessage, AppTheme>> {
+        self_hosted_modal::view(&self.self_hosted_modal, colors)
     }
 
     pub fn view<'a>(

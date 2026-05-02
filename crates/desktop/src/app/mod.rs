@@ -568,6 +568,11 @@ impl App {
                 .send
                 .modal_view(&rctx)
                 .map(|el| el.map(Message::send)),
+            Screen::Login => self
+                .views
+                .login
+                .modal_view(colors)
+                .map(|el| el.map(Message::login)),
             _ => None,
         };
 

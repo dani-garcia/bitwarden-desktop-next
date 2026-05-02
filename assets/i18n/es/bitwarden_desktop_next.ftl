@@ -35,6 +35,14 @@ login-server-accessing = Accediendo a { $server }
 login-server-accessing-label = Accediendo a:
 login-server-self-hosted = Autoalojado
 
+## Login — self-hosted environment modal
+login-self-hosted-modal-title = Entorno autoalojado
+login-self-hosted-modal-url-label = URL del servidor
+login-self-hosted-modal-url-helper = Especifica la URL base de tu instalación local de Bitwarden. Ejemplo: https://bitwarden.empresa.com
+login-self-hosted-modal-url-error = La URL debe empezar por https://
+login-self-hosted-modal-save = Guardar
+login-self-hosted-modal-cancel = Cancelar
+
 ## Login — toasts
 login-toast-unlock-failed-title = Fallo al desbloquear
 login-toast-unlock-failed-body = Comprueba tu contraseña maestra e inténtalo de nuevo.
