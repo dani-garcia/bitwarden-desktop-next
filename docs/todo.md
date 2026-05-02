@@ -40,27 +40,22 @@ All 24 settings in the Appearance / Security / Integrations / Autotype / Advance
 
 - **Zero SDK work — OS/wiring glue**
   - Open at device login — write to platform autostart (registry on Windows, LaunchAgent on macOS, `.desktop` file on Linux).
-  - Minimize on copy — flip a flag read by `ClipboardManager::copy` call-sites.
   - Always show dock (macOS) — `NSApplication.setActivationPolicy`.
-  - Enable hardware acceleration — Help → Troubleshooting → Toggle hardware acceleration now flips `Settings::hardware_acceleration`, persists, and toasts that a restart is required. The Advanced settings-tab checkbox still saves silently — give it the same restart toast. Also note that the `gpu` cargo feature must be built in for the persisted flag to do anything (`main::select_backend` falls back to tiny-skia when the feature is off).
   - Allow screenshots — Windows `SetWindowDisplayAffinity`; macOS / Linux set at window creation, so also restart-required.
-  - Show favicons — list renders real favicons via the lazy service in
-    [crates/desktop/src/favicon.rs](../crates/desktop/src/favicon.rs).
-    Remaining:
-    - Wire the same `favicon.get(uid, host)` lookup into the detail pane
-      (it still renders the initial-letter circle).
-    - **Per-user `icons_url` for self-hosted.** Today all users resolve to
-      `https://icons.bitwarden.net`. Add `icons_url: String` to `UserEntry`
-      in [sdk.rs](../crates/desktop/src/sdk.rs), populated from
-      `/api/config`'s `environment.icons` at login time (cloud defaults:
-      US → `icons.bitwarden.net`, EU → `icons.bitwarden.eu`, per the
-      Angular clients' `default-environment.service.ts`). Expose
-      `ClientManager::icons_url(&uid) -> Option<String>` and swap the
-      resolver closure in [app/mod.rs](../crates/desktop/src/app/mod.rs)
-      to consult it (fallback to US cloud default when `None`). Closure
-      runs per fetch so re-auth against a different server picks up the
-      new URL without restart. Blocked on the login command landing (or
-      the self-hosted URL modal in Tier 2) so a real `icons_url` exists.
+  - **Per-user `icons_url` for self-hosted.** Today all users resolve to
+    `https://icons.bitwarden.net` via the lazy service in
+    [crates/desktop/src/services/favicon.rs](../crates/desktop/src/services/favicon.rs).
+    Add `icons_url: String` to `UserEntry` in
+    [services/sdk/](../crates/desktop/src/services/sdk/), populated from
+    `/api/config`'s `environment.icons` at login time (cloud defaults:
+    US → `icons.bitwarden.net`, EU → `icons.bitwarden.eu`, per the
+    Angular clients' `default-environment.service.ts`). Expose
+    `ClientManager::icons_url(&uid) -> Option<String>` and swap the
+    resolver closure in [app/mod.rs](../crates/desktop/src/app/mod.rs)
+    to consult it (fallback to US cloud default when `None`). Closure
+    runs per fetch so re-auth against a different server picks up the
+    new URL without restart. Blocked on the login command landing (or
+    the self-hosted URL modal in Tier 2) so a real `icons_url` exists.
 
 - **SDK integration**
   - PIN unlock — per-user PIN state via `bitwarden_auth` + keystore wrapping.
@@ -89,13 +84,11 @@ The login command itself is promoted to Tier 1 — these are the screens / flows
 - **Self-hosted server URL modal** — server selector's "Self-hosted" option should open a modal to input custom server URL.
 - **SSO login flow** — "Use single sign-on" button on login email screen. Needs SSO provider selection + browser redirect.
 
-### Tray icon — Linux packaging
+### Tray icon — Linux test-VM verification
 
-The tray itself ships as of this change (see `crates/desktop/src/tray.rs`, four tray-adjacent settings in `data/settings.json`, single-instance wake-up). Residual Linux work:
+The tray itself ships (see `crates/desktop/src/services/tray.rs`, four tray-adjacent settings in `data/settings.json`, single-instance wake-up). Packaging-side wiring is also in: [Packager.toml](../Packager.toml) declares `libayatana-appindicator3-1` (`.deb`) / `libayatana-appindicator` (`.pacman`) as a runtime dep, and the README documents the SNI-host requirement. Residual:
 
-- Add `libayatana-appindicator3-1` as a runtime dep in the `.deb` / `.rpm` produced by `cargo run --bin packager`.
-- Note the requirement in the Linux install README (without it or an SNI host, `tray::build()` returns `None` and tray settings become no-ops; this is intentional but should be documented).
-- Verify GNOME + AppIndicator extension, KDE Plasma, and sway + waybar behaviour on a test VM.
+- Verify GNOME + AppIndicator extension, KDE Plasma, and sway + waybar behaviour on a test VM. Untested from the dev machine.
 
 **Note:** iced [PR #3021](https://github.com/iced-rs/iced/pull/3021) adds native tray support but is still open (targeting 1.0). If it lands on our pin, re-evaluate swapping our `tray-icon` dep for the native path.
 
@@ -115,9 +108,8 @@ Standard cut / copy / paste / select-all on `TextInput` fields and the notes `Te
 
 ### Sidebar polish
 
-- **Indented tree hierarchy** — Vault > All vaults > My vault, with visual indent.
-- **Expand/collapse animation** — sidebar width snaps between `RAIL_WIDTH` and `PANEL_WIDTH`. Wire a `lilt::Animated<f32, Instant>` for the width and call `services::animation::extend(...)` on toggle so the App's frame subscription picks it up automatically (same pattern as the generator's segmented-pill swoosh — see [decisions.md](./decisions.md) → "State-Driven Animation").
-- **Active-row crossfade** — animate the bg color of the selected row in/out instead of snap. Cheap visual polish via `lilt::Animated<bool>` per row, or a single `Animated<usize>` that picks which row paints accent.
+- **Expand/collapse animation** — sidebar width snaps between `RAIL_WIDTH` and `PANEL_WIDTH`. Wire a `lilt::Animated<f32, Instant>` for the width and call `services::animation::extend(...)` on toggle so the App's frame subscription picks it up automatically (same pattern as the generator's segmented-pill swoosh — see [decisions.md](./decisions.md) → "State-Driven Animation"). The naive form leaks: rendering the expanded panel inside a narrow container makes the labels wrap mid-animation. Wrap the body in `container(...).clip(true)` so iced bounds-clips the overflow during the transition; pick the destination panel immediately and animate the width up/down beneath it.
+- **Active-row crossfade** — animate the bg color of the selected row in/out instead of snap. The sidebar has three filter axes (`active_vault_filter`, `active_send_filter`, `active_section`), so a single `Animated<bool>` doesn't cover all of them. Either: (a) one `lilt::Animated<f32, Instant>` per axis transitioning 0→1 on change, with the row functions threading the per-axis progress through and applying it as accent alpha, plus tracking each axis's previous value so the outgoing row fades back to 0; or (b) one `Animated<f32>` and skip the outgoing fade — accept the previous row snapping off while the new one fades in (asymmetric, but ~half the state). Whichever, the row helpers (`nav_row`, `parent_header_row`, `standalone_item`) need an `Option<f32>` selected-progress argument instead of the current `is_selected: bool`, since the rows already paint via `style` closures that take a `Background::Color`.
 
 ### Send — wire to real SDK + supporting flows
 
@@ -140,24 +132,16 @@ The V1 launcher ships behind `Ctrl+Shift+Space` ([crates/desktop/src/views/magni
 #### Behaviour / UX
 
 - **Cursor-monitor centering on summon — Linux.** Windows + macOS shipped via [crates/desktop/src/services/cursor_monitor/mod.rs](../crates/desktop/src/services/cursor_monitor/mod.rs) (`GetCursorPos` + `MonitorFromPoint` + `GetDpiForMonitor` on Windows; `NSEvent::mouseLocation` + `NSScreen` on macOS). Linux still returns `None`, so X11 / Wayland users get the launcher on the primary monitor. X11 is doable via `XQueryPointer` + Xinerama (new dep). Wayland has no standard global-cursor protocol — needs either `wlr-layer-shell` or a DE-specific shim, and is best left deferred.
-- **Animate open / close.** Drop in a fade + small Y-translate via the self-driving `RedrawRequested` pattern (mirror `components::toast`). Discrete window-resize on filter change is fine for V1; a 100–150 ms eased height transition would feel snappier still — drive it with `lilt::Animated<f32>` and call `window::resize` per frame while in motion.
-- **More copy shortcuts.** TOTP (`Ctrl+T`), URI (`Ctrl+U`), notes (`Ctrl+Shift+N`) — `components::totp::generate_totp` already exists. Footer hint bar gets a "More" expander once there are more than three.
+- **Footer hint "More" expander.** The launcher now binds Ctrl+C / Ctrl+Shift+C / Ctrl+T / Ctrl+U / Ctrl+Shift+N, but the bottom hint bar still only surfaces the first three. Once a sixth or seventh binding lands, replace the trailing hints with a "More" disclosure (cursor-positioned popover or expand-on-hover row).
 - **Action menu per result.** Tab cycles through copy options, or `Cmd+1/2/3`. Lets users pick non-default fields without leaving the keyboard.
 - **Recent / smart ranking.** Sort by last-used; pin manually-favourited items to the top. Requires per-user usage tracking (a small side-table in `data/`).
 - **Multi-user search.** Currently single-user (active user's vault). Adding a user badge per row + cross-user merge unlocks "search any unlocked account" UX.
 - **Autotype handoff.** When the in-house autotype framework lands ([Tier 1 → Wire up the stubbed settings → Enable autotype]), Enter on the highlighted result triggers it. V1 leaves Enter as a no-op for exactly this reason.
-- **Decrypt-failure feedback.** Today an `Err` from `full_cipher` only logs at `warn` and the launcher silently dismisses ([handlers/magnify.rs](../crates/desktop/src/app/handlers/magnify.rs) `PasswordDecryptCompleted`). The main-window toast path doesn't help since the launcher hides itself before completion. If a tray-balloon / OS-notification path gets added later, hook this into it.
-- **Toast confirmation on copy.** Designs don't show one and the launcher dismissing is implicit feedback, but a small "Copied" toast on the main window (when visible) would match the rest of the app's copy UX.
+- **Decrypt-failure feedback.** Today an `Err` from `full_cipher` only logs at `warn` and the launcher silently dismisses ([handlers/magnify.rs](../crates/desktop/src/app/handlers/magnify.rs) `FieldDecryptCompleted`). The main-window toast path doesn't help since the launcher hides itself before completion. If a tray-balloon / OS-notification path gets added later, hook this into it.
 
 #### Code shape
 
 - **Encapsulate `MagnifyView` state.** All fields are `pub(crate)` and the App-level handler reaches in directly ([handlers/magnify.rs](../crates/desktop/src/app/handlers/magnify.rs) writes `magnify.query`, `magnify.selected`, `magnify.scroll_offset_y` etc.). Future refactors of the struct's shape get no compile-time guidance. Move every field to private and expose small mutation methods on `MagnifyView` (`set_query`, `set_selected`, `update_scroll_offset`, `clamp_selection`). Verbose because there are ~10 fields, all read+write — defer until the next refactor that touches the state struct anyway.
-- **Light-theme selection contrast.** White text on `#53A3FA` (the `magnify_selected` token) measures ~2.9:1 on the light theme's pale surface — below WCAG AA's 4.5:1 for normal text. Two viable fixes: (a) use `theme.colors.text_primary` for selected-row text instead of hardcoded `Color::WHITE` (adapts per theme, keeps the Figma-fidelity blue), or (b) make `magnify_selected` per-theme — keep `#53A3FA` in dark, swap a darker blue (≈ `#1A73E8`) in light. Option (a) drifts less from the design intent. Dark theme already passes.
-
-#### Documentation
-
-- **Document `AppTheme::with_transparent_background()`.** The per-window theme-variant pattern that lets Magnify return `background: TRANSPARENT` from `iced::theme::Base::base()` is the first of its kind in the codebase. Add a short paragraph under "Theme" in [docs/decisions.md](./decisions.md) explaining when to add further per-window variants — without it a future author writing a second translucent window will reinvent the dispatch-layer trick.
-- **Document the broadcast-channel pattern as a shared shape.** `services/{menu,tray,global_hotkey}` all use the same recipe: `static OnceLock<broadcast::Receiver<T>>`, `install_event_handler()` once at startup, `Subscription::run(fn_pointer)` consuming `event_stream()`. Promote to a documented section in [docs/architecture.md](./architecture.md) (or a `docs/skills/` entry) covering the invariants — store `Receiver` and call `.resubscribe()`, fn-pointer subscription identity, handle `RecvError::Lagged`. Otherwise the next external-event source author will pattern-match from whichever service they happen to read first.
 
 ### SVG logo antialiasing
 
@@ -257,9 +241,9 @@ Today both `CipherForm` and `SendForm` use a single `is_valid()` method + a `toa
 
 Worth doing once a second required field lands on either form; overkill for one `name` field.
 
-### Prune dead i18n keys
+### Prune dead i18n keys — recurring follow-up
 
-`assets/i18n/{lang}/bitwarden_desktop_next.ftl` files grow additively. `i18n-embed-fl` validates Rust → `.ftl` references at compile time, but unused keys in the `.ftl` file itself are silent. Add a small lint (grep-based check, or a `cargo xtask i18n-unused` that parses `.ftl` IDs and greps the Rust tree) before the file crosses ~200 keys. Today it's ~130.
+The lint shipped: [tools/i18n-unused](../tools/i18n-unused) parses the English catalogue, grep-scans `fl!(...)` and the menu service's `E(...)` calls, and exits non-zero on any orphan. Run via `cargo run -p i18n-unused`. Wire it into CI (`cargo run -p i18n-unused` after the test step) once a pre-merge gate is wanted; the tool itself is already CI-shaped. Outstanding hygiene if/when more orphans accumulate: drop them from the English catalogue, then mirror the deletion across `assets/i18n/{es,…}/`.
 
 ### Vault + Send event handlers will generalize once a 3rd list view exists
 

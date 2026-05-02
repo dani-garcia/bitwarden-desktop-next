@@ -35,6 +35,16 @@ pub enum Mode {
     Unlocked,
 }
 
+/// Field a Ctrl+key shortcut wants extracted from the selected cipher. Drives
+/// both the async decrypt continuation (`FieldDecryptCompleted`) and the
+/// clipboard sensitivity at copy time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CopyField {
+    Password,
+    Totp,
+    Notes,
+}
+
 pub struct MagnifyView {
     /// Iced window id for the launcher. Created hidden in `App::new` so
     /// every hotkey press is a cheap show / hide.
@@ -63,11 +73,12 @@ pub struct MagnifyView {
     /// or lock so we never restore one user's query into another's view.
     pub(crate) anchored_user: Option<UserId>,
 
-    /// In-flight password decrypt id. Set when `Ctrl+C` fires the async
-    /// `full_cipher` task and cleared when the completion message arrives.
-    /// Used to ignore stale completions if the user navigated away or the
-    /// active user changed mid-decrypt.
-    pub(crate) pending_password: Option<CipherId>,
+    /// In-flight decrypt id + which field the completion should copy. Set
+    /// when one of the Ctrl-shortcut messages fires the async `full_cipher`
+    /// task and cleared when the completion message arrives. Used to ignore
+    /// stale completions if the user navigated away, swapped the active
+    /// user, or fired a different copy shortcut mid-decrypt.
+    pub(crate) pending_decrypt: Option<(CipherId, CopyField)>,
 
     /// Top edge of the results scrollable's viewport, in pixels. Updated
     /// by the `Scrolled` message; used by the arrow-navigation handler to
@@ -86,7 +97,7 @@ impl MagnifyView {
             mode: Mode::default(),
             last_used: None,
             anchored_user: None,
-            pending_password: None,
+            pending_decrypt: None,
             scroll_offset_y: 0.0,
         }
     }
@@ -104,7 +115,7 @@ impl MagnifyView {
         self.query.clear();
         self.results.clear();
         self.selected = 0;
-        self.pending_password = None;
+        self.pending_decrypt = None;
         self.scroll_offset_y = 0.0;
     }
 

@@ -32,3 +32,13 @@ minimum-system-version = "12.0"
 #   cp -r path/to/Extension.appex "$APP/Contents/PlugIns/"
 #   codesign --force --sign "$IDENTITY" "$APP/Contents/PlugIns/Extension.appex"
 #   codesign --force --sign "$IDENTITY" "$APP"
+
+# Linux packagers depend on a StatusNotifierItem (SNI) host being available so
+# the system tray works. `tray-icon` falls back to no-op when there's no host;
+# pulling in the AppIndicator client library covers GNOME (with the extension),
+# KDE Plasma, and most wlroots-based DEs out of the box.
+[deb]
+depends = ["libayatana-appindicator3-1"]
+
+[pacman]
+depends = ["libayatana-appindicator"]

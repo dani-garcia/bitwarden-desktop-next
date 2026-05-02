@@ -1,8 +1,9 @@
 use iced::Task;
 
 use crate::{
+    components::toast::Toast,
     domain::{Screen, UserId},
-    services::sdk::AccountEntry,
+    services::{clipboard::Sensitivity, sdk::AccountEntry},
 };
 
 use super::{App, Message, WindowKind};
@@ -27,6 +28,41 @@ impl App {
 
     pub(crate) fn push_toast(&mut self, toast: crate::components::toast::Toast) {
         self.toasts.push(toast);
+    }
+
+    /// Standard "user copied something" sequence: push to clipboard, show a
+    /// success toast, and minimise the main window if the active user has
+    /// `minimize_on_copy` set. Used by the vault, send, and generator copy
+    /// handlers — anywhere the main window is what the user is looking at.
+    /// The Magnify launcher uses `clipboard.copy(...)` directly because its
+    /// own window already hides itself on the same keystroke, and the main
+    /// window typically isn't focused.
+    pub(crate) fn copy_and_toast(
+        &mut self,
+        value: String,
+        sensitivity: Sensitivity,
+        toast_label: String,
+    ) -> Task<Message> {
+        self.clipboard.copy(value, sensitivity);
+        self.push_toast(Toast::success(toast_label, None));
+        self.minimize_after_copy_task()
+    }
+
+    /// If the active user has the `minimize_on_copy` preference set, return
+    /// a `window::minimize` task for the main window. Otherwise `Task::none()`.
+    /// Reusable on its own for clipboard call sites that need different
+    /// toast wording (or no toast at all); most call sites should prefer
+    /// [`Self::copy_and_toast`].
+    pub(crate) fn minimize_after_copy_task(&self) -> Task<Message> {
+        let minimize = self
+            .active_user
+            .as_ref()
+            .is_some_and(|uid| self.settings.preferences_for(uid).minimize_on_copy);
+        if minimize {
+            iced::window::minimize(self.main_window_id(), true)
+        } else {
+            Task::none()
+        }
     }
 
     pub(crate) fn active_account_entry(&self) -> Option<&AccountEntry> {

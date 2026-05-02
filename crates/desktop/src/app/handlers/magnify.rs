@@ -10,7 +10,9 @@ use crate::{
     app::{App, Message},
     domain::Screen,
     services::{clipboard::Sensitivity, cursor_monitor},
-    views::magnify::{MAGNIFY_RESULTS_SCROLL_ID, MAGNIFY_SEARCH_ID, MagnifyMessage, Mode, dims},
+    views::magnify::{
+        CopyField, MAGNIFY_RESULTS_SCROLL_ID, MAGNIFY_SEARCH_ID, MagnifyMessage, Mode, dims,
+    },
 };
 
 impl App {
@@ -64,32 +66,37 @@ impl App {
                 }
                 Task::none()
             }
-            MagnifyMessage::CopyPasswordRequested => self.magnify_copy_password(),
-            MagnifyMessage::PasswordDecryptCompleted(uid, cipher_id, result) => {
-                // Stale completion: id mismatch, active-user changed, or user
-                // re-locked mid-decrypt — must NOT copy a freshly-decrypted
-                // secret to a now-locked session. Crucially, do NOT clear
-                // `pending_password` here: a *different* in-flight decrypt's
-                // completion would clobber a still-valid pending request.
-                if self.magnify.pending_password != Some(cipher_id)
+            MagnifyMessage::CopyFieldRequested(field) => self.magnify_copy_field(field),
+            MagnifyMessage::FieldDecryptCompleted(uid, cipher_id, field, result) => {
+                // Stale completion: id/field mismatch, active-user changed,
+                // or user re-locked mid-decrypt — must NOT copy a freshly-
+                // decrypted secret to a now-locked session. Crucially, do
+                // NOT clear `pending_decrypt` on a stale completion: a
+                // *different* in-flight decrypt's completion would clobber
+                // the still-valid pending request.
+                if self.magnify.pending_decrypt != Some((cipher_id, field))
                     || self.active_user != Some(uid)
                     || !self.client_manager.is_unlocked(&uid)
                 {
                     return Task::none();
                 }
-                self.magnify.pending_password = None;
+                self.magnify.pending_decrypt = None;
                 match result {
-                    Ok(Some(password)) => {
-                        self.clipboard.copy(password, Sensitivity::Sensitive);
+                    Ok(Some(value)) => {
+                        // Password / TOTP / notes are all "sensitive" by
+                        // policy: keep them out of clipboard history and
+                        // cloud-clipboard sync.
+                        self.clipboard.copy(value, Sensitivity::Sensitive);
                     }
                     Ok(None) => {
-                        tracing::debug!(%cipher_id, "magnify: cipher has no password field");
+                        tracing::debug!(%cipher_id, ?field, "magnify: cipher has no value for field");
                     }
                     Err(e) => {
                         // No toast: the main window is likely hidden (the
                         // launcher dismissed itself when the user pressed
-                        // Ctrl+C), so a toast there would never be seen.
-                        tracing::warn!(error = %e, %cipher_id, "magnify: password decrypt failed");
+                        // the shortcut), so a toast there would never be
+                        // seen. Same rationale as the password path.
+                        tracing::warn!(error = %e, %cipher_id, ?field, "magnify: field decrypt failed");
                     }
                 }
                 Task::none()
@@ -101,6 +108,12 @@ impl App {
                         self.clipboard
                             .copy(subtitle.to_string(), Sensitivity::Normal);
                     }
+                }
+                self.magnify_hide()
+            }
+            MagnifyMessage::CopyUriRequested => {
+                if let Some(uri) = self.magnify.selected_item().and_then(magnify_first_uri) {
+                    self.clipboard.copy(uri, Sensitivity::Normal);
                 }
                 self.magnify_hide()
             }
@@ -121,7 +134,15 @@ impl App {
             return None;
         };
 
-        let msg = match (&key, modifiers.command(), modifiers.shift()) {
+        let first_char = match &key {
+            Key::Character(s) => s.chars().next(),
+            _ => None,
+        };
+        let cmd = modifiers.command();
+        let shift = modifiers.shift();
+        let is_char = |c: char| first_char.is_some_and(|k| k.eq_ignore_ascii_case(&c));
+
+        let msg = match (&key, cmd, shift) {
             (Key::Named(Named::Escape), _, _) => MagnifyMessage::Hide,
             // In `Mode::Unlocked` Enter is reserved for a future autotype
             // hand-off and stays a no-op here.
@@ -130,20 +151,22 @@ impl App {
             }
             (Key::Named(Named::ArrowUp), _, _) => MagnifyMessage::NavigateUp,
             (Key::Named(Named::ArrowDown), _, _) => MagnifyMessage::NavigateDown,
-            (Key::Character(s), true, true)
-                if s.chars()
-                    .next()
-                    .is_some_and(|c| c.eq_ignore_ascii_case(&'c')) =>
-            {
-                MagnifyMessage::CopyUsernameRequested
+            // Cmd/Ctrl+Shift+C — copy username (sync, no decrypt).
+            _ if cmd && shift && is_char('c') => MagnifyMessage::CopyUsernameRequested,
+            // Cmd/Ctrl+Shift+N — copy notes (async decrypt).
+            _ if cmd && shift && is_char('n') => {
+                MagnifyMessage::CopyFieldRequested(CopyField::Notes)
             }
-            (Key::Character(s), true, false)
-                if s.chars()
-                    .next()
-                    .is_some_and(|c| c.eq_ignore_ascii_case(&'c')) =>
-            {
-                MagnifyMessage::CopyPasswordRequested
+            // Cmd/Ctrl+C — copy password (async decrypt).
+            _ if cmd && !shift && is_char('c') => {
+                MagnifyMessage::CopyFieldRequested(CopyField::Password)
             }
+            // Cmd/Ctrl+T — copy TOTP code (async decrypt + generator).
+            _ if cmd && !shift && is_char('t') => {
+                MagnifyMessage::CopyFieldRequested(CopyField::Totp)
+            }
+            // Cmd/Ctrl+U — copy URI (sync, the URI is on the list view).
+            _ if cmd && !shift && is_char('u') => MagnifyMessage::CopyUriRequested,
             _ => return None,
         };
         Some(self.handle_magnify_message(msg))
@@ -228,31 +251,26 @@ impl App {
         Task::batch([hide, show, focus])
     }
 
-    fn magnify_copy_password(&mut self) -> Task<Message> {
+    fn magnify_copy_field(&mut self, field: CopyField) -> Task<Message> {
         let Some(uid) = self.active_user else {
             return Task::none();
         };
         let Some(cipher_id) = self.magnify.selected_item().and_then(|item| item.id) else {
             return Task::none();
         };
-        self.magnify.pending_password = Some(cipher_id);
+        self.magnify.pending_decrypt = Some((cipher_id, field));
         let mgr = self.client_manager.clone();
         let decrypt = Task::perform(
             async move {
                 let result = mgr
                     .full_cipher(&uid, cipher_id)
                     .await
-                    .map(|view| match view.r#type {
-                        bitwarden_vault::CipherType::Login => {
-                            view.login.and_then(|l| l.password).map(|p| p.to_string())
-                        }
-                        _ => None,
-                    });
-                (uid, cipher_id, result)
+                    .map(|view| extract_field(view, field));
+                (uid, cipher_id, field, result)
             },
-            |(uid, cipher_id, result)| {
-                Message::Magnify(MagnifyMessage::PasswordDecryptCompleted(
-                    uid, cipher_id, result,
+            |(uid, cipher_id, field, result)| {
+                Message::Magnify(MagnifyMessage::FieldDecryptCompleted(
+                    uid, cipher_id, field, result,
                 ))
             },
         );
@@ -416,5 +434,44 @@ fn magnify_platform_specific() -> iced::window::settings::PlatformSpecific {
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
         iced::window::settings::PlatformSpecific::default()
+    }
+}
+
+/// Pulls the requested field out of a freshly-decrypted `CipherView`.
+/// Password and notes are direct field reads; TOTP runs the SDK's TOTP
+/// generator at copy time so the clipboard always holds a still-valid
+/// code. `None` covers both "field is empty" and "wrong cipher type"
+/// (e.g. password on a SecureNote).
+fn extract_field(view: bitwarden_vault::CipherView, field: CopyField) -> Option<String> {
+    match field {
+        CopyField::Password => match view.r#type {
+            bitwarden_vault::CipherType::Login => view.login.and_then(|l| l.password),
+            _ => None,
+        },
+        CopyField::Totp => match view.r#type {
+            bitwarden_vault::CipherType::Login => view
+                .login
+                .and_then(|l| l.totp)
+                .filter(|s| !s.is_empty())
+                .and_then(|secret| bitwarden_vault::generate_totp(secret, None).ok())
+                .map(|resp| resp.code),
+            _ => None,
+        },
+        CopyField::Notes => view.notes.filter(|s| !s.is_empty()),
+    }
+}
+
+/// First URI string off a `CipherListView`'s login summary — already
+/// decrypted on the SDK side so no async hop is needed. `None` for
+/// non-login items or items with no URIs.
+fn magnify_first_uri(item: &std::sync::Arc<bitwarden_vault::CipherListView>) -> Option<String> {
+    match &item.r#type {
+        bitwarden_vault::CipherListViewType::Login(login) => login
+            .uris
+            .as_ref()
+            .and_then(|uris| uris.first())
+            .and_then(|u| u.uri.clone())
+            .filter(|s| !s.is_empty()),
+        _ => None,
     }
 }

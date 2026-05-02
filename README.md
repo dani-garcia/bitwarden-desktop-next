@@ -12,7 +12,8 @@ See [docs/architecture.md](docs/architecture.md) for the project layout and [doc
 cargo run -p fake-data                        # Regenerate per-user SQLite + mock.json under data/
 cargo run                                     # Loading screen → login
 
-cargo run --bin packager                      # Package .app/.dmg/.msi/.deb/.rpm
+cargo run --bin packager                      # Package .app/.dmg/.msi/.deb/.pacman
+cargo run -p i18n-unused                      # List Fluent keys with no `fl!`/`E()` callers
 ```
 
 Useful dev modes:
@@ -45,7 +46,12 @@ First-run tip: the real login command isn't wired yet (see TODO below). Run `car
 - Custom title-bar menus (Windows/Linux) and native `muda` menus (macOS)
 - Light / dark theme, persisted settings (`data/settings.json`)
 - Favicons in the vault list
-- Packaging to `.app` / `.dmg` / `.msi` / `.deb` / `.rpm`
+- Packaging to `.app` / `.dmg` / `.msi` / `.deb` / `.pacman`
+
+### Linux notes
+
+- The system tray reaches the OS via the `StatusNotifierItem` (SNI) D-Bus protocol. On distros that don't advertise an SNI host (vanilla GNOME, sway without `waybar`'s tray module, etc.) `services::tray::build()` returns `None` and the tray-related settings become no-ops — this is intentional, not a bug. Add the AppIndicator GNOME extension or a tray-aware status bar to get tray support back.
+- The `.deb` / `.pacman` produced by `cargo run --bin packager` declares `libayatana-appindicator3-1` (Debian/Ubuntu) / `libayatana-appindicator` (Arch) as a runtime dependency so package-manager installs pull it in automatically. If you build the binary directly without packaging, install that library yourself before launching.
 
 ## TODO (highlights)
 

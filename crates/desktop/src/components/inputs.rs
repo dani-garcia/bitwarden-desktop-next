@@ -71,6 +71,15 @@ pub fn readonly_field_truncated<'a, M: 'a>(
 /// Wrap any content in the floating-label frame: a bordered container with
 /// a small label chip stacked on top of the border. The chip has a
 /// background matching the page so the border visually breaks behind it.
+///
+/// The output is wrapped in a [`ShellScope`] so each field gets its own
+/// private event-status flag — without it, two `pick_list`-bearing
+/// `field_frame`s as siblings interact badly: iced's `Stack` short-circuits
+/// its between-children iteration on the *shared* shell's
+/// `is_event_captured()`, so a capture inside the first field's stack
+/// stops the second field's stack from reaching its picker. Result: open
+/// the second pick_list, click the first, and both end up open. See
+/// [`crate::components::shell_scope`] for the full write-up.
 pub fn field_frame<'a, M: 'a>(
     label: impl Into<String>,
     content: Element<'a, M, AppTheme>,
@@ -89,10 +98,10 @@ pub fn field_frame<'a, M: 'a>(
         )
     });
 
-    stack![
+    crate::components::shell_scope::ShellScope::new(stack![
         column![Space::new().height(Length::Fixed(8.0)), bordered],
         container(floating_label).padding([0, 12]),
-    ]
+    ])
     .into()
 }
 

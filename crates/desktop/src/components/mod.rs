@@ -7,6 +7,7 @@ pub(crate) mod fade_in_out;
 pub(crate) mod icons;
 pub(crate) mod inputs;
 pub(crate) mod modal;
+pub(crate) mod shell_scope;
 pub(crate) mod sidebar;
 pub(crate) mod spinner;
 pub(crate) mod toast;

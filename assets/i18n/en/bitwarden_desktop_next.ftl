@@ -260,12 +260,6 @@ form-custom-field-empty = No custom fields yet
 form-add-custom-field = Add custom field
 form-custom-field-linked-unsupported = Linked fields not yet supported
 
-## Toast — default titles
-toast-default-info = Info
-toast-default-success = Success
-toast-default-warning = Warning
-toast-default-error = Error
-
 ## Toast — shared messages
 toast-required-fields = Please fill in the required fields.
 
@@ -504,7 +498,6 @@ generator-title = Generator
 generator-tab-password = Password
 generator-tab-passphrase = Passphrase
 generator-tab-username = Username
-generator-options = Options
 
 # Password tab
 generator-length = Length

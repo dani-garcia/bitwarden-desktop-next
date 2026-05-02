@@ -586,6 +586,48 @@ Two patterns coexist:
 
    Lifetime trick for outro animations: a `FadeInOut` stays "visible" while in_progress is true, even after `value` flips false. View functions gate on `progress_if_visible()? -> Option<f32>` — when fully closed the view returns `None` and the overlay unmounts. For overlays whose content is tied to selection state (bottom sheet), the close handler additionally spawns a delayed `Task` that runs `selection.clear()` after the outro duration so content stays rendered for the duration.
 
+## External Event Sources (broadcast-channel recipe)
+
+Crates that hand the app a global `set_event_handler` callback (`muda` for menus, `tray-icon` for the tray, `global-hotkey` for the launcher hotkey) all funnel into iced via the same shape — codified across `services/menu`, `services/tray`, and `services/global_hotkey`. Use this recipe whenever wiring a new external event source instead of `iced::time::every` polling or pushing through a thread:
+
+```rust
+static EVENTS: OnceLock<broadcast::Receiver<MyEvent>> = OnceLock::new();
+
+pub fn install_event_handler() {
+    // Underlying lib's setter is OnceCell-backed and rejects re-registration —
+    // so this entire function is a one-shot. Idempotent failure is fine.
+    let (tx, rx) = broadcast::channel(16);
+    let _ = EVENTS.set(rx);
+    Lib::set_event_handler(Some(move |e| {
+        let _ = tx.send(translate(e));
+    }));
+}
+
+pub fn event_stream() -> impl Stream<Item = MyEvent> {
+    iced::stream::channel(16, |mut out| async move {
+        let Some(rx) = EVENTS.get() else { return };
+        let mut rx = rx.resubscribe();
+        loop {
+            match rx.recv().await {
+                Ok(e) => { let _ = out.send(e).await; }
+                Err(broadcast::error::RecvError::Lagged(n)) => {
+                    tracing::warn!(dropped = n, "subscriber lagged");
+                }
+                Err(broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    })
+}
+```
+
+The App side wires it once via `Subscription::run(event_stream)` mapped onto a top-level `Message`. Three invariants worth burning in:
+
+- **Store the `Receiver`, not the `Sender`.** `broadcast::Receiver::resubscribe()` is the supported way to fan out — calling it inside `event_stream` gives every iced subscription its own cursor while the original receiver in the `OnceLock` keeps the channel alive (broadcast channels close when all receivers drop, *not* when senders drop).
+- **`Subscription::run` identity is by function pointer.** Pass a bare `fn`, not a closure — closures hash to a fresh identity on every `view()` and iced will tear down + re-spawn the stream every frame. `Subscription::run(event_stream)` is correct; `Subscription::run(|| event_stream())` is not.
+- **Always handle `RecvError::Lagged(n)`** by logging and continuing — broadcast channels are bounded (16 is the convention here) and a paused subscriber that misses messages must be allowed to recover instead of breaking out of the loop.
+
+`install_event_handler()` is called from `App::new` (or equivalent startup point) exactly once. Failing to install (Wayland for `global-hotkey`, no SNI host on Linux for `tray-icon`, etc.) is logged and silently ignored — the rest of the app keeps running and `event_stream()` terminates immediately, leaving the subscription idle.
+
 ## Iced Gotchas
 
 - `button::Style` / `rule::Style` require `snap: false` — missing it produces a confusing compile error pointing at the struct literal.

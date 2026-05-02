@@ -16,7 +16,7 @@ mod view;
 mod widgets;
 
 pub use message::MagnifyMessage;
-pub use state::{MAGNIFY_RESULTS_SCROLL_ID, MAGNIFY_SEARCH_ID, MagnifyView, Mode};
+pub use state::{CopyField, MAGNIFY_RESULTS_SCROLL_ID, MAGNIFY_SEARCH_ID, MagnifyView, Mode};
 pub use view::view;
 
 /// Window dimensions and layout constants. Shared between the view (for

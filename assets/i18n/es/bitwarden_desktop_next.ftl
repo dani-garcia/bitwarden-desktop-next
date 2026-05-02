@@ -258,12 +258,6 @@ form-custom-field-empty = Aún no hay campos personalizados
 form-add-custom-field = Añadir campo personalizado
 form-custom-field-linked-unsupported = Los campos vinculados aún no son compatibles
 
-## Toast — default titles
-toast-default-info = Información
-toast-default-success = Éxito
-toast-default-warning = Aviso
-toast-default-error = Error
-
 ## Toast — shared messages
 toast-required-fields = Rellena los campos obligatorios.
 

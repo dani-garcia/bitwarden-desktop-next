@@ -130,6 +130,8 @@
 
 **Rationale**: iced's `application()` / `daemon()` is generic over Theme. Custom theme gives `&AppTheme` in all `.style()` closures with direct access to 25 semantic color tokens. No thread_local or registry needed. All colors (including `scrollbar_thumb` used by the default `scrollable` catalog impl) live in `AppColors`.
 
+**Per-window theme variants**: iced has no per-window `Theme` slot — `App::theme(window_id)` returns one `AppTheme` for *every* widget tree in that window. When one window needs a different `iced::theme::Base::base()` output (e.g. the Magnify launcher's transparent OS-window background so pixels outside its rounded container stay see-through, while the main window keeps its opaque surface), the dispatch lives at the App level: `App::theme()` matches on `WindowKind` and returns a tweaked clone via a small builder method on `AppTheme`. The current escape hatch is [`AppTheme::with_transparent_background()`](../crates/desktop/src/theme/mod.rs) — it flips a `transparent_background: bool` field that `Base::base()` reads. Add further variants (each its own `with_*()` builder + matching `bool` field) the same way; keep the per-window switch in `App::theme()` so the *colours* stay shared but window-scoped chrome can diverge. `AppTheme` is cloned every time iced calls `App::theme(window_id)`, so any new field must stay cheap (`Copy` or `&'static`) — no `String`s, no `Vec`s.
+
 ## Overlays: DropDown Widget (replaces `stack!` pattern)
 
 **Decision**: Use a local fork of iced_aw's `DropDown` widget (`components/drop_down.rs`) with custom alignment variants (`BelowLeft`, `BelowRight`, `AboveRight`).

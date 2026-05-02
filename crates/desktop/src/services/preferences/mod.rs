@@ -56,27 +56,31 @@ pub struct DurationSecs(pub u32);
 impl DurationSecs {
     pub const NEVER: Self = Self(0);
 
-    /// Localized label. Presets must be 0, a multiple of 3600, or a multiple
-    /// of 60 — arbitrary values fall back to a raw seconds count, which renders
-    /// correctly but produces awkward labels like "90 seconds" instead of
-    /// "1 minute 30 seconds".
+    /// Localized label. Decomposes into hours / minutes / seconds and joins
+    /// the non-zero components with spaces, so `0` reads as "Never", `3600`
+    /// as "1 hour", and `3671` as "1 hour 1 minute 11 seconds". Each
+    /// component goes through Fluent's `$n` selector so the right
+    /// singular/plural form lands in every locale.
     pub fn label(self) -> String {
-        let s = self.0;
-        if s == 0 {
-            fl!("settings-duration-never")
-        } else if s.is_multiple_of(3600) {
-            let count = s / 3600;
-            fl!("settings-duration-hours", n = count)
-        } else if s.is_multiple_of(60) {
-            let count = s / 60;
-            fl!("settings-duration-minutes", n = count)
-        } else {
-            debug_assert!(
-                false,
-                "DurationSecs preset {s} is not a clean unit boundary"
-            );
-            fl!("settings-duration-seconds", n = s)
+        let total = self.0;
+        if total == 0 {
+            return fl!("settings-duration-never");
         }
+        let hours = total / 3600;
+        let minutes = (total % 3600) / 60;
+        let seconds = total % 60;
+
+        let mut parts = Vec::with_capacity(3);
+        if hours > 0 {
+            parts.push(fl!("settings-duration-hours", n = hours));
+        }
+        if minutes > 0 {
+            parts.push(fl!("settings-duration-minutes", n = minutes));
+        }
+        if seconds > 0 {
+            parts.push(fl!("settings-duration-seconds", n = seconds));
+        }
+        parts.join(" ")
     }
 
     /// `None` disables the timeout entirely (`Self::NEVER`).

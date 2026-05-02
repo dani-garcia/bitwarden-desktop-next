@@ -36,8 +36,12 @@ pub fn view<'a>(
 ) -> Element<'a, MagnifyMessage, AppTheme> {
     let icon_el = icon_for(item, favicon, show_favicons, active_user, colors);
 
+    // Selected row uses theme-aware text colors so the bright-blue selection
+    // pill stays AA-readable on the light theme. Dark theme's `text_primary`
+    // is `Color::WHITE` so this is a no-op there; on light theme this swaps
+    // to the dark foreground (~13:1 on `#53A3FA` vs. ~2.9:1 for white).
     let (text_primary, text_secondary) = if is_selected {
-        (Color::WHITE, Color::WHITE)
+        (colors.text_primary, colors.text_primary)
     } else {
         (colors.text_primary, colors.text_secondary)
     };
@@ -67,10 +71,15 @@ pub fn view<'a>(
     // shortcuts. The user triggers them with Ctrl+C / Ctrl+Shift+C.
     if is_selected {
         content = content
-            .push(action_pill(crate::fl!("magnify-copy-password"), "Ctrl+C"))
+            .push(action_pill(
+                crate::fl!("magnify-copy-password"),
+                "Ctrl+C",
+                colors,
+            ))
             .push(action_pill(
                 crate::fl!("magnify-copy-username"),
                 "Ctrl+\u{21E7}C",
+                colors,
             ));
     }
 
@@ -106,11 +115,15 @@ pub fn view<'a>(
 /// where the shortcut sits in an embedded keybind chip rendered in the
 /// same white as the label so the whole pill reads uniformly against the
 /// blue selected row.
-fn action_pill<'a>(label: String, shortcut: &'static str) -> Element<'a, MagnifyMessage, AppTheme> {
+fn action_pill<'a>(
+    label: String,
+    shortcut: &'static str,
+    colors: &'a AppColors,
+) -> Element<'a, MagnifyMessage, AppTheme> {
     container(
         row![
-            text(label).size(12).color(Color::WHITE),
-            keybind(text(shortcut).size(12).color(Color::WHITE)),
+            text(label).size(12).color(colors.text_primary),
+            keybind(text(shortcut).size(12).color(colors.text_primary)),
         ]
         .spacing(8)
         .align_y(Alignment::Center),

@@ -27,20 +27,7 @@ impl App {
                 value,
                 sensitivity,
                 toast_label,
-            } => {
-                self.clipboard.copy(value, sensitivity);
-                self.push_toast(Toast::success(toast_label, None));
-                let minimize = self
-                    .active_user
-                    .as_ref()
-                    .map(|uid| self.settings.preferences_for(uid).minimize_on_copy)
-                    .unwrap_or(false);
-                if minimize {
-                    iced::window::minimize(self.main_window_id(), true)
-                } else {
-                    Task::none()
-                }
-            }
+            } => self.copy_and_toast(value, sensitivity, toast_label),
         }
     }
 }

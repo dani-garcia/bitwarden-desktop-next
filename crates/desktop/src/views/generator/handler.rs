@@ -4,7 +4,6 @@ use iced::Task;
 
 use crate::{
     app::{App, Message},
-    components::toast::Toast,
     fl,
     services::{clipboard::Sensitivity, sdk::ClientManager},
     views::generator::{GenerateKind, GeneratorEvent, GeneratorMessage},
@@ -25,9 +24,7 @@ impl App {
             GeneratorEvent::Copy(value) => {
                 // Generator output is secret-grade (passwords, passphrases,
                 // generated usernames feeding future credentials).
-                self.clipboard.copy(value, Sensitivity::Sensitive);
-                self.push_toast(Toast::success(fl!("generator-toast-copied"), None));
-                Task::none()
+                self.copy_and_toast(value, Sensitivity::Sensitive, fl!("generator-toast-copied"))
             }
             GeneratorEvent::Toast(t) => {
                 self.push_toast(t);
