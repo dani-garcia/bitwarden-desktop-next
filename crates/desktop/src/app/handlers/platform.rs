@@ -3,6 +3,8 @@
 //! manipulate the window and the window-message handler dispatches menu
 //! actions on keyboard shortcuts.
 
+use std::sync::Arc;
+
 use iced::Task;
 
 use crate::{
@@ -10,7 +12,10 @@ use crate::{
         App, Message, SystemMessage, WindowMessage,
         window::{WindowInfo, WindowKind},
     },
+    components::toast::Toast,
     domain::Screen,
+    fl,
+    services::sdk::ClientManager,
     views::{settings::SettingsSnapshot, title_bar::WindowAction},
 };
 
@@ -180,6 +185,40 @@ impl App {
                 let tasks: Vec<_> = to_lock.iter().map(|uid| self.lock_user(uid)).collect();
                 Task::batch(tasks)
             }
+            SystemMessage::SyncCompleted(res) => {
+                match res {
+                    Ok(()) => self.push_toast(Toast::success(fl!("menu-toast-sync-success"), None)),
+                    Err(err) => {
+                        tracing::warn!(%err, "vault sync failed");
+                        self.push_toast(Toast::error(
+                            fl!("menu-toast-sync-failed-body"),
+                            Some(&fl!("menu-toast-sync-failed-title")),
+                        ));
+                    }
+                }
+                Task::none()
+            }
+            SystemMessage::CloseFingerprintModal => {
+                self.fingerprint.close();
+                Task::none()
+            }
+            SystemMessage::OpenLearnMoreFingerprint => {
+                crate::views::fingerprint_phrase::open_learn_more();
+                self.fingerprint.close();
+                Task::none()
+            }
+            SystemMessage::CopyFingerprint => {
+                let phrase = self.fingerprint.phrase().to_string();
+                if phrase.is_empty() {
+                    return Task::none();
+                }
+                // Skip `copy_and_toast` here so `minimize_on_copy` doesn't
+                // hide the still-open modal out from under the user.
+                self.clipboard
+                    .copy(phrase, crate::services::clipboard::Sensitivity::Normal);
+                self.push_toast(Toast::success(fl!("vault-toast-copied-fingerprint"), None));
+                Task::none()
+            }
             #[cfg(feature = "gpu")]
             SystemMessage::WgpuBackendDiscovered(backend) => {
                 // We've reached first paint, so whatever wgpu picked is
@@ -249,13 +288,32 @@ impl App {
                     return self.views.vault.focus_search_task().map(Message::vault);
                 }
             }
-            MenuAction::SyncNow | MenuAction::Reload => {}
+            MenuAction::SyncNow => {
+                let Some(uid) = self.active_user else {
+                    return Task::none();
+                };
+                let mgr: Arc<ClientManager> = Arc::clone(&self.client_manager);
+                return Task::perform(async move { mgr.sync(&uid).await }, |res| {
+                    Message::System(SystemMessage::SyncCompleted(res.map_err(|e| e.to_string())))
+                });
+            }
             MenuAction::HideToTray => {
                 if self.ensure_tray() {
                     return self.hide_main_window();
                 }
             }
-            MenuAction::ToggleAlwaysOnTop => {}
+            MenuAction::ToggleAlwaysOnTop => {
+                let id = self.main_window_id();
+                if let Some(info) = self.windows.get_mut(&id) {
+                    info.always_on_top = !info.always_on_top;
+                    let level = if info.always_on_top {
+                        iced::window::Level::AlwaysOnTop
+                    } else {
+                        iced::window::Level::Normal
+                    };
+                    return iced::window::set_level(id, level);
+                }
+            }
             MenuAction::Settings => {
                 if let Some(uid) = self.active_user {
                     self.open_overlay = None;
@@ -286,6 +344,57 @@ impl App {
                     crate::fl!("menu-help-toast-hw-accel-off")
                 };
                 self.push_toast(crate::components::toast::Toast::info(toast_msg, None));
+            }
+            MenuAction::Import => {
+                return self.open_import_modal();
+            }
+            MenuAction::Export => {
+                return self.open_export_modal();
+            }
+            MenuAction::NewFolder => {
+                return self.open_new_folder_modal();
+            }
+            MenuAction::CopyUsername => {
+                return self.copy_from_active_selection(
+                    crate::views::vault::widgets::cipher_detail::CipherDetailMessage::CopyUsername,
+                );
+            }
+            MenuAction::CopyPassword => {
+                return self.copy_from_active_selection(
+                    crate::views::vault::widgets::cipher_detail::CipherDetailMessage::CopyPassword,
+                );
+            }
+            MenuAction::CopyTotp => {
+                return self.copy_from_active_selection(
+                    crate::views::vault::widgets::cipher_detail::CipherDetailMessage::CopyTotp,
+                );
+            }
+            MenuAction::FingerprintPhrase => {
+                let Some(uid) = self.active_user else {
+                    return Task::none();
+                };
+                let Some(phrase) = self.client_manager.user_fingerprint(&uid) else {
+                    return Task::none();
+                };
+                self.open_overlay = None;
+                self.fingerprint.open_with(phrase);
+            }
+            MenuAction::OpenStaticUrl(url) => {
+                crate::services::clipboard::launch_url(url);
+            }
+            MenuAction::OpenWebVault(path) => {
+                let Some(base) = self
+                    .active_account_entry()
+                    .map(|a| a.server_url.as_str())
+                    .filter(|s| !s.is_empty())
+                else {
+                    return Task::none();
+                };
+                let url = match path {
+                    Some(p) => format!("{}/{}", base.trim_end_matches('/'), p),
+                    None => base.to_string(),
+                };
+                crate::services::clipboard::launch_url(&url);
             }
             MenuAction::About => {
                 if let Some(id) = self.about_window_id() {

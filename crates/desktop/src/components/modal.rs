@@ -148,12 +148,5 @@ where
     .padding(Padding::from([16, 20]))
     .width(Fill);
 
-    dialog(
-        380.0,
-        None,
-        |c| c.card_bg,
-        progress,
-        inner,
-        on_cancel,
-    )
+    dialog(380.0, None, |c| c.card_bg, progress, inner, on_cancel)
 }

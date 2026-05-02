@@ -269,9 +269,7 @@ impl<'a, M: Clone + 'a> From<TextField<'a, M>> for Element<'a, M, AppTheme> {
         }
         // Skipping `.on_input` leaves the text_input read-only. Dropping
         // `.on_submit` ignores Enter-spam during in-flight tasks.
-        if !disabled
-            && let Some(on_input) = on_input
-        {
+        if !disabled && let Some(on_input) = on_input {
             input = input.on_input(on_input);
             if let Some(submit_msg) = on_submit {
                 input = input.on_submit(submit_msg);

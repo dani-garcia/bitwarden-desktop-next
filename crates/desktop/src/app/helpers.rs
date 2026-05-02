@@ -126,6 +126,23 @@ impl App {
         crate::views::send::SendView::load_list_task(uid, &self.client_manager).map(Message::send)
     }
 
+    /// Synthesize a `VaultMessage::CipherDetail(...)` so the Edit-menu copy
+    /// shortcuts route through the same handler as the in-app copy buttons.
+    /// No-op when the user isn't on the Vault screen or no cipher is selected
+    /// (matches the official client — the menu fires regardless and the
+    /// vault decides whether there's anything to copy).
+    pub(crate) fn copy_from_active_selection(
+        &self,
+        msg: crate::views::vault::widgets::cipher_detail::CipherDetailMessage,
+    ) -> Task<Message> {
+        if self.screen != Screen::Vault {
+            return Task::none();
+        }
+        Task::done(Message::vault(
+            crate::views::vault::VaultMessage::CipherDetail(msg),
+        ))
+    }
+
     pub(crate) fn menu_state(&self) -> crate::services::menu::MenuState {
         let has_accounts = self.client_manager.has_users();
         let is_locked = self

@@ -80,8 +80,7 @@ pub(in super::super) fn additional_options_card<'a>(
     if !form.saving {
         notes_editor = notes_editor.on_action(CipherEditMessage::NotesAction);
     }
-    let notes =
-        crate::components::inputs::field_frame(fl!("form-notes"), notes_editor, colors);
+    let notes = crate::components::inputs::field_frame(fl!("form-notes"), notes_editor, colors);
 
     let reprompt_checkbox = checkbox(matches!(
         form.modified.reprompt,

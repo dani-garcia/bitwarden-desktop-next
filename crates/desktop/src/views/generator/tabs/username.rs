@@ -43,20 +43,16 @@ pub(in super::super) fn view<'a>(
         ]
         .width(Fill)
         .into(),
-        UsernameKind::Subaddress => inputs::text_field(
-            fl!("generator-username-email"),
-            &form.email,
-            colors,
-        )
-        .on_input(GeneratorMessage::SetEmail)
-        .into(),
-        UsernameKind::Catchall => inputs::text_field(
-            fl!("generator-username-domain"),
-            &form.domain,
-            colors,
-        )
-        .on_input(GeneratorMessage::SetDomain)
-        .into(),
+        UsernameKind::Subaddress => {
+            inputs::text_field(fl!("generator-username-email"), &form.email, colors)
+                .on_input(GeneratorMessage::SetEmail)
+                .into()
+        }
+        UsernameKind::Catchall => {
+            inputs::text_field(fl!("generator-username-domain"), &form.domain, colors)
+                .on_input(GeneratorMessage::SetDomain)
+                .into()
+        }
     };
 
     let combined_card = components::styled_card(

@@ -316,7 +316,6 @@ menu-view-zoom-in = Zoom in
 menu-view-zoom-out = Zoom out
 menu-view-reset-zoom = Reset zoom
 menu-view-toggle-fullscreen = Toggle full screen
-menu-view-reload = Reload
 
 ## Menu — Account
 menu-account-premium = Premium membership
@@ -346,6 +345,23 @@ menu-help-troubleshooting-gpu = Toggle hardware acceleration
 menu-help-toast-hw-accel-on = Hardware acceleration enabled. Restart Bitwarden to apply.
 menu-help-toast-hw-accel-off = Hardware acceleration disabled. Restart Bitwarden to apply.
 menu-help-about = About Bitwarden
+
+menu-toast-sync-success = Vault synced
+menu-toast-sync-failed-title = Sync failed
+menu-toast-sync-failed-body = Could not sync the vault. Try again later.
+
+menu-fingerprint-title = Your account's fingerprint phrase:
+menu-fingerprint-learn-more = Learn more
+menu-fingerprint-close = Close
+
+new-folder-modal-title = New folder
+new-folder-modal-field-label = Folder Name (required)
+new-folder-modal-helper = Nest a folder by adding the parent folder's name followed by a "/". Example: Social/Forums
+new-folder-modal-save = Save
+new-folder-modal-cancel = Cancel
+new-folder-toast-success = Folder created
+new-folder-toast-failed-title = Could not create folder
+new-folder-toast-failed-body = The folder could not be saved. Try again.
 
 ## Tray
 tray-show-hide = Show / Hide

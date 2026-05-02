@@ -45,17 +45,9 @@ pub fn view<'a>(
         .on_input(LoginMessage::SelfHostedUrlChanged)
         .on_submit(LoginMessage::SelfHostedSave);
     let url_field = if state.url_error {
-        inputs::errored_field_frame(
-            fl!("login-self-hosted-modal-url-label"),
-            url_input,
-            colors,
-        )
+        inputs::errored_field_frame(fl!("login-self-hosted-modal-url-label"), url_input, colors)
     } else {
-        inputs::field_frame(
-            fl!("login-self-hosted-modal-url-label"),
-            url_input,
-            colors,
-        )
+        inputs::field_frame(fl!("login-self-hosted-modal-url-label"), url_input, colors)
     };
 
     // Inline validation row replaces the helper text once the user hits Save

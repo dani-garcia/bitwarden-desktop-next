@@ -222,8 +222,8 @@ impl ExportView {
         let submit_disabled = matches!(self.selected_format, ExportFormatChoice::EncryptedJson)
             && self.password.is_empty();
 
-        let mut submit_btn = buttons::primary(text(fl!("export-modal-submit")).size(14))
-            .padding([8, 20]);
+        let mut submit_btn =
+            buttons::primary(text(fl!("export-modal-submit")).size(14)).padding([8, 20]);
         if !submit_disabled {
             submit_btn = submit_btn.on_press(ExportMessage::Submit);
         }
@@ -249,5 +249,4 @@ impl ExportView {
             ExportMessage::Close,
         ))
     }
-
 }

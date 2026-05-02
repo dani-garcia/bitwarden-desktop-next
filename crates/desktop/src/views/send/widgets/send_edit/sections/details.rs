@@ -130,8 +130,8 @@ fn file_section<'a>(
         // Editing existing file: show name + size, non-editable. Skipping
         // `.on_input` is what makes the field readonly — no placeholder
         // closure needed.
-        let name = inputs::text_field(fl!("send-form-file-name"), &form.file_name, colors)
-            .disabled(true);
+        let name =
+            inputs::text_field(fl!("send-form-file-name"), &form.file_name, colors).disabled(true);
         let size = inputs::text_field(
             fl!("send-form-file-size"),
             form.file_size_name.as_deref().unwrap_or(""),

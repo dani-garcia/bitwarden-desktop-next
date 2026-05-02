@@ -1,9 +1,11 @@
 pub(crate) mod about;
 pub(crate) mod export;
+pub(crate) mod fingerprint_phrase;
 pub(crate) mod generator;
 pub(crate) mod import;
 pub(crate) mod login;
 pub(crate) mod magnify;
+pub(crate) mod new_folder;
 pub(crate) mod send;
 pub(crate) mod settings;
 pub(crate) mod title_bar;

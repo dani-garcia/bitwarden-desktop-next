@@ -27,7 +27,7 @@ use crate::{
     theme::{AppTheme, ThemePreference},
     views::{
         export as export_view, generator as generator_view, import as import_view, login, magnify,
-        send, settings as settings_view,
+        new_folder as new_folder_view, send, settings as settings_view,
         title_bar::{self, TitleBarMessage},
         vault,
     },
@@ -75,6 +75,9 @@ pub struct App {
     /// dismisses any other overlay by construction.
     pub(super) open_overlay: Option<Overlay>,
     pub(super) toasts: Vec<Toast>,
+    /// Account → Fingerprint phrase modal. Closed unless the user explicitly
+    /// opened it via the menu.
+    pub(super) fingerprint: crate::views::fingerprint_phrase::FingerprintModal,
 
     // ── Derived ───────────────────────────────────────────────────────────
     pub(super) cache: ViewCache,
@@ -101,6 +104,7 @@ pub struct Views {
     pub(super) generator: generator_view::GeneratorView,
     pub(super) import: import_view::ImportView,
     pub(super) export: export_view::ExportView,
+    pub(super) new_folder: new_folder_view::NewFolderView,
     pub(super) title_bar: title_bar::TitleBarView,
 }
 
@@ -114,6 +118,7 @@ impl Views {
             generator: generator_view::GeneratorView::new(),
             import: import_view::ImportView::new(),
             export: export_view::ExportView::new(),
+            new_folder: new_folder_view::NewFolderView::new(),
             title_bar: title_bar::TitleBarView::new(),
         }
     }
@@ -258,6 +263,7 @@ impl App {
 
             open_overlay: None,
             toasts: Vec::new(),
+            fingerprint: crate::views::fingerprint_phrase::FingerprintModal::default(),
 
             cache: ViewCache::default(),
         };
@@ -444,6 +450,11 @@ impl App {
                         .export
                         .update(m, uctx)
                         .dispatch(Message::export, |e| self.handle_export_event(e)),
+                    ViewMessage::NewFolder(m) => self
+                        .views
+                        .new_folder
+                        .update(m, uctx)
+                        .dispatch(Message::new_folder, |e| self.handle_new_folder_event(e)),
                 }
             }
         }
@@ -558,7 +569,7 @@ impl App {
 
         let close_toast = |idx| Message::System(SystemMessage::CloseToast(idx));
 
-        let sheet: Option<Element<'_, Message, AppTheme>> = match self.screen {
+        let sheet = match self.screen {
             Screen::Vault => self
                 .views
                 .vault
@@ -572,7 +583,7 @@ impl App {
             _ => None,
         };
 
-        let modal: Option<Element<'_, Message, AppTheme>> = match self.screen {
+        let modal = match self.screen {
             Screen::Vault => self
                 .views
                 .vault
@@ -591,7 +602,7 @@ impl App {
             _ => None,
         };
 
-        let settings_modal: Option<Element<'_, Message, AppTheme>> = self
+        let settings_modal = self
             .views
             .settings
             .modal_view(colors)
@@ -599,23 +610,32 @@ impl App {
 
         // Both `modal_view` returns `None` when closed so the stack stays
         // cheap (CLAUDE.md → "Stack doesn't cull or clip").
-        let generator_modal: Option<Element<'_, Message, AppTheme>> = self
+        let generator_modal = self
             .views
             .generator
             .modal_view(colors)
             .map(|el| el.map(Message::generator));
 
-        let import_modal: Option<Element<'_, Message, AppTheme>> = self
+        let import_modal = self
             .views
             .import
             .modal_view(colors)
             .map(|el| el.map(Message::import));
 
-        let export_modal: Option<Element<'_, Message, AppTheme>> = self
+        let export_modal = self
             .views
             .export
             .modal_view(colors)
             .map(|el| el.map(Message::export));
+
+        let new_folder_modal = self
+            .views
+            .new_folder
+            .modal_view(colors)
+            .map(|el| el.map(Message::new_folder));
+
+        let fingerprint_modal =
+            crate::views::fingerprint_phrase::modal_view(&self.fingerprint, colors);
 
         let use_custom_menu_bar = crate::services::menu::should_use_custom_menu_bar();
 
@@ -652,6 +672,8 @@ impl App {
             generator_modal,
             import_modal,
             export_modal,
+            new_folder_modal,
+            fingerprint_modal,
         ]
         .into_iter()
         .flatten()

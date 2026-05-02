@@ -537,6 +537,68 @@ impl ClientManager {
         repo.set(cipher_id, cipher).await.map_err(|e| e.to_string())
     }
 
+    /// Encrypt a fresh `FolderView` and write it into the user's local
+    /// `Folder` repo. Skips the API call (same shape as `save_cipher`) since
+    /// the fake-data harness has no remote.
+    pub async fn create_folder(
+        &self,
+        user_id: &UserId,
+        name: String,
+    ) -> Result<FolderView, String> {
+        use bitwarden_vault::FolderId;
+
+        let entry = self
+            .users
+            .read()
+            .unwrap()
+            .get(user_id)
+            .cloned()
+            .ok_or_else(|| format!("unknown user {user_id}"))?;
+
+        let folder_id = FolderId::new_v4();
+        let revision_date = chrono::Utc::now();
+        let view = FolderView {
+            id: Some(folder_id),
+            name,
+            revision_date,
+        };
+
+        // `FoldersClient::encrypt` is marked deprecated upstream in favour of
+        // a higher-level `create()` that posts to the API — we want only the
+        // encrypt step, since we're persisting locally. `view` is consumed,
+        // so reconstruct the return value from the captured fields.
+        #[allow(deprecated)]
+        let encrypted = entry
+            .client
+            .vault()
+            .folders()
+            .encrypt(view)
+            .map_err(|e| e.to_string())?;
+        let id = encrypted
+            .id
+            .ok_or_else(|| "encrypted folder missing id".to_string())?;
+
+        // Decrypt the encrypted folder back into a `FolderView` for the
+        // return value. Cheaper than re-encrypting/cloning, and keeps the
+        // returned name in sync with what was persisted.
+        #[allow(deprecated)]
+        let decrypted = entry
+            .client
+            .vault()
+            .folders()
+            .decrypt(encrypted.clone())
+            .map_err(|e| e.to_string())?;
+
+        let repo = entry
+            .client
+            .platform()
+            .state()
+            .get::<Folder>()
+            .map_err(|e| e.to_string())?;
+        repo.set(id, encrypted).await.map_err(|e| e.to_string())?;
+        Ok(decrypted)
+    }
+
     pub async fn list_folders(&self, user_id: &UserId) -> Result<Vec<FolderView>, String> {
         let entry = self
             .users
@@ -616,6 +678,25 @@ impl ClientManager {
             .export_vault(folders, ciphers, format)
             .await
             .map_err(|e| e.to_string())
+    }
+
+    /// Stub for File → Sync now. The fake-data harness has no remote to sync
+    /// against, so this currently no-ops. Kept async + fallible so the call
+    /// site doesn't need to change when a real sync flow lands.
+    pub async fn sync(&self, _user_id: &UserId) -> Result<(), String> {
+        Ok(())
+    }
+
+    /// Generate the user's fingerprint phrase (five hyphenated words), used
+    /// by the Account → Fingerprint phrase menu. Returns `None` if the user
+    /// is unknown or locked (the SDK can't access the private key).
+    pub fn user_fingerprint(&self, user_id: &UserId) -> Option<String> {
+        let entry = self.users.read().unwrap().get(user_id).cloned()?;
+        entry
+            .client
+            .platform()
+            .user_fingerprint(entry.sdk_user_id.to_string())
+            .ok()
     }
 
     // ── Send stubs ────────────────────────────────────────────────────────

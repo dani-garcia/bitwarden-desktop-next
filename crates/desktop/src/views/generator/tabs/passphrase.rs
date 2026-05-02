@@ -49,9 +49,8 @@ pub(in super::super) fn view<'a>(
         GeneratorMessage::TogglePassphraseIncludeNumber,
     );
 
-    let num_card = components::styled_card(
-        column![num_words, Space::new().height(2), num_hint].width(Fill),
-    );
+    let num_card =
+        components::styled_card(column![num_words, Space::new().height(2), num_hint].width(Fill));
 
     let extras_card = components::styled_card(
         column![

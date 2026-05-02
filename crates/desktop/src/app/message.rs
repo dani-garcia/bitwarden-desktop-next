@@ -5,8 +5,9 @@ use crate::{
     services::{favicon::FaviconMessage, sdk::ClientManager},
     views::{
         about::AboutMessage, export::ExportMessage, generator::GeneratorMessage,
-        import::ImportMessage, login::LoginMessage, magnify::MagnifyMessage, send::SendMessage,
-        settings::SettingsMessage, title_bar::TitleBarMessage, vault::VaultMessage,
+        import::ImportMessage, login::LoginMessage, magnify::MagnifyMessage,
+        new_folder::NewFolderMessage, send::SendMessage, settings::SettingsMessage,
+        title_bar::TitleBarMessage, vault::VaultMessage,
     },
 };
 
@@ -46,6 +47,7 @@ pub enum ViewMessage {
     Generator(GeneratorMessage),
     Import(ImportMessage),
     Export(ExportMessage),
+    NewFolder(NewFolderMessage),
 }
 
 // Convenience constructors so call sites can use fn-pointer form
@@ -81,6 +83,10 @@ impl Message {
 
     pub fn export(m: ExportMessage) -> Self {
         Self::View(ViewMessage::Export(m))
+    }
+
+    pub fn new_folder(m: NewFolderMessage) -> Self {
+        Self::View(ViewMessage::NewFolder(m))
     }
 }
 
@@ -132,4 +138,16 @@ pub enum SystemMessage {
     /// are dropped by the handler.
     #[cfg(feature = "gpu")]
     WgpuBackendDiscovered(String),
+    /// File → Sync now finished. The fake-data harness always succeeds; the
+    /// `Result` shape is kept so a real sync flow can drop in without
+    /// rippling through the message hierarchy.
+    SyncCompleted(Result<(), String>),
+    /// User dismissed the Account → Fingerprint phrase modal.
+    CloseFingerprintModal,
+    /// "Learn more" pressed inside the fingerprint phrase modal — opens the
+    /// help page in the default browser.
+    OpenLearnMoreFingerprint,
+    /// Copy icon pressed in the fingerprint phrase modal — pushes the phrase
+    /// onto the clipboard via the standard manager + toast pipeline.
+    CopyFingerprint,
 }

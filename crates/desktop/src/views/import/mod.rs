@@ -38,76 +38,277 @@ impl std::fmt::Display for ImportFormat {
 }
 
 const FEATURED_FORMATS: &[ImportFormat] = &[
-    ImportFormat { id: "bitwardenjson", name: "Bitwarden (json)" },
-    ImportFormat { id: "bitwardencsv", name: "Bitwarden (csv)" },
-    ImportFormat { id: "chromecsv", name: "Chrome" },
-    ImportFormat { id: "dashlanecsv", name: "Dashlane (csv)" },
-    ImportFormat { id: "firefoxcsv", name: "Firefox (csv)" },
-    ImportFormat { id: "keepass2xml", name: "KeePass 2 (xml)" },
-    ImportFormat { id: "lastpasscsv", name: "LastPass" },
-    ImportFormat { id: "safaricsv", name: "Safari and macOS (csv)" },
-    ImportFormat { id: "1password1pux", name: "1Password (1pux/json)" },
+    ImportFormat {
+        id: "bitwardenjson",
+        name: "Bitwarden (json)",
+    },
+    ImportFormat {
+        id: "bitwardencsv",
+        name: "Bitwarden (csv)",
+    },
+    ImportFormat {
+        id: "chromecsv",
+        name: "Chrome",
+    },
+    ImportFormat {
+        id: "dashlanecsv",
+        name: "Dashlane (csv)",
+    },
+    ImportFormat {
+        id: "firefoxcsv",
+        name: "Firefox (csv)",
+    },
+    ImportFormat {
+        id: "keepass2xml",
+        name: "KeePass 2 (xml)",
+    },
+    ImportFormat {
+        id: "lastpasscsv",
+        name: "LastPass",
+    },
+    ImportFormat {
+        id: "safaricsv",
+        name: "Safari and macOS (csv)",
+    },
+    ImportFormat {
+        id: "1password1pux",
+        name: "1Password (1pux/json)",
+    },
 ];
 
 const REGULAR_FORMATS: &[ImportFormat] = &[
-    ImportFormat { id: "keepassxcsv", name: "KeePassX (csv)" },
-    ImportFormat { id: "1password1pif", name: "1Password (1pif)" },
-    ImportFormat { id: "1passwordwincsv", name: "1Password 6 and 7 Windows (csv)" },
-    ImportFormat { id: "1passwordmaccsv", name: "1Password 6 and 7 Mac (csv)" },
-    ImportFormat { id: "dashlanejson", name: "Dashlane (json)" },
-    ImportFormat { id: "roboformcsv", name: "RoboForm (csv)" },
-    ImportFormat { id: "keepercsv", name: "Keeper (csv)" },
-    ImportFormat { id: "enpasscsv", name: "Enpass (csv)" },
-    ImportFormat { id: "enpassjson", name: "Enpass (json)" },
-    ImportFormat { id: "protonpass", name: "ProtonPass (zip/json)" },
-    ImportFormat { id: "safeincloudxml", name: "SafeInCloud (xml)" },
-    ImportFormat { id: "pwsafexml", name: "Password Safe - pwsafe.org (xml)" },
-    ImportFormat { id: "stickypasswordxml", name: "Sticky Password (xml)" },
-    ImportFormat { id: "msecurecsv", name: "mSecure (csv)" },
-    ImportFormat { id: "truekeycsv", name: "True Key (csv)" },
-    ImportFormat { id: "passwordbossjson", name: "Password Boss (json)" },
-    ImportFormat { id: "zohovaultcsv", name: "Zoho Vault (csv)" },
-    ImportFormat { id: "splashidcsv", name: "SplashID (csv)" },
-    ImportFormat { id: "passworddragonxml", name: "Password Dragon (xml)" },
-    ImportFormat { id: "padlockcsv", name: "Padlock (csv)" },
-    ImportFormat { id: "passboltcsv", name: "Passbolt (csv)" },
-    ImportFormat { id: "clipperzhtml", name: "Clipperz (html)" },
-    ImportFormat { id: "aviracsv", name: "Avira (csv)" },
-    ImportFormat { id: "saferpasscsv", name: "SaferPass (csv)" },
-    ImportFormat { id: "upmcsv", name: "Universal Password Manager (csv)" },
-    ImportFormat { id: "ascendocsv", name: "Ascendo DataVault (csv)" },
-    ImportFormat { id: "meldiumcsv", name: "Meldium (csv)" },
-    ImportFormat { id: "passkeepcsv", name: "PassKeep (csv)" },
-    ImportFormat { id: "arccsv", name: "Arc" },
-    ImportFormat { id: "edgecsv", name: "Edge" },
-    ImportFormat { id: "operacsv", name: "Opera" },
-    ImportFormat { id: "vivaldicsv", name: "Vivaldi" },
-    ImportFormat { id: "bravecsv", name: "Brave" },
-    ImportFormat { id: "gnomejson", name: "GNOME Passwords and Keys/Seahorse (json)" },
-    ImportFormat { id: "blurcsv", name: "Blur (csv)" },
-    ImportFormat { id: "passwordagentcsv", name: "Password Agent (csv)" },
-    ImportFormat { id: "passpackcsv", name: "Passpack (csv)" },
-    ImportFormat { id: "passmanjson", name: "Passman (json)" },
-    ImportFormat { id: "avastcsv", name: "Avast Passwords (csv)" },
-    ImportFormat { id: "avastjson", name: "Avast Passwords (json)" },
-    ImportFormat { id: "fsecurefsk", name: "F-Secure KEY (fsk)" },
-    ImportFormat { id: "kasperskytxt", name: "Kaspersky Password Manager (txt)" },
-    ImportFormat { id: "remembearcsv", name: "RememBear (csv)" },
-    ImportFormat { id: "passwordwallettxt", name: "PasswordWallet (txt)" },
-    ImportFormat { id: "mykicsv", name: "Myki (csv)" },
-    ImportFormat { id: "securesafecsv", name: "SecureSafe (csv)" },
-    ImportFormat { id: "logmeoncecsv", name: "LogMeOnce (csv)" },
-    ImportFormat { id: "blackberrycsv", name: "BlackBerry Password Keeper (csv)" },
-    ImportFormat { id: "buttercupcsv", name: "Buttercup (csv)" },
-    ImportFormat { id: "codebookcsv", name: "Codebook (csv)" },
-    ImportFormat { id: "encryptrcsv", name: "Encryptr (csv)" },
-    ImportFormat { id: "yoticsv", name: "Yoti (csv)" },
-    ImportFormat { id: "nordpasscsv", name: "Nordpass (csv)" },
-    ImportFormat { id: "psonojson", name: "Psono (json)" },
-    ImportFormat { id: "passkyjson", name: "Passky (json)" },
-    ImportFormat { id: "passwordxpcsv", name: "Password XP (csv)" },
-    ImportFormat { id: "netwrixpasswordsecure", name: "Netwrix Password Secure (csv)" },
-    ImportFormat { id: "passworddepot17xml", name: "Password Depot 17 (xml)" },
+    ImportFormat {
+        id: "keepassxcsv",
+        name: "KeePassX (csv)",
+    },
+    ImportFormat {
+        id: "1password1pif",
+        name: "1Password (1pif)",
+    },
+    ImportFormat {
+        id: "1passwordwincsv",
+        name: "1Password 6 and 7 Windows (csv)",
+    },
+    ImportFormat {
+        id: "1passwordmaccsv",
+        name: "1Password 6 and 7 Mac (csv)",
+    },
+    ImportFormat {
+        id: "dashlanejson",
+        name: "Dashlane (json)",
+    },
+    ImportFormat {
+        id: "roboformcsv",
+        name: "RoboForm (csv)",
+    },
+    ImportFormat {
+        id: "keepercsv",
+        name: "Keeper (csv)",
+    },
+    ImportFormat {
+        id: "enpasscsv",
+        name: "Enpass (csv)",
+    },
+    ImportFormat {
+        id: "enpassjson",
+        name: "Enpass (json)",
+    },
+    ImportFormat {
+        id: "protonpass",
+        name: "ProtonPass (zip/json)",
+    },
+    ImportFormat {
+        id: "safeincloudxml",
+        name: "SafeInCloud (xml)",
+    },
+    ImportFormat {
+        id: "pwsafexml",
+        name: "Password Safe - pwsafe.org (xml)",
+    },
+    ImportFormat {
+        id: "stickypasswordxml",
+        name: "Sticky Password (xml)",
+    },
+    ImportFormat {
+        id: "msecurecsv",
+        name: "mSecure (csv)",
+    },
+    ImportFormat {
+        id: "truekeycsv",
+        name: "True Key (csv)",
+    },
+    ImportFormat {
+        id: "passwordbossjson",
+        name: "Password Boss (json)",
+    },
+    ImportFormat {
+        id: "zohovaultcsv",
+        name: "Zoho Vault (csv)",
+    },
+    ImportFormat {
+        id: "splashidcsv",
+        name: "SplashID (csv)",
+    },
+    ImportFormat {
+        id: "passworddragonxml",
+        name: "Password Dragon (xml)",
+    },
+    ImportFormat {
+        id: "padlockcsv",
+        name: "Padlock (csv)",
+    },
+    ImportFormat {
+        id: "passboltcsv",
+        name: "Passbolt (csv)",
+    },
+    ImportFormat {
+        id: "clipperzhtml",
+        name: "Clipperz (html)",
+    },
+    ImportFormat {
+        id: "aviracsv",
+        name: "Avira (csv)",
+    },
+    ImportFormat {
+        id: "saferpasscsv",
+        name: "SaferPass (csv)",
+    },
+    ImportFormat {
+        id: "upmcsv",
+        name: "Universal Password Manager (csv)",
+    },
+    ImportFormat {
+        id: "ascendocsv",
+        name: "Ascendo DataVault (csv)",
+    },
+    ImportFormat {
+        id: "meldiumcsv",
+        name: "Meldium (csv)",
+    },
+    ImportFormat {
+        id: "passkeepcsv",
+        name: "PassKeep (csv)",
+    },
+    ImportFormat {
+        id: "arccsv",
+        name: "Arc",
+    },
+    ImportFormat {
+        id: "edgecsv",
+        name: "Edge",
+    },
+    ImportFormat {
+        id: "operacsv",
+        name: "Opera",
+    },
+    ImportFormat {
+        id: "vivaldicsv",
+        name: "Vivaldi",
+    },
+    ImportFormat {
+        id: "bravecsv",
+        name: "Brave",
+    },
+    ImportFormat {
+        id: "gnomejson",
+        name: "GNOME Passwords and Keys/Seahorse (json)",
+    },
+    ImportFormat {
+        id: "blurcsv",
+        name: "Blur (csv)",
+    },
+    ImportFormat {
+        id: "passwordagentcsv",
+        name: "Password Agent (csv)",
+    },
+    ImportFormat {
+        id: "passpackcsv",
+        name: "Passpack (csv)",
+    },
+    ImportFormat {
+        id: "passmanjson",
+        name: "Passman (json)",
+    },
+    ImportFormat {
+        id: "avastcsv",
+        name: "Avast Passwords (csv)",
+    },
+    ImportFormat {
+        id: "avastjson",
+        name: "Avast Passwords (json)",
+    },
+    ImportFormat {
+        id: "fsecurefsk",
+        name: "F-Secure KEY (fsk)",
+    },
+    ImportFormat {
+        id: "kasperskytxt",
+        name: "Kaspersky Password Manager (txt)",
+    },
+    ImportFormat {
+        id: "remembearcsv",
+        name: "RememBear (csv)",
+    },
+    ImportFormat {
+        id: "passwordwallettxt",
+        name: "PasswordWallet (txt)",
+    },
+    ImportFormat {
+        id: "mykicsv",
+        name: "Myki (csv)",
+    },
+    ImportFormat {
+        id: "securesafecsv",
+        name: "SecureSafe (csv)",
+    },
+    ImportFormat {
+        id: "logmeoncecsv",
+        name: "LogMeOnce (csv)",
+    },
+    ImportFormat {
+        id: "blackberrycsv",
+        name: "BlackBerry Password Keeper (csv)",
+    },
+    ImportFormat {
+        id: "buttercupcsv",
+        name: "Buttercup (csv)",
+    },
+    ImportFormat {
+        id: "codebookcsv",
+        name: "Codebook (csv)",
+    },
+    ImportFormat {
+        id: "encryptrcsv",
+        name: "Encryptr (csv)",
+    },
+    ImportFormat {
+        id: "yoticsv",
+        name: "Yoti (csv)",
+    },
+    ImportFormat {
+        id: "nordpasscsv",
+        name: "Nordpass (csv)",
+    },
+    ImportFormat {
+        id: "psonojson",
+        name: "Psono (json)",
+    },
+    ImportFormat {
+        id: "passkyjson",
+        name: "Passky (json)",
+    },
+    ImportFormat {
+        id: "passwordxpcsv",
+        name: "Password XP (csv)",
+    },
+    ImportFormat {
+        id: "netwrixpasswordsecure",
+        name: "Netwrix Password Secure (csv)",
+    },
+    ImportFormat {
+        id: "passworddepot17xml",
+        name: "Password Depot 17 (xml)",
+    },
 ];
 
 fn all_formats() -> Vec<ImportFormat> {
@@ -257,8 +458,7 @@ impl ImportView {
                         self.selected_collection = None;
                     }
                     VaultChoice::Org { .. } => {
-                        self.selected_collection =
-                            Some(fl!("import-modal-collection-placeholder"));
+                        self.selected_collection = Some(fl!("import-modal-collection-placeholder"));
                     }
                 }
                 self.selected_vault = v;
@@ -383,11 +583,8 @@ impl ImportView {
             .min_height(80.0)
             .max_height(240.0)
             .on_action(ImportMessage::PasteAction);
-        let paste_field = inputs::field_frame(
-            fl!("import-modal-paste-label"),
-            paste_editor,
-            colors,
-        );
+        let paste_field =
+            inputs::field_frame(fl!("import-modal-paste-label"), paste_editor, colors);
 
         let data_card = section_card(
             fl!("import-modal-section-data"),

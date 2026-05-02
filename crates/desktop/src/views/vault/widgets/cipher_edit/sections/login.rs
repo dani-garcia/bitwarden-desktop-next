@@ -40,9 +40,13 @@ pub(in super::super) fn login_card<'a>(
             form.saving,
             colors,
         ),
-        text_field(fl!("form-totp"), login.totp.as_deref().unwrap_or(""), colors)
-            .on_input(CipherEditMessage::TotpChanged)
-            .disabled(form.saving),
+        text_field(
+            fl!("form-totp"),
+            login.totp.as_deref().unwrap_or(""),
+            colors
+        )
+        .on_input(CipherEditMessage::TotpChanged)
+        .disabled(form.saving),
     ]
     .spacing(16);
 

@@ -144,6 +144,12 @@ pub enum EnabledWhen {
     Unlocked,
     HasAccounts,
     HasLockable,
+    /// Permanently disabled — entry renders grayed-out. Used as a placeholder
+    /// for menu items that exist on the official client but have no behaviour
+    /// in this stub (Edit → Undo / Redo / Cut / Copy / Paste / Select all,
+    /// View → Zoom in / out / reset). Keyboard shortcuts still pass through
+    /// to focused text widgets unaffected, since they have no `MenuAction`.
+    Never,
 }
 
 impl EnabledWhen {
@@ -153,6 +159,7 @@ impl EnabledWhen {
             Self::Unlocked => !state.is_locked,
             Self::HasAccounts => state.has_accounts,
             Self::HasLockable => state.has_lockable_accounts,
+            Self::Never => false,
         }
     }
 }
@@ -168,7 +175,6 @@ pub enum MenuAction {
     SyncNow,
     SearchVault,
     ToggleFullScreen,
-    Reload,
     Minimize,
     HideToTray,
     ToggleAlwaysOnTop,
@@ -178,6 +184,18 @@ pub enum MenuAction {
     Generator,
     GeneratorHistory,
     ToggleHardwareAcceleration,
+    Import,
+    Export,
+    NewFolder,
+    CopyUsername,
+    CopyPassword,
+    CopyTotp,
+    FingerprintPhrase,
+    /// Static external URL — Help-menu social/store/legal links.
+    OpenStaticUrl(&'static str),
+    /// The active user's web vault. `None` opens the root; `Some("#/path")`
+    /// appends an in-app route (account-menu items).
+    OpenWebVault(Option<&'static str>),
 }
 
 // ---------------------------------------------------------------------------
@@ -308,11 +326,11 @@ pub const MENUS: &[(&str, &[MenuEntry])] = &[
                 E("menu-file-new-item-secure-note").key(cmd_shift('s')),
                 E("menu-file-new-item-ssh-key").key(cmd_shift('k')),
             ]),
-            E("menu-file-new-folder").when(Unlocked),
+            E("menu-file-new-folder").when(Unlocked).action(NewFolder),
             SEP,
             E("menu-file-sync-now").when(HasAccounts).action(SyncNow),
-            E("menu-file-import").when(Unlocked),
-            E("menu-file-export").when(Unlocked),
+            E("menu-file-import").when(Unlocked).action(Import),
+            E("menu-file-export").when(Unlocked).action(Export),
             SEP,
             E("menu-file-settings")
                 .key(cmd(','))
@@ -332,18 +350,31 @@ pub const MENUS: &[(&str, &[MenuEntry])] = &[
     (
         "menu-edit",
         &[
-            E("menu-edit-undo").key(cmd('z')),
-            E("menu-edit-redo").key(cmd('y')),
+            // Undo/Redo/Cut/Copy/Paste/Select-all: text widgets handle these
+            // via the keyboard already; menu wiring would need a focused-
+            // widget dispatcher we haven't built. Disabled placeholders for
+            // now — see docs/todo.md.
+            E("menu-edit-undo").key(cmd('z')).when(Never),
+            E("menu-edit-redo").key(cmd('y')).when(Never),
             SEP,
-            E("menu-edit-cut").key(cmd('x')),
-            E("menu-edit-copy").key(cmd('c')),
-            E("menu-edit-paste").key(cmd('v')),
+            E("menu-edit-cut").key(cmd('x')).when(Never),
+            E("menu-edit-copy").key(cmd('c')).when(Never),
+            E("menu-edit-paste").key(cmd('v')).when(Never),
             SEP,
-            E("menu-edit-select-all").key(cmd('a')),
+            E("menu-edit-select-all").key(cmd('a')).when(Never),
             SEP,
-            E("menu-edit-copy-username").key(cmd('u')).when(Unlocked),
-            E("menu-edit-copy-password").key(cmd('p')).when(Unlocked),
-            E("menu-edit-copy-totp").key(cmd('t')).when(Unlocked),
+            E("menu-edit-copy-username")
+                .key(cmd('u'))
+                .when(Unlocked)
+                .action(CopyUsername),
+            E("menu-edit-copy-password")
+                .key(cmd('p'))
+                .when(Unlocked)
+                .action(CopyPassword),
+            E("menu-edit-copy-totp")
+                .key(cmd('t'))
+                .when(Unlocked)
+                .action(CopyTotp),
         ],
     ),
     (
@@ -362,26 +393,40 @@ pub const MENUS: &[(&str, &[MenuEntry])] = &[
                 .when(Unlocked)
                 .action(GeneratorHistory),
             SEP,
-            E("menu-view-zoom-in").key(cmd('+')),
-            E("menu-view-zoom-out").key(cmd('-')),
-            E("menu-view-reset-zoom").key(cmd('0')),
+            // Zoom in/out/reset: no font-scaling system exists. Disabled
+            // placeholders — see docs/todo.md.
+            E("menu-view-zoom-in").key(cmd('+')).when(Never),
+            E("menu-view-zoom-out").key(cmd('-')).when(Never),
+            E("menu-view-reset-zoom").key(cmd('0')).when(Never),
             SEP,
             E("menu-view-toggle-fullscreen")
                 .key(fkey(11))
                 .action(ToggleFullScreen),
-            SEP,
-            E("menu-view-reload").key(cmd_shift('r')).action(Reload),
         ],
     ),
     (
         "menu-account",
         &[
-            E("menu-account-premium").when(Unlocked),
-            E("menu-account-change-password").when(Unlocked),
-            E("menu-account-two-step").when(Unlocked),
-            E("menu-account-fingerprint").when(Unlocked),
+            E("menu-account-premium")
+                .when(Unlocked)
+                .action(OpenWebVault(Some("#/settings/subscription/premium"))),
+            E("menu-account-change-password")
+                .when(Unlocked)
+                .action(OpenWebVault(Some(
+                    "#/settings/security/change-master-password",
+                ))),
+            E("menu-account-two-step")
+                .when(Unlocked)
+                .action(OpenWebVault(Some("#/settings/security/two-factor"))),
+            E("menu-account-fingerprint")
+                .when(Unlocked)
+                .action(FingerprintPhrase),
             SEP,
-            E("menu-account-delete").when(Unlocked),
+            E("menu-account-delete")
+                .when(Unlocked)
+                .action(OpenWebVault(Some(
+                    "#/settings/security/delete-account",
+                ))),
         ],
     ),
     (
@@ -401,27 +446,46 @@ pub const MENUS: &[(&str, &[MenuEntry])] = &[
     (
         "menu-help",
         &[
-            E("menu-help-feedback"),
-            E("menu-help-bug"),
-            E("menu-help-legal").sub(&[E("menu-help-legal-tos"), E("menu-help-legal-privacy")]),
-            SEP,
-            E("menu-help-follow").sub(&[
-                L("Blog"),
-                L("Twitter"),
-                L("Facebook"),
-                L("GitHub"),
-                L("Mastodon"),
+            E("menu-help-feedback").action(OpenStaticUrl("https://bitwarden.com/help")),
+            E("menu-help-bug").action(OpenStaticUrl("https://github.com/bitwarden/clients/issues")),
+            E("menu-help-legal").sub(&[
+                E("menu-help-legal-tos").action(OpenStaticUrl("https://bitwarden.com/terms/")),
+                E("menu-help-legal-privacy")
+                    .action(OpenStaticUrl("https://bitwarden.com/privacy/")),
             ]),
             SEP,
-            E("menu-help-web-vault"),
+            E("menu-help-follow").sub(&[
+                L("Blog").action(OpenStaticUrl("https://blog.bitwarden.com")),
+                L("Twitter").action(OpenStaticUrl("https://twitter.com/bitwarden")),
+                L("Facebook").action(OpenStaticUrl("https://www.facebook.com/bitwarden/")),
+                L("GitHub").action(OpenStaticUrl("https://github.com/bitwarden")),
+                L("Mastodon").action(OpenStaticUrl("https://fosstodon.org/@bitwarden")),
+            ]),
             SEP,
-            E("menu-help-mobile-app").sub(&[L("iOS"), L("Android")]),
+            E("menu-help-web-vault").action(OpenWebVault(None)),
+            SEP,
+            E("menu-help-mobile-app").sub(&[
+                L("iOS").action(OpenStaticUrl(
+                    "https://itunes.apple.com/app/bitwarden-free-password-manager/id1137397744?mt=8",
+                )),
+                L("Android").action(OpenStaticUrl(
+                    "https://play.google.com/store/apps/details?id=com.x8bit.bitwarden",
+                )),
+            ]),
             E("menu-help-browser-extension").sub(&[
-                L("Chrome"),
-                L("Firefox"),
-                L("Opera"),
-                L("Edge"),
-                L("Safari"),
+                L("Chrome").action(OpenStaticUrl(
+                    "https://chromewebstore.google.com/detail/bitwarden-free-password-m/nngceckbapebfimnlniiiahkandclblb",
+                )),
+                L("Firefox").action(OpenStaticUrl(
+                    "https://addons.mozilla.org/firefox/addon/bitwarden-password-manager/",
+                )),
+                L("Opera").action(OpenStaticUrl(
+                    "https://addons.opera.com/extensions/details/bitwarden-free-password-manager/",
+                )),
+                L("Edge").action(OpenStaticUrl(
+                    "https://microsoftedge.microsoft.com/addons/detail/jbkfoedolllekgbhcbcoahefnbanhhlh",
+                )),
+                L("Safari").action(OpenStaticUrl("https://bitwarden.com/download/")),
             ]),
             SEP,
             E("menu-help-troubleshooting")

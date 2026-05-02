@@ -314,7 +314,6 @@ menu-view-zoom-in = Acercar
 menu-view-zoom-out = Alejar
 menu-view-reset-zoom = Restablecer zoom
 menu-view-toggle-fullscreen = Pantalla completa
-menu-view-reload = Recargar
 
 ## Menu — Account
 menu-account-premium = Membresía Premium
@@ -344,6 +343,23 @@ menu-help-troubleshooting-gpu = Alternar aceleración por hardware
 menu-help-toast-hw-accel-on = Aceleración por hardware activada. Reinicia Bitwarden para aplicar el cambio.
 menu-help-toast-hw-accel-off = Aceleración por hardware desactivada. Reinicia Bitwarden para aplicar el cambio.
 menu-help-about = Acerca de Bitwarden
+
+menu-toast-sync-success = Caja fuerte sincronizada
+menu-toast-sync-failed-title = Error de sincronización
+menu-toast-sync-failed-body = No se pudo sincronizar la caja fuerte. Inténtalo de nuevo más tarde.
+
+menu-fingerprint-title = Frase de huella digital de tu cuenta:
+menu-fingerprint-learn-more = Más información
+menu-fingerprint-close = Cerrar
+
+new-folder-modal-title = Nueva carpeta
+new-folder-modal-field-label = Nombre de la carpeta (obligatorio)
+new-folder-modal-helper = Anida una carpeta añadiendo el nombre de la carpeta padre seguido de "/". Ejemplo: Social/Foros
+new-folder-modal-save = Guardar
+new-folder-modal-cancel = Cancelar
+new-folder-toast-success = Carpeta creada
+new-folder-toast-failed-title = No se pudo crear la carpeta
+new-folder-toast-failed-body = No fue posible guardar la carpeta. Inténtalo de nuevo.
 
 ## Bandeja
 tray-show-hide = Mostrar / Ocultar
