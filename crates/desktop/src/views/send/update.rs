@@ -6,6 +6,7 @@ use iced::Task;
 use crate::{
     app::{Outcome, UpdateCtx},
     components::{sidebar::SendFilter, toast::Toast},
+    debug_fmt::{NoDebug, Summary},
     domain::UserId,
     fl,
     services::sdk::ClientManager,
@@ -31,7 +32,7 @@ impl SendView {
                     .await
                     .map(|items| items.into_iter().map(Arc::new).collect::<Vec<_>>())
             },
-            move |result| SendMessage::ListLoaded(uid, result),
+            move |result| SendMessage::ListLoaded(uid, result.map(Summary)),
         )
     }
 }
@@ -132,7 +133,7 @@ impl SendView {
                 };
                 let mgr = client_manager.clone();
                 return Outcome::spawn(async move { mgr.full_send(&uid, id).await }, move |res| {
-                    SendMessage::DetailLoaded(uid, id, res.map(Box::new))
+                    SendMessage::DetailLoaded(uid, id, res.map(|v| NoDebug(Box::new(v))))
                 });
             }
             SendListMessage::Scrolled(viewport) => {
@@ -187,7 +188,7 @@ impl SendView {
                 let mgr = client_manager.clone();
                 let view = form.to_send_view();
                 Outcome::spawn(async move { mgr.save_send(&uid, view).await }, move |res| {
-                    SendMessage::SaveCompleted(uid, res.map(Box::new))
+                    SendMessage::SaveCompleted(uid, res.map(|v| NoDebug(Box::new(v))))
                 })
             }
             FormAction::Delete => {
@@ -236,12 +237,12 @@ impl SendView {
     fn handle_list_loaded(
         &mut self,
         msg_uid: UserId,
-        result: Result<Vec<Arc<SdkSendView>>, String>,
+        result: Result<Summary<Vec<Arc<SdkSendView>>>, String>,
         active_user: Option<&UserId>,
         active_filter: SendFilter,
     ) -> Outcome<Self> {
         match result {
-            Ok(items) => {
+            Ok(Summary(items)) => {
                 tracing::info!(uid = %msg_uid, count = items.len(), "send list loaded");
                 let cache = self.items.entry(msg_uid).or_default();
                 cache.all = items;
@@ -260,14 +261,14 @@ impl SendView {
         &mut self,
         msg_uid: UserId,
         id: SendId,
-        result: Result<Box<SdkSendView>, String>,
+        result: Result<NoDebug<Box<SdkSendView>>, String>,
         active_user: Option<&UserId>,
     ) -> Outcome<Self> {
         if active_user != Some(&msg_uid) {
             return Outcome::None;
         }
         match result {
-            Ok(view) => {
+            Ok(NoDebug(view)) => {
                 if self.selection.id == Some(id) {
                     self.selection.form = Some(SendForm::edit(*view));
                     self.selection.sheet_fade.open();
@@ -288,14 +289,14 @@ impl SendView {
     fn handle_save_completed(
         &mut self,
         msg_uid: UserId,
-        result: Result<Box<SdkSendView>, String>,
+        result: Result<NoDebug<Box<SdkSendView>>, String>,
         active_user: Option<&UserId>,
     ) -> Outcome<Self> {
         if active_user != Some(&msg_uid) {
             return Outcome::None;
         }
         let event = match result {
-            Ok(view) => {
+            Ok(NoDebug(view)) => {
                 // Re-bind selection to the persisted id (new sends start with
                 // id=None; `save_send` assigns one) so subsequent reloads
                 // keep the form open.
@@ -318,9 +319,12 @@ impl SendView {
         Outcome::event(event)
     }
 
-    fn handle_password_generated(&mut self, result: Result<String, String>) -> Outcome<Self> {
+    fn handle_password_generated(
+        &mut self,
+        result: Result<NoDebug<String>, String>,
+    ) -> Outcome<Self> {
         match result {
-            Ok(value) => {
+            Ok(NoDebug(value)) => {
                 if let Some(form) = self.selection.form.as_mut() {
                     form.apply_generated_password(value);
                 }

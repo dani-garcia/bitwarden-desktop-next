@@ -6,6 +6,7 @@ use iced::Task;
 use crate::{
     app::{App, Message},
     components::toast::Toast,
+    debug_fmt::NoDebug,
     fl,
     services::sdk::ClientManager,
     views::send::{SendEvent, SendMessage},
@@ -60,7 +61,11 @@ impl App {
         };
         Task::perform(
             async move { mgr.generate_password(&uid, req).await },
-            |res| Message::send(SendMessage::PasswordGenerated(res.map(|(value, _)| value))),
+            |res| {
+                Message::send(SendMessage::PasswordGenerated(
+                    res.map(|(value, _)| NoDebug(value)),
+                ))
+            },
         )
     }
 }

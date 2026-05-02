@@ -10,6 +10,7 @@ use crate::{
         account_switcher::{AccountSwitcherEvent, AccountSwitcherMessage},
         toast::Toast,
     },
+    debug_fmt::{NoDebug, Summary},
     domain::UserId,
     services::clipboard::Sensitivity,
 };
@@ -19,7 +20,7 @@ use super::widgets::{
     send_list::{SearchMessage, SendListMessage},
 };
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum SendMessage {
     ItemList(SendListMessage),
     Search(SearchMessage),
@@ -36,73 +37,13 @@ pub enum SendMessage {
     NewItem,
     ConfirmDeleteSelected,
     CancelDeleteSelected,
-    ListLoaded(UserId, Result<Vec<Arc<SdkSendView>>, String>),
-    DetailLoaded(UserId, SendId, Result<Box<SdkSendView>, String>),
-    SaveCompleted(UserId, Result<Box<SdkSendView>, String>),
+    ListLoaded(UserId, Result<Summary<Vec<Arc<SdkSendView>>>, String>),
+    DetailLoaded(UserId, SendId, Result<NoDebug<Box<SdkSendView>>, String>),
+    SaveCompleted(UserId, Result<NoDebug<Box<SdkSendView>>, String>),
     DeleteCompleted(UserId, SendId, Result<(), String>),
     /// Result of `ClientManager::generate_password` requested by the
-    /// Send form's regenerate button. App handles the SDK call (it owns
-    /// the generator's options) and pipes the value back here.
-    PasswordGenerated(Result<String, String>),
-}
-
-impl std::fmt::Debug for SendMessage {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::ItemList(m) => f.debug_tuple("ItemList").field(m).finish(),
-            Self::Search(m) => f.debug_tuple("Search").field(m).finish(),
-            Self::AccountSwitcher(m) => f.debug_tuple("AccountSwitcher").field(m).finish(),
-            Self::SendEdit(m) => f.debug_tuple("SendEdit").field(m).finish(),
-            Self::CloseFormPane => f.write_str("CloseFormPane"),
-            Self::FinalizeSheetClose => f.write_str("FinalizeSheetClose"),
-            Self::PaneResized(e) => f.debug_tuple("PaneResized").field(e).finish(),
-            Self::NewItem => f.write_str("NewItem"),
-            Self::ConfirmDeleteSelected => f.write_str("ConfirmDeleteSelected"),
-            Self::CancelDeleteSelected => f.write_str("CancelDeleteSelected"),
-            Self::ListLoaded(uid, result) => {
-                let mut t = f.debug_tuple("ListLoaded");
-                t.field(uid);
-                match result {
-                    Ok(items) => t.field(&format_args!("Ok(<{} items>)", items.len())),
-                    Err(e) => t.field(&format_args!("Err({e})")),
-                };
-                t.finish()
-            }
-            Self::DetailLoaded(uid, id, result) => {
-                let mut t = f.debug_tuple("DetailLoaded");
-                t.field(uid);
-                t.field(id);
-                match result {
-                    Ok(_) => t.field(&"Ok(<SendView>)"),
-                    Err(e) => t.field(&format_args!("Err({e})")),
-                };
-                t.finish()
-            }
-            Self::SaveCompleted(uid, result) => {
-                let mut t = f.debug_tuple("SaveCompleted");
-                t.field(uid);
-                match result {
-                    Ok(_) => t.field(&"Ok(<SendView>)"),
-                    Err(e) => t.field(&format_args!("Err({e})")),
-                };
-                t.finish()
-            }
-            Self::DeleteCompleted(uid, id, result) => f
-                .debug_tuple("DeleteCompleted")
-                .field(uid)
-                .field(id)
-                .field(result)
-                .finish(),
-            Self::PasswordGenerated(result) => {
-                let mut t = f.debug_tuple("PasswordGenerated");
-                match result {
-                    Ok(_) => t.field(&"Ok(<password>)"),
-                    Err(e) => t.field(&format_args!("Err({e})")),
-                };
-                t.finish()
-            }
-        }
-    }
+    /// Send form's regenerate button.
+    PasswordGenerated(Result<NoDebug<String>, String>),
 }
 
 #[derive(Debug, Clone)]
@@ -120,7 +61,6 @@ pub enum SendEvent {
         sensitivity: Sensitivity,
         toast_label: String,
     },
-    /// Send form's regenerate button. App reads
-    /// `views.generator.password_request()` and dispatches the SDK call.
+    /// Send form's regenerate button. App dispatches the SDK call.
     RegeneratePasswordRequested,
 }

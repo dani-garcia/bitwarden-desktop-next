@@ -3,6 +3,7 @@
 mod app;
 mod assets;
 mod components;
+mod debug_fmt;
 mod domain;
 mod paths;
 mod services;

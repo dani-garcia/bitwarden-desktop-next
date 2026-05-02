@@ -108,6 +108,10 @@ Sends live as decrypted `SendView`s in an in-memory `HashMap` on [`ClientManager
 
 The "Choose file" button in the new-file-send branch ([widgets/send_form/view.rs](../crates/desktop/src/views/send/widgets/send_form/view.rs) `file_section`) is a placeholder — message fires, handler is a no-op. Needs an OS file picker (dialog crate or iced's native picker once it lands) to populate `file_name` + `file_size_name`, plus `SendClient::encrypt_file` / `encrypt_buffer` wiring.
 
+### Send form — embedded password generator panel `[M]`
+
+The password regenerate button currently fires `ClientManager::generate_password` with a fixed request (14-char, all charsets, min 1 digit + 1 symbol — see [send/handler.rs](../crates/desktop/src/views/send/handler.rs) `regenerate_send_password`). The official client opens a contextual side-panel generator instead: Password / Passphrase tabs, live preview with its own regenerate, length / charset / min-number / min-special / avoid-ambiguous options, "Use this password" / "Cancel" footer. On apply the value populates the form field; on cancel the form is untouched. Open question: share [`GeneratorView`](../crates/desktop/src/views/generator/) in an embedded "picker" mode (drop the Username tab, expose options + value, fire an apply event) or build a new lightweight view — the embedded path is fewer LOC but adds a mode switch to the existing modal.
+
 ### In-form validation surface `[M]` `[defer: 2nd required field on either form]`
 
 Both `CipherForm` and `SendForm` use a single `is_valid()` method + the `toast-required-fields` toast. Once required-field rules grow past one field, replace `is_valid() -> bool` with `validate() -> HashMap<FieldId, &'static str>` returning per-field error messages. Add `show_validation: bool` flipped on the first failed Save — keeps first-view UX clean. Add `inputs::validated_text_field(...)` in [components/inputs.rs](../crates/desktop/src/components/inputs.rs) that paints a red border via the `text_input::Style` closure when `Some(error)`. Toast stays as the global "can't save yet" nudge but demoted to title only.

@@ -1,12 +1,12 @@
-//! `VaultMessage` + `VaultEvent` + a hand-rolled `Debug` impl.
+//! `VaultMessage` + `VaultEvent`.
 //!
-//! iced debug-formats every update Message and warns if it takes >1 ms. The
-//! default `#[derive(Debug)]` on `ListLoaded` walks through ~20k entries of
-//! `Arc<CipherListView>` on the load-test account, which measured ~31 ms.
-//! The only variants that carry a genuinely heavy payload are `ListLoaded`
-//! and the option loads for the form; everything else is short. Hand-roll
-//! `Debug` so bulk variants render as a terse summary and the cheap variants
-//! keep their natural derive-like output.
+//! Variants whose payloads are large or sensitive use the [`NoDebug`] /
+//! [`Summary`] wrappers from [`crate::debug_fmt`] so the enum just derives
+//! `Debug` instead of hand-rolling per-variant formatters. iced warns when
+//! a `Message`'s `Debug` takes >1 ms — the load-test account's 20k-cipher
+//! `ListLoaded` measured ~31 ms with the derive default, hence `Summary`
+//! on the bulk variant; `DetailLoaded` / `SaveCompleted` carry decrypted
+//! ciphers, hence `NoDebug`.
 
 use std::sync::Arc;
 
@@ -18,6 +18,7 @@ use crate::{
         account_switcher::{AccountSwitcherEvent, AccountSwitcherMessage},
         toast::Toast,
     },
+    debug_fmt::{NoDebug, Summary},
     domain::UserId,
     services::{
         clipboard::Sensitivity,
@@ -34,14 +35,14 @@ use super::widgets::{
 
 /// Payload for [`VaultMessage::FormOptionsLoaded`]. Delivered as a single
 /// value so the handler has one stale-check + one form-exists check.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct FormOptions {
     pub folders: Result<Vec<FolderOption>, String>,
     pub organizations: Vec<Organization>,
     pub collections: Vec<Collection>,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum VaultMessage {
     ItemList(ItemListMessage),
     Search(SearchMessage),
@@ -59,8 +60,8 @@ pub enum VaultMessage {
     ConfirmDeleteSelected,
     /// User dismissed the delete modal (Cancel, backdrop click, etc.).
     CancelDeleteSelected,
-    ListLoaded(UserId, Result<Vec<Arc<CipherListView>>, String>),
-    DetailLoaded(UserId, CipherId, Result<Box<CipherView>, String>),
+    ListLoaded(UserId, Result<Summary<Vec<Arc<CipherListView>>>, String>),
+    DetailLoaded(UserId, CipherId, Result<NoDebug<Box<CipherView>>, String>),
     /// Fires once the cipher form's option lists (folders, organizations,
     /// collections) are all ready. Bundled into a single message because the
     /// three loads are always triggered together from the Edit handler and
@@ -69,8 +70,8 @@ pub enum VaultMessage {
     /// and collections are sync reads off the already-loaded `ClientManager`.
     /// `FolderOption` is used (not `FolderView`) because `FolderView` isn't
     /// `Clone` and `VaultMessage` must be.
-    FormOptionsLoaded(UserId, FormOptions),
-    SaveCompleted(UserId, Result<Box<CipherView>, String>),
+    FormOptionsLoaded(UserId, NoDebug<FormOptions>),
+    SaveCompleted(UserId, Result<NoDebug<Box<CipherView>>, String>),
     DeleteCompleted(UserId, CipherId, Result<(), String>),
     /// Internal: dispatched on a one-frame delay from screen-mount handlers
     /// (post-unlock, switch-user-already-unlocked) so the focus operation
@@ -79,73 +80,6 @@ pub enum VaultMessage {
     /// first-mount behavior. Outside a fresh-mount context, the synchronous
     /// `auto_focus_task` / `focus_search_task` are sufficient.
     AutoFocusSearchDelayed,
-}
-
-impl std::fmt::Debug for VaultMessage {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::ItemList(m) => f.debug_tuple("ItemList").field(m).finish(),
-            Self::Search(m) => f.debug_tuple("Search").field(m).finish(),
-            Self::AccountSwitcher(m) => f.debug_tuple("AccountSwitcher").field(m).finish(),
-            Self::CipherDetail(m) => f.debug_tuple("CipherDetail").field(m).finish(),
-            Self::CipherEdit(m) => f.debug_tuple("CipherEdit").field(m).finish(),
-            Self::CloseCipherDetail => f.write_str("CloseCipherDetail"),
-            Self::FinalizeSheetClose => f.write_str("FinalizeSheetClose"),
-            Self::PaneResized(e) => f.debug_tuple("PaneResized").field(e).finish(),
-            Self::NewItem => f.write_str("NewItem"),
-            Self::ConfirmDeleteSelected => f.write_str("ConfirmDeleteSelected"),
-            Self::CancelDeleteSelected => f.write_str("CancelDeleteSelected"),
-            Self::ListLoaded(uid, result) => {
-                let mut t = f.debug_tuple("ListLoaded");
-                t.field(uid);
-                match result {
-                    Ok(items) => t.field(&format_args!("Ok(<{} items>)", items.len())),
-                    Err(e) => t.field(&format_args!("Err({e})")),
-                };
-                t.finish()
-            }
-            Self::DetailLoaded(uid, id, result) => {
-                let mut t = f.debug_tuple("DetailLoaded");
-                t.field(uid);
-                t.field(id);
-                match result {
-                    Ok(_) => t.field(&"Ok(<CipherView>)"),
-                    Err(e) => t.field(&format_args!("Err({e})")),
-                };
-                t.finish()
-            }
-            Self::FormOptionsLoaded(uid, opts) => {
-                let folders = match &opts.folders {
-                    Ok(fs) => format!("Ok(<{} folders>)", fs.len()),
-                    Err(e) => format!("Err({e})"),
-                };
-                f.debug_tuple("FormOptionsLoaded")
-                    .field(uid)
-                    .field(&format_args!(
-                        "folders={folders}, <{} orgs>, <{} collections>",
-                        opts.organizations.len(),
-                        opts.collections.len()
-                    ))
-                    .finish()
-            }
-            Self::SaveCompleted(uid, result) => {
-                let mut t = f.debug_tuple("SaveCompleted");
-                t.field(uid);
-                match result {
-                    Ok(_) => t.field(&"Ok(<CipherView>)"),
-                    Err(e) => t.field(&format_args!("Err({e})")),
-                };
-                t.finish()
-            }
-            Self::DeleteCompleted(uid, id, result) => f
-                .debug_tuple("DeleteCompleted")
-                .field(uid)
-                .field(id)
-                .field(result)
-                .finish(),
-            Self::AutoFocusSearchDelayed => f.write_str("AutoFocusSearchDelayed"),
-        }
-    }
 }
 
 // ── Events ─────────────────────────────────────────────────────────────────
