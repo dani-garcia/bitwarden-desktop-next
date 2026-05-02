@@ -100,6 +100,9 @@ impl SendView {
             SendMessage::DeleteCompleted(uid, id, res) => {
                 return self.handle_delete_completed(uid, id, res, active_user);
             }
+            SendMessage::PasswordGenerated(res) => {
+                return self.handle_password_generated(res);
+            }
         }
         Outcome::None
     }
@@ -201,6 +204,9 @@ impl SendView {
                 sensitivity: crate::services::clipboard::Sensitivity::Sensitive,
                 toast_label: fl!("send-toast-copied-password"),
             }),
+            FormAction::RegeneratePassword => {
+                Outcome::event(SendEvent::RegeneratePasswordRequested)
+            }
         }
     }
 
@@ -310,6 +316,24 @@ impl SendView {
             }
         };
         Outcome::event(event)
+    }
+
+    fn handle_password_generated(&mut self, result: Result<String, String>) -> Outcome<Self> {
+        match result {
+            Ok(value) => {
+                if let Some(form) = self.selection.form.as_mut() {
+                    form.apply_generated_password(value);
+                }
+                Outcome::None
+            }
+            Err(err) => {
+                tracing::warn!(%err, "send password regenerate failed");
+                Outcome::event(SendEvent::ToastRequested(Toast::warning(
+                    err,
+                    Some(&fl!("generator-toast-failed")),
+                )))
+            }
+        }
     }
 
     fn handle_delete_completed(

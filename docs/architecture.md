@@ -634,8 +634,40 @@ The App side wires it once via `Subscription::run(event_stream)` mapped onto a t
 - `view()` returns `Element<'_, M, Theme>` borrowing from `&self`. Locally-computed `Vec`s can't flow into the returned Element — use cached fields (`ViewCache`, per-user `ItemCache`).
 - **Nested container backgrounds mask parent border-radius**: put the rounded fill on the innermost container, or drop inner backgrounds.
 - **Stack doesn't cull or clip**: `iced::widget::stack` lays out every child fully at the same bounds. Prefer exclusive branches in `view()` over layering when only one is shown at a time.
+- **`iced::widget::Stack` short-circuits between its own children on `shell.is_event_captured()`, but the `Shell` is shared across the whole event pass.** A capture set inside one widget subtree leaks into a sibling subtree's `Stack`, which then bails before reaching its remaining children. Wrap each affected subtree in [`components::shell_scope::ShellScope`](../crates/desktop/src/components/shell_scope.rs) — see [Shell Capture Isolation](#shell-capture-isolation-shellscope) below.
 - External event sources are pushed into `tokio::sync::broadcast` channels at startup and consumed via `Subscription::run(fn_pointer)`. Avoid `iced::time::every()` for external sources.
 - `AppTheme` is cloned every time iced calls `App::theme(window_id)`. Keep it cheap: `name` is `&'static str`, `colors` is `Copy`.
+
+## Shell Capture Isolation (`ShellScope`)
+
+`Shell` is iced's per-event-pass side-channel: widgets use it to publish messages, request redraws, and call `capture_event()` to mark an event as handled so ancestors stop bubbling. iced uses **one** `Shell` for the whole event pass — it's a `&mut` reference threaded down the tree, so every widget reads and writes the same flag.
+
+That's mostly fine because few widgets *read* `is_event_captured()`. The problem ones are widgets whose `update` does
+
+```rust
+self.child.update(.., shell, ..);
+if shell.is_event_captured() { return; }
+// ...follow-up logic that should only run if the child didn't handle it
+```
+
+In iced 0.15 (rev `4e0bdcf`) the readers are `widget/src/{stack.rs:242, button.rs:282, mouse_area.rs:221, scrollable.rs:783, helpers.rs:906}`. `button` / `mouse_area` / `scrollable` only skip their own self-targeted follow-up, so a stale flag from a sibling at most makes them no-op when the cursor isn't over them anyway — invisible. **`Stack` is the outlier**: its check sits inside the loop that delivers the event to its remaining children, so a sibling-set flag stops other children from running, which *is* observable.
+
+Concrete repro: two `pick_list`-bearing [`field_frame`](../crates/desktop/src/components/inputs.rs)s as siblings in a column. Open the second (its picker sets `is_open = true`). Click the first. The first's `Stack` reaches its picker (its own first child doesn't capture), the picker captures on open. iced's column then iterates to the second `field_frame`'s `Stack`, which processes its first child (label, no capture), checks `shell.is_event_captured()` — *true, set by the first stack's picker* — and returns before reaching its own picker. The second picker's close branch never runs, both menus end up open.
+
+**Fix shape:** give the inner subtree a private `Shell`, run `update` against it, then `Shell::merge` the result back. iced uses this exact pattern internally for [`combo_box::update`](https://github.com/iced-rs/iced/blob/4e0bdcf54aeaadec6753fffd1b1185087bf03b67/widget/src/combo_box.rs#L578) and [`lazy::component`](https://github.com/iced-rs/iced/blob/4e0bdcf54aeaadec6753fffd1b1185087bf03b67/widget/src/lazy/component.rs#L326) — both stash a `local_shell` so their child's capture status is computed in isolation. [`ShellScope`](../crates/desktop/src/components/shell_scope.rs) is the same pattern factored out as a reusable wrapper widget so any subtree containing a `Stack` can be insulated with `ShellScope::new(stack![...]).into()`. `field_frame` already wraps with it; if you write a new helper that uses `Stack` and is meant to live as a sibling of itself, do the same.
+
+A small upstream patch would obviate this — `Stack::update` could capture `was_captured_before = shell.is_event_captured()` once at the start of the loop and short-circuit only on captures that happened *during* its own iteration:
+
+```rust
+let was_captured_before = shell.is_event_captured();
+for child in ... {
+    child.update(.., shell, ..);
+    if shell.is_event_captured() && !was_captured_before { return; }
+    ...
+}
+```
+
+If that lands upstream, drop `ShellScope` and the wrap call in `field_frame`.
 
 ## Iced Source Reference
 

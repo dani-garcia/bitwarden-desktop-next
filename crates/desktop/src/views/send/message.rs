@@ -40,6 +40,10 @@ pub enum SendMessage {
     DetailLoaded(UserId, SendId, Result<Box<SdkSendView>, String>),
     SaveCompleted(UserId, Result<Box<SdkSendView>, String>),
     DeleteCompleted(UserId, SendId, Result<(), String>),
+    /// Result of `ClientManager::generate_password` requested by the
+    /// Send form's regenerate button. App handles the SDK call (it owns
+    /// the generator's options) and pipes the value back here.
+    PasswordGenerated(Result<String, String>),
 }
 
 impl std::fmt::Debug for SendMessage {
@@ -89,6 +93,14 @@ impl std::fmt::Debug for SendMessage {
                 .field(id)
                 .field(result)
                 .finish(),
+            Self::PasswordGenerated(result) => {
+                let mut t = f.debug_tuple("PasswordGenerated");
+                match result {
+                    Ok(_) => t.field(&"Ok(<password>)"),
+                    Err(e) => t.field(&format_args!("Err({e})")),
+                };
+                t.finish()
+            }
         }
     }
 }
@@ -108,4 +120,7 @@ pub enum SendEvent {
         sensitivity: Sensitivity,
         toast_label: String,
     },
+    /// Send form's regenerate button. App reads
+    /// `views.generator.password_request()` and dispatches the SDK call.
+    RegeneratePasswordRequested,
 }

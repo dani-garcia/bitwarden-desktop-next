@@ -5,9 +5,9 @@
 //!
 //! **Why this exists.** [`iced::widget::Stack`] short-circuits its
 //! between-children iteration on `shell.is_event_captured()`
-//! (widget/src/stack.rs in the pinned iced rev). The shell is *shared* across
-//! the full event-handling pass — siblings of one stack share a shell with
-//! siblings of another stack. So a capture set inside one widget's
+//! (`widget/src/stack.rs:242` in the pinned iced rev). The shell is *shared*
+//! across the full event-handling pass — siblings of one stack share a shell
+//! with siblings of another stack. So a capture set inside one widget's
 //! [`Stack`] persists when iced moves on to the next sibling subtree, and
 //! that next subtree's own [`Stack`] then bails out before reaching the
 //! widget that should have run.
@@ -23,6 +23,27 @@
 //! its own clean shell — sibling captures don't leak in. Anything the inner
 //! subtree wants to report (messages, redraw requests, clipboard ops,
 //! capture status) flows back through [`Shell::merge`].
+//!
+//! **Upstream precedent.** This is the same recipe iced uses internally for
+//! widgets that need capture isolation, just hoisted into a reusable
+//! wrapper:
+//!
+//! - `widget/src/combo_box.rs:578` — `combo_box::update` builds a
+//!   `local_shell`, runs the `text_input` against it, then forwards capture
+//!   status / redraw / clipboard back by hand.
+//! - `widget/src/lazy/component.rs:326` and `:593` — `Component::update`
+//!   does the same dance for the inner element it manages.
+//!
+//! Both predate `Shell::merge` and hand-roll the merge step; we lean on
+//! [`Shell::merge`] for the same effect.
+//!
+//! **If iced fixes this upstream**, drop `ShellScope` entirely and remove
+//! the wrap from [`field_frame`](crate::components::inputs::field_frame).
+//! The minimal upstream patch is to capture `was_captured_before` once at
+//! the start of `Stack::update` and short-circuit only on captures that
+//! happened *during* the loop — see
+//! [docs/architecture.md → Shell Capture Isolation](../../../docs/architecture.md#shell-capture-isolation-shellscope).
+//! See also [docs/architecture.md → Iced Gotchas](../../../docs/architecture.md#iced-gotchas).
 
 use iced::{
     Element, Event, Length, Rectangle, Renderer, Size, Vector,

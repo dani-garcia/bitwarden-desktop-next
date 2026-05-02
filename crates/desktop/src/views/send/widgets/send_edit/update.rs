@@ -18,7 +18,7 @@ impl SendForm {
 
             SendEditMessage::PasswordChanged(s) => self.set_password(s),
             SendEditMessage::PasswordRevealToggled => self.toggle_password_reveal(),
-            SendEditMessage::PasswordRegenerate => self.regenerate_password(),
+            SendEditMessage::PasswordRegenerate => return FormAction::RegeneratePassword,
             SendEditMessage::PasswordCopy => {
                 if !self.password.is_empty() {
                     return FormAction::CopyPassword(self.password.clone());

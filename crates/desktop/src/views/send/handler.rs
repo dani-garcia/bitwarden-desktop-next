@@ -1,10 +1,14 @@
+use std::sync::Arc;
+
+use bitwarden_generators::PasswordGeneratorRequest;
 use iced::Task;
 
 use crate::{
     app::{App, Message},
     components::toast::Toast,
     fl,
-    views::send::SendEvent,
+    services::sdk::ClientManager,
+    views::send::{SendEvent, SendMessage},
 };
 
 impl App {
@@ -28,6 +32,35 @@ impl App {
                 sensitivity,
                 toast_label,
             } => self.copy_and_toast(value, sensitivity, toast_label),
+            SendEvent::RegeneratePasswordRequested => self.regenerate_send_password(),
         }
+    }
+
+    /// Drive the Send form's regenerate button through the SDK with a
+    /// fixed sensible default (14-char, all charsets on, min one digit + one
+    /// symbol). The value (not the history snapshot) is piped back into
+    /// the form via `SendMessage::PasswordGenerated`; the SDK still records
+    /// the entry in `ClientManager::password_history` as a side effect.
+    fn regenerate_send_password(&self) -> Task<Message> {
+        let Some(uid) = self.active_user else {
+            return Task::none();
+        };
+        let mgr: Arc<ClientManager> = Arc::clone(&self.client_manager);
+        let req = PasswordGeneratorRequest {
+            lowercase: true,
+            uppercase: true,
+            numbers: true,
+            special: true,
+            length: 14,
+            avoid_ambiguous: false,
+            min_lowercase: None,
+            min_uppercase: None,
+            min_number: Some(1),
+            min_special: Some(1),
+        };
+        Task::perform(
+            async move { mgr.generate_password(&uid, req).await },
+            |res| Message::send(SendMessage::PasswordGenerated(res.map(|(value, _)| value))),
+        )
     }
 }
