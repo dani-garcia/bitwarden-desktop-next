@@ -19,8 +19,7 @@
 
 use std::{
     collections::BTreeSet,
-    env,
-    fs,
+    env, fs,
     path::{Path, PathBuf},
     process::ExitCode,
 };
@@ -83,8 +82,7 @@ fn main() -> ExitCode {
     let unused: Vec<&String> = declared
         .difference(&referenced)
         .filter(|k| {
-            !ALLOW_EXACT.contains(&k.as_str())
-                && !ALLOW_PREFIX.iter().any(|p| k.starts_with(p))
+            !ALLOW_EXACT.contains(&k.as_str()) && !ALLOW_PREFIX.iter().any(|p| k.starts_with(p))
         })
         .collect();
 
@@ -125,7 +123,9 @@ fn find_workspace_root() -> Result<PathBuf, String> {
             }
         }
         if !current.pop() {
-            return Err("could not find workspace root (no [workspace] Cargo.toml above cwd)".into());
+            return Err(
+                "could not find workspace root (no [workspace] Cargo.toml above cwd)".into(),
+            );
         }
     }
 }

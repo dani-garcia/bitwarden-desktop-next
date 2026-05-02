@@ -22,8 +22,8 @@ use objc2::rc::Retained;
 use objc2::runtime::{NSObjectProtocol, ProtocolObject};
 use objc2_app_kit::NSWorkspace;
 use objc2_foundation::{
-    NSDistributedNotificationCenter, NSNotification, NSNotificationCenter,
-    NSOperationQueue, NSString,
+    NSDistributedNotificationCenter, NSNotification, NSNotificationCenter, NSOperationQueue,
+    NSString,
 };
 use tokio::sync::mpsc;
 

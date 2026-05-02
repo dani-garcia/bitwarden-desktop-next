@@ -48,9 +48,7 @@
 use iced::{
     Element, Event, Length, Rectangle, Renderer, Size, Vector,
     advanced::{
-        Layout, Shell, Widget,
-        layout, mouse, overlay,
-        renderer,
+        Layout, Shell, Widget, layout, mouse, overlay, renderer,
         widget::{Operation, Tree, tree},
     },
 };

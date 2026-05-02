@@ -52,9 +52,8 @@ pub fn apply(window: &dyn iced::window::Window, corner_radius: f32) {
     // SAFETY: `AppKitWindowHandle::ns_view` is documented as a valid pointer
     // to an NSView (winit's contentView). `iced::window::run` invokes us on
     // the main thread, which is required for AppKit access.
-    let view: Retained<NSView> = unsafe {
-        Retained::retain(handle.ns_view.as_ptr().cast()).expect("ns_view was null")
-    };
+    let view: Retained<NSView> =
+        unsafe { Retained::retain(handle.ns_view.as_ptr().cast()).expect("ns_view was null") };
     let Some(layer) = view.layer() else {
         tracing::warn!("magnify_macos_fix: NSView has no backing layer");
         return;

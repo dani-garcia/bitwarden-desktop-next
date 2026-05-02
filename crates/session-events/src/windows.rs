@@ -20,7 +20,6 @@ use std::time::Duration;
 
 use futures_core::Stream;
 use tokio::sync::mpsc;
-use windows::core::{PCWSTR, w};
 use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::RemoteDesktop::{
@@ -35,6 +34,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WM_POWERBROADCAST, WM_QUIT, WM_WTSSESSION_CHANGE, WNDCLASSW, WTS_SESSION_LOCK,
     WTS_SESSION_UNLOCK,
 };
+use windows::core::{PCWSTR, w};
 
 use crate::SessionEvent;
 

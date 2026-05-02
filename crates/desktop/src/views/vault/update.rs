@@ -212,7 +212,9 @@ impl VaultView {
                 let mgr = client_manager.clone();
                 return Outcome::spawn(
                     async move { mgr.full_cipher(&uid, id).await },
-                    move |res| VaultMessage::DetailLoaded(uid, id, res.map(|v| NoDebug(Box::new(v)))),
+                    move |res| {
+                        VaultMessage::DetailLoaded(uid, id, res.map(|v| NoDebug(Box::new(v))))
+                    },
                 );
             }
             ItemListMessage::OpenExternal(_)
