@@ -122,7 +122,16 @@ impl VaultView {
                         .map(VaultEvent::AccountSwitcher),
                 );
             }
-            VaultMessage::NewItem => {}
+            VaultMessage::ToggleNewItemMenu => {
+                *open_overlay = if *open_overlay == Some(crate::app::Overlay::NewItemMenu) {
+                    None
+                } else {
+                    Some(crate::app::Overlay::NewItemMenu)
+                };
+            }
+            VaultMessage::NewItem(t) => {
+                return self.handle_new_item(t, client_manager, active_user, open_overlay);
+            }
             VaultMessage::ListLoaded(uid, res) => {
                 return self.handle_list_loaded(
                     uid,
@@ -325,15 +334,45 @@ impl VaultView {
             return Outcome::None;
         };
         self.selection.form = Some(CipherForm::edit(detail));
+        Outcome::task(Self::load_form_options_task(uid, client_manager))
+    }
 
-        // Kick off all three option-list loads as one task. Folders goes
-        // through the SDK repo (async); orgs + collections are pure reads
-        // off the already-loaded ClientManager, so they complete inside
-        // the same async block with near-zero cost. Delivering them
-        // together means the handler runs a single stale-check + form-
-        // exists check.
+    fn handle_new_item(
+        &mut self,
+        cipher_type: bitwarden_vault::CipherType,
+        client_manager: &Arc<ClientManager>,
+        active_user: Option<&UserId>,
+        open_overlay: &mut Option<crate::app::Overlay>,
+    ) -> Outcome<Self> {
+        // Auto-dismiss the +New dropdown if it was the trigger.
+        if *open_overlay == Some(crate::app::Overlay::NewItemMenu) {
+            *open_overlay = None;
+        }
+        let Some(uid) = active_user.copied() else {
+            return Outcome::None;
+        };
+        // Drop any prior selection so the right pane shows only the new
+        // empty form — no stale read-only detail content peeking through.
+        self.selection.clear();
+        self.selection.form = Some(CipherForm::new(cipher_type, None));
+        self.pane.open();
+        self.selection.sheet_fade.open();
+
+        Outcome::task(Task::batch([
+            Self::load_form_options_task(uid, client_manager),
+            Self::focus_name_input_task(),
+        ]))
+    }
+
+    /// Build the task that loads folders/orgs/collections for the cipher
+    /// form. Shared by edit-mode and create-mode entry points; folders is
+    /// the only async leg, the other two are sync reads that ride along.
+    fn load_form_options_task(
+        uid: UserId,
+        client_manager: &Arc<ClientManager>,
+    ) -> Task<VaultMessage> {
         let mgr = client_manager.clone();
-        Outcome::spawn(
+        Task::perform(
             async move {
                 let folders = mgr
                     .list_folders(&uid)
@@ -383,6 +422,17 @@ impl VaultView {
             FormAction::None => Outcome::None,
             FormAction::Cancel => {
                 self.selection.form = None;
+                // No detail to fall back to (new-item flow) — close the pane
+                // so the right side doesn't linger as an empty column. Edit
+                // flows leave detail populated and the read-only pane shows.
+                if self.selection.detail.is_none() {
+                    self.selection.sheet_fade.close();
+                    self.pane.close();
+                    return Outcome::spawn(
+                        tokio::time::sleep(std::time::Duration::from_millis(180)),
+                        |_| VaultMessage::FinalizeSheetClose,
+                    );
+                }
                 Outcome::None
             }
             FormAction::Save => {
@@ -438,6 +488,10 @@ impl VaultView {
         }
         let event = match result {
             Ok(NoDebug(view)) => {
+                // For new-item saves `selection.id` was None until now; sync
+                // it with the saved cipher so the upcoming list reload's
+                // selection-tracking has something to match against.
+                self.selection.id = view.id;
                 self.selection.detail = Some(*view);
                 self.selection.form = None;
                 self.selection.sheet_fade.open();

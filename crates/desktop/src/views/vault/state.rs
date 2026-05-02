@@ -146,6 +146,12 @@ impl VaultView {
         iced::widget::operation::focus(super::widgets::search_bar::SEARCH_ID)
     }
 
+    /// Focus the cipher form's name input. Used after mounting a fresh
+    /// "+New item" form so the user can start typing immediately.
+    pub(crate) fn focus_name_input_task() -> Task<VaultMessage> {
+        iced::widget::operation::focus(super::widgets::cipher_edit::NAME_INPUT_ID)
+    }
+
     /// Variant of [`auto_focus_task`] for screen-mount transitions where
     /// the vault widget tree wasn't on screen the moment the focus task
     /// was queued — the operation would otherwise walk the outgoing

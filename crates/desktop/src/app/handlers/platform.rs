@@ -369,6 +369,15 @@ impl App {
             MenuAction::NewFolder => {
                 return self.open_new_folder_modal();
             }
+            MenuAction::NewItem(t) => {
+                if self.screen != Screen::Vault {
+                    self.set_screen(Screen::Vault);
+                }
+                self.open_overlay = None;
+                return Task::done(Message::vault(
+                    crate::views::vault::VaultMessage::NewItem(t),
+                ));
+            }
             MenuAction::CopyUsername => {
                 return self.copy_from_active_selection(
                     crate::views::vault::widgets::cipher_detail::CipherDetailMessage::CopyUsername,

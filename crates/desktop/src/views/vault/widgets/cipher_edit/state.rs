@@ -1,10 +1,12 @@
 //! `CipherForm` struct + choice enums + constructors/mutators.
 
 use bitwarden_core::OrganizationId;
+use bitwarden_ssh::generator::{KeyAlgorithm, generate_sshkey};
 use bitwarden_vault::{
-    CardView, CipherType, CipherView, FolderId, FolderView, IdentityView, LoginView,
-    SecureNoteType, SecureNoteView,
+    CardView, CipherRepromptType, CipherType, CipherView, FolderId, FolderView, IdentityView,
+    LoginView, SecureNoteType, SecureNoteView,
 };
+use chrono::Utc;
 use iced::widget::{combo_box, text_editor};
 
 use crate::{
@@ -90,8 +92,8 @@ impl std::fmt::Display for OrgChoice {
 
 // ── CipherForm struct ──────────────────────────────────────────────────────
 
-/// Form backing the cipher edit view. Also sized to back the "New item"
-/// flow (`original = None`), though wiring that is out of scope here.
+/// Form backing the cipher edit view. `original = None` distinguishes the
+/// "New item" flow from "Edit existing".
 pub struct CipherForm {
     pub original: Option<CipherView>,
     pub modified: CipherView,
@@ -129,6 +131,71 @@ impl CipherForm {
     /// added as the form grows.
     pub fn is_valid(&self) -> bool {
         !self.modified.name.trim().is_empty()
+    }
+
+    /// Construct an empty form for creating a new cipher of the given type.
+    /// `id` stays `None` until the server (mocked by `ClientManager::save_cipher`)
+    /// allocates one. `original = None` so the form renders the "new item"
+    /// title and skips diff logic.
+    pub fn new(cipher_type: CipherType, organization_id: Option<OrganizationId>) -> Self {
+        let now = Utc::now();
+        // SSH keys are generated up-front (Ed25519 — fast, sync) so the form
+        // opens already populated with private/public/fingerprint. Other types
+        // are filled in by `ensure_sub_structs()` below.
+        let ssh_key = (cipher_type == CipherType::SshKey)
+            .then(|| generate_sshkey(KeyAlgorithm::Ed25519))
+            .and_then(|res| match res {
+                Ok(view) => Some(view),
+                Err(err) => {
+                    tracing::error!(%err, "ssh key generation failed; opening form with empty fields");
+                    None
+                }
+            });
+        let modified = CipherView {
+            id: None,
+            organization_id,
+            folder_id: None,
+            collection_ids: Vec::new(),
+            key: None,
+            name: String::new(),
+            notes: None,
+            r#type: cipher_type,
+            login: None,
+            identity: None,
+            card: None,
+            secure_note: None,
+            ssh_key,
+            bank_account: None,
+            favorite: false,
+            reprompt: CipherRepromptType::None,
+            organization_use_totp: false,
+            edit: true,
+            permissions: None,
+            view_password: true,
+            local_data: None,
+            attachments: None,
+            attachment_decryption_failures: None,
+            fields: None,
+            password_history: None,
+            creation_date: now,
+            deleted_date: None,
+            revision_date: now,
+            archived_date: None,
+        };
+        let mut form = Self {
+            original: None,
+            modified,
+            folders: Vec::new(),
+            organizations: Vec::new(),
+            collections: Vec::new(),
+            folder_combo_state: combo_box::State::new(vec![FolderChoice::None]),
+            org_combo_state: combo_box::State::new(vec![OrgChoice::None]),
+            collections_dropdown_open: false,
+            notes_content: text_editor::Content::new(),
+            saving: false,
+        };
+        form.ensure_sub_structs();
+        form
     }
 
     /// Construct for editing an existing cipher. Clones the view so `original`

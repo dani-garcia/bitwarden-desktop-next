@@ -884,6 +884,7 @@ dependencies = [
  "bitwarden-logging",
  "bitwarden-pm",
  "bitwarden-send",
+ "bitwarden-ssh",
  "bitwarden-state",
  "bitwarden-vault",
  "chrono",

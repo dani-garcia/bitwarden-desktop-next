@@ -44,6 +44,8 @@ pub enum Overlay {
     /// Disambiguated between login and vault by the currently-rendered `Screen`.
     AccountSwitcher,
     ServerSelector,
+    /// Vault header "+New" button → cipher-type picker.
+    NewItemMenu,
 }
 
 /// Services + session passed to each view's `update()`. Rebuilt per call;

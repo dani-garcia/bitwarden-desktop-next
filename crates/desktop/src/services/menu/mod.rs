@@ -1,5 +1,6 @@
 use std::sync::OnceLock;
 
+use bitwarden_vault::CipherType;
 use iced::futures::{SinkExt, Stream};
 use muda::{Menu, MenuItem as MudaMenuItem, PredefinedMenuItem, Submenu};
 use tokio::sync::broadcast;
@@ -168,7 +169,7 @@ impl EnabledWhen {
 // Actions
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum MenuAction {
     Quit,
     LockAllVaults,
@@ -190,6 +191,10 @@ pub enum MenuAction {
     Import,
     Export,
     NewFolder,
+    /// Open the vault with an empty cipher form of the given type.
+    /// Wired from the File → New login (Cmd+N) entry, the File → New item
+    /// submenu (Cmd+Shift+L/C/I/S/K), and the +New dropdown.
+    NewItem(CipherType),
     CopyUsername,
     CopyPassword,
     CopyTotp,
@@ -321,13 +326,26 @@ pub const MENUS: &[(&str, &[MenuEntry])] = &[
     (
         "menu-file",
         &[
-            E("menu-file-new-login").key(cmd('n')).when(Unlocked),
+            E("menu-file-new-login")
+                .key(cmd('n'))
+                .when(Unlocked)
+                .action(NewItem(CipherType::Login)),
             E("menu-file-new-item").when(Unlocked).sub(&[
-                E("menu-file-new-item-login").key(cmd_shift('l')),
-                E("menu-file-new-item-card").key(cmd_shift('c')),
-                E("menu-file-new-item-identity").key(cmd_shift('i')),
-                E("menu-file-new-item-secure-note").key(cmd_shift('s')),
-                E("menu-file-new-item-ssh-key").key(cmd_shift('k')),
+                E("menu-file-new-item-login")
+                    .key(cmd_shift('l'))
+                    .action(NewItem(CipherType::Login)),
+                E("menu-file-new-item-card")
+                    .key(cmd_shift('c'))
+                    .action(NewItem(CipherType::Card)),
+                E("menu-file-new-item-identity")
+                    .key(cmd_shift('i'))
+                    .action(NewItem(CipherType::Identity)),
+                E("menu-file-new-item-secure-note")
+                    .key(cmd_shift('s'))
+                    .action(NewItem(CipherType::SecureNote)),
+                E("menu-file-new-item-ssh-key")
+                    .key(cmd_shift('k'))
+                    .action(NewItem(CipherType::SshKey)),
             ]),
             E("menu-file-new-folder").when(Unlocked).action(NewFolder),
             SEP,

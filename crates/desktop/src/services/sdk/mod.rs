@@ -464,7 +464,7 @@ impl ClientManager {
     pub async fn save_cipher(
         &self,
         user_id: &UserId,
-        cipher_view: CipherView,
+        mut cipher_view: CipherView,
     ) -> Result<CipherView, String> {
         let entry = self
             .users
@@ -473,6 +473,12 @@ impl ClientManager {
             .get(user_id)
             .cloned()
             .ok_or_else(|| format!("unknown user {user_id}"))?;
+
+        // Mock-only: a real backend would assign the id on POST and return it.
+        // With no server, generate one here so the repo has a key to store under.
+        if cipher_view.id.is_none() {
+            cipher_view.id = Some(CipherId::new_v4());
+        }
 
         let ctx = entry
             .client
@@ -737,11 +743,12 @@ impl ClientManager {
         user_id: &UserId,
         mut view: SendView,
     ) -> Result<SendView, String> {
+        // Mock-only: a real backend would assign id + access_id on POST and
+        // return them. With no server, generate them here.
         if view.id.is_none() {
             view.id = Some(SendId::new_v4());
         }
         if view.access_id.is_none() {
-            // Placeholder until the SDK generates a real one on create.
             view.access_id = Some(
                 uuid::Uuid::new_v4()
                     .simple()

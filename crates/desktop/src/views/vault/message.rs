@@ -10,7 +10,7 @@
 
 use std::sync::Arc;
 
-use bitwarden_vault::{CipherId, CipherListView, CipherView};
+use bitwarden_vault::{CipherId, CipherListView, CipherType, CipherView};
 use iced::widget::pane_grid;
 
 use crate::{
@@ -55,7 +55,11 @@ pub enum VaultMessage {
     /// during its slide-down/fade-out.
     FinalizeSheetClose,
     PaneResized(pane_grid::ResizeEvent),
-    NewItem,
+    /// User clicked the +New button — toggle the cipher-type picker dropdown.
+    ToggleNewItemMenu,
+    /// User picked a type (from the +New dropdown, a File-menu item, or a
+    /// keyboard accelerator). Mounts an empty form of that type.
+    NewItem(CipherType),
     /// User confirmed the delete in the modal — fire the SDK soft-delete.
     ConfirmDeleteSelected,
     /// User dismissed the delete modal (Cancel, backdrop click, etc.).

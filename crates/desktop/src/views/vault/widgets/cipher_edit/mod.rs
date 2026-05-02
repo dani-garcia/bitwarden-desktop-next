@@ -26,5 +26,6 @@ mod update;
 mod view;
 
 pub use message::{CipherEditMessage, FormAction};
+pub use sections::shared::NAME_INPUT_ID;
 pub use state::{CipherForm, FolderOption};
 pub use view::view;
