@@ -501,6 +501,16 @@ impl App {
         }
     }
 
+    /// Per-window UI scale fed back to iced. Only the main window honours the
+    /// user's zoom setting — the About dialog and Magnify launcher have hand-
+    /// tuned fixed layouts and stay at 1.0.
+    pub fn scale_factor(&self, window_id: iced::window::Id) -> f32 {
+        match self.windows.get(&window_id).map(|w| w.kind) {
+            Some(WindowKind::Main) => self.settings.zoom_factor.scale(),
+            _ => 1.0,
+        }
+    }
+
     fn view_main(&self) -> Element<'_, Message, AppTheme> {
         let colors = &self.theme.current.colors;
 

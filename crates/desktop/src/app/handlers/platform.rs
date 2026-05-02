@@ -331,6 +331,21 @@ impl App {
             MenuAction::GeneratorHistory => {
                 return self.open_generator_history();
             }
+            MenuAction::ZoomIn => {
+                if self.settings.zoom_factor.step_in() {
+                    self.settings.save();
+                }
+            }
+            MenuAction::ZoomOut => {
+                if self.settings.zoom_factor.step_out() {
+                    self.settings.save();
+                }
+            }
+            MenuAction::ZoomReset => {
+                if self.settings.zoom_factor.reset() {
+                    self.settings.save();
+                }
+            }
             MenuAction::ToggleHardwareAcceleration => {
                 // The renderer backend is selected once at startup
                 // (`main::select_backend`), so flipping the bit here only

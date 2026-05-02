@@ -146,9 +146,9 @@ pub enum EnabledWhen {
     HasLockable,
     /// Permanently disabled — entry renders grayed-out. Used as a placeholder
     /// for menu items that exist on the official client but have no behaviour
-    /// in this stub (Edit → Undo / Redo / Cut / Copy / Paste / Select all,
-    /// View → Zoom in / out / reset). Keyboard shortcuts still pass through
-    /// to focused text widgets unaffected, since they have no `MenuAction`.
+    /// in this stub (Edit → Undo / Redo / Cut / Copy / Paste / Select all).
+    /// Keyboard shortcuts still pass through to focused text widgets
+    /// unaffected, since they have no `MenuAction`.
     Never,
 }
 
@@ -183,6 +183,9 @@ pub enum MenuAction {
     Settings,
     Generator,
     GeneratorHistory,
+    ZoomIn,
+    ZoomOut,
+    ZoomReset,
     ToggleHardwareAcceleration,
     Import,
     Export,
@@ -393,11 +396,11 @@ pub const MENUS: &[(&str, &[MenuEntry])] = &[
                 .when(Unlocked)
                 .action(GeneratorHistory),
             SEP,
-            // Zoom in/out/reset: no font-scaling system exists. Disabled
-            // placeholders — see docs/todo.md.
-            E("menu-view-zoom-in").key(cmd('+')).when(Never),
-            E("menu-view-zoom-out").key(cmd('-')).when(Never),
-            E("menu-view-reset-zoom").key(cmd('0')).when(Never),
+            // Bound to '=' rather than '+' so users on US/EU layouts hit the
+            // shortcut without holding shift — matches Firefox / Chrome.
+            E("menu-view-zoom-in").key(cmd('=')).action(ZoomIn),
+            E("menu-view-zoom-out").key(cmd('-')).action(ZoomOut),
+            E("menu-view-reset-zoom").key(cmd('0')).action(ZoomReset),
             SEP,
             E("menu-view-toggle-fullscreen")
                 .key(fkey(11))

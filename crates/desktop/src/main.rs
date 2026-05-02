@@ -68,15 +68,25 @@ fn main() -> iced::Result {
     services::sdk::ClientManager::verify_data_dir();
 
     iced::daemon(App::new, App::update, App::view)
+        .settings(iced::Settings {
+            // Maps to `WM_CLASS` on X11 and `app_id` on Wayland so the running
+            // window matches the `.desktop` file (and its icon). Kept in sync
+            // with `Packager.toml`'s `identifier`. Ignored on Windows + macOS.
+            id: Some("com.bitwarden.desktop.next".into()),
+            fonts: vec![
+                assets::FONT_MEDIUM.into(),
+                assets::FONT_BOLD.into(),
+                assets::BWI_FONT.into(),
+                icons::FONT_BYTES.into(),
+            ],
+            default_font: APP_FONT,
+            antialiasing: true,
+            ..Default::default()
+        })
         .subscription(App::subscription)
         .title(App::title)
         .theme(App::theme)
-        .font(assets::FONT_MEDIUM)
-        .font(assets::FONT_BOLD)
-        .font(assets::BWI_FONT)
-        .font(icons::FONT_BYTES)
-        .default_font(APP_FONT)
-        .antialiasing(true)
+        .scale_factor(App::scale_factor)
         .run()
 }
 

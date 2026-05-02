@@ -5,13 +5,78 @@
 use std::{collections::HashMap, io::BufReader};
 
 use bitwarden_core::UserId;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::{services::preferences::UserPreferences, theme::ThemePreference};
 
 /// Sentinel for "follow the OS locale". Stored in `language` when no explicit
 /// language has been picked.
 pub const LANGUAGE_SYSTEM: &str = "";
+
+/// UI zoom multiplier in tenths (10 = 1.0×). Stepping is exact integer
+/// arithmetic — no floating-point drift after a few +/- presses. Self-clamps
+/// to `MIN..=MAX` on construction and on deserialize, so a hand-edited
+/// `zoom_factor: 0` in `settings.json` snaps to `MIN` instead of bricking the UI.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
+pub struct ZoomFactor(u8);
+
+impl ZoomFactor {
+    pub const DEFAULT: u8 = 10;
+    pub const MIN: u8 = 5;
+    pub const MAX: u8 = 30;
+
+    pub fn new(tenths: u8) -> Self {
+        Self(tenths.clamp(Self::MIN, Self::MAX))
+    }
+
+    /// Tenths value as an f32 multiplier ready for iced's `scale_factor` callback.
+    pub fn scale(self) -> f32 {
+        f32::from(self.0) / 10.0
+    }
+
+    /// Bump one tenth up, saturating at [`Self::MAX`]. Returns `true` if changed.
+    pub fn step_in(&mut self) -> bool {
+        if self.0 < Self::MAX {
+            self.0 += 1;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Drop one tenth down, saturating at [`Self::MIN`]. Returns `true` if changed.
+    pub fn step_out(&mut self) -> bool {
+        if self.0 > Self::MIN {
+            self.0 -= 1;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Restore to [`Self::DEFAULT`]. Returns `true` if changed.
+    pub fn reset(&mut self) -> bool {
+        if self.0 != Self::DEFAULT {
+            self.0 = Self::DEFAULT;
+            true
+        } else {
+            false
+        }
+    }
+}
+
+impl Default for ZoomFactor {
+    fn default() -> Self {
+        Self(Self::DEFAULT)
+    }
+}
+
+impl<'de> Deserialize<'de> for ZoomFactor {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        u8::deserialize(d).map(Self::new)
+    }
+}
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(default)]
@@ -77,6 +142,11 @@ pub struct Settings {
     /// Keyed by `UserId`. Populated lazily; persisted alongside the app-wide
     /// fields so unlock-with-PIN, clipboard delay, etc. survive across launches.
     pub user_preferences: HashMap<UserId, UserPreferences>,
+
+    // ── Zoom ──────────────────────────────────────────────────────────────
+    /// UI scale fed into iced's per-window `scale_factor` callback. Composes
+    /// multiplicatively with OS DPI. Stepped from the View → Zoom in / out / reset menu.
+    pub zoom_factor: ZoomFactor,
 }
 
 impl Settings {
