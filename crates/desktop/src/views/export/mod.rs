@@ -1,8 +1,10 @@
 //! Export vault modal — wired to the sidebar Export button.
 //!
-//! Visual stub: format picker is real, but Submit only fires an
-//! "unimplemented" toast. The banner shows the active user's email so the
-//! "individual vault" message reads as concrete.
+//! Format options mirror [`bitwarden_exporters::ExportFormat`] (Csv, Json,
+//! EncryptedJson). Selecting `EncryptedJson` reveals a password input below
+//! the picker; Submit hands the chosen format off to App, which calls the
+//! SDK's `client.exporters().export_vault(...)` and writes the result to
+//! disk.
 
 use iced::{
     Alignment, Element, Fill, Padding,
@@ -17,26 +19,44 @@ use crate::{
 };
 
 // ── Export format catalog ─────────────────────────────────────────────────
+//
+// Mirrors the variants of [`bitwarden_exporters::ExportFormat`]. The SDK
+// enum carries `password: String` inside `EncryptedJson`, but the picker
+// only needs identity (which variant) — the password is collected from a
+// separate input. `to_sdk` reassembles the SDK-shaped value at submit time.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ExportFormat {
-    pub id: &'static str,
-    pub name: &'static str,
+pub enum ExportFormatChoice {
+    Json,
+    Csv,
+    EncryptedJson,
 }
 
-impl std::fmt::Display for ExportFormat {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.name)
+impl ExportFormatChoice {
+    const ALL: &'static [Self] = &[Self::Json, Self::Csv, Self::EncryptedJson];
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Json => ".json",
+            Self::Csv => ".csv",
+            Self::EncryptedJson => ".json (Encrypted)",
+        }
+    }
+
+    fn to_sdk(self, password: String) -> bitwarden_exporters::ExportFormat {
+        match self {
+            Self::Json => bitwarden_exporters::ExportFormat::Json,
+            Self::Csv => bitwarden_exporters::ExportFormat::Csv,
+            Self::EncryptedJson => bitwarden_exporters::ExportFormat::EncryptedJson { password },
+        }
     }
 }
 
-const EXPORT_FORMATS: &[ExportFormat] = &[
-    ExportFormat { id: "json", name: ".json" },
-    ExportFormat { id: "csv", name: ".csv" },
-    ExportFormat { id: "encrypted_json", name: ".json (Encrypted)" },
-];
-
-const DEFAULT_FORMAT: ExportFormat = EXPORT_FORMATS[0];
+impl std::fmt::Display for ExportFormatChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
+    }
+}
 
 // ── State ─────────────────────────────────────────────────────────────────
 
@@ -45,18 +65,32 @@ pub struct ExportView {
     /// Active user email — shown verbatim in the "Only items associated with"
     /// banner. Set via [`Self::open`] each time the modal is opened.
     email: String,
-    selected_format: ExportFormat,
+    selected_format: ExportFormatChoice,
+    /// Password for the encrypted-json variant. Cleared on open and on
+    /// successful submit. Only read when `selected_format == EncryptedJson`.
+    password: String,
 }
 
 #[derive(Debug, Clone)]
 pub enum ExportMessage {
     Close,
     Submit,
-    FormatSelected(ExportFormat),
+    FormatSelected(ExportFormatChoice),
+    PasswordChanged(String),
+    /// Result of the async SDK export — `Ok(path)` is the file the App
+    /// handler wrote the export to, `Err` is a human-readable error.
+    Completed(Result<String, String>),
 }
 
 pub enum ExportEvent {
-    Unimplemented,
+    /// Run the export with the given SDK format. The view has already
+    /// folded its picker selection + password field into a fully-shaped
+    /// [`bitwarden_exporters::ExportFormat`] — App spawns the SDK call.
+    Run(bitwarden_exporters::ExportFormat),
+    /// Export finished — surface the saved-file path as a success toast.
+    ToastSuccess(String),
+    /// Export failed — surface the error as an error toast.
+    ToastError(String),
 }
 
 impl ViewTypes for ExportView {
@@ -71,14 +105,16 @@ impl ExportView {
         Self {
             fade: FadeInOut::default(),
             email: String::new(),
-            selected_format: DEFAULT_FORMAT,
+            selected_format: ExportFormatChoice::Json,
+            password: String::new(),
         }
     }
 
     pub fn open(&mut self, email: String) {
         self.fade.open();
         self.email = email;
-        self.selected_format = DEFAULT_FORMAT;
+        self.selected_format = ExportFormatChoice::Json;
+        self.password.clear();
     }
 
     pub fn update(&mut self, msg: ExportMessage, _ctx: UpdateCtx<'_>) -> Outcome<Self> {
@@ -87,10 +123,30 @@ impl ExportView {
                 self.fade.close();
                 Outcome::None
             }
-            ExportMessage::Submit => Outcome::event(ExportEvent::Unimplemented),
+            ExportMessage::Submit => {
+                let format = self.selected_format.to_sdk(self.password.clone());
+                Outcome::event(ExportEvent::Run(format))
+            }
             ExportMessage::FormatSelected(f) => {
                 self.selected_format = f;
+                if !matches!(f, ExportFormatChoice::EncryptedJson) {
+                    self.password.clear();
+                }
                 Outcome::None
+            }
+            ExportMessage::PasswordChanged(p) => {
+                self.password = p;
+                Outcome::None
+            }
+            ExportMessage::Completed(Ok(path)) => {
+                self.password.clear();
+                self.fade.close();
+                Outcome::event(ExportEvent::ToastSuccess(path))
+            }
+            ExportMessage::Completed(Err(err)) => {
+                // Leave the modal open so the user can correct & retry —
+                // typical case is a wrong / missing encryption password.
+                Outcome::event(ExportEvent::ToastError(err))
             }
         }
     }
@@ -116,8 +172,6 @@ impl ExportView {
         ]
         .align_y(Alignment::Center);
 
-        // Tinted info banner — accent fill at low alpha so it reads as a
-        // soft notification rather than a hard call-out.
         let banner_text = fl!("export-modal-banner", email = self.email.as_str());
         let banner = container(
             row![
@@ -141,31 +195,50 @@ impl ExportView {
         let format_picker = inputs::select_field_on(
             fl!("export-modal-file-format-label"),
             Some(self.selected_format),
-            EXPORT_FORMATS.to_vec(),
-            |f: &ExportFormat| f.name.to_string(),
+            ExportFormatChoice::ALL.to_vec(),
+            |f: &ExportFormatChoice| f.label().to_string(),
             ExportMessage::FormatSelected,
             |c| c.card_bg,
             colors,
         );
 
-        let submit_btn = buttons::primary(text(fl!("export-modal-submit")).size(14))
-            .on_press(ExportMessage::Submit)
+        let mut body = column![header, banner, format_picker].spacing(16);
+
+        if matches!(self.selected_format, ExportFormatChoice::EncryptedJson) {
+            // Same chip-bg story as the format picker — sits directly on
+            // the dialog `card_bg`. `bare_text_input` gives the standard
+            // field look; `.secure(true)` masks the value.
+            let password_input = inputs::bare_text_input(&self.password)
+                .secure(true)
+                .on_input(ExportMessage::PasswordChanged);
+            body = body.push(inputs::field_frame_on(
+                fl!("export-modal-password-label"),
+                password_input.into(),
+                |c| c.card_bg,
+                colors,
+            ));
+        }
+
+        let submit_disabled = matches!(self.selected_format, ExportFormatChoice::EncryptedJson)
+            && self.password.is_empty();
+
+        let mut submit_btn = buttons::primary(text(fl!("export-modal-submit")).size(14))
             .padding([8, 20]);
+        if !submit_disabled {
+            submit_btn = submit_btn.on_press(ExportMessage::Submit);
+        }
         let cancel_btn = buttons::secondary(text(fl!("export-modal-cancel")).size(14))
             .on_press(ExportMessage::Close)
             .padding([8, 20]);
 
-        let body = column![
-            header,
-            banner,
-            format_picker,
-            row![submit_btn, cancel_btn]
-                .spacing(8)
-                .align_y(Alignment::Center),
-        ]
-        .spacing(16)
-        .padding(Padding::from([20, 24]))
-        .width(Fill);
+        let body = body
+            .push(
+                row![submit_btn, cancel_btn]
+                    .spacing(8)
+                    .align_y(Alignment::Center),
+            )
+            .padding(Padding::from([20, 24]))
+            .width(Fill);
 
         Some(modal::dialog(
             460.0,
@@ -176,4 +249,5 @@ impl ExportView {
             ExportMessage::Close,
         ))
     }
+
 }

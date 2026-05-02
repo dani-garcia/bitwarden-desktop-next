@@ -104,6 +104,10 @@ Sends live as decrypted `SendView`s in an in-memory `HashMap` on [`ClientManager
 
 The "Choose file" button in the new-file-send branch ([widgets/send_form/view.rs](../crates/desktop/src/views/send/widgets/send_form/view.rs) `file_section`) is a placeholder — message fires, handler is a no-op. Needs an OS file picker (dialog crate or iced's native picker once it lands) to populate `file_name` + `file_size_name`, plus `SendClient::encrypt_file` / `encrypt_buffer` wiring.
 
+### Export — save-file dialog `[M]`
+
+`run_export` in [app/handlers/export.rs](../crates/desktop/src/app/handlers/export.rs) calls the SDK exporter and writes the result to `data_dir()/bitwarden-export-<timestamp>.<ext>`. Fine for dev — files land next to the SQLite DBs — but real users expect to pick the destination (default Downloads, suggested filename, format-driven extension filter) and have a Cancel that aborts the export entirely. Needs the same OS save-file dialog the Send file flow needs; landing one shared picker covers both. The success toast already shows the absolute path, so once the picker is in, the wiring just swaps `data_dir().join(filename)` for the picker's chosen path.
+
 ### Send form — embedded password generator panel `[M]`
 
 The password regenerate button currently fires `ClientManager::generate_password` with a fixed request (14-char, all charsets, min 1 digit + 1 symbol — see [send/handler.rs](../crates/desktop/src/views/send/handler.rs) `regenerate_send_password`). The official client opens a contextual side-panel generator instead: Password / Passphrase tabs, live preview with its own regenerate, length / charset / min-number / min-special / avoid-ambiguous options, "Use this password" / "Cancel" footer. On apply the value populates the form field; on cancel the form is untouched. Open question: share [`GeneratorView`](../crates/desktop/src/views/generator/) in an embedded "picker" mode (drop the Username tab, expose options + value, fire an apply event) or build a new lightweight view — the embedded path is fewer LOC but adds a mode switch to the existing modal.
@@ -239,6 +243,14 @@ Before more call sites accumulate (unlock failure, copy-to-clipboard, sync error
 ## Blocked / waiting upstream
 
 Park; revisit when the gate lifts.
+
+### Import — wire to SDK importers when the crate exists
+
+The Import modal ([views/import/mod.rs](../crates/desktop/src/views/import/mod.rs)) is fully chrome — vault/folder/collection dropdowns seeded from the active user, format picker populated from the upstream `featuredImportOptions` + `regularImportOptions` lists, paste textarea. Submit fires `ImportEvent::Unimplemented` and a "coming soon" toast; nothing is parsed, nothing is written.
+
+The SDK ships [`bitwarden-exporters`](https://github.com/bitwarden/sdk-internal/tree/main/crates/bitwarden-exporters) (which we use for export) but no parallel `bitwarden-importers` crate yet. The only import-side function is `ExporterClient::import_cxf` — Apple-only Credential Exchange Format. Every other parser still lives in upstream Electron's TypeScript ([clients/libs/importer/](../clients/libs/importer/)); a Rust port isn't on a published roadmap.
+
+When a `bitwarden-importers` crate (or equivalent SDK API) lands: replace the `Unimplemented` path in [app/handlers/import.rs](../crates/desktop/src/app/handlers/import.rs) with a real call that takes the chosen `ImportFormat` + file bytes (or paste contents) + destination vault / folder / collection. Handler shape mirrors the export wiring (Task::perform → completion message → success/error toast → close on success). The "Choose file" button — currently also stubbed via `Unimplemented` — gets the same OS save-file dialog the Send / Export flows need (different mode: open).
 
 ### SSH agent — waiting on upstream V2
 

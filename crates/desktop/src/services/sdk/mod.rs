@@ -42,7 +42,7 @@ use bitwarden_state::{
     registry::StateRegistry,
     repository::{Repository, RepositoryError, RepositoryItem},
 };
-use bitwarden_vault::{Cipher, CipherId, CipherListView, CipherView, FolderView};
+use bitwarden_vault::{Cipher, CipherId, CipherListView, CipherView, Folder, FolderView};
 use serde::Deserialize;
 
 use crate::domain::UnlockMethods;
@@ -574,6 +574,48 @@ impl ClientManager {
             .get(user_id)
             .map(|e| e.collections.clone())
             .unwrap_or_default()
+    }
+
+    /// Export the user's personal vault via the SDK's `ExporterClient`.
+    /// Pulls the user's encrypted ciphers + folders from the SDK state
+    /// repos and hands them to `export_vault` — the SDK decrypts internally
+    /// using the unlocked keystore. Returns the serialized export string;
+    /// caller is responsible for writing it to disk.
+    pub async fn export_vault(
+        &self,
+        user_id: &UserId,
+        format: bitwarden_exporters::ExportFormat,
+    ) -> Result<String, String> {
+        let entry = self
+            .users
+            .read()
+            .unwrap()
+            .get(user_id)
+            .cloned()
+            .ok_or_else(|| format!("unknown user {user_id}"))?;
+
+        let cipher_repo = entry
+            .client
+            .platform()
+            .state()
+            .get::<Cipher>()
+            .map_err(|e| e.to_string())?;
+        let folder_repo = entry
+            .client
+            .platform()
+            .state()
+            .get::<Folder>()
+            .map_err(|e| e.to_string())?;
+
+        let ciphers = cipher_repo.list().await.map_err(|e| e.to_string())?;
+        let folders = folder_repo.list().await.map_err(|e| e.to_string())?;
+
+        entry
+            .client
+            .exporters()
+            .export_vault(folders, ciphers, format)
+            .await
+            .map_err(|e| e.to_string())
     }
 
     // ── Send stubs ────────────────────────────────────────────────────────

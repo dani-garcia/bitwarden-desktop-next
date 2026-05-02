@@ -879,6 +879,7 @@ dependencies = [
  "bitwarden-collections",
  "bitwarden-core",
  "bitwarden-crypto",
+ "bitwarden-exporters",
  "bitwarden-generators",
  "bitwarden-logging",
  "bitwarden-pm",
