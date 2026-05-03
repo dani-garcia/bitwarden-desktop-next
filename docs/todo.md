@@ -108,11 +108,7 @@ Sends live as decrypted `SendView`s in an in-memory `HashMap` on [`ClientManager
 
 ### Send — file creation flow `[M]`
 
-The "Choose file" button in the new-file-send branch ([widgets/send_form/view.rs](../crates/desktop/src/views/send/widgets/send_form/view.rs) `file_section`) is a placeholder — message fires, handler is a no-op. Needs an OS file picker (dialog crate or iced's native picker once it lands) to populate `file_name` + `file_size_name`, plus `SendClient::encrypt_file` / `encrypt_buffer` wiring.
-
-### Export — save-file dialog `[M]`
-
-`run_export` in [app/handlers/export.rs](../crates/desktop/src/app/handlers/export.rs) calls the SDK exporter and writes the result to `data_dir()/bitwarden-export-<timestamp>.<ext>`. Fine for dev — files land next to the SQLite DBs — but real users expect to pick the destination (default Downloads, suggested filename, format-driven extension filter) and have a Cancel that aborts the export entirely. Needs the same OS save-file dialog the Send file flow needs; landing one shared picker covers both. The success toast already shows the absolute path, so once the picker is in, the wiring just swaps `data_dir().join(filename)` for the picker's chosen path.
+The "Choose file" button in the new-file-send branch ([widgets/send_form/view.rs](../crates/desktop/src/views/send/widgets/send_form/view.rs) `file_section`) is a placeholder — message fires, handler is a no-op. Needs `rfd::AsyncFileDialog::new().pick_file().await` (already a dep — see [app/handlers/export.rs](../crates/desktop/src/app/handlers/export.rs) for the `Task::perform` recipe) to populate `file_name` + `file_size_name`, plus `SendClient::encrypt_file` / `encrypt_buffer` wiring.
 
 ### Send form — embedded password generator panel `[M]`
 
@@ -256,7 +252,7 @@ The Import modal ([views/import/mod.rs](../crates/desktop/src/views/import/mod.r
 
 The SDK ships [`bitwarden-exporters`](https://github.com/bitwarden/sdk-internal/tree/main/crates/bitwarden-exporters) (which we use for export) but no parallel `bitwarden-importers` crate yet. The only import-side function is `ExporterClient::import_cxf` — Apple-only Credential Exchange Format. Every other parser still lives in upstream Electron's TypeScript ([clients/libs/importer/](../clients/libs/importer/)); a Rust port isn't on a published roadmap.
 
-When a `bitwarden-importers` crate (or equivalent SDK API) lands: replace the `Unimplemented` path in [app/handlers/import.rs](../crates/desktop/src/app/handlers/import.rs) with a real call that takes the chosen `ImportFormat` + file bytes (or paste contents) + destination vault / folder / collection. Handler shape mirrors the export wiring (Task::perform → completion message → success/error toast → close on success). The "Choose file" button — currently also stubbed via `Unimplemented` — gets the same OS save-file dialog the Send / Export flows need (different mode: open).
+When a `bitwarden-importers` crate (or equivalent SDK API) lands: replace the `Unimplemented` path in [app/handlers/import.rs](../crates/desktop/src/app/handlers/import.rs) with a real call that takes the chosen `ImportFormat` + file bytes (or paste contents) + destination vault / folder / collection. Handler shape mirrors the export wiring (Task::perform → completion message → success/error toast → close on success). The "Choose file" button — currently also stubbed via `Unimplemented` — should use `rfd::AsyncFileDialog::new().pick_file().await` (already a dep — see [app/handlers/export.rs](../crates/desktop/src/app/handlers/export.rs) for the save-side recipe).
 
 ### SSH agent — waiting on upstream V2
 

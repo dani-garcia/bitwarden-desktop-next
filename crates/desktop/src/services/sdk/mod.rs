@@ -388,6 +388,36 @@ impl ClientManager {
         Ok(())
     }
 
+    /// Verify the user's master password against the cached user-key envelope
+    /// without touching the keystore. Returns `Ok(())` on match, `Err(_)` on
+    /// any verification failure (wrong password, wrong derived key, or
+    /// crypto-layer error). Used by Export to gate vault data leaving the
+    /// encrypted store behind a fresh master-password check — `unlock`'s
+    /// `initialize_user_crypto` would mutate keystore state for an already-
+    /// unlocked user, which we don't want here.
+    pub async fn validate_master_password(
+        &self,
+        user_id: &UserId,
+        password: String,
+    ) -> Result<(), String> {
+        let entry = self
+            .users
+            .read()
+            .unwrap()
+            .get(user_id)
+            .cloned()
+            .ok_or_else(|| format!("unknown user {user_id}"))?;
+
+        entry
+            .client
+            .0
+            .auth()
+            .validate_password_user_key(password, entry.encrypted_user_key.to_string())
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
     /// Requires `unlock` to have been called first.
     pub async fn list_ciphers(&self, user_id: &UserId) -> Result<Vec<CipherListView>, String> {
         let entry = self
