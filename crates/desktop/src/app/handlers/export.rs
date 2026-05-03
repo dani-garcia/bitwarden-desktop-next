@@ -1,5 +1,6 @@
 use std::{path::PathBuf, sync::Arc};
 
+use bitwarden_core::OrganizationId;
 use iced::Task;
 
 use crate::{
@@ -17,7 +18,11 @@ impl App {
             // `uid` is captured from the validated user, not re-read from
             // `self.active_user` — guards against an account switch between
             // Confirm and the rfd dialog redirecting the export.
-            ExportEvent::PickPathThenRun { uid, format } => {
+            ExportEvent::PickPathThenRun {
+                uid,
+                organization_id,
+                format,
+            } => {
                 let mgr: Arc<ClientManager> = Arc::clone(&self.client_manager);
                 let extension = extension_for(&format);
                 let default_name = format!(
@@ -26,7 +31,17 @@ impl App {
                     extension,
                 );
                 Task::perform(
-                    async move { pick_and_export(mgr, uid, format, extension, default_name).await },
+                    async move {
+                        pick_and_export(
+                            mgr,
+                            uid,
+                            organization_id,
+                            format,
+                            extension,
+                            default_name,
+                        )
+                        .await
+                    },
                     |r| Message::export(ExportMessage::Completed(r)),
                 )
             }
@@ -53,17 +68,26 @@ impl App {
     }
 
     /// Open the Export modal, passing the active account's email so the
-    /// "individual vault" banner can name the user.
+    /// personal-vault banner can name the user, and seeding the source-vault
+    /// dropdown from the cached org snapshot held by `VaultView`.
     pub(crate) fn open_export_modal(&mut self) -> Task<Message> {
-        if self.active_user.is_none() {
+        let Some(uid) = self.active_user else {
             return Task::none();
-        }
+        };
         self.open_overlay = None;
         let email = self
             .active_account_entry()
             .map(|a| a.email.clone())
             .unwrap_or_default();
         self.views.export.open(email);
+
+        let orgs = self
+            .views
+            .vault
+            .organizations_for(&uid)
+            .map(|s| s.to_vec())
+            .unwrap_or_default();
+        self.views.export.set_organizations(&orgs);
         Task::none()
     }
 }
@@ -87,6 +111,7 @@ fn extension_for(format: &bitwarden_exporters::ExportFormat) -> &'static str {
 async fn pick_and_export(
     mgr: Arc<ClientManager>,
     uid: UserId,
+    organization_id: Option<OrganizationId>,
     format: bitwarden_exporters::ExportFormat,
     extension: &'static str,
     default_name: String,
@@ -100,7 +125,9 @@ async fn pick_and_export(
         return Ok(None);
     };
     let path: PathBuf = handle.path().to_path_buf();
-    write_export(mgr, uid, format, path).await.map(Some)
+    write_export(mgr, uid, organization_id, format, path)
+        .await
+        .map(Some)
 }
 
 /// Call the SDK exporter and write the result to the user-chosen file.
@@ -108,10 +135,14 @@ async fn pick_and_export(
 async fn write_export(
     mgr: Arc<ClientManager>,
     uid: UserId,
+    organization_id: Option<OrganizationId>,
     format: bitwarden_exporters::ExportFormat,
     path: PathBuf,
 ) -> Result<String, String> {
-    let content = mgr.export_vault(&uid, format).await?;
+    let content = match organization_id {
+        None => mgr.export_vault(&uid, format).await?,
+        Some(org_id) => mgr.export_organization_vault(&uid, org_id, format).await?,
+    };
     std::fs::write(&path, content).map_err(|e| e.to_string())?;
     Ok(path.display().to_string())
 }

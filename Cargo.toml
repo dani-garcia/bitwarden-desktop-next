@@ -26,7 +26,7 @@ bitwarden-ssh = { git = "https://github.com/bitwarden/sdk-internal", rev = "3aa1
 bitwarden-state = { git = "https://github.com/bitwarden/sdk-internal", rev = "3aa1201692e5d56efa763c7dec1161254d4c9e4b" }
 bitwarden-vault = { git = "https://github.com/bitwarden/sdk-internal", rev = "3aa1201692e5d56efa763c7dec1161254d4c9e4b" }
 
-iced = { git = "https://github.com/iced-rs/iced", rev = "4e0bdcf54aeaadec6753fffd1b1185087bf03b67", default-features = false }
+iced = { git = "https://github.com/iced-rs/iced", rev = "cf09909263c0b5a0ef43bbf4158a4843559cc8cb", default-features = false }
 
 # Compile all dependencies with some optimizations when building this crate on debug
 # This slows down clean builds by about 50%, but the resulting binaries can be orders of magnitude faster

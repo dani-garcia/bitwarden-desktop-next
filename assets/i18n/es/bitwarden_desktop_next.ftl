@@ -537,7 +537,12 @@ import-toast-unimplemented = La importación aún no está disponible
 
 ## Modal de exportar
 export-modal-title = Exportar bóveda
-export-modal-banner = Solo se exportarán los elementos individuales asociados a { $email }. No se incluirán los elementos de bóvedas de organización ni los archivos adjuntos.
+export-modal-vault-label = Exportar desde (obligatorio)
+export-modal-vault-personal = Mi bóveda
+export-modal-banner-personal-title = Exportando bóveda individual
+export-modal-banner-personal = Solo se exportarán los elementos individuales asociados a { $email }. No se incluirán los elementos de bóvedas de organización ni los archivos adjuntos.
+export-modal-banner-org-title = Exportando bóveda de la organización
+export-modal-banner-org-body = Solo se exportará la bóveda de la organización asociada a { $name }. No se incluirán los elementos de las bóvedas individuales ni de otras organizaciones.
 export-modal-file-format-label = Formato de archivo (obligatorio)
 export-modal-password-label = Contraseña de archivo (obligatorio)
 export-modal-continue = Continuar

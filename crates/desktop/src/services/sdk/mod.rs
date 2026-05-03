@@ -716,6 +716,27 @@ impl ClientManager {
             .map_err(|e| e.to_string())
     }
 
+    /// Export a single organization's vault. The SDK's
+    /// `ExporterClient::export_organization_vault` is currently a `todo!()`
+    /// in the pinned `bitwarden-exporters` rev (`crates/bitwarden-exporters/src/export.rs`),
+    /// so calling it would panic — short-circuit with a human-readable error
+    /// until upstream lands. Signature mirrors what the SDK call will take
+    /// (uid + org id + format) so the call site won't need to change when
+    /// the body is filled in.
+    pub async fn export_organization_vault(
+        &self,
+        user_id: &UserId,
+        _organization_id: OrganizationId,
+        _format: bitwarden_exporters::ExportFormat,
+    ) -> Result<String, String> {
+        // Validate the user exists so an unknown-uid case still surfaces the
+        // same error shape as `export_vault`.
+        if !self.users.read().unwrap().contains_key(user_id) {
+            return Err(format!("unknown user {user_id}"));
+        }
+        Err("Organization vault export isn't implemented in the SDK yet".to_string())
+    }
+
     /// Stub for File → Sync now. The fake-data harness has no remote to sync
     /// against, so this currently no-ops. Kept async + fallible so the call
     /// site doesn't need to change when a real sync flow lands.

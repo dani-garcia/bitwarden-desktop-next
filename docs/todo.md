@@ -33,7 +33,8 @@ Each entry carries two inline tags so you can size it at a glance:
 - [Settings — runtime wiring](#settings--runtime-wiring)
 - [Polish & refactors](#polish--refactors)
 - [Plan-first](#plan-first)
-- [Blocked / waiting upstream](#blocked--waiting-upstream)
+- [Blocked on Bitwarden SDK](#blocked-on-bitwarden-sdk)
+- [Blocked / waiting on other upstream](#blocked--waiting-on-other-upstream)
 
 ---
 
@@ -97,10 +98,6 @@ The SDK exposes `CipherType::BankAccount` / `CipherListViewType::BankAccount`; t
 ### Right-click context menu for text inputs `[M]`
 
 Cut / copy / paste / select-all on `TextInput` and the notes `TextEditor` in `cipher_form`. Iced 0.15 doesn't ship this — text widgets silently swallow right-clicks. Shape: a `components::context_menu` wrapper that stacks `MouseArea::on_right_press` over the child and shows our `DropDown` with the four actions. `TextEditor` already accepts `Action::{Copy,Cut,Paste,SelectAll}` via `on_action` (direct wire-up). `TextInput` needs a `widget::Id` per field + `widget::operation::text_input::{select_all, …}` dispatched as `Task`s; paste reuses iced's clipboard shell. First pass anchors the menu to the field (our `DropDown` is widget-anchored); cursor-anchored variant would need a small `DropDown` extension for absolute-offset placement.
-
-### Sync — wire to real SDK `[L]`
-
-`ClientManager::sync(uid)` ([services/sdk/mod.rs](../crates/desktop/src/services/sdk/mod.rs)) returns `Ok(())` without doing anything — File → Sync now toasts "Vault synced" but no network round-trip happens. The whole vault loads from SQLite at startup (`fake-data` seeds it), so there's no remote to sync against today. When the SDK exposes a sync API: pull ciphers / folders / collections / orgs from the server, persist into the SDK's repos, then return so the toast reflects reality. Subscription-side: the official client also runs sync on a timer (default ~5 min) and on app focus — both can layer on once the manual call works.
 
 ### Send — wire to real SDK `[L]`
 
@@ -242,9 +239,16 @@ Before more call sites accumulate (unlock failure, copy-to-clipboard, sync error
 
 ---
 
-## Blocked / waiting upstream
+## Blocked on Bitwarden SDK
 
-Park; revisit when the gate lifts.
+Park; revisit when the named SDK API lands. Each entry names the upstream
+function or crate it's waiting on so you can grep `sdk-internal` for status.
+
+### Export — wire org vault export when SDK lands
+
+The Export modal ([views/export/mod.rs](../crates/desktop/src/views/export/mod.rs)) lets the user pick "My vault" or one of their orgs from the source-vault dropdown; personal exports go through `ExporterClient::export_vault`, but the org branch short-circuits at [`ClientManager::export_organization_vault`](../crates/desktop/src/services/sdk/mod.rs) with `Err("Organization vault export isn't implemented in the SDK yet")`. Surfaces as the generic "Couldn't export the vault" toast.
+
+The pinned `bitwarden-exporters` rev's `export_organization_vault` in [`crates/bitwarden-exporters/src/export.rs`](https://github.com/bitwarden/sdk-internal/blob/main/crates/bitwarden-exporters/src/export.rs) is `todo!()` (would panic if called). When it lands: replace the early-return in `ClientManager::export_organization_vault` with a real call. The signature already matches what the SDK needs (uid + org id + format) — body needs to load the org's encrypted ciphers (filter the cipher repo by `organization_id`) and the SDK-shape `bitwarden_collections::Collection` for the org, then hand both to `ExporterClient::export_organization_vault`. We don't have a `Repository<Collection>` today; the org-collection load may need a parallel SDK addition.
 
 ### Import — wire to SDK importers when the crate exists
 
@@ -253,6 +257,18 @@ The Import modal ([views/import/mod.rs](../crates/desktop/src/views/import/mod.r
 The SDK ships [`bitwarden-exporters`](https://github.com/bitwarden/sdk-internal/tree/main/crates/bitwarden-exporters) (which we use for export) but no parallel `bitwarden-importers` crate yet. The only import-side function is `ExporterClient::import_cxf` — Apple-only Credential Exchange Format. Every other parser still lives in upstream Electron's TypeScript ([clients/libs/importer/](../clients/libs/importer/)); a Rust port isn't on a published roadmap.
 
 When a `bitwarden-importers` crate (or equivalent SDK API) lands: replace the `Unimplemented` path in [app/handlers/import.rs](../crates/desktop/src/app/handlers/import.rs) with a real call that takes the chosen `ImportFormat` + file bytes (or paste contents) + destination vault / folder / collection. Handler shape mirrors the export wiring (Task::perform → completion message → success/error toast → close on success). The "Choose file" button — currently also stubbed via `Unimplemented` — should use `rfd::AsyncFileDialog::new().pick_file().await` (already a dep — see [app/handlers/export.rs](../crates/desktop/src/app/handlers/export.rs) for the save-side recipe).
+
+### Sync — wire to real SDK
+
+`ClientManager::sync(uid)` ([services/sdk/mod.rs](../crates/desktop/src/services/sdk/mod.rs)) returns `Ok(())` without doing anything — File → Sync now toasts "Vault synced" but no network round-trip happens. The whole vault loads from SQLite at startup (`fake-data` seeds it), so there's no remote to sync against today. When the SDK exposes a sync API: pull ciphers / folders / collections / orgs from the server, persist into the SDK's repos, then return so the toast reflects reality. Subscription-side: the official client also runs sync on a timer (default ~5 min) and on app focus — both can layer on once the manual call works.
+
+---
+
+## Blocked / waiting on other upstream
+
+Park; revisit when the gate lifts. Bitwarden SDK gates have their own
+section above; this bucket is everything else (iced, Bitwarden's Electron
+desktop_native, third-party crates).
 
 ### SSH agent — waiting on upstream V2
 

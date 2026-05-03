@@ -13,6 +13,7 @@
 
 use std::sync::Arc;
 
+use bitwarden_core::OrganizationId;
 use iced::{
     Alignment, Element, Fill, Padding,
     widget::{self, Space, column, container, row, stack, text},
@@ -23,7 +24,7 @@ use crate::{
     components::{FadeInOut, buttons, fade_in_out, icons, inputs, modal},
     domain::UserId,
     fl,
-    services::sdk::ClientManager,
+    services::sdk::{ClientManager, Organization},
     theme::{AppColors, AppTheme, RADIUS_LG},
 };
 
@@ -81,6 +82,26 @@ impl std::fmt::Display for ExportFormatChoice {
     }
 }
 
+// ── Vault selection ───────────────────────────────────────────────────────
+
+/// Source vault: the user's personal vault, or one of their organizations.
+/// Mirrors `VaultChoice` in the import modal so the two pickers feel
+/// identical — the dropdown lists "My vault" plus one entry per org.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VaultChoice {
+    Personal,
+    Org { id: OrganizationId, name: String },
+}
+
+impl std::fmt::Display for VaultChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Personal => f.write_str(&fl!("export-modal-vault-personal")),
+            Self::Org { name, .. } => f.write_str(name),
+        }
+    }
+}
+
 // ── State ─────────────────────────────────────────────────────────────────
 
 pub struct ExportView {
@@ -89,9 +110,13 @@ pub struct ExportView {
     /// Inner fade — owns the Confirm dialog (master password). Opens only
     /// while the user is on the master-password gate.
     pub confirm_fade: FadeInOut,
-    /// Active user email — shown verbatim in the "Only items associated with"
-    /// banner. Set via [`Self::open`] each time the modal is opened.
+    /// Active user email — shown verbatim in the personal-vault banner.
+    /// Set via [`Self::open`] each time the modal is opened.
     email: String,
+    /// Personal + per-org options for the source-vault dropdown. Seeded
+    /// synchronously from the active user's cached org list on open.
+    vault_choices: Vec<VaultChoice>,
+    selected_vault: VaultChoice,
     selected_format: ExportFormatChoice,
     /// Encryption password for the encrypted-json variant. Cleared on open
     /// and on successful submit. Only read when
@@ -110,6 +135,7 @@ pub enum ExportMessage {
     Close,
     /// Continue on the Compose dialog → open the master-password gate.
     Continue,
+    VaultSelected(VaultChoice),
     FormatSelected(ExportFormatChoice),
     FilePasswordChanged(String),
     MasterPasswordChanged(String),
@@ -141,8 +167,13 @@ pub enum ExportEvent {
     /// already-folded format value. `uid` is captured at validation time
     /// so that an active-user switch between Confirm and the save dialog
     /// can't redirect the export to a different account's vault.
+    /// `organization_id` is `Some` when the user picked an org from the
+    /// source-vault dropdown — the App handler routes it to
+    /// [`ClientManager::export_organization_vault`] instead of the
+    /// personal exporter.
     PickPathThenRun {
         uid: UserId,
+        organization_id: Option<OrganizationId>,
         format: bitwarden_exporters::ExportFormat,
     },
     /// Export finished — surface the saved-file path as a success toast.
@@ -168,6 +199,8 @@ impl ExportView {
             fade: FadeInOut::default(),
             confirm_fade: FadeInOut::default(),
             email: String::new(),
+            vault_choices: vec![VaultChoice::Personal],
+            selected_vault: VaultChoice::Personal,
             selected_format: ExportFormatChoice::Json,
             file_password: String::new(),
             master_password: String::new(),
@@ -179,10 +212,26 @@ impl ExportView {
         self.fade.open();
         self.confirm_fade.close();
         self.email = email;
+        self.selected_vault = VaultChoice::Personal;
         self.selected_format = ExportFormatChoice::Json;
         self.file_password.clear();
         self.master_password.clear();
         self.validating = false;
+    }
+
+    /// Replace the source-vault dropdown options with "My vault" + the
+    /// active user's org list. Called by App on each open from the cached
+    /// org snapshot held by `VaultView` — same pattern as the import modal.
+    pub fn set_organizations(&mut self, orgs: &[Organization]) {
+        let mut choices = Vec::with_capacity(orgs.len() + 1);
+        choices.push(VaultChoice::Personal);
+        for org in orgs {
+            choices.push(VaultChoice::Org {
+                id: org.id,
+                name: org.name.clone(),
+            });
+        }
+        self.vault_choices = choices;
     }
 
     fn close_all(&mut self) {
@@ -196,6 +245,10 @@ impl ExportView {
         match msg {
             ExportMessage::Close => {
                 self.close_all();
+                Outcome::None
+            }
+            ExportMessage::VaultSelected(v) => {
+                self.selected_vault = v;
                 Outcome::None
             }
             ExportMessage::FormatSelected(f) => {
@@ -255,7 +308,15 @@ impl ExportView {
                     return Outcome::None;
                 }
                 let format = self.selected_format.to_sdk(self.file_password.clone());
-                Outcome::event(ExportEvent::PickPathThenRun { uid, format })
+                let organization_id = match &self.selected_vault {
+                    VaultChoice::Personal => None,
+                    VaultChoice::Org { id, .. } => Some(*id),
+                };
+                Outcome::event(ExportEvent::PickPathThenRun {
+                    uid,
+                    organization_id,
+                    format,
+                })
             }
             ExportMessage::ValidationCompleted(Err(_)) => {
                 self.validating = false;
@@ -315,26 +376,21 @@ impl ExportView {
         ]
         .align_y(Alignment::Center);
 
-        let banner_text = fl!("export-modal-banner", email = self.email.as_str());
-        let banner = container(
-            row![
-                icons::INFO_CIRCLE.render(16.0, colors.accent),
-                text(banner_text).size(13).color(colors.text_primary),
-            ]
-            .spacing(10)
-            .align_y(Alignment::Start),
-        )
-        .padding(12)
-        .width(Fill)
-        .style(|theme: &AppTheme| {
-            iced::widget::container::Style::default()
-                .background(theme.colors.accent.scale_alpha(0.12))
-                .border(iced::Border::default().rounded(RADIUS_LG))
-        });
+        let banner = self.banner(colors);
 
-        // The picker sits directly on the dialog body (which is painted
+        // Both pickers sit directly on the dialog body (which is painted
         // with `card_bg`), so the floating label chip needs to match —
         // otherwise it shows as a contrasting tile on the border.
+        let vault_picker = inputs::select_field_on(
+            fl!("export-modal-vault-label"),
+            Some(self.selected_vault.clone()),
+            self.vault_choices.clone(),
+            |v: &VaultChoice| v.to_string(),
+            ExportMessage::VaultSelected,
+            |c| c.card_bg,
+            colors,
+        );
+
         let format_picker = inputs::select_field_on(
             fl!("export-modal-file-format-label"),
             Some(self.selected_format),
@@ -345,7 +401,7 @@ impl ExportView {
             colors,
         );
 
-        let mut body = column![header, banner, format_picker].spacing(16);
+        let mut body = column![header, banner, vault_picker, format_picker].spacing(16);
 
         if matches!(self.selected_format, ExportFormatChoice::EncryptedJson) {
             // Same chip-bg story as the format picker — sits directly on
@@ -391,6 +447,47 @@ impl ExportView {
             container(body),
             ExportMessage::Close,
         )
+    }
+
+    /// Info-blue banner above the pickers. Both arms share a bold heading
+    /// + body shape; the copy swaps to name the active user's email or the chosen org.
+    fn banner<'a>(&'a self, colors: &'a AppColors) -> Element<'a, ExportMessage, AppTheme> {
+        let (title, body) = match &self.selected_vault {
+            VaultChoice::Personal => (
+                fl!("export-modal-banner-personal-title"),
+                fl!(
+                    "export-modal-banner-personal",
+                    email = self.email.as_str()
+                ),
+            ),
+            VaultChoice::Org { name, .. } => (
+                fl!("export-modal-banner-org-title"),
+                fl!("export-modal-banner-org-body", name = name.as_str()),
+            ),
+        };
+
+        let copy = column![
+            text(title)
+                .size(13)
+                .font(crate::APP_FONT_BOLD)
+                .color(colors.text_primary),
+            text(body).size(13).color(colors.text_primary),
+        ]
+        .spacing(4);
+
+        container(
+            row![icons::INFO_CIRCLE.render(16.0, colors.accent), copy]
+                .spacing(10)
+                .align_y(Alignment::Start),
+        )
+        .padding(12)
+        .width(Fill)
+        .style(|theme: &AppTheme| {
+            iced::widget::container::Style::default()
+                .background(theme.colors.accent.scale_alpha(0.12))
+                .border(iced::Border::default().rounded(RADIUS_LG))
+        })
+        .into()
     }
 
     fn confirm_dialog<'a>(
