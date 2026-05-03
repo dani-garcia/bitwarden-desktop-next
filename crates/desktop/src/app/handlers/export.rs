@@ -1,6 +1,7 @@
-use std::{path::PathBuf, sync::Arc};
+use std::path::PathBuf;
 
 use bitwarden_core::OrganizationId;
+use bitwarden_pm::PasswordManagerClient;
 use iced::Task;
 
 use crate::{
@@ -8,7 +9,7 @@ use crate::{
     components::toast::Toast,
     domain::UserId,
     fl,
-    services::sdk::ClientManager,
+    services::sdk::ClientExt,
     views::export::{ExportEvent, ExportMessage},
 };
 
@@ -23,24 +24,23 @@ impl App {
                 organization_id,
                 format,
             } => {
-                let mgr: Arc<ClientManager> = Arc::clone(&self.client_manager);
                 let extension = extension_for(&format);
                 let default_name = format!(
                     "bitwarden-export-{}.{}",
                     chrono::Local::now().format("%Y%m%d-%H%M%S"),
                     extension,
                 );
-                Task::perform(
-                    async move {
+                self.perform_with_client(
+                    uid,
+                    move |client| {
                         pick_and_export(
-                            mgr,
+                            client,
                             uid,
                             organization_id,
                             format,
                             extension,
                             default_name,
                         )
-                        .await
                     },
                     |r| Message::export(ExportMessage::Completed(r)),
                 )
@@ -109,7 +109,7 @@ fn extension_for(format: &bitwarden_exporters::ExportFormat) -> &'static str {
 /// iced and rfd both want the main thread; the async one cooperates with our
 /// `Task::perform` runtime.
 async fn pick_and_export(
-    mgr: Arc<ClientManager>,
+    client: PasswordManagerClient,
     uid: UserId,
     organization_id: Option<OrganizationId>,
     format: bitwarden_exporters::ExportFormat,
@@ -125,24 +125,27 @@ async fn pick_and_export(
         return Ok(None);
     };
     let path: PathBuf = handle.path().to_path_buf();
-    write_export(mgr, uid, organization_id, format, path)
+    write_export(client, uid, organization_id, format, path)
         .await
         .map(Some)
 }
 
 /// Call the SDK exporter and write the result to the user-chosen file.
-/// Sync `std::fs::write` is acceptable here — vault exports are small.
+/// `tokio::fs::write` so a slow target (network drive, USB) doesn't park
+/// the runtime worker — large vaults can serialize to tens of MB.
 async fn write_export(
-    mgr: Arc<ClientManager>,
-    uid: UserId,
+    client: PasswordManagerClient,
+    _uid: UserId,
     organization_id: Option<OrganizationId>,
     format: bitwarden_exporters::ExportFormat,
     path: PathBuf,
 ) -> Result<String, String> {
     let content = match organization_id {
-        None => mgr.export_vault(&uid, format).await?,
-        Some(org_id) => mgr.export_organization_vault(&uid, org_id, format).await?,
+        None => client.export_vault(format).await?,
+        Some(org_id) => client.export_organization_vault(org_id, format).await?,
     };
-    std::fs::write(&path, content).map_err(|e| e.to_string())?;
+    tokio::fs::write(&path, content)
+        .await
+        .map_err(|e| e.to_string())?;
     Ok(path.display().to_string())
 }

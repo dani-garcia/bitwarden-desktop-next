@@ -16,18 +16,19 @@
 //!   `Event(e)`. The "both task and event" case is excluded — enrich the
 //!   event so App's handler fires both effects.
 
-use std::sync::Arc;
+use std::future::Future;
 
+use bitwarden_pm::PasswordManagerClient;
 use iced::Task;
 
 use crate::{
-    components::sidebar::{SendFilter, VaultFilter},
     domain::UserId,
     services::{
         favicon::FaviconService,
         sdk::{AccountEntry, ClientManager},
     },
     theme::AppColors,
+    views::{send::SendFilter, vault::VaultFilter},
 };
 
 /// App-level overlays with mutual-exclusion semantics: at most one open at a
@@ -51,7 +52,11 @@ pub enum Overlay {
 /// Services + session passed to each view's `update()`. Rebuilt per call;
 /// moved in by value because it holds `&mut` to App state (`open_overlay`).
 pub struct UpdateCtx<'a> {
-    pub client_manager: &'a Arc<ClientManager>,
+    /// `&mut` so views can call sync mutating methods (`save_send`,
+    /// `push_history`, …). Async SDK work runs on a `client_for(uid)` handle
+    /// captured at the start of the task; the manager itself is never
+    /// borrowed across `.await`.
+    pub client_manager: &'a mut ClientManager,
     pub active_user: Option<&'a UserId>,
     /// Pulled from the App-level sidebar state; views need it on search-input
     /// changes, list reloads, etc.
@@ -60,6 +65,54 @@ pub struct UpdateCtx<'a> {
     /// Writing here auto-closes whatever was open before (single-cell
     /// mutual-exclusion).
     pub open_overlay: &'a mut Option<Overlay>,
+}
+
+impl UpdateCtx<'_> {
+    /// View-side mirror of `App::perform_with_active_client`. Extracts the
+    /// active user's `PasswordManagerClient`, runs an async call against it,
+    /// and wraps the result `Task` in `Outcome::Task` for direct return from
+    /// a view's `update` arm. `Outcome::None` if no active user or the user
+    /// isn't loaded.
+    pub fn perform_with_active_client<V, Spawn, Fut, T>(
+        &self,
+        spawn: Spawn,
+        on_complete: impl Fn(UserId, T) -> V::Message + Send + 'static,
+    ) -> Outcome<V>
+    where
+        V: ViewTypes,
+        V::Message: Send + 'static,
+        Spawn: FnOnce(PasswordManagerClient) -> Fut,
+        Fut: Future<Output = T> + Send + 'static,
+        T: Send + 'static,
+    {
+        let Some(uid) = self.active_user.copied() else {
+            return Outcome::None;
+        };
+        self.perform_with_client(uid, spawn, move |t| on_complete(uid, t))
+    }
+
+    /// Variant of [`Self::perform_with_active_client`] for callers that
+    /// already have a specific uid in hand (e.g. captured from a message
+    /// payload). Same defensive `Outcome::None` bail when the user isn't
+    /// loaded.
+    pub fn perform_with_client<V, Spawn, Fut, T>(
+        &self,
+        uid: UserId,
+        spawn: Spawn,
+        on_complete: impl Fn(T) -> V::Message + Send + 'static,
+    ) -> Outcome<V>
+    where
+        V: ViewTypes,
+        V::Message: Send + 'static,
+        Spawn: FnOnce(PasswordManagerClient) -> Fut,
+        Fut: Future<Output = T> + Send + 'static,
+        T: Send + 'static,
+    {
+        let Some(client) = self.client_manager.client_for(&uid) else {
+            return Outcome::None;
+        };
+        Outcome::Task(Task::perform(spawn(client), on_complete))
+    }
 }
 
 /// Render-time context passed to each view's `view()` and view-internal render
@@ -129,7 +182,7 @@ where
     V::Message: Send + 'static,
 {
     /// Shorthand for `Outcome::task(Task::perform(future, on_complete))`.
-    pub fn spawn<T: Send + 'static>(
+    pub fn perform<T: Send + 'static>(
         future: impl std::future::Future<Output = T> + Send + 'static,
         on_complete: impl Fn(T) -> V::Message + Send + 'static,
     ) -> Self {

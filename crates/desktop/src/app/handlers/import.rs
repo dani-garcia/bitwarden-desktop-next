@@ -1,12 +1,10 @@
-use std::sync::Arc;
-
 use iced::Task;
 
 use crate::{
     app::{App, Message},
     components::toast::Toast,
     fl,
-    services::sdk::ClientManager,
+    services::sdk::ClientExt,
     views::import::{ImportEvent, ImportMessage},
 };
 
@@ -42,10 +40,9 @@ impl App {
             .import
             .set_collections(self.client_manager.list_collections(&uid));
 
-        let mgr: Arc<ClientManager> = Arc::clone(&self.client_manager);
-        Task::perform(
-            async move {
-                match mgr.list_folders(&uid).await {
+        self.perform_with_active_client(
+            |client| async move {
+                match client.list_folders().await {
                     Ok(folders) => folders.into_iter().map(|f| f.name).collect(),
                     Err(err) => {
                         tracing::warn!(%err, "failed to load folders for import modal");
@@ -53,7 +50,7 @@ impl App {
                     }
                 }
             },
-            |names| Message::import(ImportMessage::FoldersLoaded(names)),
+            |_uid, names| Message::import(ImportMessage::FoldersLoaded(names)),
         )
     }
 }

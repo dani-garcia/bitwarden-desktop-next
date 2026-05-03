@@ -5,7 +5,6 @@
 //! handled by `App`: section clicks may trigger a screen switch, and
 //! per-screen filter changes are forwarded to the view that owns them.
 
-use bitwarden_core::OrganizationId;
 use bitwarden_vault::CipherType;
 use iced::{
     Alignment, Background, Border, Color, Element, Fill, Length, Padding,
@@ -17,6 +16,10 @@ use crate::{
     fl,
     services::sdk::Organization,
     theme::{AppColors, AppTheme},
+    // Filter types are owned by the views whose lists they filter; sidebar
+    // imports them rather than defining them so the semantics stay with the
+    // view that interprets them.
+    views::{send::SendFilter, vault::VaultFilter},
 };
 
 const RAIL_WIDTH: f32 = 50.0;
@@ -43,29 +46,6 @@ pub enum NavSection {
     Generator,
     Import,
     Export,
-}
-
-/// Filter applied to the vault's cipher list.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum VaultFilter {
-    /// "Vault" parent — every cipher the user can see.
-    AllItems,
-    /// "My Vault" — personal ciphers only (not owned by an organization).
-    Personal,
-    Organization(OrganizationId),
-    Favorites,
-    Category(CipherType),
-    Archive,
-    Trash,
-}
-
-/// Filter applied to the send list.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SendFilter {
-    /// "Send" parent — every send.
-    AllItems,
-    Text,
-    File,
 }
 
 /// Sidebar chrome state that persists across screen switches.

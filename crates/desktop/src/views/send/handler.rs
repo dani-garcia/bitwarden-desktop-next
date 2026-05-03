@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use bitwarden_generators::PasswordGeneratorRequest;
 use iced::Task;
 
@@ -8,7 +6,7 @@ use crate::{
     components::toast::Toast,
     debug_fmt::NoDebug,
     fl,
-    services::sdk::ClientManager,
+    services::sdk::ClientExt,
     views::send::{SendEvent, SendMessage},
 };
 
@@ -43,10 +41,6 @@ impl App {
     /// the form via `SendMessage::PasswordGenerated`; the SDK still records
     /// the entry in `ClientManager::password_history` as a side effect.
     fn regenerate_send_password(&self) -> Task<Message> {
-        let Some(uid) = self.active_user else {
-            return Task::none();
-        };
-        let mgr: Arc<ClientManager> = Arc::clone(&self.client_manager);
         let req = PasswordGeneratorRequest {
             lowercase: true,
             uppercase: true,
@@ -59,13 +53,9 @@ impl App {
             min_number: Some(1),
             min_special: Some(1),
         };
-        Task::perform(
-            async move { mgr.generate_password(&uid, req).await },
-            |res| {
-                Message::send(SendMessage::PasswordGenerated(
-                    res.map(|(value, _)| NoDebug(value)),
-                ))
-            },
+        self.perform_with_active_client(
+            move |client| client.generate_password(req),
+            |_uid, res| Message::send(SendMessage::PasswordGenerated(res.map(NoDebug))),
         )
     }
 }

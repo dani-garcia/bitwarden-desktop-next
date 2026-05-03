@@ -104,15 +104,23 @@ fn compute_alpha(timer: &ToastTimer, now: Instant) -> f32 {
     fade_in * fade_out * MAX_ALPHA
 }
 
-/// Fraction of the visible-time budget remaining: 1.0 at creation, 0.0 once
-/// auto-dismiss fires. Pinned to 1.0 while hovered.
+/// Fraction of the visible-time budget remaining: 1.0 once fully visible,
+/// 0.0 once auto-dismiss fires. Pinned to 1.0 while hovered. The visible
+/// budget excludes the fade-in window so the bar starts at exactly 1.0
+/// when the toast is fully opaque, and pins to 0.0 the moment dismissal
+/// begins (so the bar doesn't drift below 0 during the fade-out).
 fn compute_progress(timer: &ToastTimer, now: Instant) -> f32 {
-    if timer.hovered && timer.dismissing.is_none() {
+    if timer.dismissing.is_some() {
+        return 0.0;
+    }
+    if timer.hovered {
         return 1.0;
     }
+    let fade_in_secs = FADE_IN_MS as f32 / 1000.0;
+    let visible_budget = TIMEOUT.as_secs_f32() - fade_in_secs;
     let elapsed = now.saturating_duration_since(timer.created).as_secs_f32();
-    let total = TIMEOUT.as_secs_f32();
-    (1.0 - elapsed / total).clamp(0.0, 1.0)
+    let elapsed_visible = (elapsed - fade_in_secs).max(0.0);
+    (1.0 - elapsed_visible / visible_budget).clamp(0.0, 1.0)
 }
 
 fn refresh_visuals(timer: &ToastTimer, now: Instant) -> ToastVisuals {

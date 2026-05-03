@@ -9,7 +9,7 @@ mod unlock;
 use iced::{Element, Task};
 
 use crate::{
-    app::{Outcome, UpdateCtx, ViewTypes},
+    app::{Outcome, RenderCtx, UpdateCtx, ViewTypes},
     components::{
         FadeInOut,
         account_switcher::{AccountSwitcherEvent, AccountSwitcherMessage},
@@ -17,7 +17,7 @@ use crate::{
     },
     domain::{UnlockMethod, UserId},
     services::sdk::ClientManager,
-    theme::{AppColors, AppTheme},
+    theme::AppTheme,
     views::login::{
         login_email::LOGIN_EMAIL_FIELD_ID, login_password::LOGIN_PASSWORD_FIELD_ID,
         self_hosted_modal::SELF_HOSTED_URL_FIELD_ID, unlock::UNLOCK_FIELD_ID,
@@ -159,28 +159,28 @@ pub enum LoginEvent {
 // ── View State ─────────────────────────────────────────────────────────────
 
 pub struct LoginView {
-    pub auth_page: AuthPage,
+    pub(super) auth_page: AuthPage,
     /// True between `LoginMessage::Unlock` firing and `UnlockCompleted` arriving.
     /// Drives the in-progress spinner on the unlock screen and gates re-entry.
-    pub unlock_in_progress: bool,
+    pub(super) unlock_in_progress: bool,
     /// Other unlock methods the active user has configured, minus the currently
     /// selected one. Populated only while `auth_page` is `Unlock`; cleared on
     /// every transition to `LoginEmail` / `LoginPassword`. Lives here instead
     /// of on `App` because every input (active user, `auth_page`, method
     /// choice) is already owned or observed by this view.
-    pub unlock_alternatives: Vec<UnlockMethod>,
+    pub(super) unlock_alternatives: Vec<UnlockMethod>,
     /// Working URL + animation state for the self-hosted environment modal.
     /// `fade.is_open()` is the source of truth for "modal logically open".
-    pub self_hosted_modal: SelfHostedModal,
+    pub(super) self_hosted_modal: SelfHostedModal,
 }
 
 #[derive(Default)]
 pub struct SelfHostedModal {
-    pub fade: FadeInOut,
-    pub url_input: String,
+    pub(super) fade: FadeInOut,
+    pub(super) url_input: String,
     /// Set on Save when validation fails. Cleared on every keystroke so the
     /// inline error disappears as soon as the user starts correcting.
-    pub url_error: bool,
+    pub(super) url_error: bool,
 }
 
 impl ViewTypes for LoginView {
@@ -245,12 +245,13 @@ impl LoginView {
                 let Some(uid) = active_user.cloned() else {
                     return Outcome::None;
                 };
+                let Some(data) = client_manager.unlock_data_for(&uid) else {
+                    return Outcome::None;
+                };
                 self.unlock_in_progress = true;
-                let mgr = client_manager.clone();
-                return Outcome::spawn(
-                    async move { mgr.unlock(&uid, password).await },
-                    move |res| LoginMessage::UnlockCompleted(uid, res),
-                );
+                return Outcome::perform(async move { data.unlock(password).await }, move |res| {
+                    LoginMessage::UnlockCompleted(uid, res)
+                });
             }
             LoginMessage::UnlockCompleted(msg_uid, result) => {
                 self.unlock_in_progress = false;
@@ -529,15 +530,15 @@ impl LoginView {
     /// doesn't cull").
     pub fn modal_view<'a>(
         &'a self,
-        colors: &'a AppColors,
+        ctx: &RenderCtx<'a>,
     ) -> Option<Element<'a, LoginMessage, AppTheme>> {
-        self_hosted_modal::view(&self.self_hosted_modal, colors)
+        self_hosted_modal::view(&self.self_hosted_modal, ctx.colors)
     }
 
     pub fn view<'a>(
         &'a self,
+        ctx: &RenderCtx<'a>,
         server: &'a str,
-        ctx: &crate::app::RenderCtx<'a>,
     ) -> Element<'a, LoginMessage, AppTheme> {
         let colors = ctx.colors;
         let email = ctx.active_email;

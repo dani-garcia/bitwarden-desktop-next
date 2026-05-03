@@ -38,7 +38,7 @@ use helpers::main_window_platform_specific;
 pub struct App {
     // ── Session ───────────────────────────────────────────────────────────
     pub(super) active_user: Option<UserId>,
-    pub(super) client_manager: Arc<ClientManager>,
+    pub(super) client_manager: ClientManager,
     /// Read once at startup. Lifecycle branches re-read `self.settings.<field>`
     /// at event time (never cached) so live changes apply without a restart.
     pub(super) settings: Settings,
@@ -229,10 +229,13 @@ impl App {
         );
 
         // Discover users in `<workspace-root>/data/` and open one SQLite DB
-        // per user. The `ClientManagerLoaded` handler swaps the Arc when done.
-        let load_task = Task::perform(async { Arc::new(ClientManager::load().await) }, |mgr| {
-            Message::System(SystemMessage::ClientManagerLoaded(mgr))
-        });
+        // per user. The `ClientManagerLoaded` handler `take()`s the manager
+        // out of the slot — Arc<Mutex<Option<_>>> so `Message` keeps
+        // deriving `Clone` without making `ClientManager` itself cloneable.
+        let load_task = Task::perform(
+            async { std::sync::Arc::new(std::sync::Mutex::new(Some(ClientManager::load().await))) },
+            |slot| Message::System(SystemMessage::ClientManagerLoaded(slot)),
+        );
 
         // Favicon service. Every user points at the cloud default for now;
         // see `docs/todo.md` "Show favicons" for the per-user `icons_url` swap.
@@ -242,7 +245,7 @@ impl App {
 
         let app = Self {
             active_user: None,
-            client_manager: Arc::new(ClientManager::empty()),
+            client_manager: ClientManager::empty(),
             settings,
 
             screen: Screen::Loading,
@@ -403,7 +406,7 @@ impl App {
                 let active_vault_filter = self.sidebar.active_vault_filter;
                 let active_send_filter = self.sidebar.active_send_filter;
                 let uctx = UpdateCtx {
-                    client_manager: &self.client_manager,
+                    client_manager: &mut self.client_manager,
                     active_user: self.active_user.as_ref(),
                     active_vault_filter,
                     active_send_filter,
@@ -433,7 +436,7 @@ impl App {
                     ViewMessage::Settings(m) => self
                         .views
                         .settings
-                        .update(m, uctx)
+                        .update(m)
                         .dispatch(Message::settings, |e| self.handle_settings_event(e)),
                     ViewMessage::Generator(m) => self
                         .views
@@ -543,7 +546,7 @@ impl App {
                 iced::widget::center(crate::components::spinner::spinner(48.0, colors.accent))
                     .into()
             }
-            Screen::Login => self.views.login.view(server, &rctx).map(Message::login),
+            Screen::Login => self.views.login.view(&rctx, server).map(Message::login),
             Screen::Vault => self.views.vault.view(&rctx).map(Message::vault),
             Screen::Send => self.views.send.view(&rctx).map(Message::send),
         };
@@ -607,7 +610,7 @@ impl App {
             Screen::Login => self
                 .views
                 .login
-                .modal_view(colors)
+                .modal_view(&rctx)
                 .map(|el| el.map(Message::login)),
             _ => None,
         };
@@ -615,7 +618,7 @@ impl App {
         let settings_modal = self
             .views
             .settings
-            .modal_view(colors)
+            .modal_view(&rctx)
             .map(|el| el.map(Message::settings));
 
         // Both `modal_view` returns `None` when closed so the stack stays
@@ -623,29 +626,34 @@ impl App {
         let generator_modal = self
             .views
             .generator
-            .modal_view(colors)
+            .modal_view(&rctx)
             .map(|el| el.map(Message::generator));
 
         let import_modal = self
             .views
             .import
-            .modal_view(colors)
+            .modal_view(&rctx)
             .map(|el| el.map(Message::import));
 
         let export_modal = self
             .views
             .export
-            .modal_view(colors)
+            .modal_view(&rctx)
             .map(|el| el.map(Message::export));
 
         let new_folder_modal = self
             .views
             .new_folder
-            .modal_view(colors)
+            .modal_view(&rctx)
             .map(|el| el.map(Message::new_folder));
 
-        let fingerprint_modal =
-            crate::views::fingerprint_phrase::modal_view(&self.fingerprint, colors);
+        let fingerprint_modal = crate::views::fingerprint_phrase::modal_view(
+            &rctx,
+            &self.fingerprint,
+            Message::System(SystemMessage::CopyFingerprint),
+            Message::System(SystemMessage::CloseFingerprintModal),
+            Message::System(SystemMessage::OpenLearnMoreFingerprint),
+        );
 
         let use_custom_menu_bar = crate::services::menu::should_use_custom_menu_bar();
 

@@ -9,8 +9,11 @@ use iced::{
 };
 
 use crate::{
+    app::RenderCtx,
     components::{
-        account_switcher, bottom_sheet, buttons, collapsible_pane, drop_down, icons,
+        account_switcher,
+        bottom_sheet::{self, SHEET_BREAKPOINT_PX, SHEET_TOP_INSET_PX, SHEET_TOP_RADIUS_PX},
+        buttons, collapsible_pane, drop_down, icons,
         icons::BwiIcon,
     },
     fl,
@@ -18,7 +21,7 @@ use crate::{
 };
 
 use super::{
-    SHEET_BREAKPOINT_PX, SHEET_TOP_INSET_PX, SHEET_TOP_RADIUS_PX, VaultMessage,
+    VaultMessage,
     state::VaultView,
     widgets::{
         cipher_detail::{self, CipherDetailMessage},
@@ -27,10 +30,7 @@ use super::{
 };
 
 impl VaultView {
-    pub fn view<'a>(
-        &'a self,
-        ctx: &crate::app::RenderCtx<'a>,
-    ) -> Element<'a, VaultMessage, AppTheme> {
+    pub fn view<'a>(&'a self, ctx: &RenderCtx<'a>) -> Element<'a, VaultMessage, AppTheme> {
         let active_user = ctx.active_user.expect("Screen::Vault without active_user");
         let user_cache = self.items.get(active_user);
         let cached_items: &[Arc<CipherListView>] =
@@ -47,12 +47,12 @@ impl VaultView {
                     .then(|| self.detail_or_form_pane(ctx.colors, 0.0));
                 collapsible_pane::view(
                     &self.pane,
-                    self.list_content(cached_items, ctx),
+                    self.list_content(ctx, cached_items),
                     right,
                     VaultMessage::PaneResized,
                 )
             } else {
-                self.list_content(cached_items, ctx)
+                self.list_content(ctx, cached_items)
             };
 
         container(content_area_inner)
@@ -72,7 +72,7 @@ impl VaultView {
     /// `None` otherwise.
     pub fn sheet_view<'a>(
         &'a self,
-        ctx: &crate::app::RenderCtx<'a>,
+        ctx: &RenderCtx<'a>,
     ) -> Option<Element<'a, VaultMessage, AppTheme>> {
         if ctx.window_width >= SHEET_BREAKPOINT_PX {
             return None;
@@ -95,7 +95,7 @@ impl VaultView {
     /// the sidebar and title bar.
     pub fn modal_view<'a>(
         &'a self,
-        ctx: &crate::app::RenderCtx<'a>,
+        ctx: &RenderCtx<'a>,
     ) -> Option<Element<'a, VaultMessage, AppTheme>> {
         let progress = self.selection.confirm_delete.progress_if_visible()?;
         let colors = ctx.colors;
@@ -143,8 +143,8 @@ impl VaultView {
     /// Builds the list pane content (header + search + item list).
     fn list_content<'a>(
         &'a self,
+        ctx: &RenderCtx<'a>,
         cached_items: &'a [Arc<CipherListView>],
-        ctx: &crate::app::RenderCtx<'a>,
     ) -> Element<'a, VaultMessage, AppTheme> {
         let colors = ctx.colors;
         let active_email = ctx
@@ -209,7 +209,7 @@ impl VaultView {
             })
             .width(Fill);
 
-        let item_list = item_list::view(cached_items, self.selection.item, self.list_scroll, ctx)
+        let item_list = item_list::view(ctx, cached_items, self.selection.item, self.list_scroll)
             .map(VaultMessage::ItemList);
 
         column![content_header, search_row, item_list]
@@ -251,8 +251,11 @@ fn new_item_menu<'a>(colors: &'a AppColors) -> Element<'a, VaultMessage, AppThem
         ),
     ];
 
-    let body = column(rows.into_iter().map(|(icon, label, t)| new_item_row(icon, label, t, colors)))
-        .spacing(0);
+    let body = column(
+        rows.into_iter()
+            .map(|(icon, label, t)| new_item_row(icon, label, t, colors)),
+    )
+    .spacing(0);
 
     container(body)
         .width(220)

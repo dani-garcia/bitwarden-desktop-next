@@ -9,7 +9,7 @@ use iced::Task;
 use crate::{
     app::{App, Message},
     domain::Screen,
-    services::{clipboard::Sensitivity, cursor_monitor},
+    services::{clipboard::Sensitivity, cursor_monitor, sdk::ClientExt},
     views::magnify::{
         CopyField, MAGNIFY_RESULTS_SCROLL_ID, MAGNIFY_SEARCH_ID, MagnifyMessage, Mode, dims,
     },
@@ -252,23 +252,18 @@ impl App {
     }
 
     fn magnify_copy_field(&mut self, field: CopyField) -> Task<Message> {
-        let Some(uid) = self.active_user else {
-            return Task::none();
-        };
         let Some(cipher_id) = self.magnify.selected_item().and_then(|item| item.id) else {
             return Task::none();
         };
         self.magnify.pending_decrypt = Some((cipher_id, field));
-        let mgr = self.client_manager.clone();
-        let decrypt = Task::perform(
-            async move {
-                let result = mgr
-                    .full_cipher(&uid, cipher_id)
+        let decrypt = self.perform_with_active_client(
+            move |client| async move {
+                client
+                    .full_cipher(cipher_id)
                     .await
-                    .map(|view| extract_field(view, field));
-                (uid, cipher_id, field, result)
+                    .map(|view| extract_field(view, field))
             },
-            |(uid, cipher_id, field, result)| {
+            move |uid, result| {
                 Message::Magnify(MagnifyMessage::FieldDecryptCompleted(
                     uid, cipher_id, field, result,
                 ))

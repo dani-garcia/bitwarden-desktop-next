@@ -8,6 +8,8 @@ use std::{collections::HashMap, sync::Arc};
 use bitwarden_vault::{CipherId, CipherListView, CipherView};
 use iced::Task;
 
+use bitwarden_core::OrganizationId;
+
 use crate::{
     app::ViewTypes,
     components::{FadeInOut, collapsible_pane::CollapsiblePane, virtual_list},
@@ -18,6 +20,21 @@ use crate::{
 use super::{VaultEvent, VaultMessage, widgets::cipher_edit::CipherForm};
 
 // ── View-local domain ──────────────────────────────────────────────────────
+
+/// Filter applied to the cipher list. Selected from the sidebar; the sidebar
+/// imports this type from here so the filter shape stays owned by the vault
+/// view that defines its semantics.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum VaultFilter {
+    /// "Vault" parent — every cipher the user can see.
+    AllItems,
+    Personal,
+    Organization(OrganizationId),
+    Favorites,
+    Category(bitwarden_vault::CipherType),
+    Archive,
+    Trash,
+}
 
 /// Ratio the detail/form pane opens to the first time (list 60% / detail 40%).
 const INITIAL_DETAIL_PANE_RATIO: f32 = 0.4;
@@ -102,7 +119,7 @@ impl VaultView {
     /// Reset transient view state when switching users. Item caches are
     /// preserved in the map — keyed by user so they can't mix. Callers are
     /// expected to reset the sidebar filter separately (it lives on App).
-    pub fn reset(&mut self, uid: &UserId, filter: crate::components::sidebar::VaultFilter) {
+    pub fn reset(&mut self, uid: &UserId, filter: VaultFilter) {
         self.search_query.clear();
         self.selection.clear();
         self.pane.close();

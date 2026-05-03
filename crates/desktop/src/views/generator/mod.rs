@@ -42,7 +42,7 @@ const TAB_ANIM_MS: f32 = 160.0;
 // ── State ──────────────────────────────────────────────────────────────────
 
 pub struct GeneratorView {
-    pub fade: components::FadeInOut,
+    pub(super) fade: components::FadeInOut,
     mode: Mode,
     active_tab: TabKind,
     /// Float-valued tab index used to drive the sliding pill indicator.
@@ -221,13 +221,15 @@ pub enum GeneratorMessage {
     ToggleUsernameIncludeNumber(bool),
     SetEmail(String),
     SetDomain(String),
-    // Async round-trip from ClientManager
-    Generated(Result<(String, Vec<PasswordHistoryEntry>), String>),
+    // Async round-trip from the SDK. Carries just the value; the view's
+    // update commits it into `ClientManager::password_history` via the
+    // `&mut ClientManager` on `UpdateCtx` and stashes the snapshot.
+    Generated(Result<String, String>),
 }
 
 /// Events bubbled up to App. App is responsible for actually running the
-/// SDK call (needs `Arc<ClientManager>` + active user) and for the
-/// clipboard/toast side effects.
+/// SDK call (needs the per-user handle from `ClientManager::client_for`) and
+/// for the clipboard/toast side effects.
 pub enum GeneratorEvent {
     /// Regenerate the output for the active tab. App spawns a Task that
     /// calls `ClientManager::generate_*` and pipes the result back through
@@ -306,7 +308,7 @@ impl GeneratorView {
     pub fn update(
         &mut self,
         msg: GeneratorMessage,
-        _ctx: crate::app::UpdateCtx<'_>,
+        ctx: crate::app::UpdateCtx<'_>,
     ) -> Outcome<Self> {
         match msg {
             GeneratorMessage::Close => {
@@ -461,9 +463,11 @@ impl GeneratorView {
                 self.username.domain = s;
                 self.regenerate_event()
             }
-            GeneratorMessage::Generated(Ok((value, history))) => {
-                self.current = Some(value);
-                self.history = history;
+            GeneratorMessage::Generated(Ok(value)) => {
+                self.current = Some(value.clone());
+                if let Some(uid) = ctx.active_user.copied() {
+                    self.history = ctx.client_manager.push_history(uid, value);
+                }
                 Outcome::None
             }
             GeneratorMessage::Generated(Err(err)) => {
@@ -486,13 +490,13 @@ impl GeneratorView {
     /// take a cheap exclusive branch (see CLAUDE.md → "Stack doesn't cull").
     pub fn modal_view<'a>(
         &'a self,
-        colors: &'a AppColors,
+        ctx: &crate::app::RenderCtx<'a>,
     ) -> Option<Element<'a, GeneratorMessage, AppTheme>> {
         let progress = self.fade.progress_if_visible()?;
 
         let body = match self.mode {
-            Mode::Generator => self.generator_body(colors),
-            Mode::History => history::view(&self.history, colors),
+            Mode::Generator => self.generator_body(ctx.colors),
+            Mode::History => history::view(&self.history, ctx.colors),
         };
 
         let title_label = match self.mode {
@@ -503,11 +507,11 @@ impl GeneratorView {
             text(title_label)
                 .size(20)
                 .font(crate::APP_FONT_BOLD)
-                .color(colors.text_primary),
+                .color(ctx.colors.text_primary),
             Space::new().width(Fill),
             buttons::ghost_icon(
-                icons::X_LG.render(16.0, colors.text_primary),
-                colors.item_hover,
+                icons::X_LG.render(16.0, ctx.colors.text_primary),
+                ctx.colors.item_hover,
             )
             .padding([6, 6])
             .on_press(GeneratorMessage::Close),

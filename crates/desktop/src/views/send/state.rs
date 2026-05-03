@@ -7,11 +7,24 @@ use iced::Task;
 
 use crate::{
     app::ViewTypes,
-    components::{FadeInOut, collapsible_pane::CollapsiblePane, sidebar::SendFilter, virtual_list},
+    components::{FadeInOut, collapsible_pane::CollapsiblePane, virtual_list},
     domain::UserId,
 };
 
 use super::{SendEvent, SendMessage, widgets::send_edit::SendForm};
+
+// ── View-local domain ──────────────────────────────────────────────────────
+
+/// Filter applied to the send list. Selected from the sidebar; the sidebar
+/// imports this type from here so the filter shape stays owned by the send
+/// view that defines its semantics.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SendFilter {
+    /// "Send" parent — every send.
+    AllItems,
+    Text,
+    File,
+}
 
 /// The currently-selected send. Sends open directly into the edit form
 /// when a row is clicked, so there's no read-only "detail" step — `form`

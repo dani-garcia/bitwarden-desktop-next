@@ -4,7 +4,12 @@
 //! via the Close button or backdrop click. The "Learn more" link opens
 //! Bitwarden's fingerprint help page in the default browser. State lives on
 //! `App` rather than as its own `View` because the modal carries one string
-//! and emits two App-level signals — full MVU plumbing would be boilerplate.
+//! and emits three App-level signals — full MVU plumbing would be boilerplate.
+//!
+//! Pure helper, not a `View`: `modal_view` is generic over a message type
+//! `M` and takes its three message instances by parameter, so this module
+//! never imports `crate::app::Message`. The caller (App) constructs the
+//! concrete `Message` values and passes them in.
 
 use iced::{
     Alignment, Border, Color, Element, Fill, Length, Padding, Shadow, Vector,
@@ -12,11 +17,10 @@ use iced::{
 };
 
 use crate::{
-    app::{Message, SystemMessage},
     components::{FadeInOut, buttons, icons, modal},
     fl,
     services::clipboard,
-    theme::{AppColors, AppTheme},
+    theme::AppTheme,
 };
 
 const LEARN_MORE_URL: &str = "https://bitwarden.com/help/fingerprint-phrase/";
@@ -26,7 +30,7 @@ const RING_DIAMETER: f32 = 48.0;
 
 #[derive(Default)]
 pub struct FingerprintModal {
-    pub fade: FadeInOut,
+    pub(super) fade: FadeInOut,
     phrase: String,
 }
 
@@ -47,14 +51,21 @@ impl FingerprintModal {
 
 /// Returns `None` while fully closed so App can drop the slot from its
 /// overlay stack rather than rendering an invisible layer.
-pub fn modal_view<'a>(
+///
+/// `on_copy` / `on_close` / `on_learn_more` are concrete message instances
+/// the caller wants emitted on the corresponding action. Generic over `M` so
+/// this module doesn't depend on `App::Message`.
+pub fn modal_view<'a, M: Clone + 'a>(
+    ctx: &crate::app::RenderCtx<'a>,
     state: &'a FingerprintModal,
-    colors: &'a AppColors,
-) -> Option<Element<'a, Message, AppTheme>> {
+    on_copy: M,
+    on_close: M,
+    on_learn_more: M,
+) -> Option<Element<'a, M, AppTheme>> {
     let progress = state.fade.progress_if_visible()?;
 
     let icon_ring =
-        container(icons::INFO_CIRCLE_FILL.render::<Message, AppTheme>(28.0, colors.accent))
+        container(icons::INFO_CIRCLE_FILL.render::<M, AppTheme>(28.0, ctx.colors.accent))
             .width(Length::Fixed(RING_DIAMETER))
             .height(Length::Fixed(RING_DIAMETER))
             .align_x(Alignment::Center)
@@ -78,19 +89,15 @@ pub fn modal_view<'a>(
 
     let title = text(fl!("menu-fingerprint-title"))
         .size(16)
-        .color(colors.text_primary)
+        .color(ctx.colors.text_primary)
         .font(crate::APP_FONT_BOLD);
 
     let phrase_row = row![
         text(state.phrase.as_str())
             .size(14)
-            .color(colors.text_primary)
+            .color(ctx.colors.text_primary)
             .wrapping(Wrapping::None),
-        buttons::icon_button(
-            icons::BWI_COPY,
-            Message::System(SystemMessage::CopyFingerprint),
-            colors,
-        ),
+        buttons::icon_button(icons::BWI_COPY, on_copy, ctx.colors),
     ]
     .spacing(6)
     .align_y(Alignment::Center);
@@ -98,21 +105,21 @@ pub fn modal_view<'a>(
     let learn_more = buttons::primary(
         row![
             text(fl!("menu-fingerprint-learn-more")).size(14),
-            icons::BWI_EXTERNAL_LINK.render::<Message, AppTheme>(12.0, colors.card_bg),
+            icons::BWI_EXTERNAL_LINK.render::<M, AppTheme>(12.0, ctx.colors.card_bg),
         ]
         .spacing(8)
         .align_y(Alignment::Center),
     )
-    .on_press(Message::System(SystemMessage::OpenLearnMoreFingerprint))
+    .on_press(on_learn_more)
     .padding(Padding::from([10, 20]))
     .width(Length::Fill);
 
     let close_button = buttons::secondary(
         text(fl!("menu-fingerprint-close"))
             .size(14)
-            .color(colors.accent),
+            .color(ctx.colors.accent),
     )
-    .on_press(Message::System(SystemMessage::CloseFingerprintModal))
+    .on_press(on_close.clone())
     .padding(Padding::from([10, 20]))
     .width(Length::Fill);
 
@@ -143,7 +150,7 @@ pub fn modal_view<'a>(
         |c| c.card_bg,
         progress,
         body,
-        Message::System(SystemMessage::CloseFingerprintModal),
+        on_close,
     ))
 }
 

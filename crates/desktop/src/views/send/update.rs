@@ -5,7 +5,7 @@ use iced::Task;
 
 use crate::{
     app::{Outcome, UpdateCtx},
-    components::{sidebar::SendFilter, toast::Toast},
+    components::toast::Toast,
     debug_fmt::{NoDebug, Summary},
     domain::UserId,
     fl,
@@ -13,7 +13,7 @@ use crate::{
 };
 
 use super::{
-    SendEvent, SendMessage,
+    SendEvent, SendFilter, SendMessage,
     state::SendView,
     widgets::{
         send_edit::{FormAction, SendEditMessage, SendForm},
@@ -24,38 +24,27 @@ use super::{
 // ── Task factory ───────────────────────────────────────────────────────────
 
 impl SendView {
-    pub fn load_list_task(uid: UserId, mgr: &Arc<ClientManager>) -> Task<SendMessage> {
-        let mgr = mgr.clone();
-        Task::perform(
-            async move {
-                mgr.list_sends(&uid)
-                    .await
-                    .map(|items| items.into_iter().map(Arc::new).collect::<Vec<_>>())
-            },
-            move |result| SendMessage::ListLoaded(uid, result.map(Summary)),
-        )
+    /// Sync stub today (no SDK encrypt/decrypt yet); returned as a `Task` so
+    /// the call shape lines up with `VaultView::load_list_task` and a future
+    /// SDK-driven async path is a drop-in.
+    pub fn load_list_task(uid: UserId, mgr: &ClientManager) -> Task<SendMessage> {
+        let items: Vec<Arc<SdkSendView>> = mgr.list_sends(&uid).into_iter().map(Arc::new).collect();
+        Task::done(SendMessage::ListLoaded(uid, Ok(Summary(items))))
     }
 }
 
 // ── Update dispatch ────────────────────────────────────────────────────────
 
 impl SendView {
-    pub fn update(&mut self, msg: SendMessage, ctx: UpdateCtx<'_>) -> Outcome<Self> {
-        let UpdateCtx {
-            client_manager,
-            active_user,
-            active_send_filter,
-            open_overlay,
-            ..
-        } = ctx;
+    pub fn update(&mut self, msg: SendMessage, mut ctx: UpdateCtx<'_>) -> Outcome<Self> {
         match msg {
             SendMessage::ItemList(m) => {
-                return self.handle_item_list(m, client_manager, active_user);
+                return self.handle_item_list(&ctx, m);
             }
             SendMessage::Search(SearchMessage::QueryChanged(query)) => {
                 self.search_query = query;
-                if let Some(uid) = active_user {
-                    self.recompute_filtered(uid, active_send_filter);
+                if let Some(uid) = ctx.active_user {
+                    self.recompute_filtered(uid, ctx.active_send_filter);
                 }
             }
             SendMessage::CloseFormPane => {
@@ -64,7 +53,7 @@ impl SendView {
                 // animates out. Wide-mode pane closes immediately.
                 self.selection.sheet_fade.close();
                 self.pane.close();
-                return Outcome::spawn(
+                return Outcome::perform(
                     tokio::time::sleep(std::time::Duration::from_millis(180)),
                     |_| SendMessage::FinalizeSheetClose,
                 );
@@ -74,34 +63,41 @@ impl SendView {
             }
             SendMessage::PaneResized(event) => self.pane.set_ratio(event.ratio),
             SendMessage::SendEdit(m) => {
-                return self.handle_send_edit(m, client_manager, active_user);
+                return self.handle_send_edit(&mut ctx, m);
             }
             SendMessage::CancelDeleteSelected => self.selection.confirm_delete.close(),
             SendMessage::ConfirmDeleteSelected => {
-                return self.handle_confirm_delete(client_manager, active_user);
+                return self.handle_confirm_delete(&mut ctx);
             }
             SendMessage::NewItem => {
-                self.handle_new_item(active_send_filter);
+                self.handle_new_item(&ctx);
             }
             SendMessage::AccountSwitcher(m) => {
                 return Outcome::from_option(
-                    m.consume(open_overlay, crate::app::Overlay::AccountSwitcher)
+                    m.consume(&mut *ctx.open_overlay, crate::app::Overlay::AccountSwitcher)
                         .map(SendEvent::AccountSwitcher),
                 );
             }
             SendMessage::ListLoaded(uid, res) => {
-                return self.handle_list_loaded(uid, res, active_user, active_send_filter);
+                return self.handle_list_loaded(&ctx, uid, res);
             }
             SendMessage::DetailLoaded(uid, id, res) => {
-                return self.handle_detail_loaded(uid, id, res, active_user);
+                return self.handle_detail_loaded(&ctx, uid, id, res);
             }
             SendMessage::SaveCompleted(uid, res) => {
-                return self.handle_save_completed(uid, res, active_user);
+                return self.handle_save_completed(&ctx, uid, res);
             }
             SendMessage::DeleteCompleted(uid, id, res) => {
-                return self.handle_delete_completed(uid, id, res, active_user);
+                return self.handle_delete_completed(&ctx, uid, id, res);
             }
             SendMessage::PasswordGenerated(res) => {
+                // Mirror the official client: every generated value lands in
+                // the user's history, regardless of which form triggered it.
+                if let Ok(NoDebug(value)) = &res
+                    && let Some(uid) = ctx.active_user.copied()
+                {
+                    ctx.client_manager.push_history(uid, value.clone());
+                }
                 return self.handle_password_generated(res);
             }
         }
@@ -112,29 +108,30 @@ impl SendView {
 // ── Per-variant handlers ───────────────────────────────────────────────────
 
 impl SendView {
-    fn handle_item_list(
-        &mut self,
-        msg: SendListMessage,
-        client_manager: &Arc<ClientManager>,
-        active_user: Option<&UserId>,
-    ) -> Outcome<Self> {
+    fn handle_item_list(&mut self, ctx: &UpdateCtx<'_>, msg: SendListMessage) -> Outcome<Self> {
         match msg {
             SendListMessage::ItemSelected(idx) => {
                 self.selection.item = Some(idx);
-                self.selection.id = active_user
+                self.selection.id = ctx
+                    .active_user
                     .and_then(|uid| self.items.get(uid))
                     .and_then(|ic| ic.cached.get(idx))
                     .and_then(|i| i.id);
                 let Some(id) = self.selection.id else {
                     return Outcome::None;
                 };
-                let Some(uid) = active_user.copied() else {
+                let Some(uid) = ctx.active_user.copied() else {
                     return Outcome::None;
                 };
-                let mgr = client_manager.clone();
-                return Outcome::spawn(async move { mgr.full_send(&uid, id).await }, move |res| {
-                    SendMessage::DetailLoaded(uid, id, res.map(|v| NoDebug(Box::new(v))))
-                });
+                // Sync stub today; deliver via `Task::done` so the rest of
+                // the view's flow (loading state, stale-uid guard) keeps the
+                // same shape as the future async path.
+                let result = ctx
+                    .client_manager
+                    .full_send(&uid, id)
+                    .map(|v| NoDebug(Box::new(v)))
+                    .ok_or_else(|| format!("send {id} not found"));
+                return Outcome::task(Task::done(SendMessage::DetailLoaded(uid, id, result)));
             }
             SendListMessage::Scrolled(viewport) => {
                 self.list_scroll.track(viewport);
@@ -144,11 +141,11 @@ impl SendView {
         Outcome::None
     }
 
-    fn handle_new_item(&mut self, active_filter: SendFilter) {
+    fn handle_new_item(&mut self, ctx: &UpdateCtx<'_>) {
         // The sub-filter dictates the default type. File sends currently have
         // no creation path beyond the placeholder "Choose file" button — the
         // form renders a disabled filename/size for them.
-        let send_type = match active_filter {
+        let send_type = match ctx.active_send_filter {
             SendFilter::File => SendType::File,
             SendFilter::Text | SendFilter::AllItems => SendType::Text,
         };
@@ -158,12 +155,7 @@ impl SendView {
         self.pane.open();
     }
 
-    fn handle_send_edit(
-        &mut self,
-        msg: SendEditMessage,
-        client_manager: &Arc<ClientManager>,
-        active_user: Option<&UserId>,
-    ) -> Outcome<Self> {
+    fn handle_send_edit(&mut self, ctx: &mut UpdateCtx<'_>, msg: SendEditMessage) -> Outcome<Self> {
         let Some(form) = self.selection.form.as_mut() else {
             return Outcome::None;
         };
@@ -181,15 +173,19 @@ impl SendView {
                         None,
                     )));
                 }
-                let Some(uid) = active_user.copied() else {
+                let Some(uid) = ctx.active_user.copied() else {
                     return Outcome::None;
                 };
                 form.saving = true;
-                let mgr = client_manager.clone();
                 let view = form.to_send_view();
-                Outcome::spawn(async move { mgr.save_send(&uid, view).await }, move |res| {
-                    SendMessage::SaveCompleted(uid, res.map(|v| NoDebug(Box::new(v))))
-                })
+                // Sync save (no SDK encrypt yet); commit + dispatch the
+                // completion message so handle_save_completed runs the same
+                // path as the future async case.
+                let saved = ctx.client_manager.save_send(uid, view);
+                Outcome::task(Task::done(SendMessage::SaveCompleted(
+                    uid,
+                    Ok(NoDebug(Box::new(saved))),
+                )))
             }
             FormAction::Delete => {
                 self.selection.confirm_delete.open();
@@ -211,11 +207,7 @@ impl SendView {
         }
     }
 
-    fn handle_confirm_delete(
-        &mut self,
-        client_manager: &Arc<ClientManager>,
-        active_user: Option<&UserId>,
-    ) -> Outcome<Self> {
+    fn handle_confirm_delete(&mut self, ctx: &mut UpdateCtx<'_>) -> Outcome<Self> {
         self.selection.confirm_delete.close();
         let Some(send_id) = self.selection.id else {
             // New-item form hasn't been saved yet — "delete" just dismisses
@@ -224,30 +216,30 @@ impl SendView {
             self.pane.close();
             return Outcome::None;
         };
-        let Some(uid) = active_user.copied() else {
+        let Some(uid) = ctx.active_user.copied() else {
             return Outcome::None;
         };
-        let mgr = client_manager.clone();
-        Outcome::spawn(
-            async move { mgr.delete_send(&uid, send_id).await },
-            move |res| SendMessage::DeleteCompleted(uid, send_id, res),
-        )
+        ctx.client_manager.delete_send(&uid, send_id);
+        Outcome::task(Task::done(SendMessage::DeleteCompleted(
+            uid,
+            send_id,
+            Ok(()),
+        )))
     }
 
     fn handle_list_loaded(
         &mut self,
+        ctx: &UpdateCtx<'_>,
         msg_uid: UserId,
         result: Result<Summary<Vec<Arc<SdkSendView>>>, String>,
-        active_user: Option<&UserId>,
-        active_filter: SendFilter,
     ) -> Outcome<Self> {
         match result {
             Ok(Summary(items)) => {
                 tracing::info!(uid = %msg_uid, count = items.len(), "send list loaded");
                 let cache = self.items.entry(msg_uid).or_default();
                 cache.all = items;
-                if active_user == Some(&msg_uid) {
-                    self.recompute_filtered(&msg_uid, active_filter);
+                if ctx.active_user == Some(&msg_uid) {
+                    self.recompute_filtered(&msg_uid, ctx.active_send_filter);
                 }
             }
             Err(err) => {
@@ -259,12 +251,12 @@ impl SendView {
 
     fn handle_detail_loaded(
         &mut self,
+        ctx: &UpdateCtx<'_>,
         msg_uid: UserId,
         id: SendId,
         result: Result<NoDebug<Box<SdkSendView>>, String>,
-        active_user: Option<&UserId>,
     ) -> Outcome<Self> {
-        if active_user != Some(&msg_uid) {
+        if ctx.active_user != Some(&msg_uid) {
             return Outcome::None;
         }
         match result {
@@ -288,11 +280,11 @@ impl SendView {
 
     fn handle_save_completed(
         &mut self,
+        ctx: &UpdateCtx<'_>,
         msg_uid: UserId,
         result: Result<NoDebug<Box<SdkSendView>>, String>,
-        active_user: Option<&UserId>,
     ) -> Outcome<Self> {
-        if active_user != Some(&msg_uid) {
+        if ctx.active_user != Some(&msg_uid) {
             return Outcome::None;
         }
         let event = match result {
@@ -342,12 +334,12 @@ impl SendView {
 
     fn handle_delete_completed(
         &mut self,
+        ctx: &UpdateCtx<'_>,
         msg_uid: UserId,
         send_id: SendId,
         result: Result<(), String>,
-        active_user: Option<&UserId>,
     ) -> Outcome<Self> {
-        if active_user != Some(&msg_uid) {
+        if ctx.active_user != Some(&msg_uid) {
             return Outcome::None;
         }
         let event = match result {

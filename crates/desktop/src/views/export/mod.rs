@@ -11,8 +11,6 @@
 //! below the picker; the encryption password is folded into the SDK-shaped
 //! format value at the moment Continue is pressed.
 
-use std::sync::Arc;
-
 use bitwarden_core::OrganizationId;
 use iced::{
     Alignment, Element, Fill, Padding,
@@ -24,7 +22,7 @@ use crate::{
     components::{FadeInOut, buttons, fade_in_out, icons, inputs, modal},
     domain::UserId,
     fl,
-    services::sdk::{ClientManager, Organization},
+    services::sdk::{ClientExt, Organization},
     theme::{AppColors, AppTheme, RADIUS_LG},
 };
 
@@ -106,10 +104,10 @@ impl std::fmt::Display for VaultChoice {
 
 pub struct ExportView {
     /// Outer fade — owns the Compose dialog (format picker).
-    pub fade: FadeInOut,
+    pub(super) fade: FadeInOut,
     /// Inner fade — owns the Confirm dialog (master password). Opens only
     /// while the user is on the master-password gate.
-    pub confirm_fade: FadeInOut,
+    pub(super) confirm_fade: FadeInOut,
     /// Active user email — shown verbatim in the personal-vault banner.
     /// Set via [`Self::open`] each time the modal is opened.
     email: String,
@@ -287,10 +285,13 @@ impl ExportView {
                 };
                 self.validating = true;
                 let password = self.master_password.clone();
-                let mgr: Arc<ClientManager> = Arc::clone(ctx.client_manager);
-                Outcome::spawn(
+                let Some((client, key)) = ctx.client_manager.validation_data_for(&uid) else {
+                    return Outcome::None;
+                };
+                Outcome::perform(
                     async move {
-                        mgr.validate_master_password(&uid, password)
+                        client
+                            .validate_master_password(key, password)
                             .await
                             .map(|()| uid)
                     },
@@ -344,15 +345,15 @@ impl ExportView {
 
     pub fn modal_view<'a>(
         &'a self,
-        colors: &'a AppColors,
+        ctx: &crate::app::RenderCtx<'a>,
     ) -> Option<Element<'a, ExportMessage, AppTheme>> {
         let progress = self.fade.progress_if_visible()?;
-        let compose = self.compose_dialog(colors, progress);
+        let compose = self.compose_dialog(ctx.colors, progress);
 
         let Some(confirm_progress) = self.confirm_fade.progress_if_visible() else {
             return Some(compose);
         };
-        let confirm = self.confirm_dialog(colors, confirm_progress);
+        let confirm = self.confirm_dialog(ctx.colors, confirm_progress);
         Some(stack![compose, confirm].into())
     }
 
@@ -455,10 +456,7 @@ impl ExportView {
         let (title, body) = match &self.selected_vault {
             VaultChoice::Personal => (
                 fl!("export-modal-banner-personal-title"),
-                fl!(
-                    "export-modal-banner-personal",
-                    email = self.email.as_str()
-                ),
+                fl!("export-modal-banner-personal", email = self.email.as_str()),
             ),
             VaultChoice::Org { name, .. } => (
                 fl!("export-modal-banner-org-title"),
@@ -575,4 +573,3 @@ impl ExportView {
         )
     }
 }
-

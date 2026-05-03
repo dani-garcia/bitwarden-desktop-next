@@ -35,6 +35,10 @@ const ICON_CORNER_RADIUS: f32 = 4.0;
 
 const FETCH_CONCURRENCY: usize = 5;
 const FETCH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+/// Hard cap on a favicon response body. A malicious icon server could
+/// otherwise serve a multi-GB body — `bytes()` would buffer it whole, and
+/// with `FETCH_CONCURRENCY` parallel fetches that's a one-line OOM.
+const MAX_FAVICON_BYTES: u64 = 2 * 1024 * 1024;
 
 // ── Public API ─────────────────────────────────────────────────────────────
 
@@ -248,8 +252,8 @@ async fn fetch_one(inner: &FaviconInner, uid: &UserId, hostname: &Hostname) -> I
     );
     let resp = inner.http.get(&url).timeout(FETCH_TIMEOUT).send().await;
     match resp {
-        Ok(r) if r.status().is_success() => match r.bytes().await {
-            Ok(body) => decode_to_handle(body.to_vec()).await.unwrap_or_else(|e| {
+        Ok(r) if r.status().is_success() => match read_capped(r, MAX_FAVICON_BYTES).await {
+            Ok(body) => decode_to_handle(body).await.unwrap_or_else(|e| {
                 tracing::debug!(host = %hostname, error = %e, "favicon decode failed");
                 IconState::Missing
             }),
@@ -267,6 +271,28 @@ async fn fetch_one(inner: &FaviconInner, uid: &UserId, hostname: &Hostname) -> I
             IconState::Missing
         }
     }
+}
+
+/// Read the response body in chunks, rejecting once the running total
+/// exceeds `max`. Catches both honest-Content-Length giants (cheap reject)
+/// and chunked-transfer abusers (mid-stream cancel). `chunk()` doesn't
+/// require reqwest's `stream` feature.
+async fn read_capped(mut resp: reqwest::Response, max: u64) -> Result<Vec<u8>, String> {
+    if let Some(len) = resp.content_length()
+        && len > max
+    {
+        return Err(format!("body too large ({len} > {max})"));
+    }
+    let mut total: u64 = 0;
+    let mut buf: Vec<u8> = Vec::new();
+    while let Some(chunk) = resp.chunk().await.map_err(|e| e.to_string())? {
+        total = total.saturating_add(chunk.len() as u64);
+        if total > max {
+            return Err(format!("body exceeded {max} bytes"));
+        }
+        buf.extend_from_slice(&chunk);
+    }
+    Ok(buf)
 }
 
 // ── Decode + alpha-mask pipeline ──────────────────────────────────────────

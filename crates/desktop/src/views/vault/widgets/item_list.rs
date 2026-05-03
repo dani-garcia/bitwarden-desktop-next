@@ -10,6 +10,7 @@ use iced::{
 };
 
 use crate::{
+    app::RenderCtx,
     components::{self, buttons, icons, virtual_list},
     fl,
     services::favicon::{self, IconState},
@@ -58,10 +59,10 @@ fn initial_color(name: &str) -> iced::Color {
 }
 
 pub fn view<'a>(
+    ctx: &RenderCtx<'a>,
     items: &'a [Arc<CipherListView>],
     selected_index: Option<usize>,
     scroll: virtual_list::ScrollState,
-    ctx: &crate::app::RenderCtx<'a>,
 ) -> Element<'a, ItemListMessage, AppTheme> {
     let colors = ctx.colors;
     let table_header = container(
@@ -92,7 +93,7 @@ pub fn view<'a>(
         items,
         scroll,
         ROW_HEIGHT,
-        |i, item| row_element(i, item, selected_index == Some(i), ctx),
+        |i, item| row_element(ctx, i, item, selected_index == Some(i)),
         ItemListMessage::Scrolled,
     )
     .height(Fill)
@@ -133,10 +134,10 @@ pub fn view<'a>(
 /// wraps the returned Element in a `Length::Fixed(ROW_HEIGHT)` container
 /// itself, so no height concern leaks into here.
 fn row_element<'a>(
+    ctx: &RenderCtx<'a>,
     i: usize,
     item: &'a CipherListView,
     is_selected: bool,
-    ctx: &crate::app::RenderCtx<'a>,
 ) -> Element<'a, ItemListMessage, AppTheme> {
     let colors = ctx.colors;
     let favicon = ctx.favicon;

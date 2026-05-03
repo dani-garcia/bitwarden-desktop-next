@@ -32,13 +32,13 @@ use crate::{
 // ── State ──────────────────────────────────────────────────────────────────
 
 pub struct SettingsView {
-    pub fade: components::FadeInOut,
+    pub(super) fade: components::FadeInOut,
     active: CategoryKind,
     /// Working copy of `(Settings, UserPreferences)`. Every edit mutates this
     /// directly and also bubbles up via `SettingsEvent::Applied` so App can
     /// copy it back into its persisted state and run any live side effect.
     /// Tabs render straight out of this snapshot — no intermediate form layer.
-    pub snapshot: SettingsSnapshot,
+    pub(super) snapshot: SettingsSnapshot,
 }
 
 impl ViewTypes for SettingsView {
@@ -173,11 +173,10 @@ impl SettingsView {
         self.fade.close();
     }
 
-    pub fn update(
-        &mut self,
-        msg: SettingsMessage,
-        _ctx: crate::app::UpdateCtx<'_>,
-    ) -> Outcome<Self> {
+    /// Settings is a pure-state view: every arm here mutates `self.snapshot`
+    /// (or `self.fade`) and bubbles up via `SettingsEvent`. No SDK calls, no
+    /// overlay arbitration → no `UpdateCtx`.
+    pub fn update(&mut self, msg: SettingsMessage) -> Outcome<Self> {
         match msg {
             SettingsMessage::Close => self.fade.close(),
             SettingsMessage::SelectCategory(kind) => self.active = kind,
@@ -228,12 +227,12 @@ impl SettingsView {
     /// overlay stack only when this yields `Some(_)`.
     pub fn modal_view<'a>(
         &'a self,
-        colors: &'a AppColors,
+        ctx: &crate::app::RenderCtx<'a>,
     ) -> Option<Element<'a, SettingsMessage, AppTheme>> {
         let progress = self.fade.progress_if_visible()?;
 
-        let sidebar = self.sidebar_view(colors);
-        let pane = self.content_pane(colors);
+        let sidebar = self.sidebar_view(ctx.colors);
+        let pane = self.content_pane(ctx.colors);
 
         // Outer dialog: fixed-size, white bg, rounded all corners. The sidebar
         // paints its own light-gray background with matching LEFT corner radii

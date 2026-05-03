@@ -1,3 +1,6 @@
+use std::future::Future;
+
+use bitwarden_pm::PasswordManagerClient;
 use iced::Task;
 
 use crate::{
@@ -63,6 +66,53 @@ impl App {
         } else {
             Task::none()
         }
+    }
+
+    /// Bundle the most common SDK call shape: extract the active user's
+    /// `PasswordManagerClient`, run an async call against it, and route the
+    /// result through `on_complete`. `Task::none()` if no active user or the
+    /// user isn't loaded — the same defensive bail every handler used to
+    /// open with by hand.
+    ///
+    /// `spawn` runs sync once with the cloned client and returns the future;
+    /// the future is `Task::perform`'d. `on_complete` receives the active
+    /// uid alongside the result so call sites that need it (export, magnify)
+    /// don't have to capture it twice.
+    pub(crate) fn perform_with_active_client<Spawn, Fut, T>(
+        &self,
+        spawn: Spawn,
+        on_complete: impl Fn(UserId, T) -> Message + Send + 'static,
+    ) -> Task<Message>
+    where
+        Spawn: FnOnce(PasswordManagerClient) -> Fut,
+        Fut: Future<Output = T> + Send + 'static,
+        T: Send + 'static,
+    {
+        let Some(uid) = self.active_user else {
+            return Task::none();
+        };
+        self.perform_with_client(uid, spawn, move |t| on_complete(uid, t))
+    }
+
+    /// Variant of [`Self::perform_with_active_client`] for callers that
+    /// already have a specific uid in hand (e.g. captured from a message
+    /// payload, so we shouldn't re-read `self.active_user`). Same defensive
+    /// `Task::none()` bail when the user isn't loaded.
+    pub(crate) fn perform_with_client<Spawn, Fut, T>(
+        &self,
+        uid: UserId,
+        spawn: Spawn,
+        on_complete: impl Fn(T) -> Message + Send + 'static,
+    ) -> Task<Message>
+    where
+        Spawn: FnOnce(PasswordManagerClient) -> Fut,
+        Fut: Future<Output = T> + Send + 'static,
+        T: Send + 'static,
+    {
+        let Some(client) = self.client_manager.client_for(&uid) else {
+            return Task::none();
+        };
+        Task::perform(spawn(client), on_complete)
     }
 
     pub(crate) fn active_account_entry(&self) -> Option<&AccountEntry> {

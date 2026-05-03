@@ -1,11 +1,9 @@
-use std::sync::Arc;
-
 use iced::Task;
 
 use crate::{
     app::{App, Message},
     fl,
-    services::{clipboard::Sensitivity, sdk::ClientManager},
+    services::{clipboard::Sensitivity, sdk::ClientExt},
     views::generator::{GenerateKind, GeneratorEvent, GeneratorMessage},
 };
 
@@ -38,26 +36,16 @@ impl App {
     /// user — generator is gated by `EnabledWhen::Unlocked` so this is a
     /// defensive guard.
     pub(crate) fn run_generator(&self, kind: GenerateKind) -> Task<Message> {
-        let Some(uid) = self.active_user else {
-            return Task::none();
-        };
-        let mgr: Arc<ClientManager> = Arc::clone(&self.client_manager);
-        match kind {
-            GenerateKind::Password(req) => {
-                Task::perform(async move { mgr.generate_password(&uid, req).await }, |r| {
-                    Message::generator(GeneratorMessage::Generated(r))
-                })
-            }
-            GenerateKind::Passphrase(req) => Task::perform(
-                async move { mgr.generate_passphrase(&uid, req).await },
-                |r| Message::generator(GeneratorMessage::Generated(r)),
-            ),
-            GenerateKind::Username(req) => {
-                Task::perform(async move { mgr.generate_username(&uid, req).await }, |r| {
-                    Message::generator(GeneratorMessage::Generated(r))
-                })
-            }
-        }
+        self.perform_with_active_client(
+            move |client| async move {
+                match kind {
+                    GenerateKind::Password(req) => client.generate_password(req).await,
+                    GenerateKind::Passphrase(req) => client.generate_passphrase(req).await,
+                    GenerateKind::Username(req) => client.generate_username(req).await,
+                }
+            },
+            |_uid, r| Message::generator(GeneratorMessage::Generated(r)),
+        )
     }
 
     /// Open the Generator modal in its default tab and seed the first

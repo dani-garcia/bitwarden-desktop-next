@@ -341,7 +341,7 @@ impl std::fmt::Display for VaultChoice {
 }
 
 pub struct ImportView {
-    pub fade: FadeInOut,
+    pub(super) fade: FadeInOut,
     vault_choices: Vec<VaultChoice>,
     selected_vault: VaultChoice,
     /// Folder names with the localized placeholder at the top. Loaded
@@ -504,7 +504,7 @@ impl ImportView {
     /// cheap exclusive branch — same pattern as the generator modal.
     pub fn modal_view<'a>(
         &'a self,
-        colors: &'a AppColors,
+        ctx: &crate::app::RenderCtx<'a>,
     ) -> Option<Element<'a, ImportMessage, AppTheme>> {
         let progress = self.fade.progress_if_visible()?;
 
@@ -512,11 +512,11 @@ impl ImportView {
             text(fl!("import-modal-title"))
                 .size(20)
                 .font(crate::APP_FONT_BOLD)
-                .color(colors.text_primary),
+                .color(ctx.colors.text_primary),
             Space::new().width(Fill),
             buttons::ghost_icon(
-                icons::X_LG.render(16.0, colors.text_primary),
-                colors.item_hover,
+                icons::X_LG.render(16.0, ctx.colors.text_primary),
+                ctx.colors.item_hover,
             )
             .padding([6, 6])
             .on_press(ImportMessage::Close),
@@ -529,7 +529,7 @@ impl ImportView {
             self.vault_choices.clone(),
             |v: &VaultChoice| v.to_string(),
             ImportMessage::VaultSelected,
-            colors,
+            ctx.colors,
         );
 
         let sub_picker: Element<'a, ImportMessage, AppTheme> = match &self.selected_vault {
@@ -539,7 +539,7 @@ impl ImportView {
                 self.folder_choices.clone(),
                 |s: &String| s.clone(),
                 ImportMessage::FolderSelected,
-                colors,
+                ctx.colors,
             ),
             VaultChoice::Org { id, .. } => inputs::select_field(
                 fl!("import-modal-collection-label"),
@@ -547,14 +547,14 @@ impl ImportView {
                 self.collection_choices(*id),
                 |s: &String| s.clone(),
                 ImportMessage::CollectionSelected,
-                colors,
+                ctx.colors,
             ),
         };
 
         let destination_card = section_card(
             fl!("import-modal-section-destination"),
             column![vault_picker, sub_picker].spacing(12).into(),
-            colors,
+            ctx.colors,
         );
 
         let format_picker = inputs::select_field(
@@ -563,7 +563,7 @@ impl ImportView {
             all_formats(),
             |f: &ImportFormat| f.name.to_string(),
             ImportMessage::FormatSelected,
-            colors,
+            ctx.colors,
         );
 
         let file_row = row![
@@ -572,7 +572,7 @@ impl ImportView {
                 .padding([8, 16]),
             text(fl!("import-modal-no-file"))
                 .size(14)
-                .color(colors.text_secondary),
+                .color(ctx.colors.text_secondary),
         ]
         .spacing(12)
         .align_y(Alignment::Center);
@@ -584,7 +584,7 @@ impl ImportView {
             .max_height(240.0)
             .on_action(ImportMessage::PasteAction);
         let paste_field =
-            inputs::field_frame(fl!("import-modal-paste-label"), paste_editor, colors);
+            inputs::field_frame(fl!("import-modal-paste-label"), paste_editor, ctx.colors);
 
         let data_card = section_card(
             fl!("import-modal-section-data"),
@@ -592,13 +592,13 @@ impl ImportView {
                 format_picker,
                 text(fl!("import-modal-file-helper"))
                     .size(12)
-                    .color(colors.text_secondary),
+                    .color(ctx.colors.text_secondary),
                 file_row,
                 paste_field,
             ]
             .spacing(12)
             .into(),
-            colors,
+            ctx.colors,
         );
 
         let submit_btn = buttons::primary(text(fl!("import-modal-submit")).size(14))

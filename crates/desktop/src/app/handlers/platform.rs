@@ -3,8 +3,6 @@
 //! manipulate the window and the window-message handler dispatches menu
 //! actions on keyboard shortcuts.
 
-use std::sync::Arc;
-
 use iced::Task;
 
 use crate::{
@@ -15,7 +13,6 @@ use crate::{
     components::toast::Toast,
     domain::Screen,
     fl,
-    services::sdk::ClientManager,
     views::{settings::SettingsSnapshot, title_bar::WindowAction},
 };
 
@@ -160,7 +157,11 @@ impl App {
                 }
                 Task::none()
             }
-            SystemMessage::ClientManagerLoaded(mgr) => {
+            SystemMessage::ClientManagerLoaded(slot) => {
+                let Some(mgr) = slot.lock().unwrap().take() else {
+                    tracing::error!("ClientManager slot was already drained");
+                    return Task::none();
+                };
                 self.client_manager = mgr;
                 self.active_user = self.client_manager.user_ids().into_iter().next();
                 self.views
@@ -292,8 +293,10 @@ impl App {
                 let Some(uid) = self.active_user else {
                     return Task::none();
                 };
-                let mgr: Arc<ClientManager> = Arc::clone(&self.client_manager);
-                return Task::perform(async move { mgr.sync(&uid).await }, |res| {
+                if self.client_manager.client_for(&uid).is_none() {
+                    return Task::none();
+                }
+                return Task::perform(crate::services::sdk::sync(), |res| {
                     Message::System(SystemMessage::SyncCompleted(res.map_err(|e| e.to_string())))
                 });
             }
@@ -374,9 +377,9 @@ impl App {
                     self.set_screen(Screen::Vault);
                 }
                 self.open_overlay = None;
-                return Task::done(Message::vault(
-                    crate::views::vault::VaultMessage::NewItem(t),
-                ));
+                return Task::done(Message::vault(crate::views::vault::VaultMessage::NewItem(
+                    t,
+                )));
             }
             MenuAction::CopyUsername => {
                 return self.copy_from_active_selection(

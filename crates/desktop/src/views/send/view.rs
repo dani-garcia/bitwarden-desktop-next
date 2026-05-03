@@ -7,22 +7,24 @@ use iced::{
 };
 
 use crate::{
-    components::{account_switcher, bottom_sheet, buttons, collapsible_pane, icons},
+    app::RenderCtx,
+    components::{
+        account_switcher,
+        bottom_sheet::{self, SHEET_BREAKPOINT_PX, SHEET_TOP_INSET_PX, SHEET_TOP_RADIUS_PX},
+        buttons, collapsible_pane, icons,
+    },
     fl,
     theme::{AppColors, AppTheme},
 };
 
 use super::{
-    SHEET_BREAKPOINT_PX, SHEET_TOP_INSET_PX, SHEET_TOP_RADIUS_PX, SendMessage,
+    SendMessage,
     state::SendView,
     widgets::{send_edit, send_list},
 };
 
 impl SendView {
-    pub fn view<'a>(
-        &'a self,
-        ctx: &crate::app::RenderCtx<'a>,
-    ) -> Element<'a, SendMessage, AppTheme> {
+    pub fn view<'a>(&'a self, ctx: &RenderCtx<'a>) -> Element<'a, SendMessage, AppTheme> {
         let active_user = ctx.active_user.expect("Screen::Send without active_user");
         let cached_items: &[Arc<SdkSendView>] = self
             .items
@@ -44,12 +46,12 @@ impl SendView {
                     .map(|_| self.form_pane(ctx.colors, 0.0));
                 collapsible_pane::view(
                     &self.pane,
-                    self.list_content(cached_items, ctx),
+                    self.list_content(ctx, cached_items),
                     right,
                     SendMessage::PaneResized,
                 )
             } else {
-                self.list_content(cached_items, ctx)
+                self.list_content(ctx, cached_items)
             };
 
         container(content_area_inner)
@@ -65,7 +67,7 @@ impl SendView {
 
     pub fn sheet_view<'a>(
         &'a self,
-        ctx: &crate::app::RenderCtx<'a>,
+        ctx: &RenderCtx<'a>,
     ) -> Option<Element<'a, SendMessage, AppTheme>> {
         if ctx.window_width >= SHEET_BREAKPOINT_PX {
             return None;
@@ -83,7 +85,7 @@ impl SendView {
 
     pub fn modal_view<'a>(
         &'a self,
-        ctx: &crate::app::RenderCtx<'a>,
+        ctx: &RenderCtx<'a>,
     ) -> Option<Element<'a, SendMessage, AppTheme>> {
         let progress = self.selection.confirm_delete.progress_if_visible()?;
         let colors = ctx.colors;
@@ -121,8 +123,8 @@ impl SendView {
 
     fn list_content<'a>(
         &'a self,
+        ctx: &RenderCtx<'a>,
         cached_items: &'a [Arc<SdkSendView>],
-        ctx: &crate::app::RenderCtx<'a>,
     ) -> Element<'a, SendMessage, AppTheme> {
         let colors = ctx.colors;
         let active_email = ctx.active_email.expect("Screen::Send without active_email");

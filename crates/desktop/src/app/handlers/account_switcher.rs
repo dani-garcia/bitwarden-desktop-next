@@ -38,8 +38,8 @@ impl App {
         // next summon doesn't restore them.
         self.magnify_reset_sticky();
         self.active_user = Some(uid);
-        self.sidebar.active_vault_filter = crate::components::sidebar::VaultFilter::AllItems;
-        self.sidebar.active_send_filter = crate::components::sidebar::SendFilter::AllItems;
+        self.sidebar.active_vault_filter = crate::views::vault::VaultFilter::AllItems;
+        self.sidebar.active_send_filter = crate::views::send::SendFilter::AllItems;
         self.views
             .vault
             .reset(&uid, self.sidebar.active_vault_filter);

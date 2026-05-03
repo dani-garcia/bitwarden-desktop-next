@@ -177,17 +177,28 @@ impl Settings {
         }
     }
 
+    /// Atomic write: serialize into a sibling `.tmp` and rename over the
+    /// target. A crash during the write leaves the original file intact —
+    /// crucial for the `wgpu_backend_pending` sentinel that guards against
+    /// the wgpu crash-loop.
     pub fn save(&self) {
         let path = crate::paths::data_dir().join("settings.json");
-        let file = match std::fs::File::create(&path) {
+        let tmp_path = path.with_extension("json.tmp");
+        let file = match std::fs::File::create(&tmp_path) {
             Ok(f) => f,
             Err(e) => {
-                tracing::warn!(path = %path.display(), error = %e, "settings.json write failed");
+                tracing::warn!(path = %tmp_path.display(), error = %e, "settings.json write failed");
                 return;
             }
         };
         if let Err(e) = serde_json::to_writer_pretty(file, self) {
-            tracing::warn!(path = %path.display(), error = %e, "settings.json serialize failed");
+            tracing::warn!(path = %tmp_path.display(), error = %e, "settings.json serialize failed");
+            let _ = std::fs::remove_file(&tmp_path);
+            return;
+        }
+        if let Err(e) = std::fs::rename(&tmp_path, &path) {
+            tracing::warn!(path = %path.display(), error = %e, "settings.json rename failed");
+            let _ = std::fs::remove_file(&tmp_path);
         }
     }
 

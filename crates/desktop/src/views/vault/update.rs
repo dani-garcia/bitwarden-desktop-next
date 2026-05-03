@@ -15,15 +15,18 @@ use iced::Task;
 
 use crate::{
     app::{Outcome, UpdateCtx},
-    components::{sidebar::VaultFilter, toast::Toast},
+    components::toast::Toast,
     debug_fmt::{NoDebug, Summary},
     domain::UserId,
     fl,
-    services::{clipboard::Sensitivity, sdk::ClientManager},
+    services::{
+        clipboard::Sensitivity,
+        sdk::{ClientExt, ClientManager},
+    },
 };
 
 use super::{
-    VaultEvent, VaultMessage,
+    VaultEvent, VaultFilter, VaultMessage,
     message::FormOptions,
     state::VaultView,
     widgets::{
@@ -41,11 +44,17 @@ impl VaultView {
     /// `VaultMessage::ListLoaded`. Called from App handlers (unlock, user
     /// switch, sync) — the factory lives here so all `Task::perform` calls
     /// that produce `VaultMessage`s stay within the owning view.
-    pub fn load_list_task(uid: UserId, mgr: &Arc<ClientManager>) -> Task<VaultMessage> {
-        let mgr = mgr.clone();
+    pub fn load_list_task(uid: UserId, mgr: &ClientManager) -> Task<VaultMessage> {
+        let Some(client) = mgr.client_for(&uid) else {
+            return Task::done(VaultMessage::ListLoaded(
+                uid,
+                Err(format!("unknown user {uid}")),
+            ));
+        };
         Task::perform(
             async move {
-                mgr.list_ciphers(&uid)
+                client
+                    .list_ciphers()
                     .await
                     .map(|items| items.into_iter().map(Arc::new).collect::<Vec<_>>())
             },
@@ -63,22 +72,15 @@ impl VaultView {
     /// `ctx` carries the SDK handle + active user; it's built fresh on every
     /// `App::update` call so the view can construct `Task::perform` calls
     /// without owning shared state.
-    pub fn update(&mut self, msg: VaultMessage, ctx: UpdateCtx<'_>) -> Outcome<Self> {
-        let UpdateCtx {
-            client_manager,
-            active_user,
-            active_vault_filter,
-            open_overlay,
-            ..
-        } = ctx;
+    pub fn update(&mut self, msg: VaultMessage, mut ctx: UpdateCtx<'_>) -> Outcome<Self> {
         match msg {
             VaultMessage::ItemList(m) => {
-                return self.handle_item_list(m, client_manager, active_user);
+                return self.handle_item_list(&ctx, m);
             }
             VaultMessage::Search(SearchMessage::QueryChanged(query)) => {
                 self.search_query = query;
-                if let Some(uid) = active_user {
-                    self.recompute_filtered(uid, active_vault_filter);
+                if let Some(uid) = ctx.active_user {
+                    self.recompute_filtered(uid, ctx.active_vault_filter);
                 }
             }
             VaultMessage::CloseCipherDetail => {
@@ -88,7 +90,7 @@ impl VaultView {
                 // it has no animation to wait on.
                 self.selection.sheet_fade.close();
                 self.pane.close();
-                return Outcome::spawn(
+                return Outcome::perform(
                     tokio::time::sleep(std::time::Duration::from_millis(180)),
                     |_| VaultMessage::FinalizeSheetClose,
                 );
@@ -98,51 +100,45 @@ impl VaultView {
             }
             VaultMessage::PaneResized(event) => self.pane.set_ratio(event.ratio),
             VaultMessage::CipherDetail(m) => {
-                return self.handle_cipher_detail(m, client_manager, active_user);
+                return self.handle_cipher_detail(&ctx, m);
             }
             VaultMessage::CancelDeleteSelected => self.selection.confirm_delete.close(),
             VaultMessage::ConfirmDeleteSelected => {
-                return self.handle_confirm_delete(client_manager, active_user);
+                return self.handle_confirm_delete(&ctx);
             }
             VaultMessage::CipherEdit(m) => {
-                return self.handle_cipher_edit(m, client_manager, active_user);
+                return self.handle_cipher_edit(&ctx, m);
             }
             VaultMessage::FormOptionsLoaded(uid, NoDebug(opts)) => {
-                return self.handle_form_options_loaded(uid, opts, active_user);
+                return self.handle_form_options_loaded(&ctx, uid, opts);
             }
             VaultMessage::SaveCompleted(uid, res) => {
-                return self.handle_save_completed(uid, res, active_user);
+                return self.handle_save_completed(&ctx, uid, res);
             }
             VaultMessage::DeleteCompleted(uid, id, res) => {
-                return self.handle_delete_completed(uid, id, res, active_user);
+                return self.handle_delete_completed(&ctx, uid, id, res);
             }
             VaultMessage::AccountSwitcher(m) => {
                 return Outcome::from_option(
-                    m.consume(open_overlay, crate::app::Overlay::AccountSwitcher)
+                    m.consume(&mut *ctx.open_overlay, crate::app::Overlay::AccountSwitcher)
                         .map(VaultEvent::AccountSwitcher),
                 );
             }
             VaultMessage::ToggleNewItemMenu => {
-                *open_overlay = if *open_overlay == Some(crate::app::Overlay::NewItemMenu) {
+                *ctx.open_overlay = if *ctx.open_overlay == Some(crate::app::Overlay::NewItemMenu) {
                     None
                 } else {
                     Some(crate::app::Overlay::NewItemMenu)
                 };
             }
             VaultMessage::NewItem(t) => {
-                return self.handle_new_item(t, client_manager, active_user, open_overlay);
+                return self.handle_new_item(&mut ctx, t);
             }
             VaultMessage::ListLoaded(uid, res) => {
-                return self.handle_list_loaded(
-                    uid,
-                    res,
-                    client_manager,
-                    active_user,
-                    active_vault_filter,
-                );
+                return self.handle_list_loaded(&ctx, uid, res);
             }
             VaultMessage::DetailLoaded(uid, id, res) => {
-                return self.handle_detail_loaded(uid, id, res, active_user);
+                return self.handle_detail_loaded(&ctx, uid, id, res);
             }
             VaultMessage::AutoFocusSearchDelayed => {
                 return Outcome::task(self.auto_focus_task());
@@ -188,15 +184,11 @@ impl VaultView {
         self.recompute_filtered(uid, filter);
     }
 
-    fn handle_item_list(
-        &mut self,
-        msg: ItemListMessage,
-        client_manager: &Arc<ClientManager>,
-        active_user: Option<&UserId>,
-    ) -> Outcome<Self> {
+    fn handle_item_list(&mut self, ctx: &UpdateCtx<'_>, msg: ItemListMessage) -> Outcome<Self> {
         match msg {
             ItemListMessage::ItemSelected(idx) => {
-                let new_id = active_user
+                let new_id = ctx
+                    .active_user
                     .and_then(|uid| self.items.get(uid))
                     .and_then(|ic| ic.cached.get(idx))
                     .and_then(|i| i.id);
@@ -215,13 +207,9 @@ impl VaultView {
                 let Some(id) = self.selection.id else {
                     return Outcome::None;
                 };
-                let Some(uid) = active_user.copied() else {
-                    return Outcome::None;
-                };
-                let mgr = client_manager.clone();
-                return Outcome::spawn(
-                    async move { mgr.full_cipher(&uid, id).await },
-                    move |res| {
+                return ctx.perform_with_active_client(
+                    move |client| client.full_cipher(id),
+                    move |uid, res| {
                         VaultMessage::DetailLoaded(uid, id, res.map(|v| NoDebug(Box::new(v))))
                     },
                 );
@@ -238,12 +226,11 @@ impl VaultView {
 
     fn handle_cipher_detail(
         &mut self,
+        ctx: &UpdateCtx<'_>,
         msg: CipherDetailMessage,
-        client_manager: &Arc<ClientManager>,
-        active_user: Option<&UserId>,
     ) -> Outcome<Self> {
         match msg {
-            CipherDetailMessage::Edit => self.handle_detail_edit(client_manager, active_user),
+            CipherDetailMessage::Edit => self.handle_detail_edit(ctx),
             CipherDetailMessage::CopyUsername => clipboard_outcome(
                 self.selected_login()
                     .and_then(|l| l.username.as_deref())
@@ -322,33 +309,27 @@ impl VaultView {
         }
     }
 
-    fn handle_detail_edit(
-        &mut self,
-        client_manager: &Arc<ClientManager>,
-        active_user: Option<&UserId>,
-    ) -> Outcome<Self> {
+    fn handle_detail_edit(&mut self, ctx: &UpdateCtx<'_>) -> Outcome<Self> {
         let Some(detail) = self.selection.detail.clone() else {
             return Outcome::None;
         };
-        let Some(uid) = active_user.copied() else {
+        let Some(uid) = ctx.active_user.copied() else {
             return Outcome::None;
         };
         self.selection.form = Some(CipherForm::edit(detail));
-        Outcome::task(Self::load_form_options_task(uid, client_manager))
+        Outcome::task(Self::load_form_options_task(ctx, uid))
     }
 
     fn handle_new_item(
         &mut self,
+        ctx: &mut UpdateCtx<'_>,
         cipher_type: bitwarden_vault::CipherType,
-        client_manager: &Arc<ClientManager>,
-        active_user: Option<&UserId>,
-        open_overlay: &mut Option<crate::app::Overlay>,
     ) -> Outcome<Self> {
         // Auto-dismiss the +New dropdown if it was the trigger.
-        if *open_overlay == Some(crate::app::Overlay::NewItemMenu) {
-            *open_overlay = None;
+        if *ctx.open_overlay == Some(crate::app::Overlay::NewItemMenu) {
+            *ctx.open_overlay = None;
         }
-        let Some(uid) = active_user.copied() else {
+        let Some(uid) = ctx.active_user.copied() else {
             return Outcome::None;
         };
         // Drop any prior selection so the right pane shows only the new
@@ -359,27 +340,26 @@ impl VaultView {
         self.selection.sheet_fade.open();
 
         Outcome::task(Task::batch([
-            Self::load_form_options_task(uid, client_manager),
+            Self::load_form_options_task(ctx, uid),
             Self::focus_name_input_task(),
         ]))
     }
 
     /// Build the task that loads folders/orgs/collections for the cipher
     /// form. Shared by edit-mode and create-mode entry points; folders is
-    /// the only async leg, the other two are sync reads that ride along.
-    fn load_form_options_task(
-        uid: UserId,
-        client_manager: &Arc<ClientManager>,
-    ) -> Task<VaultMessage> {
-        let mgr = client_manager.clone();
+    /// the only async leg, the other two are sync reads we capture upfront.
+    fn load_form_options_task(ctx: &UpdateCtx<'_>, uid: UserId) -> Task<VaultMessage> {
+        let Some(client) = ctx.client_manager.client_for(&uid) else {
+            return Task::none();
+        };
+        let organizations = ctx.client_manager.list_organizations(&uid);
+        let collections = ctx.client_manager.list_collections(&uid);
         Task::perform(
             async move {
-                let folders = mgr
-                    .list_folders(&uid)
+                let folders = client
+                    .list_folders()
                     .await
                     .map(|folders| folders.into_iter().map(FolderOption::from).collect());
-                let organizations = mgr.list_organizations(&uid);
-                let collections = mgr.list_collections(&uid);
                 FormOptions {
                     folders,
                     organizations,
@@ -390,30 +370,21 @@ impl VaultView {
         )
     }
 
-    fn handle_confirm_delete(
-        &mut self,
-        client_manager: &Arc<ClientManager>,
-        active_user: Option<&UserId>,
-    ) -> Outcome<Self> {
+    fn handle_confirm_delete(&mut self, ctx: &UpdateCtx<'_>) -> Outcome<Self> {
         self.selection.confirm_delete.close();
         let Some(cipher_id) = self.selection.id else {
             return Outcome::None;
         };
-        let Some(uid) = active_user.copied() else {
-            return Outcome::None;
-        };
-        let mgr = client_manager.clone();
-        Outcome::spawn(
-            async move { mgr.soft_delete_cipher(&uid, cipher_id).await },
-            move |res| VaultMessage::DeleteCompleted(uid, cipher_id, res),
+        ctx.perform_with_active_client(
+            move |client| client.soft_delete_cipher(cipher_id),
+            move |uid, res| VaultMessage::DeleteCompleted(uid, cipher_id, res),
         )
     }
 
     fn handle_cipher_edit(
         &mut self,
+        ctx: &UpdateCtx<'_>,
         msg: super::widgets::cipher_edit::CipherEditMessage,
-        client_manager: &Arc<ClientManager>,
-        active_user: Option<&UserId>,
     ) -> Outcome<Self> {
         let Some(form) = self.selection.form.as_mut() else {
             return Outcome::None;
@@ -428,7 +399,7 @@ impl VaultView {
                 if self.selection.detail.is_none() {
                     self.selection.sheet_fade.close();
                     self.pane.close();
-                    return Outcome::spawn(
+                    return Outcome::perform(
                         tokio::time::sleep(std::time::Duration::from_millis(180)),
                         |_| VaultMessage::FinalizeSheetClose,
                     );
@@ -442,15 +413,13 @@ impl VaultView {
                         None,
                     )));
                 }
-                let Some(uid) = active_user.copied() else {
-                    return Outcome::None;
-                };
                 form.saving = true;
-                let mgr = client_manager.clone();
                 let cipher_view = form.modified.clone();
-                Outcome::spawn(
-                    async move { mgr.save_cipher(&uid, cipher_view).await },
-                    move |res| VaultMessage::SaveCompleted(uid, res.map(|v| NoDebug(Box::new(v)))),
+                ctx.perform_with_active_client(
+                    move |client| client.save_cipher(cipher_view),
+                    move |uid, res| {
+                        VaultMessage::SaveCompleted(uid, res.map(|v| NoDebug(Box::new(v))))
+                    },
                 )
             }
         }
@@ -458,11 +427,11 @@ impl VaultView {
 
     fn handle_form_options_loaded(
         &mut self,
+        ctx: &UpdateCtx<'_>,
         msg_uid: UserId,
         opts: FormOptions,
-        active_user: Option<&UserId>,
     ) -> Outcome<Self> {
-        if active_user != Some(&msg_uid) {
+        if ctx.active_user != Some(&msg_uid) {
             return Outcome::None;
         }
         let Some(form) = self.selection.form.as_mut() else {
@@ -479,11 +448,11 @@ impl VaultView {
 
     fn handle_save_completed(
         &mut self,
+        ctx: &UpdateCtx<'_>,
         msg_uid: UserId,
         result: Result<NoDebug<Box<CipherView>>, String>,
-        active_user: Option<&UserId>,
     ) -> Outcome<Self> {
-        if active_user != Some(&msg_uid) {
+        if ctx.active_user != Some(&msg_uid) {
             return Outcome::None;
         }
         let event = match result {
@@ -513,12 +482,12 @@ impl VaultView {
 
     fn handle_delete_completed(
         &mut self,
+        ctx: &UpdateCtx<'_>,
         msg_uid: UserId,
         cipher_id: CipherId,
         result: Result<(), String>,
-        active_user: Option<&UserId>,
     ) -> Outcome<Self> {
-        if active_user != Some(&msg_uid) {
+        if ctx.active_user != Some(&msg_uid) {
             return Outcome::None;
         }
         let event = match result {
@@ -540,24 +509,22 @@ impl VaultView {
 
     fn handle_list_loaded(
         &mut self,
+        ctx: &UpdateCtx<'_>,
         msg_uid: UserId,
         result: Result<Summary<Vec<Arc<CipherListView>>>, String>,
-        client_manager: &Arc<ClientManager>,
-        active_user: Option<&UserId>,
-        active_filter: VaultFilter,
     ) -> Outcome<Self> {
         match result {
             Ok(Summary(items)) => {
                 tracing::info!(uid = %msg_uid, count = items.len(), "vault list loaded");
-                let organizations = client_manager.list_organizations(&msg_uid);
+                let organizations = ctx.client_manager.list_organizations(&msg_uid);
                 let cache = self.items.entry(msg_uid).or_default();
                 cache.all = items;
                 cache.organizations = organizations;
                 // Only recompute the filtered view if this is the active user
                 // — search_query / active_filter are view-global state that
                 // may not match a background user's context.
-                if active_user == Some(&msg_uid) {
-                    self.recompute_filtered(&msg_uid, active_filter);
+                if ctx.active_user == Some(&msg_uid) {
+                    self.recompute_filtered(&msg_uid, ctx.active_vault_filter);
                 }
             }
             Err(err) => {
@@ -569,13 +536,13 @@ impl VaultView {
 
     fn handle_detail_loaded(
         &mut self,
+        ctx: &UpdateCtx<'_>,
         msg_uid: UserId,
         id: CipherId,
         result: Result<NoDebug<Box<CipherView>>, String>,
-        active_user: Option<&UserId>,
     ) -> Outcome<Self> {
         // Stale-check: user switched while full_cipher was in flight.
-        if active_user != Some(&msg_uid) {
+        if ctx.active_user != Some(&msg_uid) {
             tracing::debug!(
                 uid = %msg_uid,
                 cipher_id = %id,

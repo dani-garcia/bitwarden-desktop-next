@@ -19,7 +19,7 @@ use std::{
     io::BufReader,
     path::Path,
     str::FromStr,
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, Mutex},
 };
 
 use bitwarden_collections::collection::CollectionId;
@@ -112,6 +112,9 @@ pub struct AccountEntry {
     pub locked: bool,
 }
 
+/// Per-user SDK state. Fully private — the only handle that leaves this
+/// module is `PasswordManagerClient` (cheap-to-clone, internally `Arc`'d) or
+/// the small [`UnlockData`] / validation tuple bundles assembled below.
 struct UserEntry {
     client: PasswordManagerClient,
     // App-side stand-in for SDK profile methods that don't exist yet.
@@ -131,17 +134,23 @@ struct UserEntry {
     collections: Vec<Collection>,
 }
 
+/// Owns per-user state. Single-threaded: every method runs from the iced
+/// update thread. Async SDK work is done by free functions (see below) that
+/// take a [`PasswordManagerClient`] (or, for unlock, an [`UnlockData`])
+/// extracted via the accessors here — the manager itself is never borrowed
+/// across `.await`, so no interior locking is needed. Mutating methods take
+/// `&mut self` and run sync from `App::update`.
 pub struct ClientManager {
-    /// Entries are `Arc` so async methods can clone the handle out of the guard
-    /// and drop the lock before awaiting — holding a read guard across `.await`
-    /// risks deadlock with writers and is flagged by clippy.
-    users: RwLock<HashMap<UserId, Arc<UserEntry>>>,
+    /// Boxed so the (rather large) `UserEntry` doesn't bloat the HashMap
+    /// node; cloning a `PasswordManagerClient` for an async task only needs
+    /// the inner `Arc`-backed handle, not the entry itself.
+    users: HashMap<UserId, Box<UserEntry>>,
     /// In-memory send store, keyed by user. The real SDK flow will encrypt and
     /// persist via `Repository<Send>`; until then we hold decrypted `SendView`
     /// values directly. See `docs/todo.md`.
-    sends: RwLock<HashMap<UserId, Vec<SendView>>>,
+    sends: HashMap<UserId, Vec<SendView>>,
     /// In-memory generator history, keyed by user. Cleared on `log_out`.
-    password_history: RwLock<HashMap<UserId, Vec<PasswordHistoryEntry>>>,
+    password_history: HashMap<UserId, Vec<PasswordHistoryEntry>>,
 }
 
 /// One entry in the in-memory generator history. Flat across password /
@@ -157,16 +166,76 @@ pub struct PasswordHistoryEntry {
 impl std::fmt::Debug for ClientManager {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ClientManager")
-            .field("users", &self.users.read().unwrap().len())
+            .field("users", &self.users.len())
             .finish()
     }
 }
 
+/// Extension trait that bundles every SDK call we make on a
+/// `PasswordManagerClient`. Async tasks are dispatched from views as
+/// `client.list_ciphers().await` etc. — the client is consumed by value
+/// (cheap, since its inner is `Arc`-backed) so the resulting future is
+/// `'static + Send` and slots straight into `Task::perform`.
+///
+/// `unlock` lives on [`UnlockData`] instead because it needs more than the
+/// client (kdf, email, key envelopes); see further below.
+#[async_trait::async_trait]
 pub trait ClientExt {
     fn is_unlocked(&self) -> bool;
     fn lock(&self);
+
+    /// Verify the user's master password against the cached user-key envelope
+    /// without touching the keystore. Used by Export to gate vault data
+    /// leaving the encrypted store behind a fresh master-password check.
+    async fn validate_master_password(
+        self,
+        encrypted_user_key: String,
+        password: String,
+    ) -> Result<(), String>;
+
+    /// Requires `unlock` to have been called first.
+    async fn list_ciphers(self) -> Result<Vec<CipherListView>, String>;
+
+    /// Fully decrypt a single cipher (including secrets). Used by the detail pane.
+    async fn full_cipher(self, cipher_id: CipherId) -> Result<CipherView, String>;
+
+    /// Encrypt an edited `CipherView` and persist to the local SQLite repo.
+    /// Returns the re-decrypted view so callers can refresh with
+    /// normalizations the encrypt step applied (cipher key, TOTP checksums, …).
+    async fn save_cipher(self, cipher_view: CipherView) -> Result<CipherView, String>;
+
+    /// Soft-delete by marking `deleted_date` and writing it back.
+    async fn soft_delete_cipher(self, cipher_id: CipherId) -> Result<(), String>;
+
+    /// Encrypt a fresh `FolderView` and write it into the user's local
+    /// `Folder` repo. Skips the API call (same shape as `save_cipher`) since
+    /// the fake-data harness has no remote.
+    async fn create_folder(self, name: String) -> Result<FolderView, String>;
+
+    async fn list_folders(self) -> Result<Vec<FolderView>, String>;
+
+    /// Export the user's personal vault via the SDK's `ExporterClient`. The
+    /// SDK decrypts internally using the unlocked keystore. Returns the
+    /// serialized export string; caller writes to disk.
+    async fn export_vault(
+        self,
+        format: bitwarden_exporters::ExportFormat,
+    ) -> Result<String, String>;
+
+    /// Stub — the SDK's `export_organization_vault` is currently `todo!()`
+    /// in the pinned `bitwarden-exporters` rev.
+    async fn export_organization_vault(
+        self,
+        organization_id: OrganizationId,
+        format: bitwarden_exporters::ExportFormat,
+    ) -> Result<String, String>;
+
+    async fn generate_password(self, req: PasswordGeneratorRequest) -> Result<String, String>;
+    async fn generate_passphrase(self, req: PassphraseGeneratorRequest) -> Result<String, String>;
+    async fn generate_username(self, req: UsernameGeneratorRequest) -> Result<String, String>;
 }
 
+#[async_trait::async_trait]
 impl ClientExt for PasswordManagerClient {
     fn is_unlocked(&self) -> bool {
         self.0
@@ -179,6 +248,209 @@ impl ClientExt for PasswordManagerClient {
     fn lock(&self) {
         self.0.internal.get_key_store().clear();
     }
+
+    async fn validate_master_password(
+        self,
+        encrypted_user_key: String,
+        password: String,
+    ) -> Result<(), String> {
+        self.0
+            .auth()
+            .validate_password_user_key(password, encrypted_user_key)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    async fn list_ciphers(self) -> Result<Vec<CipherListView>, String> {
+        let result = self
+            .vault()
+            .ciphers()
+            .list()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if !result.failures.is_empty() {
+            tracing::warn!(
+                count = result.failures.len(),
+                "some ciphers failed to decrypt"
+            );
+        }
+
+        let mut list = result.successes;
+        list.sort_by(|a, b| a.name.cmp(&b.name));
+        Ok(list)
+    }
+
+    async fn full_cipher(self, cipher_id: CipherId) -> Result<CipherView, String> {
+        let repo = self
+            .platform()
+            .state()
+            .get::<Cipher>()
+            .map_err(|e| e.to_string())?;
+        let cipher = repo
+            .get(cipher_id)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("cipher {cipher_id} not found"))?;
+
+        self.vault()
+            .ciphers()
+            .decrypt(cipher)
+            .await
+            .map_err(|e| e.to_string())
+    }
+
+    async fn save_cipher(self, mut cipher_view: CipherView) -> Result<CipherView, String> {
+        // Mock-only: a real backend would assign the id on POST and return it.
+        // With no server, generate one here so the repo has a key to store under.
+        if cipher_view.id.is_none() {
+            cipher_view.id = Some(CipherId::new_v4());
+        }
+
+        let ctx = self
+            .vault()
+            .ciphers()
+            .encrypt(cipher_view)
+            .await
+            .map_err(|e| e.to_string())?;
+        let cipher = ctx.cipher;
+        let id = cipher
+            .id
+            .ok_or_else(|| "encrypted cipher missing id".to_string())?;
+
+        let repo = self
+            .platform()
+            .state()
+            .get::<Cipher>()
+            .map_err(|e| e.to_string())?;
+        repo.set(id, cipher.clone())
+            .await
+            .map_err(|e| e.to_string())?;
+
+        self.vault()
+            .ciphers()
+            .decrypt(cipher)
+            .await
+            .map_err(|e| e.to_string())
+    }
+
+    async fn soft_delete_cipher(self, cipher_id: CipherId) -> Result<(), String> {
+        let repo = self
+            .platform()
+            .state()
+            .get::<Cipher>()
+            .map_err(|e| e.to_string())?;
+        let mut cipher = repo
+            .get(cipher_id)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("cipher {cipher_id} not found"))?;
+        // `Cipher::soft_delete()` is `pub(crate)` in bitwarden-vault, but
+        // `deleted_date` is public so we set it directly.
+        cipher.deleted_date = Some(chrono::Utc::now());
+        repo.set(cipher_id, cipher).await.map_err(|e| e.to_string())
+    }
+
+    async fn create_folder(self, name: String) -> Result<FolderView, String> {
+        use bitwarden_vault::FolderId;
+
+        let folder_id = FolderId::new_v4();
+        let revision_date = chrono::Utc::now();
+        let view = FolderView {
+            id: Some(folder_id),
+            name,
+            revision_date,
+        };
+
+        // `FoldersClient::encrypt` is marked deprecated upstream in favour of
+        // a higher-level `create()` that posts to the API — we want only the
+        // encrypt step, since we're persisting locally.
+        #[allow(deprecated)]
+        let encrypted = self
+            .vault()
+            .folders()
+            .encrypt(view)
+            .map_err(|e| e.to_string())?;
+        let id = encrypted
+            .id
+            .ok_or_else(|| "encrypted folder missing id".to_string())?;
+
+        // Decrypt the encrypted folder back into a `FolderView` for the
+        // return value. Cheaper than re-encrypting/cloning, and keeps the
+        // returned name in sync with what was persisted.
+        #[allow(deprecated)]
+        let decrypted = self
+            .vault()
+            .folders()
+            .decrypt(encrypted.clone())
+            .map_err(|e| e.to_string())?;
+
+        let repo = self
+            .platform()
+            .state()
+            .get::<Folder>()
+            .map_err(|e| e.to_string())?;
+        repo.set(id, encrypted).await.map_err(|e| e.to_string())?;
+        Ok(decrypted)
+    }
+
+    async fn list_folders(self) -> Result<Vec<FolderView>, String> {
+        self.vault()
+            .folders()
+            .list()
+            .await
+            .map_err(|e| e.to_string())
+    }
+
+    async fn export_vault(
+        self,
+        format: bitwarden_exporters::ExportFormat,
+    ) -> Result<String, String> {
+        let cipher_repo = self
+            .platform()
+            .state()
+            .get::<Cipher>()
+            .map_err(|e| e.to_string())?;
+        let folder_repo = self
+            .platform()
+            .state()
+            .get::<Folder>()
+            .map_err(|e| e.to_string())?;
+
+        let ciphers = cipher_repo.list().await.map_err(|e| e.to_string())?;
+        let folders = folder_repo.list().await.map_err(|e| e.to_string())?;
+
+        self.exporters()
+            .export_vault(folders, ciphers, format)
+            .await
+            .map_err(|e| e.to_string())
+    }
+
+    async fn export_organization_vault(
+        self,
+        _organization_id: OrganizationId,
+        _format: bitwarden_exporters::ExportFormat,
+    ) -> Result<String, String> {
+        Err("Organization vault export isn't implemented in the SDK yet".to_string())
+    }
+
+    async fn generate_password(self, req: PasswordGeneratorRequest) -> Result<String, String> {
+        self.generator().password(req).map_err(|e| e.to_string())
+    }
+
+    async fn generate_passphrase(self, req: PassphraseGeneratorRequest) -> Result<String, String> {
+        self.generator().passphrase(req).map_err(|e| e.to_string())
+    }
+
+    /// SDK `username` is `async` because the `Forwarded` variant does HTTP;
+    /// `Word`/`Subaddress`/`Catchall` resolve synchronously inside the future.
+    async fn generate_username(self, req: UsernameGeneratorRequest) -> Result<String, String> {
+        self.generator()
+            .username(req)
+            .await
+            .map_err(|e| e.to_string())
+    }
 }
 
 use crate::paths::data_dir;
@@ -188,10 +460,43 @@ impl ClientManager {
     /// can return and the window can appear before SQLite opens finish.
     pub fn empty() -> Self {
         Self {
-            users: RwLock::new(HashMap::new()),
-            sends: RwLock::new(HashMap::new()),
-            password_history: RwLock::new(HashMap::new()),
+            users: HashMap::new(),
+            sends: HashMap::new(),
+            password_history: HashMap::new(),
         }
+    }
+
+    /// Cheap-to-clone SDK handle for one user. `PasswordManagerClient` wraps
+    /// an internal `Arc`, so cloning bumps a refcount — async tasks capture
+    /// this and call SDK methods on it directly without touching the manager.
+    pub fn client_for(&self, uid: &UserId) -> Option<PasswordManagerClient> {
+        self.users
+            .get(uid)
+            .map(|e| PasswordManagerClient(e.client.0.clone()))
+    }
+
+    /// Snapshot of the data `sdk::unlock` needs. Pulled sync at the call
+    /// site so the async task never borrows the manager.
+    pub fn unlock_data_for(&self, uid: &UserId) -> Option<UnlockData> {
+        let e = self.users.get(uid)?;
+        Some(UnlockData {
+            client: PasswordManagerClient(e.client.0.clone()),
+            sdk_user_id: e.sdk_user_id,
+            kdf: e.kdf.clone(),
+            email: e.email.clone(),
+            encrypted_user_key: e.encrypted_user_key.clone(),
+            private_key: e.private_key.clone(),
+            organizations: e.organizations.clone(),
+        })
+    }
+
+    /// Snapshot of the data `sdk::validate_master_password` needs.
+    pub fn validation_data_for(&self, uid: &UserId) -> Option<(PasswordManagerClient, String)> {
+        let e = self.users.get(uid)?;
+        Some((
+            PasswordManagerClient(e.client.0.clone()),
+            e.encrypted_user_key.to_string(),
+        ))
     }
 
     pub fn verify_data_dir() {
@@ -237,14 +542,14 @@ impl ClientManager {
                 continue;
             };
             tracing::debug!(user_id = %uid, email = %mu.email, "loading mock user");
-            users.insert(uid, Arc::new(build_user_entry(mu, &data_dir).await));
+            users.insert(uid, Box::new(build_user_entry(mu, &data_dir).await));
         }
 
         tracing::info!(users = users.len(), "ClientManager loaded");
         Self {
-            users: RwLock::new(users),
-            sends: RwLock::new(HashMap::new()),
-            password_history: RwLock::new(HashMap::new()),
+            users,
+            sends: HashMap::new(),
+            password_history: HashMap::new(),
         }
     }
 
@@ -252,17 +557,15 @@ impl ClientManager {
     /// "first user" callers would otherwise land on a different account each
     /// launch.
     pub fn user_ids(&self) -> Vec<UserId> {
-        let users = self.users.read().unwrap();
-        let mut ids: Vec<UserId> = users.keys().copied().collect();
-        ids.sort_by(|a, b| users[a].email.cmp(&users[b].email));
+        let mut ids: Vec<UserId> = self.users.keys().copied().collect();
+        ids.sort_by(|a, b| self.users[a].email.cmp(&self.users[b].email));
         ids
     }
 
-    /// One `users.read()` per call; callers cache the result on App rather
-    /// than calling per view rebuild.
+    /// Callers cache the result on App rather than calling per view rebuild.
     pub fn accounts(&self) -> Vec<AccountEntry> {
-        let users = self.users.read().unwrap();
-        let mut entries: Vec<AccountEntry> = users
+        let mut entries: Vec<AccountEntry> = self
+            .users
             .values()
             .map(|e| AccountEntry {
                 user_id: e.sdk_user_id,
@@ -277,36 +580,23 @@ impl ClientManager {
     }
 
     pub fn unlock_methods(&self, uid: &UserId) -> Option<UnlockMethods> {
-        self.users
-            .read()
-            .unwrap()
-            .get(uid)
-            .map(|e| e.unlock_methods.clone())
+        self.users.get(uid).map(|e| e.unlock_methods.clone())
     }
 
     pub fn is_unlocked(&self, uid: &UserId) -> bool {
-        self.users
-            .read()
-            .unwrap()
-            .get(uid)
-            .is_some_and(|e| e.client.is_unlocked())
+        self.users.get(uid).is_some_and(|e| e.client.is_unlocked())
     }
 
     pub fn has_users(&self) -> bool {
-        !self.users.read().unwrap().is_empty()
+        !self.users.is_empty()
     }
 
     pub fn has_unlocked_users(&self) -> bool {
-        self.users
-            .read()
-            .unwrap()
-            .values()
-            .any(|e| e.client.is_unlocked())
+        self.users.values().any(|e| e.client.is_unlocked())
     }
 
     pub fn lock(&self, uid: &UserId) {
-        let users = self.users.read().unwrap();
-        if let Some(entry) = users.get(uid) {
+        if let Some(entry) = self.users.get(uid) {
             entry.client.lock();
         }
     }
@@ -320,344 +610,17 @@ impl ClientManager {
     /// be alive inside in-flight async tasks that cloned it — acceptable today,
     /// but future cleanup requiring synchronous resource release (e.g. closing
     /// the SQLite handle) needs those tasks to complete first.
-    pub fn log_out(&self, uid: &UserId) {
-        let mut users = self.users.write().unwrap();
-        if let Some(entry) = users.remove(uid) {
+    pub fn log_out(&mut self, uid: &UserId) {
+        if let Some(entry) = self.users.remove(uid) {
             entry.client.lock();
         }
-        self.sends.write().unwrap().remove(uid);
-        self.password_history.write().unwrap().remove(uid);
-    }
-
-    /// Initialize the SDK crypto state with the user's master password. On
-    /// success the keystore is unlocked in memory.
-    pub async fn unlock(&self, user_id: &UserId, password: String) -> Result<(), String> {
-        let entry = self
-            .users
-            .read()
-            .unwrap()
-            .get(user_id)
-            .cloned()
-            .ok_or_else(|| format!("unknown user {user_id}"))?;
-
-        let req = InitUserCryptoRequest {
-            // Reuse the Client's bound UserId on every unlock — see the
-            // invariant on `UserEntry::sdk_user_id`.
-            user_id: Some(entry.sdk_user_id),
-            kdf_params: entry.kdf.clone(),
-            email: entry.email.clone(),
-            account_cryptographic_state: WrappedAccountCryptographicState::V1 {
-                private_key: entry.private_key.clone(),
-            },
-            method: InitUserCryptoMethod::MasterPasswordUnlock {
-                password,
-                master_password_unlock: MasterPasswordUnlockData {
-                    kdf: entry.kdf.clone(),
-                    master_key_wrapped_user_key: entry.encrypted_user_key.clone(),
-                    salt: entry.email.clone(),
-                },
-            },
-            upgrade_token: None,
-        };
-
-        entry
-            .client
-            .crypto()
-            .initialize_user_crypto(req)
-            .await
-            .map_err(|e| e.to_string())?;
-
-        // Replay org keys so the vault client can encrypt/decrypt org-owned
-        // ciphers. Orgs without a wrapped key contribute nothing.
-        let org_keys: HashMap<OrganizationId, UnsignedSharedKey> = entry
-            .organizations
-            .iter()
-            .filter_map(|o| o.wrapped_key.clone().map(|k| (o.id, k)))
-            .collect();
-        if !org_keys.is_empty() {
-            entry
-                .client
-                .crypto()
-                .initialize_org_crypto(InitOrgCryptoRequest {
-                    organization_keys: org_keys,
-                })
-                .await
-                .map_err(|e| e.to_string())?;
-        }
-
-        Ok(())
-    }
-
-    /// Verify the user's master password against the cached user-key envelope
-    /// without touching the keystore. Returns `Ok(())` on match, `Err(_)` on
-    /// any verification failure (wrong password, wrong derived key, or
-    /// crypto-layer error). Used by Export to gate vault data leaving the
-    /// encrypted store behind a fresh master-password check — `unlock`'s
-    /// `initialize_user_crypto` would mutate keystore state for an already-
-    /// unlocked user, which we don't want here.
-    pub async fn validate_master_password(
-        &self,
-        user_id: &UserId,
-        password: String,
-    ) -> Result<(), String> {
-        let entry = self
-            .users
-            .read()
-            .unwrap()
-            .get(user_id)
-            .cloned()
-            .ok_or_else(|| format!("unknown user {user_id}"))?;
-
-        entry
-            .client
-            .0
-            .auth()
-            .validate_password_user_key(password, entry.encrypted_user_key.to_string())
-            .await
-            .map_err(|e| e.to_string())?;
-        Ok(())
-    }
-
-    /// Requires `unlock` to have been called first.
-    pub async fn list_ciphers(&self, user_id: &UserId) -> Result<Vec<CipherListView>, String> {
-        let entry = self
-            .users
-            .read()
-            .unwrap()
-            .get(user_id)
-            .cloned()
-            .ok_or_else(|| format!("unknown user {user_id}"))?;
-
-        let result = entry
-            .client
-            .vault()
-            .ciphers()
-            .list()
-            .await
-            .map_err(|e| e.to_string())?;
-
-        if !result.failures.is_empty() {
-            tracing::warn!(
-                user_id = %user_id,
-                count = result.failures.len(),
-                "some ciphers failed to decrypt"
-            );
-        }
-
-        let mut list = result.successes;
-        list.sort_by(|a, b| a.name.cmp(&b.name));
-        Ok(list)
-    }
-
-    /// Fully decrypt a single cipher (including secrets). Used by the detail pane.
-    pub async fn full_cipher(
-        &self,
-        user_id: &UserId,
-        cipher_id: CipherId,
-    ) -> Result<CipherView, String> {
-        let entry = self
-            .users
-            .read()
-            .unwrap()
-            .get(user_id)
-            .cloned()
-            .ok_or_else(|| format!("unknown user {user_id}"))?;
-
-        let repo = entry
-            .client
-            .platform()
-            .state()
-            .get::<Cipher>()
-            .map_err(|e| e.to_string())?;
-        let cipher = repo
-            .get(cipher_id)
-            .await
-            .map_err(|e| e.to_string())?
-            .ok_or_else(|| format!("cipher {cipher_id} not found"))?;
-
-        entry
-            .client
-            .vault()
-            .ciphers()
-            .decrypt(cipher)
-            .await
-            .map_err(|e| e.to_string())
-    }
-
-    /// Encrypt an edited `CipherView` and persist to the local SQLite repo.
-    /// Bypasses the server PUT in `CiphersClient::edit()` (no backend). Returns
-    /// the re-decrypted view so callers can refresh with normalizations the
-    /// encrypt step applied (cipher key, TOTP checksums, …).
-    ///
-    /// NOTE: skips password-history tracking that `CiphersClient::edit()` does
-    /// internally via non-public types — acceptable while there's no backend.
-    pub async fn save_cipher(
-        &self,
-        user_id: &UserId,
-        mut cipher_view: CipherView,
-    ) -> Result<CipherView, String> {
-        let entry = self
-            .users
-            .read()
-            .unwrap()
-            .get(user_id)
-            .cloned()
-            .ok_or_else(|| format!("unknown user {user_id}"))?;
-
-        // Mock-only: a real backend would assign the id on POST and return it.
-        // With no server, generate one here so the repo has a key to store under.
-        if cipher_view.id.is_none() {
-            cipher_view.id = Some(CipherId::new_v4());
-        }
-
-        let ctx = entry
-            .client
-            .vault()
-            .ciphers()
-            .encrypt(cipher_view)
-            .await
-            .map_err(|e| e.to_string())?;
-        let cipher = ctx.cipher;
-        let id = cipher
-            .id
-            .ok_or_else(|| "encrypted cipher missing id".to_string())?;
-
-        let repo = entry
-            .client
-            .platform()
-            .state()
-            .get::<Cipher>()
-            .map_err(|e| e.to_string())?;
-        repo.set(id, cipher.clone())
-            .await
-            .map_err(|e| e.to_string())?;
-
-        entry
-            .client
-            .vault()
-            .ciphers()
-            .decrypt(cipher)
-            .await
-            .map_err(|e| e.to_string())
-    }
-
-    /// Soft-delete by marking `deleted_date` and writing it back. Skips the
-    /// server PUT in `CiphersClient::soft_delete()` (no backend).
-    pub async fn soft_delete_cipher(
-        &self,
-        user_id: &UserId,
-        cipher_id: CipherId,
-    ) -> Result<(), String> {
-        let entry = self
-            .users
-            .read()
-            .unwrap()
-            .get(user_id)
-            .cloned()
-            .ok_or_else(|| format!("unknown user {user_id}"))?;
-
-        let repo = entry
-            .client
-            .platform()
-            .state()
-            .get::<Cipher>()
-            .map_err(|e| e.to_string())?;
-        let mut cipher = repo
-            .get(cipher_id)
-            .await
-            .map_err(|e| e.to_string())?
-            .ok_or_else(|| format!("cipher {cipher_id} not found"))?;
-        // `Cipher::soft_delete()` is `pub(crate)` in bitwarden-vault, but
-        // `deleted_date` is public so we set it directly.
-        cipher.deleted_date = Some(chrono::Utc::now());
-        repo.set(cipher_id, cipher).await.map_err(|e| e.to_string())
-    }
-
-    /// Encrypt a fresh `FolderView` and write it into the user's local
-    /// `Folder` repo. Skips the API call (same shape as `save_cipher`) since
-    /// the fake-data harness has no remote.
-    pub async fn create_folder(
-        &self,
-        user_id: &UserId,
-        name: String,
-    ) -> Result<FolderView, String> {
-        use bitwarden_vault::FolderId;
-
-        let entry = self
-            .users
-            .read()
-            .unwrap()
-            .get(user_id)
-            .cloned()
-            .ok_or_else(|| format!("unknown user {user_id}"))?;
-
-        let folder_id = FolderId::new_v4();
-        let revision_date = chrono::Utc::now();
-        let view = FolderView {
-            id: Some(folder_id),
-            name,
-            revision_date,
-        };
-
-        // `FoldersClient::encrypt` is marked deprecated upstream in favour of
-        // a higher-level `create()` that posts to the API — we want only the
-        // encrypt step, since we're persisting locally. `view` is consumed,
-        // so reconstruct the return value from the captured fields.
-        #[allow(deprecated)]
-        let encrypted = entry
-            .client
-            .vault()
-            .folders()
-            .encrypt(view)
-            .map_err(|e| e.to_string())?;
-        let id = encrypted
-            .id
-            .ok_or_else(|| "encrypted folder missing id".to_string())?;
-
-        // Decrypt the encrypted folder back into a `FolderView` for the
-        // return value. Cheaper than re-encrypting/cloning, and keeps the
-        // returned name in sync with what was persisted.
-        #[allow(deprecated)]
-        let decrypted = entry
-            .client
-            .vault()
-            .folders()
-            .decrypt(encrypted.clone())
-            .map_err(|e| e.to_string())?;
-
-        let repo = entry
-            .client
-            .platform()
-            .state()
-            .get::<Folder>()
-            .map_err(|e| e.to_string())?;
-        repo.set(id, encrypted).await.map_err(|e| e.to_string())?;
-        Ok(decrypted)
-    }
-
-    pub async fn list_folders(&self, user_id: &UserId) -> Result<Vec<FolderView>, String> {
-        let entry = self
-            .users
-            .read()
-            .unwrap()
-            .get(user_id)
-            .cloned()
-            .ok_or_else(|| format!("unknown user {user_id}"))?;
-
-        entry
-            .client
-            .vault()
-            .folders()
-            .list()
-            .await
-            .map_err(|e| e.to_string())
+        self.sends.remove(uid);
+        self.password_history.remove(uid);
     }
 
     /// Seeded from `mock.json` (no sync path).
     pub fn list_organizations(&self, user_id: &UserId) -> Vec<Organization> {
         self.users
-            .read()
-            .unwrap()
             .get(user_id)
             .map(|e| e.organizations.clone())
             .unwrap_or_default()
@@ -667,88 +630,16 @@ impl ClientManager {
     /// `organization_id` as needed.
     pub fn list_collections(&self, user_id: &UserId) -> Vec<Collection> {
         self.users
-            .read()
-            .unwrap()
             .get(user_id)
             .map(|e| e.collections.clone())
             .unwrap_or_default()
-    }
-
-    /// Export the user's personal vault via the SDK's `ExporterClient`.
-    /// Pulls the user's encrypted ciphers + folders from the SDK state
-    /// repos and hands them to `export_vault` — the SDK decrypts internally
-    /// using the unlocked keystore. Returns the serialized export string;
-    /// caller is responsible for writing it to disk.
-    pub async fn export_vault(
-        &self,
-        user_id: &UserId,
-        format: bitwarden_exporters::ExportFormat,
-    ) -> Result<String, String> {
-        let entry = self
-            .users
-            .read()
-            .unwrap()
-            .get(user_id)
-            .cloned()
-            .ok_or_else(|| format!("unknown user {user_id}"))?;
-
-        let cipher_repo = entry
-            .client
-            .platform()
-            .state()
-            .get::<Cipher>()
-            .map_err(|e| e.to_string())?;
-        let folder_repo = entry
-            .client
-            .platform()
-            .state()
-            .get::<Folder>()
-            .map_err(|e| e.to_string())?;
-
-        let ciphers = cipher_repo.list().await.map_err(|e| e.to_string())?;
-        let folders = folder_repo.list().await.map_err(|e| e.to_string())?;
-
-        entry
-            .client
-            .exporters()
-            .export_vault(folders, ciphers, format)
-            .await
-            .map_err(|e| e.to_string())
-    }
-
-    /// Export a single organization's vault. The SDK's
-    /// `ExporterClient::export_organization_vault` is currently a `todo!()`
-    /// in the pinned `bitwarden-exporters` rev (`crates/bitwarden-exporters/src/export.rs`),
-    /// so calling it would panic — short-circuit with a human-readable error
-    /// until upstream lands. Signature mirrors what the SDK call will take
-    /// (uid + org id + format) so the call site won't need to change when
-    /// the body is filled in.
-    pub async fn export_organization_vault(
-        &self,
-        user_id: &UserId,
-        _organization_id: OrganizationId,
-        _format: bitwarden_exporters::ExportFormat,
-    ) -> Result<String, String> {
-        // Validate the user exists so an unknown-uid case still surfaces the
-        // same error shape as `export_vault`.
-        if !self.users.read().unwrap().contains_key(user_id) {
-            return Err(format!("unknown user {user_id}"));
-        }
-        Err("Organization vault export isn't implemented in the SDK yet".to_string())
-    }
-
-    /// Stub for File → Sync now. The fake-data harness has no remote to sync
-    /// against, so this currently no-ops. Kept async + fallible so the call
-    /// site doesn't need to change when a real sync flow lands.
-    pub async fn sync(&self, _user_id: &UserId) -> Result<(), String> {
-        Ok(())
     }
 
     /// Generate the user's fingerprint phrase (five hyphenated words), used
     /// by the Account → Fingerprint phrase menu. Returns `None` if the user
     /// is unknown or locked (the SDK can't access the private key).
     pub fn user_fingerprint(&self, user_id: &UserId) -> Option<String> {
-        let entry = self.users.read().unwrap().get(user_id).cloned()?;
+        let entry = self.users.get(user_id)?;
         entry
             .client
             .platform()
@@ -759,41 +650,27 @@ impl ClientManager {
     // ── Send stubs ────────────────────────────────────────────────────────
     //
     // Stubbed storage in `self.sends`. No SDK encrypt/decrypt roundtrip yet.
-    // When the SDK send flow lands, swap these bodies for real client calls;
-    // the signatures are already a superset of what the real flow needs.
+    // When the SDK send flow lands, the create/edit/delete paths will move
+    // into the free async functions below; for now they're sync `&mut self`
+    // because no SDK call is involved.
 
-    /// Async so call sites can `Task::perform` the same way they do for
-    /// ciphers — swapping in a real decrypt step later won't ripple.
-    pub async fn list_sends(&self, user_id: &UserId) -> Result<Vec<SendView>, String> {
-        let mut list = self
-            .sends
-            .read()
-            .unwrap()
-            .get(user_id)
-            .cloned()
-            .unwrap_or_default();
+    pub fn list_sends(&self, user_id: &UserId) -> Vec<SendView> {
+        let mut list = self.sends.get(user_id).cloned().unwrap_or_default();
         list.sort_by(|a, b| a.name.cmp(&b.name));
-        Ok(list)
+        list
     }
 
     /// Used when the user picks a row — we always open directly into the
     /// edit form, so this returns the full `SendView`.
-    pub async fn full_send(&self, user_id: &UserId, send_id: SendId) -> Result<SendView, String> {
+    pub fn full_send(&self, user_id: &UserId, send_id: SendId) -> Option<SendView> {
         self.sends
-            .read()
-            .unwrap()
             .get(user_id)
             .and_then(|sends| sends.iter().find(|s| s.id == Some(send_id)).cloned())
-            .ok_or_else(|| format!("send {send_id} not found"))
     }
 
     /// Insert or replace a send. New sends (no id) get an id + access_id
     /// generated locally so the UI can render the link placeholder.
-    pub async fn save_send(
-        &self,
-        user_id: &UserId,
-        mut view: SendView,
-    ) -> Result<SendView, String> {
+    pub fn save_send(&mut self, user_id: UserId, mut view: SendView) -> SendView {
         // Mock-only: a real backend would assign id + access_id on POST and
         // return them. With no server, generate them here.
         if view.id.is_none() {
@@ -811,120 +688,122 @@ impl ClientManager {
         }
 
         let id = view.id.expect("id generated above");
-        let mut sends = self.sends.write().unwrap();
-        let entry = sends.entry(*user_id).or_default();
+        let entry = self.sends.entry(user_id).or_default();
         if let Some(slot) = entry.iter_mut().find(|s| s.id == Some(id)) {
             *slot = view.clone();
         } else {
             entry.push(view.clone());
         }
-        Ok(view)
+        view
     }
 
     /// In-memory stub; the real SDK flow would call `SendsClient::delete`.
-    pub async fn delete_send(&self, user_id: &UserId, send_id: SendId) -> Result<(), String> {
-        let mut sends = self.sends.write().unwrap();
-        if let Some(entry) = sends.get_mut(user_id) {
+    pub fn delete_send(&mut self, user_id: &UserId, send_id: SendId) {
+        if let Some(entry) = self.sends.get_mut(user_id) {
             entry.retain(|s| s.id != Some(send_id));
         }
-        Ok(())
     }
 
-    // ── Generator ─────────────────────────────────────────────────────────
-    //
-    // Each `generate_*` pushes the value into `password_history` and returns
-    // the fresh snapshot alongside it. One round-trip spares the view a list
-    // call after every regenerate — the generator auto-regenerates on every
-    // option change, so this shaves one Task per keystroke.
-
-    /// Sync in the SDK; wrapped in `async fn` so call sites use the same
-    /// `Task::perform` path as the other generator methods.
-    pub async fn generate_password(
-        &self,
-        user_id: &UserId,
-        req: PasswordGeneratorRequest,
-    ) -> Result<(String, Vec<PasswordHistoryEntry>), String> {
-        let entry = self
-            .users
-            .read()
-            .unwrap()
-            .get(user_id)
-            .cloned()
-            .ok_or_else(|| format!("unknown user {user_id}"))?;
-        let value = entry
-            .client
-            .generator()
-            .password(req)
-            .map_err(|e| e.to_string())?;
-        Ok((value.clone(), self.push_history(user_id, value)))
-    }
-
-    pub async fn generate_passphrase(
-        &self,
-        user_id: &UserId,
-        req: PassphraseGeneratorRequest,
-    ) -> Result<(String, Vec<PasswordHistoryEntry>), String> {
-        let entry = self
-            .users
-            .read()
-            .unwrap()
-            .get(user_id)
-            .cloned()
-            .ok_or_else(|| format!("unknown user {user_id}"))?;
-        let value = entry
-            .client
-            .generator()
-            .passphrase(req)
-            .map_err(|e| e.to_string())?;
-        Ok((value.clone(), self.push_history(user_id, value)))
-    }
-
-    /// SDK `username` is `async` because the `Forwarded` variant does HTTP;
-    /// `Word`/`Subaddress`/`Catchall` resolve synchronously inside the future.
-    pub async fn generate_username(
-        &self,
-        user_id: &UserId,
-        req: UsernameGeneratorRequest,
-    ) -> Result<(String, Vec<PasswordHistoryEntry>), String> {
-        let entry = self
-            .users
-            .read()
-            .unwrap()
-            .get(user_id)
-            .cloned()
-            .ok_or_else(|| format!("unknown user {user_id}"))?;
-        let value = entry
-            .client
-            .generator()
-            .username(req)
-            .await
-            .map_err(|e| e.to_string())?;
-        Ok((value.clone(), self.push_history(user_id, value)))
-    }
+    // ── Generator history ─────────────────────────────────────────────────
 
     /// Ordered oldest-first by insertion; the view reverses for display.
     pub fn password_history(&self, user_id: &UserId) -> Vec<PasswordHistoryEntry> {
         self.password_history
-            .read()
-            .unwrap()
             .get(user_id)
             .cloned()
             .unwrap_or_default()
     }
 
-    pub fn clear_password_history(&self, user_id: &UserId) {
-        self.password_history.write().unwrap().remove(user_id);
+    pub fn clear_password_history(&mut self, user_id: &UserId) {
+        self.password_history.remove(user_id);
     }
 
-    fn push_history(&self, user_id: &UserId, value: String) -> Vec<PasswordHistoryEntry> {
-        let mut store = self.password_history.write().unwrap();
-        let list = store.entry(*user_id).or_default();
+    /// Append a freshly-generated value to the user's history. Returns the
+    /// updated snapshot so the caller can ship it straight to the view in
+    /// the same `App::update` round-trip.
+    pub fn push_history(&mut self, user_id: UserId, value: String) -> Vec<PasswordHistoryEntry> {
+        let list = self.password_history.entry(user_id).or_default();
         list.push(PasswordHistoryEntry {
             value,
             created: chrono::Utc::now(),
         });
         list.clone()
     }
+}
+
+// ── Unlock + sync ──────────────────────────────────────────────────────────
+//
+// `unlock` lives on [`UnlockData`] (not on `ClientExt`) because it needs the
+// kdf params and key envelopes alongside the client. `sync` is a stub.
+
+/// Bundle of fields `UnlockData::unlock` needs. Pulled sync from the manager
+/// via [`ClientManager::unlock_data_for`] so the async task is fully owned.
+pub struct UnlockData {
+    pub client: PasswordManagerClient,
+    pub sdk_user_id: UserId,
+    pub kdf: Kdf,
+    pub email: String,
+    pub encrypted_user_key: EncString,
+    pub private_key: EncString,
+    pub organizations: Vec<Organization>,
+}
+
+impl UnlockData {
+    /// Initialize the SDK crypto state with the user's master password. On
+    /// success the keystore is unlocked in memory.
+    pub async fn unlock(self, password: String) -> Result<(), String> {
+        let req = InitUserCryptoRequest {
+            // Reuse the Client's bound UserId on every unlock — see the
+            // invariant on `UserEntry::sdk_user_id`.
+            user_id: Some(self.sdk_user_id),
+            kdf_params: self.kdf.clone(),
+            email: self.email.clone(),
+            account_cryptographic_state: WrappedAccountCryptographicState::V1 {
+                private_key: self.private_key,
+            },
+            method: InitUserCryptoMethod::MasterPasswordUnlock {
+                password,
+                master_password_unlock: MasterPasswordUnlockData {
+                    kdf: self.kdf,
+                    master_key_wrapped_user_key: self.encrypted_user_key,
+                    salt: self.email,
+                },
+            },
+            upgrade_token: None,
+        };
+
+        self.client
+            .crypto()
+            .initialize_user_crypto(req)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        // Replay org keys so the vault client can encrypt/decrypt org-owned
+        // ciphers. Orgs without a wrapped key contribute nothing.
+        let org_keys: HashMap<OrganizationId, UnsignedSharedKey> = self
+            .organizations
+            .into_iter()
+            .filter_map(|o| o.wrapped_key.map(|k| (o.id, k)))
+            .collect();
+        if !org_keys.is_empty() {
+            self.client
+                .crypto()
+                .initialize_org_crypto(InitOrgCryptoRequest {
+                    organization_keys: org_keys,
+                })
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+
+        Ok(())
+    }
+}
+
+/// Stub for File → Sync now. The fake-data harness has no remote to sync
+/// against, so this currently no-ops. Kept async + fallible so the call
+/// site doesn't need to change when a real sync flow lands.
+pub async fn sync() -> Result<(), String> {
+    Ok(())
 }
 
 // ── Construction helpers ───────────────────────────────────────────────────

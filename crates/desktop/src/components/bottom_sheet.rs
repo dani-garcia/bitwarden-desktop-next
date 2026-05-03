@@ -5,6 +5,20 @@ use iced::{
 
 use crate::theme::AppTheme;
 
+/// Below this window width (logical px) the right-hand pane (vault detail,
+/// send form) collapses into a bottom sheet rendered over the list pane.
+/// Single source of truth shared by every authenticated screen so they all
+/// switch layout at the same width.
+pub const SHEET_BREAKPOINT_PX: f32 = 1000.0;
+
+/// Visible strip at the top of the underlying view above the sheet
+/// (≈2× `TITLE_BAR_HEIGHT`). Lets the user keep some context of what's
+/// behind the sheet.
+pub const SHEET_TOP_INSET_PX: f32 = 64.0;
+
+/// Top-corner radius of the sheet's content surface.
+pub const SHEET_TOP_RADIUS_PX: f32 = 16.0;
+
 /// Backdrop alpha at full open, modulated by `progress`.
 const BACKDROP_ALPHA: f32 = 0.45;
 

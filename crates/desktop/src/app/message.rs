@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use crate::{
     components::sidebar::SidebarMessage,
@@ -122,9 +122,13 @@ pub enum SystemMessage {
     /// `ThemePreference::System`.
     ThemeChanged,
     CloseToast(usize),
-    /// Background `ClientManager::load` finished. Swaps the placeholder
-    /// `ClientManager::empty()` for the populated one.
-    ClientManagerLoaded(Arc<ClientManager>),
+    /// Background `ClientManager::load` finished. The loader stores the
+    /// populated manager in a one-shot slot; App's handler `take()`s it
+    /// out. `Arc<Mutex<...>>` because `Message` derives `Clone` and
+    /// `ClientManager` isn't `Clone` (its in-memory `sends` /
+    /// `password_history` are mutated through `&mut self` and shouldn't
+    /// silently fork on a stray message clone).
+    ClientManagerLoaded(Arc<Mutex<Option<ClientManager>>>),
     /// Single-instance listener forwarded a "show" signal from a second launch.
     InstanceWakeRequested,
     /// OS session state change (screen lock/unlock, suspend/resume). The

@@ -19,13 +19,13 @@ use crate::{
     app::{Outcome, UpdateCtx, ViewTypes},
     components::{FadeInOut, buttons, icons, inputs, modal},
     fl,
-    theme::{AppColors, AppTheme},
+    theme::AppTheme,
 };
 
 // ── State ─────────────────────────────────────────────────────────────────
 
 pub struct NewFolderView {
-    pub fade: FadeInOut,
+    pub(super) fade: FadeInOut,
     name: String,
     /// True while the SDK encrypt + repo write is in flight. Disables the
     /// Save button + name input so submit-spamming can't double-create.
@@ -108,7 +108,7 @@ impl NewFolderView {
 
     pub fn modal_view<'a>(
         &'a self,
-        colors: &'a AppColors,
+        ctx: &crate::app::RenderCtx<'a>,
     ) -> Option<Element<'a, NewFolderMessage, AppTheme>> {
         let progress = self.fade.progress_if_visible()?;
 
@@ -116,11 +116,11 @@ impl NewFolderView {
             text(fl!("new-folder-modal-title"))
                 .size(20)
                 .font(crate::APP_FONT_BOLD)
-                .color(colors.text_primary),
+                .color(ctx.colors.text_primary),
             Space::new().width(Fill),
             buttons::ghost_icon(
-                icons::X_LG.render(16.0, colors.text_primary),
-                colors.item_hover,
+                icons::X_LG.render(16.0, ctx.colors.text_primary),
+                ctx.colors.item_hover,
             )
             .padding([6, 6])
             .on_press(NewFolderMessage::Close),
@@ -132,7 +132,7 @@ impl NewFolderView {
         let mut name_field = inputs::text_field(
             fl!("new-folder-modal-field-label"),
             self.name.as_str(),
-            colors,
+            ctx.colors,
         )
         .chip_bg(|c| c.card_bg)
         .disabled(self.saving);
@@ -144,7 +144,7 @@ impl NewFolderView {
 
         let helper = text(fl!("new-folder-modal-helper"))
             .size(12)
-            .color(colors.text_secondary);
+            .color(ctx.colors.text_secondary);
 
         let submit_disabled = self.saving || self.name.trim().is_empty();
         let mut submit_btn =
