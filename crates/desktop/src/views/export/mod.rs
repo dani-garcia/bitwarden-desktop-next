@@ -19,14 +19,14 @@ use iced::{
 
 use crate::{
     app::{Outcome, UpdateCtx, ViewTypes},
-    components::{FadeInOut, fade_in_out, icons, inputs, modal},
-    domain::UserId,
+    components::{FadeInOut, fade_in_out, icons, inputs, modal, toast::Toast},
+    domain::{UserId, VaultChoice},
     fl,
     services::sdk::{ClientExt, Organization},
     theme::{AppColors, AppTheme, RADIUS_LG},
 };
 
-const CONFIRM_PASSWORD_FIELD_ID: widget::Id = widget::Id::new("export-confirm-password-field");
+pub const CONFIRM_PASSWORD_FIELD_ID: widget::Id = widget::Id::new("export-confirm-password-field");
 
 // ── Export format catalog ─────────────────────────────────────────────────
 //
@@ -77,26 +77,6 @@ impl ExportFormatChoice {
 impl std::fmt::Display for ExportFormatChoice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.label())
-    }
-}
-
-// ── Vault selection ───────────────────────────────────────────────────────
-
-/// Source vault: the user's personal vault, or one of their organizations.
-/// Mirrors `VaultChoice` in the import modal so the two pickers feel
-/// identical — the dropdown lists "My vault" plus one entry per org.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum VaultChoice {
-    Personal,
-    Org { id: OrganizationId, name: String },
-}
-
-impl std::fmt::Display for VaultChoice {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Personal => f.write_str(&fl!("export-modal-vault-personal")),
-            Self::Org { name, .. } => f.write_str(name),
-        }
     }
 }
 
@@ -174,14 +154,6 @@ pub enum ExportEvent {
         organization_id: Option<OrganizationId>,
         format: bitwarden_exporters::ExportFormat,
     },
-    /// Export finished — surface the saved-file path as a success toast.
-    ToastSuccess(String),
-    /// Export failed — surface the error as an error toast.
-    ToastError(String),
-    /// Confirm-step validation rejected the master password. App surfaces
-    /// "Invalid master password" as an error toast; the Confirm dialog
-    /// stays open so the user can retry.
-    ToastInvalidMasterPassword,
 }
 
 impl ViewTypes for ExportView {
@@ -221,15 +193,7 @@ impl ExportView {
     /// active user's org list. Called by App on each open from the cached
     /// org snapshot held by `VaultView` — same pattern as the import modal.
     pub fn set_organizations(&mut self, orgs: &[Organization]) {
-        let mut choices = Vec::with_capacity(orgs.len() + 1);
-        choices.push(VaultChoice::Personal);
-        for org in orgs {
-            choices.push(VaultChoice::Org {
-                id: org.id,
-                name: org.name.clone(),
-            });
-        }
-        self.vault_choices = choices;
+        self.vault_choices = VaultChoice::list_with_personal(orgs);
     }
 
     fn close_all(&mut self) {
@@ -321,12 +285,15 @@ impl ExportView {
             }
             ExportMessage::ValidationCompleted(Err(_)) => {
                 self.validating = false;
-                Outcome::event(ExportEvent::ToastInvalidMasterPassword)
+                Outcome::toast(Toast::error(fl!("export-confirm-error"), None))
             }
             ExportMessage::Completed(Ok(Some(path))) => {
                 self.file_password.clear();
                 self.close_all();
-                Outcome::event(ExportEvent::ToastSuccess(path))
+                Outcome::toast(Toast::success(
+                    fl!("export-toast-success", path = path.as_str()),
+                    None,
+                ))
             }
             ExportMessage::Completed(Ok(None)) => {
                 // User cancelled the native save dialog — close the modals
@@ -338,7 +305,11 @@ impl ExportView {
                 // Leave the modals open so the user can correct & retry —
                 // typical case is a wrong / missing encryption password.
                 self.validating = false;
-                Outcome::event(ExportEvent::ToastError(err))
+                tracing::error!(%err, "vault export failed");
+                Outcome::toast(Toast::error(
+                    fl!("export-toast-failed-body"),
+                    Some(&fl!("export-toast-failed-title")),
+                ))
             }
         }
     }
@@ -369,11 +340,12 @@ impl ExportView {
         // Both pickers sit directly on the dialog body (which is painted
         // with `card_bg`), so the floating label chip needs to match —
         // otherwise it shows as a contrasting tile on the border.
+        let personal_label = fl!("export-modal-vault-personal");
         let vault_picker = inputs::select_field_on(
             fl!("export-modal-vault-label"),
             Some(self.selected_vault.clone()),
             self.vault_choices.clone(),
-            |v: &VaultChoice| v.to_string(),
+            move |v: &VaultChoice| v.label(&personal_label),
             ExportMessage::VaultSelected,
             |c| c.card_bg,
             colors,

@@ -16,7 +16,7 @@ use super::{
     SendEvent, SendFilter, SendMessage,
     state::SendView,
     widgets::{
-        send_edit::{FormAction, SendEditMessage, SendForm},
+        send_edit::{FormEvent, SendEditMessage, SendForm},
         send_list::{SearchMessage, SendListMessage},
     },
 };
@@ -160,13 +160,13 @@ impl SendView {
             return Outcome::None;
         };
         match form.update(msg) {
-            FormAction::None => Outcome::None,
-            FormAction::Cancel => {
+            FormEvent::None => Outcome::None,
+            FormEvent::Cancel => {
                 self.selection.clear();
                 self.pane.close();
                 Outcome::None
             }
-            FormAction::Save => {
+            FormEvent::Save => {
                 if !form.is_valid() {
                     return Outcome::toast(Toast::warning(fl!("toast-required-fields"), None));
                 }
@@ -184,21 +184,21 @@ impl SendView {
                     Ok(NoDebug(Box::new(saved))),
                 )))
             }
-            FormAction::Delete => {
+            FormEvent::Delete => {
                 self.selection.confirm_delete.open();
                 Outcome::None
             }
-            FormAction::CopyLink(url) => Outcome::event(SendEvent::ClipboardCopyRequested {
+            FormEvent::CopyLink(url) => Outcome::event(SendEvent::ClipboardCopyRequested {
                 value: url,
                 sensitivity: crate::services::clipboard::Sensitivity::Normal,
                 toast_label: fl!("send-toast-copied-link"),
             }),
-            FormAction::CopyPassword(pw) => Outcome::event(SendEvent::ClipboardCopyRequested {
+            FormEvent::CopyPassword(pw) => Outcome::event(SendEvent::ClipboardCopyRequested {
                 value: pw,
                 sensitivity: crate::services::clipboard::Sensitivity::Sensitive,
                 toast_label: fl!("send-toast-copied-password"),
             }),
-            FormAction::RegeneratePassword => {
+            FormEvent::RegeneratePassword => {
                 Outcome::event(SendEvent::RegeneratePasswordRequested)
             }
         }
@@ -235,7 +235,7 @@ impl SendView {
                 tracing::info!(uid = %msg_uid, count = items.len(), "send list loaded");
                 let cache = self.items.entry(msg_uid).or_default();
                 cache.all = items;
-                if ctx.active_user == Some(&msg_uid) {
+                if ctx.is_active_user(&msg_uid) {
                     self.recompute_filtered(&msg_uid, ctx.active_send_filter);
                 }
             }
@@ -253,7 +253,7 @@ impl SendView {
         id: SendId,
         result: Result<NoDebug<Box<SdkSendView>>, String>,
     ) -> Outcome<Self> {
-        if ctx.active_user != Some(&msg_uid) {
+        if !ctx.is_active_user(&msg_uid) {
             return Outcome::None;
         }
         match result {
@@ -281,7 +281,7 @@ impl SendView {
         msg_uid: UserId,
         result: Result<NoDebug<Box<SdkSendView>>, String>,
     ) -> Outcome<Self> {
-        if ctx.active_user != Some(&msg_uid) {
+        if !ctx.is_active_user(&msg_uid) {
             return Outcome::None;
         }
         match result {
@@ -332,7 +332,7 @@ impl SendView {
         send_id: SendId,
         result: Result<(), String>,
     ) -> Outcome<Self> {
-        if ctx.active_user != Some(&msg_uid) {
+        if !ctx.is_active_user(&msg_uid) {
             return Outcome::None;
         }
         match result {

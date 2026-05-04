@@ -8,7 +8,7 @@ use iced::{
 
 use crate::{
     components::{
-        buttons, icons,
+        buttons,
         inputs::{reveal_text_field, text_field},
     },
     fl,
@@ -61,12 +61,10 @@ pub(in super::super) fn login_card<'a>(
                 ),
                 colors,
             );
-            let remove_btn = buttons::ghost_icon(
-                icons::BWI_TRASH.render(18.0, colors.titlebar_close_hover),
-                colors.item_hover,
-            )
-            .on_press(CipherEditMessage::PasskeyRemoved(idx))
-            .padding([6, 6]);
+            let remove_btn = buttons::delete_icon_button(
+                CipherEditMessage::PasskeyRemoved(idx),
+                colors,
+            );
 
             body = body.push(
                 row![container(info).width(Fill), remove_btn]
@@ -104,12 +102,10 @@ pub(in super::super) fn autofill_card<'a>(
             let input = text_field(fl!("form-uri"), value, colors)
                 .on_input(move |s| CipherEditMessage::UriChanged(idx, s))
                 .disabled(form.saving);
-            let remove_btn = buttons::ghost_icon(
-                icons::BWI_TRASH.render(18.0, colors.titlebar_close_hover),
-                colors.item_hover,
-            )
-            .on_press(CipherEditMessage::UriRemoved(idx))
-            .padding([6, 6]);
+            let remove_btn = buttons::delete_icon_button(
+                CipherEditMessage::UriRemoved(idx),
+                colors,
+            );
 
             body = body.push(
                 row![container(input).width(Fill), remove_btn,]
@@ -119,17 +115,11 @@ pub(in super::super) fn autofill_card<'a>(
         }
     }
 
-    let add_btn = buttons::secondary(
-        row![
-            icons::PLUS.render(14.0, colors.accent),
-            text(fl!("form-add-website")).size(14),
-        ]
-        .spacing(6)
-        .align_y(Alignment::Center),
-    )
-    .on_press(CipherEditMessage::UriAdded)
-    .padding([6, 12]);
-    body = body.push(add_btn);
+    body = body.push(crate::views::vault::widgets::field_helpers::add_item_button(
+        fl!("form-add-website"),
+        CipherEditMessage::UriAdded,
+        colors,
+    ));
 
     card_with_margin(styled_card(body))
 }

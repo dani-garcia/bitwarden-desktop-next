@@ -2,14 +2,15 @@
 
 use bitwarden_vault::CipherType;
 use iced::{
-    Alignment, Element, Fill,
-    widget::{Space, column, container, row, scrollable, text},
+    Element, Fill,
+    widget::{column, scrollable},
 };
 
 use crate::{
-    components::{self, buttons, icons, modal},
+    components::{self, modal},
     fl,
     theme::{AppColors, AppTheme},
+    views::vault::widgets::field_helpers::section_label,
 };
 
 use super::{message::CipherEditMessage, sections, state::CipherForm};
@@ -22,49 +23,49 @@ pub fn view<'a>(
     let header = header_row(form, colors);
 
     let mut sections: Vec<Element<'a, CipherEditMessage, AppTheme>> = vec![
-        sections::shared::section_label(fl!("form-section-item-details"), colors),
+        section_label(fl!("form-section-item-details"), colors),
         sections::shared::item_details_card(form, colors),
     ];
 
     match form.modified.r#type {
         CipherType::Login => {
-            sections.push(sections::shared::section_label(
+            sections.push(section_label(
                 fl!("form-section-login-credentials"),
                 colors,
             ));
             sections.push(sections::login::login_card(form, colors));
-            sections.push(sections::shared::section_label(
+            sections.push(section_label(
                 fl!("form-section-autofill-options"),
                 colors,
             ));
             sections.push(sections::login::autofill_card(form, colors));
         }
         CipherType::Card => {
-            sections.push(sections::shared::section_label(
+            sections.push(section_label(
                 fl!("form-section-card-details"),
                 colors,
             ));
             sections.push(sections::card::card_details_card(form, colors));
         }
         CipherType::Identity => {
-            sections.push(sections::shared::section_label(
+            sections.push(section_label(
                 fl!("form-section-personal-details"),
                 colors,
             ));
             sections.push(sections::identity::identity_personal_card(form, colors));
-            sections.push(sections::shared::section_label(
+            sections.push(section_label(
                 fl!("form-section-identification"),
                 colors,
             ));
             sections.push(sections::identity::identity_identification_card(
                 form, colors,
             ));
-            sections.push(sections::shared::section_label(
+            sections.push(section_label(
                 fl!("form-section-contact-info"),
                 colors,
             ));
             sections.push(sections::identity::identity_contact_card(form, colors));
-            sections.push(sections::shared::section_label(
+            sections.push(section_label(
                 fl!("form-section-address"),
                 colors,
             ));
@@ -72,7 +73,7 @@ pub fn view<'a>(
         }
         CipherType::SecureNote => { /* notes live in the shared "Additional options" card below */ }
         CipherType::SshKey => {
-            sections.push(sections::shared::section_label(
+            sections.push(section_label(
                 fl!("form-section-ssh-key"),
                 colors,
             ));
@@ -83,20 +84,20 @@ pub fn view<'a>(
         CipherType::BankAccount => {}
     }
 
-    sections.push(sections::shared::section_label(
+    sections.push(section_label(
         fl!("form-section-additional-options"),
         colors,
     ));
     sections.push(sections::shared::additional_options_card(form, colors));
 
-    sections.push(sections::shared::section_label(
+    sections.push(section_label(
         fl!("form-section-custom-fields"),
         colors,
     ));
     sections.push(sections::shared::custom_fields_card(form, colors));
 
     let body = scrollable(column(sections).spacing(4).padding([12, 20])).height(Fill);
-    let bottom_bar = bottom_bar(form, colors);
+    let bottom_bar = bottom_bar(form);
 
     components::rounded_top_pane(
         column![header, body, bottom_bar].spacing(0).height(Fill),
@@ -106,7 +107,7 @@ pub fn view<'a>(
 
 fn header_row<'a>(
     form: &'a CipherForm,
-    colors: &AppColors,
+    colors: &'a AppColors,
 ) -> Element<'a, CipherEditMessage, AppTheme> {
     let title_text = if form.original.is_some() {
         match form.modified.r#type {
@@ -120,27 +121,10 @@ fn header_row<'a>(
     } else {
         fl!("form-title-new-item")
     };
-
-    let title = text(title_text).size(18).color(colors.text_primary);
-
-    let cancel_btn = buttons::ghost_icon(
-        icons::BWI_CLOSE.render(32.0, colors.text_secondary),
-        colors.item_hover,
-    )
-    .on_press(CipherEditMessage::Cancel)
-    .padding([1, 1]);
-
-    let header =
-        container(row![title, Space::new().width(Fill), cancel_btn].align_y(Alignment::Center))
-            .padding([8, 20]);
-
-    column![header, components::separator_h()].spacing(0).into()
+    components::pane_header(title_text, CipherEditMessage::Cancel, colors)
 }
 
-fn bottom_bar<'a>(
-    form: &'a CipherForm,
-    _colors: &AppColors,
-) -> Element<'a, CipherEditMessage, AppTheme> {
+fn bottom_bar<'a>(form: &'a CipherForm) -> Element<'a, CipherEditMessage, AppTheme> {
     let save_label = if form.saving {
         fl!("form-saving")
     } else {
@@ -153,11 +137,5 @@ fn bottom_bar<'a>(
         fl!("form-cancel"),
         CipherEditMessage::Cancel,
     );
-
-    let bar = container(actions)
-        .width(Fill)
-        .padding([8, 20])
-        .style(|theme: &AppTheme| container::Style::default().background(theme.colors.background));
-
-    column![components::separator_h(), bar].spacing(0).into()
+    components::pane_footer(actions)
 }

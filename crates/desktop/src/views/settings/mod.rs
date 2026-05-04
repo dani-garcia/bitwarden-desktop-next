@@ -19,7 +19,7 @@ use iced::{
 };
 
 use crate::{
-    app::{Outcome, ViewTypes},
+    app::{Outcome, UpdateCtx, ViewTypes},
     components::{self, buttons, icons, modal, toast::Toast},
     fl,
     services::{
@@ -173,10 +173,7 @@ impl SettingsView {
         self.fade.close();
     }
 
-    /// Settings is a pure-state view: every arm here mutates `self.snapshot`
-    /// (or `self.fade`) and bubbles up via `SettingsEvent`. No SDK calls, no
-    /// overlay arbitration → no `UpdateCtx`.
-    pub fn update(&mut self, msg: SettingsMessage) -> Outcome<Self> {
+    pub fn update(&mut self, msg: SettingsMessage, _ctx: UpdateCtx<'_>) -> Outcome<Self> {
         match msg {
             SettingsMessage::Close => self.fade.close(),
             SettingsMessage::SelectCategory(kind) => self.active = kind,
@@ -352,16 +349,7 @@ fn category_item<'a>(
 
 // ── Small helpers shared by tabs ───────────────────────────────────────────
 
-pub(super) fn section_heading<'a>(
-    label: impl Into<String>,
-    colors: &'a AppColors,
-) -> Element<'a, SettingChange, AppTheme> {
-    text(label.into())
-        .size(16)
-        .font(crate::APP_FONT_BOLD)
-        .color(colors.text_primary)
-        .into()
-}
+pub(super) use crate::components::section_heading;
 
 /// Placeholder toast for stubbed settings. Exposed so App can construct the
 /// same toast when it receives a stubbed `Applied` event.

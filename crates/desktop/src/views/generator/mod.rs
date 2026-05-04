@@ -42,7 +42,8 @@ use crate::{
 pub use message::{GenerateKind, GeneratorEvent, GeneratorMessage};
 pub use state::{TabKind, UsernameKind};
 
-use self::state::{Mode, PassphraseForm, PasswordForm, UsernameForm};
+pub use self::state::Mode;
+use self::state::{PassphraseForm, PasswordForm, UsernameForm};
 
 /// How fast the segmented tab indicator slides between positions.
 const TAB_ANIM_MS: f32 = 160.0;
@@ -89,19 +90,16 @@ impl GeneratorView {
         }
     }
 
-    pub fn open_as_generator(&mut self) {
+    pub fn open(&mut self, mode: Mode) {
         self.fade.open();
-        self.mode = Mode::Generator;
-        self.active_tab = TabKind::Password;
-        // Snap the indicator without animating — opening is already an
-        // in-animation; sliding the pill on top of that would be busy.
-        self.tab_anim.transition_instantaneous(0.0, Instant::now());
-        self.current = None;
-    }
-
-    pub fn open_as_history(&mut self) {
-        self.fade.open();
-        self.mode = Mode::History;
+        self.mode = mode;
+        if matches!(mode, Mode::Generator) {
+            self.active_tab = TabKind::Password;
+            // Snap the indicator without animating — opening is already an
+            // in-animation; sliding the pill on top of that would be busy.
+            self.tab_anim.transition_instantaneous(0.0, Instant::now());
+            self.current = None;
+        }
     }
 
     /// Replace the cached history snapshot. App calls this on modal open

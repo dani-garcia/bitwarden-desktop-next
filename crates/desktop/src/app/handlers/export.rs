@@ -6,9 +6,7 @@ use iced::Task;
 
 use crate::{
     app::{App, Message},
-    components::toast::Toast,
     domain::UserId,
-    fl,
     services::sdk::ClientExt,
     views::export::{ExportEvent, ExportMessage},
 };
@@ -44,25 +42,6 @@ impl App {
                     },
                     |r| Message::export(ExportMessage::Completed(r)),
                 )
-            }
-            ExportEvent::ToastSuccess(path) => {
-                self.push_toast(Toast::success(
-                    fl!("export-toast-success", path = path.as_str()),
-                    None,
-                ));
-                Task::none()
-            }
-            ExportEvent::ToastError(err) => {
-                tracing::error!(%err, "vault export failed");
-                self.push_toast(Toast::error(
-                    fl!("export-toast-failed-body"),
-                    Some(&fl!("export-toast-failed-title")),
-                ));
-                Task::none()
-            }
-            ExportEvent::ToastInvalidMasterPassword => {
-                self.push_toast(Toast::error(fl!("export-confirm-error"), None));
-                Task::none()
             }
         }
     }

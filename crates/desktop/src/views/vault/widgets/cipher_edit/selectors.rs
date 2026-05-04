@@ -95,9 +95,35 @@ pub(super) fn collections_selector<'a>(
         fl!("form-collections-selected", count = count)
     };
 
-    let trigger = bordered_dropdown_trigger(&summary, colors, || {
-        CipherEditMessage::CollectionsDropdownToggled
-    });
+    let trigger: Element<'a, CipherEditMessage, AppTheme> = {
+        let label_text = text(summary.clone()).size(14).color(colors.text_primary);
+        let chevron = icons::BWI_ANGLE_DOWN.render(14.0, colors.text_secondary);
+        let content = row![label_text, Space::new().width(Fill), chevron]
+            .spacing(8)
+            .align_y(Alignment::Center);
+
+        buttons::ghost(
+            container(content).padding([8, 12]).width(Fill),
+            false,
+            Color::TRANSPARENT,
+            colors.item_hover,
+            RADIUS_SM,
+        )
+        .on_press(CipherEditMessage::CollectionsDropdownToggled)
+        .padding(0)
+        .width(Fill)
+        .style(|theme: &AppTheme, _status| iced::widget::button::Style {
+            background: Some(Background::Color(Color::TRANSPARENT)),
+            text_color: theme.colors.text_primary,
+            border: Border::default()
+                .color(theme.colors.border)
+                .width(1.0)
+                .rounded(RADIUS_SM),
+            shadow: iced::Shadow::default(),
+            snap: false,
+        })
+        .into()
+    };
 
     let mut options: Vec<Element<'a, CipherEditMessage, AppTheme>> = Vec::new();
     if scoped.is_empty() {
@@ -160,38 +186,3 @@ pub(super) fn collections_selector<'a>(
     )
 }
 
-/// Pill-shaped dropdown trigger used by the collections multi-select. Card
-/// brand / month / title selectors use iced's `pick_list` directly.
-pub(super) fn bordered_dropdown_trigger<'a, M: Clone + 'a>(
-    label: &str,
-    colors: &'a AppColors,
-    on_click: impl Fn() -> M + 'a,
-) -> Element<'a, M, AppTheme> {
-    let label_text = text(label.to_string()).size(14).color(colors.text_primary);
-    let chevron = icons::BWI_ANGLE_DOWN.render(14.0, colors.text_secondary);
-    let content = row![label_text, Space::new().width(Fill), chevron]
-        .spacing(8)
-        .align_y(Alignment::Center);
-
-    buttons::ghost(
-        container(content).padding([8, 12]).width(Fill),
-        false,
-        Color::TRANSPARENT,
-        colors.item_hover,
-        RADIUS_SM,
-    )
-    .on_press(on_click())
-    .padding(0)
-    .width(Fill)
-    .style(|theme: &AppTheme, _status| iced::widget::button::Style {
-        background: Some(Background::Color(Color::TRANSPARENT)),
-        text_color: theme.colors.text_primary,
-        border: Border::default()
-            .color(theme.colors.border)
-            .width(1.0)
-            .rounded(RADIUS_SM),
-        shadow: iced::Shadow::default(),
-        snap: false,
-    })
-    .into()
-}

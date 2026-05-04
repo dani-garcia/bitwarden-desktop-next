@@ -57,9 +57,7 @@ pub struct ClientManager {
     /// node; cloning a `PasswordManagerClient` for an async task only needs
     /// the inner `Arc`-backed handle, not the entry itself.
     users: HashMap<UserId, Box<UserEntry>>,
-    /// In-memory send store, keyed by user. The real SDK flow will encrypt and
-    /// persist via `Repository<Send>`; until then we hold decrypted `SendView`
-    /// values directly. See `docs/todo.md`.
+    /// In-memory send store keyed by user; not encrypted/persisted yet.
     sends: HashMap<UserId, Vec<SendView>>,
     /// In-memory generator history, keyed by user. Cleared on `log_out`.
     password_history: HashMap<UserId, Vec<PasswordHistoryEntry>>,
@@ -175,16 +173,10 @@ impl ClientManager {
         }
     }
 
-    /// Clear the user's keystore and remove the entry. Named `log_out` (not
-    /// `remove`) because the SDK will want server-side token revocation and
-    /// local SQLite cleanup on this transition in the future.
-    ///
-    /// TODO: migrate to `async fn log_out(...) -> Result<(), _>` when the SDK
-    /// exposes a real logout path. The `Box<UserEntry>` dropped here may still
-    /// be alive inside in-flight async tasks that cloned the inner client —
-    /// acceptable today, but future cleanup requiring synchronous resource
-    /// release (e.g. closing the SQLite handle) needs those tasks to complete
-    /// first.
+    /// Clear the user's keystore and remove the entry. The dropped
+    /// `Box<UserEntry>` may still be alive inside in-flight async tasks that
+    /// cloned the inner client — fine today, but synchronous resource release
+    /// (e.g. closing the SQLite handle) would need those tasks to drain first.
     pub fn log_out(&mut self, uid: &UserId) {
         if let Some(entry) = self.users.remove(uid) {
             entry.client.lock();

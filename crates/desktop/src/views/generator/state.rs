@@ -8,7 +8,7 @@ use bitwarden_generators::{
 use crate::fl;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Mode {
+pub enum Mode {
     Generator,
     History,
 }

@@ -117,9 +117,8 @@ pub async fn load_users() -> HashMap<UserId, Box<UserEntry>> {
 }
 
 async fn build_user_entry(mu: MockUserMeta, data_dir: &Path) -> UserEntry {
-    // TODO: migrate to `PasswordManagerClient::load_from_state` once the SDK
-    // exposes it. We hand-assemble the client because `PasswordManagerClient::new`
-    // pre-sets the database `OnceLock` to a memory db, blocking our per-user
+    // Hand-assembled because `PasswordManagerClient::new` pre-sets the
+    // database `OnceLock` to a memory db, blocking our per-user
     // `initialize_database` call.
     let token_handler =
         Arc::new(bitwarden_auth::token_management::PasswordManagerTokenHandler::default());

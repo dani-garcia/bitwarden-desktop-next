@@ -2,14 +2,14 @@ use bitwarden_vault::{CipherListView, CipherListViewType};
 use iced::{
     Alignment, Background, Border, Color, Element, Fill, Length,
     widget::{
-        column, container, image, mouse_area, row, text,
+        column, container, mouse_area, row, text,
         text::{Ellipsis, Wrapping},
     },
 };
 
 use crate::{
     components::icons,
-    services::favicon::{self, FaviconService, IconState},
+    services::favicon::FaviconService,
     theme::{AppColors, AppTheme, RADIUS_PILL, RADIUS_SM},
     views::magnify::{MagnifyMessage, dims::ROW_HEIGHT, widgets::chip::keybind},
 };
@@ -145,25 +145,16 @@ fn icon_for<'a>(
     colors: &'a AppColors,
 ) -> Element<'a, MagnifyMessage, AppTheme> {
     let inner: Element<'a, MagnifyMessage, AppTheme> =
-        if let CipherListViewType::Login(login) = &item.r#type {
-            if show_favicons
-                && let Some(uid) = active_user
-                && let Some(handle) = login
-                    .uris
-                    .as_ref()
-                    .and_then(|u| u.first())
-                    .and_then(|u| u.uri.as_deref())
-                    .and_then(favicon::hostname_for_fetch)
-                    .map(|h| favicon.get(uid, &h))
-                    .and_then(|state| match state {
-                        IconState::Found(handle) => Some(handle),
-                        _ => None,
-                    })
-            {
-                png_icon(handle)
-            } else {
-                png_icon(favicon::globe_handle())
-            }
+        if let CipherListViewType::Login(login) = &item.r#type
+            && show_favicons
+            && let Some(uid) = active_user
+        {
+            let uri = login
+                .uris
+                .as_ref()
+                .and_then(|u| u.first())
+                .and_then(|u| u.uri.as_deref());
+            crate::components::favicon_icon(favicon.handle_for_login_uri(uid, uri))
         } else {
             let icon = match item.r#type {
                 CipherListViewType::Card(_) => icons::BWI_CREDIT_CARD,
@@ -202,9 +193,3 @@ fn icon_backdrop<'a>(
         .into()
 }
 
-fn png_icon<'a>(handle: image::Handle) -> Element<'a, MagnifyMessage, AppTheme> {
-    container(image::Image::new(handle).width(32).height(32))
-        .width(32)
-        .height(32)
-        .into()
-}

@@ -4,6 +4,7 @@
 //! may not import from `views/`, `components/`, or `app/`.
 
 pub mod animation;
+pub mod broadcast_stream;
 pub mod clipboard;
 pub mod cursor_monitor;
 pub mod favicon;

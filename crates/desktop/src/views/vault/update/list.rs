@@ -78,7 +78,7 @@ impl VaultView {
                 // Only recompute the filtered view if this is the active user
                 // — search_query / active_filter are view-global state that
                 // may not match a background user's context.
-                if ctx.active_user == Some(&msg_uid) {
+                if ctx.is_active_user(&msg_uid) {
                     self.recompute_filtered(&msg_uid, ctx.active_vault_filter);
                 }
             }

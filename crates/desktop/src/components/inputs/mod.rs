@@ -9,8 +9,9 @@
 //!
 //! ## Layout
 //!
-//! - This file: frame primitives ([`field_frame`], [`errored_field_frame`],
-//!   [`field_error_row`], [`bare_text_input`], [`readonly_field_truncated`]).
+//! - This file: frame primitives ([`field_frame`], [`field_frame_on`],
+//!   [`errored_field_frame`], [`errored_field_frame_on`], [`field_error_row`],
+//!   [`bare_text_input`], [`readonly_field_truncated`]).
 //! - [`text`] — [`text_field`] / [`stepper_field`].
 //! - [`select`] — [`select_field`] / [`search_select_field`] /
 //!   [`multi_select_field`].
@@ -116,26 +117,7 @@ pub fn field_frame_on<'a, M: 'a>(
     chip_bg: impl Fn(&AppColors) -> Color + 'static,
     colors: &'a AppColors,
 ) -> Element<'a, M, AppTheme> {
-    let floating_label = container(text(label.into()).size(14).color(colors.text_secondary))
-        .padding([0, 4])
-        .style(move |theme: &AppTheme| {
-            container::Style::default().background(chip_bg(&theme.colors))
-        });
-
-    let bordered = container(content).width(Fill).style(|theme: &AppTheme| {
-        container::Style::default().border(
-            Border::default()
-                .color(theme.colors.border)
-                .width(1.0)
-                .rounded(4),
-        )
-    });
-
-    crate::components::shell_scope::ShellScope::new(stack![
-        column![Space::new().height(Length::Fixed(8.0)), bordered],
-        container(floating_label).padding([0, 12]),
-    ])
-    .into()
+    field_frame_styled(label, content, chip_bg, false, colors)
 }
 
 /// [`field_frame`] in the validation-error state: red border + red label
@@ -146,16 +128,46 @@ pub fn errored_field_frame<'a, M: 'a>(
     content: impl Into<Element<'a, M, AppTheme>>,
     colors: &'a AppColors,
 ) -> Element<'a, M, AppTheme> {
-    let floating_label = container(text(label.into()).size(14).color(colors.danger))
-        .padding([0, 4])
-        .style(|theme: &AppTheme| container::Style::default().background(theme.colors.background));
+    field_frame_styled(label, content, |c| c.background, true, colors)
+}
 
-    let bordered = container(content).width(Fill).style(|theme: &AppTheme| {
+/// [`errored_field_frame`] with a caller-chosen chip background. Use when
+/// the errored field sits on a surface other than `colors.background`.
+pub fn errored_field_frame_on<'a, M: 'a>(
+    label: impl Into<String>,
+    content: impl Into<Element<'a, M, AppTheme>>,
+    chip_bg: impl Fn(&AppColors) -> Color + 'static,
+    colors: &'a AppColors,
+) -> Element<'a, M, AppTheme> {
+    field_frame_styled(label, content, chip_bg, true, colors)
+}
+
+fn field_frame_styled<'a, M: 'a>(
+    label: impl Into<String>,
+    content: impl Into<Element<'a, M, AppTheme>>,
+    chip_bg: impl Fn(&AppColors) -> Color + 'static,
+    errored: bool,
+    colors: &'a AppColors,
+) -> Element<'a, M, AppTheme> {
+    let label_color = if errored {
+        colors.danger
+    } else {
+        colors.text_secondary
+    };
+    let floating_label = container(text(label.into()).size(14).color(label_color))
+        .padding([0, 4])
+        .style(move |theme: &AppTheme| {
+            container::Style::default().background(chip_bg(&theme.colors))
+        });
+
+    let bordered = container(content).width(Fill).style(move |theme: &AppTheme| {
+        let border_color = if errored {
+            theme.colors.danger
+        } else {
+            theme.colors.border
+        };
         container::Style::default().border(
-            Border::default()
-                .color(theme.colors.danger)
-                .width(1.0)
-                .rounded(4),
+            Border::default().color(border_color).width(1.0).rounded(4),
         )
     });
 

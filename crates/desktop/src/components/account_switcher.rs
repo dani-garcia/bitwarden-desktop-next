@@ -166,20 +166,20 @@ pub fn dropdown<'a>(
         sections.push(options_row(
             icons::LOCK,
             fl!("account-switcher-lock-all"),
-            Some(AccountSwitcherMessage::LockAll),
+            AccountSwitcherMessage::LockAll,
             colors,
         ));
     }
     sections.push(options_row(
         icons::GEAR,
         fl!("account-switcher-settings"),
-        Some(AccountSwitcherMessage::Settings),
+        AccountSwitcherMessage::Settings,
         colors,
     ));
     sections.push(options_row(
         icons::PLUS,
         fl!("account-switcher-add"),
-        Some(AccountSwitcherMessage::AddAccount),
+        AccountSwitcherMessage::AddAccount,
         colors,
     ));
 
@@ -314,10 +314,10 @@ fn other_account_row<'a>(
 fn options_row<'a>(
     icon: icons::Icon,
     label: String,
-    on_press: Option<AccountSwitcherMessage>,
+    on_press: AccountSwitcherMessage,
     colors: &'a AppColors,
 ) -> Element<'a, AccountSwitcherMessage, AppTheme> {
-    let button = buttons::ghost(
+    buttons::ghost(
         row![
             icon.render(14.0, colors.accent),
             text(label).size(14).color(colors.accent),
@@ -329,13 +329,10 @@ fn options_row<'a>(
         colors.item_hover,
         0.0,
     )
+    .on_press(on_press)
     .padding([8, 12])
-    .width(Fill);
-
-    match on_press {
-        Some(msg) => button.on_press(msg).into(),
-        None => button.into(),
-    }
+    .width(Fill)
+    .into()
 }
 
 fn section_label<'a, M: 'a>(label: String, colors: &AppColors) -> Element<'a, M, AppTheme> {

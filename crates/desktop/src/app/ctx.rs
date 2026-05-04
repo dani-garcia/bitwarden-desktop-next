@@ -69,6 +69,12 @@ pub struct UpdateCtx<'a> {
 }
 
 impl UpdateCtx<'_> {
+    /// True when `uid` matches the currently-active user. Used by SDK
+    /// completion handlers to drop stale results after an account switch.
+    pub fn is_active_user(&self, uid: &UserId) -> bool {
+        self.active_user == Some(uid)
+    }
+
     /// View-side mirror of `App::perform_with_active_client`. Extracts the
     /// active user's `PasswordManagerClient`, runs an async call against it,
     /// and wraps the result `Task` in `Outcome::Task` for direct return from
@@ -125,6 +131,9 @@ pub struct RenderCtx<'a> {
     pub window_width: f32,
     pub active_user: Option<&'a UserId>,
     pub active_email: Option<&'a str>,
+    /// Server URL for the active account, or `""` when no account is
+    /// active or the entry is missing.
+    pub active_server_url: &'a str,
     pub accounts: &'a [AccountEntry],
     pub open_overlay: Option<Overlay>,
 }

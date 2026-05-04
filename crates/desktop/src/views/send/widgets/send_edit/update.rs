@@ -1,10 +1,10 @@
 use super::{
     message::SendEditMessage,
-    state::{FormAction, SendForm},
+    state::{FormEvent, SendForm},
 };
 
 impl SendForm {
-    pub fn update(&mut self, msg: SendEditMessage) -> FormAction {
+    pub fn update(&mut self, msg: SendEditMessage) -> FormEvent {
         match msg {
             SendEditMessage::NameChanged(s) => self.set_name(s),
             SendEditMessage::TextAction(action) => self.text_content.perform(action),
@@ -18,15 +18,15 @@ impl SendForm {
 
             SendEditMessage::PasswordChanged(s) => self.set_password(s),
             SendEditMessage::PasswordRevealToggled => self.toggle_password_reveal(),
-            SendEditMessage::PasswordRegenerate => return FormAction::RegeneratePassword,
+            SendEditMessage::PasswordRegenerate => return FormEvent::RegeneratePassword,
             SendEditMessage::PasswordCopy => {
                 if !self.password.is_empty() {
-                    return FormAction::CopyPassword(self.password.clone());
+                    return FormEvent::CopyPassword(self.password.clone());
                 }
             }
             SendEditMessage::CopyLinkPressed => {
                 if let Some(url) = self.send_link() {
-                    return FormAction::CopyLink(url);
+                    return FormEvent::CopyLink(url);
                 }
             }
 
@@ -40,10 +40,10 @@ impl SendForm {
 
             SendEditMessage::NotesAction(action) => self.notes_content.perform(action),
 
-            SendEditMessage::SavePressed => return FormAction::Save,
-            SendEditMessage::CancelPressed => return FormAction::Cancel,
-            SendEditMessage::DeletePressed => return FormAction::Delete,
+            SendEditMessage::SavePressed => return FormEvent::Save,
+            SendEditMessage::CancelPressed => return FormEvent::Cancel,
+            SendEditMessage::DeletePressed => return FormEvent::Delete,
         }
-        FormAction::None
+        FormEvent::None
     }
 }

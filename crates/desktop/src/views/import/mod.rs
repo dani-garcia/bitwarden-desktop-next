@@ -14,6 +14,7 @@ use iced::{
 use crate::{
     app::{Outcome, UpdateCtx, ViewTypes},
     components::{FadeInOut, buttons, inputs, modal},
+    domain::VaultChoice,
     fl,
     services::sdk::{Collection, Organization},
     theme::{AppColors, AppTheme, RADIUS_LG},
@@ -322,24 +323,6 @@ fn all_formats() -> Vec<ImportFormat> {
 
 // ── State ─────────────────────────────────────────────────────────────────
 
-/// Destination vault: either the user's personal vault or one of their
-/// organizations. Drives whether the second dropdown shows folders
-/// (personal) or collections (organization).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum VaultChoice {
-    Personal,
-    Org { id: OrganizationId, name: String },
-}
-
-impl std::fmt::Display for VaultChoice {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Personal => f.write_str(&fl!("import-modal-vault-personal")),
-            Self::Org { name, .. } => f.write_str(name),
-        }
-    }
-}
-
 pub struct ImportView {
     pub(super) fade: FadeInOut,
     vault_choices: Vec<VaultChoice>,
@@ -416,15 +399,7 @@ impl ImportView {
     }
 
     pub fn set_organizations(&mut self, orgs: &[Organization]) {
-        let mut choices = Vec::with_capacity(orgs.len() + 1);
-        choices.push(VaultChoice::Personal);
-        for org in orgs {
-            choices.push(VaultChoice::Org {
-                id: org.id,
-                name: org.name.clone(),
-            });
-        }
-        self.vault_choices = choices;
+        self.vault_choices = VaultChoice::list_with_personal(orgs);
     }
 
     pub fn set_collections(&mut self, collections: Vec<Collection>) {
@@ -514,11 +489,12 @@ impl ImportView {
             ctx.colors,
         );
 
+        let personal_label = fl!("import-modal-vault-personal");
         let vault_picker = inputs::select_field(
             fl!("import-modal-vault-label"),
             Some(self.selected_vault.clone()),
             self.vault_choices.clone(),
-            |v: &VaultChoice| v.to_string(),
+            move |v: &VaultChoice| v.label(&personal_label),
             ImportMessage::VaultSelected,
             ctx.colors,
         );
@@ -616,7 +592,9 @@ impl ImportView {
 }
 
 /// Inset card matching the design: subtle background tile + rounded
-/// corners, with a heading at the top in the accent colour.
+/// corners, with an accent-coloured heading inside the card alongside the
+/// body — distinct from `components::section_card` which stacks the heading
+/// above a shadowed card.
 fn section_card<'a>(
     heading: String,
     body: Element<'a, ImportMessage, AppTheme>,

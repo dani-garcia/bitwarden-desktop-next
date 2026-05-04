@@ -50,7 +50,6 @@ fn card_content<'a>(
         colors,
     );
 
-    // TODO: "Get master password hint" navigates to hint request flow (not yet implemented)
     let hint_link = buttons::transparent(
         text(fl!("login-password-get-hint"))
             .size(14)

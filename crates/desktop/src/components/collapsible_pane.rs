@@ -113,10 +113,8 @@ pub fn view<'a, M: 'a + Clone>(
     right: Option<Element<'a, M, AppTheme>>,
     on_resize: impl Fn(ResizeEvent) -> M + 'a,
 ) -> Element<'a, M, AppTheme> {
-    // `PaneGrid::new` takes `impl Fn` and calls it once per pane at
-    // construction. We have the Elements already built, so stash them in
-    // RefCell slots and `take()` each one — keeps the closure `Fn`-safe
-    // without rebuilding content inside.
+    // Elements are pre-built — stash in RefCell and take() to satisfy the
+    // Fn bound without rebuilding content inside the closure.
     let left_slot = RefCell::new(Some(left.into()));
     let right_slot = RefCell::new(right);
 

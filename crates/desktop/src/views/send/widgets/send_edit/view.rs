@@ -3,7 +3,7 @@
 
 use bitwarden_send::SendType;
 use iced::{
-    Alignment, Border, Element, Fill, Padding,
+    Alignment, Border, Element, Fill,
     widget::{Space, column, container, row, scrollable, text},
 };
 
@@ -49,12 +49,7 @@ pub fn view<'a>(
     .align_y(Alignment::Center);
 
     let header_container = container(header)
-        .padding(Padding {
-            top: 16.0,
-            right: 20.0,
-            bottom: 16.0,
-            left: 20.0,
-        })
+        .padding([16, 20])
         .style(move |theme: &AppTheme| {
             container::Style::default()
                 .background(theme.colors.card_bg)
@@ -67,12 +62,7 @@ pub fn view<'a>(
             additional_options_card(form, colors)
         ]
         .spacing(16)
-        .padding(Padding {
-            top: 16.0,
-            right: 20.0,
-            bottom: 16.0,
-            left: 20.0,
-        }),
+        .padding([16, 20]),
     )
     .height(Fill)
     .style(crate::components::rail_scroll_style)
@@ -104,23 +94,15 @@ fn footer<'a>(form: &'a SendForm, colors: &'a AppColors) -> Element<'a, SendEdit
     // remove on a brand-new draft. Uses `titlebar_close_hover` (red) for
     // consistency with the vault detail pane's trash icon.
     if form.id.is_some() {
-        let delete_btn = buttons::ghost_icon(
-            icons::BWI_TRASH.render(18.0, colors.titlebar_close_hover),
-            colors.item_hover,
-        )
-        .on_press(SendEditMessage::DeletePressed)
-        .padding([6, 8]);
         left_row = left_row.push(Space::new().width(Fill));
-        left_row = left_row.push(delete_btn);
+        left_row = left_row.push(buttons::delete_icon_button(
+            SendEditMessage::DeletePressed,
+            colors,
+        ));
     }
 
     container(left_row)
-        .padding(Padding {
-            top: 12.0,
-            right: 20.0,
-            bottom: 12.0,
-            left: 20.0,
-        })
+        .padding([12, 20])
         .width(Fill)
         .style(|theme: &AppTheme| {
             container::Style::default()

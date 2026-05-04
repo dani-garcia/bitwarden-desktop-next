@@ -18,10 +18,10 @@ pub(crate) use fade_in_out::FadeInOut;
 
 use iced::{
     Background, Border, Color, Element, Fill, Padding, Shadow, Vector,
-    widget::{container, rule, scrollable},
+    widget::{container, image, rule, scrollable, text},
 };
 
-use crate::theme::{AppTheme, RADIUS_LG};
+use crate::theme::{AppColors, AppTheme, RADIUS_LG};
 
 /// Subtle drop shadow used by `styled_card`, the generator history-row, and
 /// the send-edit section card. A 1px-down soft shadow at 20% black; pulls
@@ -132,4 +132,108 @@ pub fn card_with_margin<'a, M: 'a>(
             left: 0.0,
         })
         .into()
+}
+
+/// 14 px primary-text label that sits above a card or grouped field.
+pub fn section_label<'a, M: 'a>(
+    label: impl Into<String>,
+    colors: &AppColors,
+) -> Element<'a, M, AppTheme> {
+    text(label.into())
+        .size(14)
+        .color(colors.text_primary)
+        .into()
+}
+
+/// 16 px bold primary-text heading that opens a settings tab section or a
+/// generator subgroup.
+pub fn section_heading<'a, M: 'a>(
+    label: impl Into<String>,
+    colors: &'a AppColors,
+) -> Element<'a, M, AppTheme> {
+    text(label.into())
+        .size(16)
+        .font(crate::APP_FONT_BOLD)
+        .color(colors.text_primary)
+        .into()
+}
+
+/// Right-pane header: 18 px title + close-X, separator below. Shared by
+/// the cipher detail / edit panes. Send-edit's header has its own bolder /
+/// card-bg style and stays inline.
+pub fn pane_header<'a, M: Clone + 'a>(
+    title: impl Into<String>,
+    on_close: M,
+    colors: &'a AppColors,
+) -> Element<'a, M, AppTheme> {
+    use iced::widget::{Space, row};
+    let title_el = text(title.into()).size(18).color(colors.text_primary);
+    let close_btn = self::buttons::ghost_icon(
+        self::icons::BWI_CLOSE.render(32.0, colors.text_secondary),
+        colors.item_hover,
+    )
+    .on_press(on_close)
+    .padding([1, 1]);
+    let header = container(
+        row![title_el, Space::new().width(Fill), close_btn].align_y(iced::Alignment::Center),
+    )
+    .padding([8, 20]);
+    iced::widget::column![header, separator_h()].spacing(0).into()
+}
+
+/// Right-pane footer: separator above + `background`-coloured action bar.
+/// Pair with [`pane_header`].
+pub fn pane_footer<'a, M: 'a>(
+    content: impl Into<Element<'a, M, AppTheme>>,
+) -> Element<'a, M, AppTheme> {
+    let bar = container(content)
+        .width(Fill)
+        .padding([8, 20])
+        .style(|theme: &AppTheme| container::Style::default().background(theme.colors.background));
+    iced::widget::column![separator_h(), bar].spacing(0).into()
+}
+
+/// Bold 14 px heading stacked above a [`styled_card`] body. Used by
+/// import / send-edit to group fields under a labeled card.
+pub fn section_card<'a, M: 'a>(
+    heading: impl Into<String>,
+    body: impl Into<Element<'a, M, AppTheme>>,
+    colors: &'a AppColors,
+) -> Element<'a, M, AppTheme> {
+    iced::widget::column![
+        text(heading.into())
+            .size(14)
+            .font(crate::APP_FONT_BOLD)
+            .color(colors.text_primary),
+        styled_card(body),
+    ]
+    .spacing(8)
+    .into()
+}
+
+/// 32×32 favicon slot for vault list / magnify rows. The image carries its
+/// rounded-rect alpha mask baked in by [`crate::services::favicon`], so iced
+/// just blits the texture — no container clipping needed.
+pub fn favicon_icon<'a, M: 'a>(handle: image::Handle) -> Element<'a, M, AppTheme> {
+    container(image::Image::new(handle).width(32).height(32))
+        .width(32)
+        .height(32)
+        .into()
+}
+
+/// Standard 18 px / 8 sp labeled checkbox used across settings + generator
+/// tabs and other tab-style toggle rows.
+pub fn labeled_checkbox<'a, F, M>(
+    checked: bool,
+    label: impl Into<String>,
+    on_toggle: F,
+) -> iced::widget::Checkbox<'a, M, AppTheme>
+where
+    F: 'a + Fn(bool) -> M,
+{
+    iced::widget::checkbox(checked)
+        .label(label.into())
+        .size(18)
+        .spacing(8)
+        .on_toggle(on_toggle)
 }

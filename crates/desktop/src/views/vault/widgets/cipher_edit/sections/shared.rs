@@ -1,5 +1,4 @@
 //! Section cards shared by every cipher type:
-//! - `section_label` heading helper
 //! - `item_details_card` (name, favorite, folder, organization, collections)
 //! - `additional_options_card` (notes + master-password reprompt toggle)
 //! - `custom_fields_card` (text / hidden / boolean fields, add/remove)
@@ -16,7 +15,7 @@ pub const NAME_INPUT_ID: widget::Id = widget::Id::new("cipher-edit-name");
 
 use crate::{
     components::{
-        buttons, icons,
+        buttons,
         inputs::{reveal_text_field, select_field, text_field},
     },
     fl,
@@ -26,16 +25,6 @@ use crate::{
         field_helpers::{card_with_margin, styled_card},
     },
 };
-
-pub(in super::super) fn section_label<'a>(
-    label: impl Into<String>,
-    colors: &AppColors,
-) -> Element<'a, CipherEditMessage, AppTheme> {
-    text(label.into())
-        .size(14)
-        .color(colors.text_primary)
-        .into()
-}
 
 pub(in super::super) fn item_details_card<'a>(
     form: &'a CipherForm,
@@ -121,17 +110,11 @@ pub(in super::super) fn custom_fields_card<'a>(
         }
     }
 
-    let add_btn = buttons::secondary(
-        row![
-            icons::PLUS.render(14.0, colors.accent),
-            text(fl!("form-add-custom-field")).size(14),
-        ]
-        .spacing(6)
-        .align_y(Alignment::Center),
-    )
-    .on_press(CipherEditMessage::CustomFieldAdded)
-    .padding([6, 12]);
-    body = body.push(add_btn);
+    body = body.push(crate::views::vault::widgets::field_helpers::add_item_button(
+        fl!("form-add-custom-field"),
+        CipherEditMessage::CustomFieldAdded,
+        colors,
+    ));
 
     card_with_margin(styled_card(body))
 }
@@ -197,12 +180,8 @@ fn custom_field_row<'a>(
             .into(),
     };
 
-    let remove_btn = buttons::ghost_icon(
-        icons::BWI_TRASH.render(18.0, colors.titlebar_close_hover),
-        colors.item_hover,
-    )
-    .on_press(CipherEditMessage::CustomFieldRemoved(idx))
-    .padding([6, 6]);
+    let remove_btn =
+        buttons::delete_icon_button(CipherEditMessage::CustomFieldRemoved(idx), colors);
 
     row![
         type_picker,

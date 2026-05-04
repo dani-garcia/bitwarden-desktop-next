@@ -8,11 +8,11 @@ use chrono::{DateTime, Duration, Utc};
 use iced::widget::text_editor;
 
 /// Result of dispatching a `SendEditMessage` into `SendForm::update`.
-/// Mirrors `CipherForm`'s `FormAction` but with extensions for the form's
+/// Mirrors `CipherForm`'s `FormEvent` but with extensions for the form's
 /// copy-to-clipboard actions (link, password) and the regenerate-password
 /// request which the containing view needs to promote to `SendEvent`s
 /// (the actual SDK call lives at App level — it needs `views.generator`).
-pub enum FormAction {
+pub enum FormEvent {
     None,
     Save,
     Cancel,
@@ -309,7 +309,7 @@ impl SendForm {
     }
 
     /// True once all required fields are populated. Called from the view
-    /// handler's `FormAction::Save` branch to decide between running the
+    /// handler's `FormEvent::Save` branch to decide between running the
     /// save task and showing a "please fill in required fields" toast.
     pub fn is_valid(&self) -> bool {
         if self.name.trim().is_empty() {

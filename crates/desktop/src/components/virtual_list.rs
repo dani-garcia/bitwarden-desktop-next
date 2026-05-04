@@ -1,68 +1,15 @@
 //! Generic viewport-windowed scrollable list.
 //!
-//! Large lists (>~1k items) blow up `view()` performance even though iced's
-//! `Column::draw()` culls offscreen children: `Column::layout()` still iterates
-//! **every** child on every frame. That's O(N) layout work per redraw, which
-//! makes scrolling AND window drag feel sluggish long before we hit the render
-//! budget.
+//! `Column::layout()` walks every child every frame even when only a window is
+//! drawn, so 1k+ rows make scrolling and window-drag jank. This module builds
+//! widgets only for rows inside the scroll viewport (plus an overscan buffer)
+//! and pads top/bottom with `Space` so the scrollbar still reports total
+//! height. Layout cost drops from O(N) to O(window).
 //!
-//! This module windows the list by building widgets **only for rows inside
-//! the visible scroll window** (plus a small overscan buffer), with a single
-//! `Space` filler above and below to keep the scroll thumb reporting the
-//! correct total height. Layout cost drops from O(N) to O(window).
-//!
-//! ## Upstream tracking
-//!
-//! iced has an open issue for first-class virtualized list support:
-//! <https://github.com/iced-rs/iced/issues/160>. Once an upstream solution
-//! lands (targeted at iced 1.0 per the issue), this module can be replaced
-//! by a thin adapter around the native widget — or deleted entirely if the
-//! upstream API fits our usage directly.
-//!
-//! ## Invariant
-//!
-//! Every row occupies exactly `row_height` pixels — `virtual_list` enforces
-//! this by wrapping each row the caller produces in a fixed-height container.
-//! The caller's row closure is free to return any `Element`; it will be
-//! forced to the correct slot height with top-left alignment.
-//!
-//! ## Usage
-//!
-//! ```ignore
-//! // Parent view struct:
-//! pub struct MyView {
-//!     scroll: virtual_list::ScrollState,
-//!     items: Vec<Item>,
-//! }
-//!
-//! // Message handler — one-liner via the `track` helper:
-//! MyMessage::Scrolled(viewport) => self.scroll.track(viewport),
-//!
-//! // view() — return whatever Element you want for a row, no need to
-//! // worry about enforcing its height:
-//! virtual_list::view(
-//!     &self.items,
-//!     self.scroll,
-//!     ROW_HEIGHT,
-//!     |i, item| row_element(i, item),
-//!     MyMessage::Scrolled,
-//! )
-//! .height(Fill)
-//! .style(my_scrollable_style)
-//! ```
-//!
-//! ## Why the parent owns the scroll state
-//!
-//! iced's `view()` function is pure — the parent passes `&self` in and gets
-//! an `Element` back. For the visible window to change in response to scroll,
-//! `view()` must read a scroll offset that was updated *before* it ran. That
-//! offset therefore has to live on the parent's state, and scroll events
-//! must be routed through the parent's message handler.
-//!
-//! Hiding this entirely would require a stateful custom iced widget that
-//! manages its own `tree::State` and re-implements scroll event handling
-//! from raw wheel/touch events — a lot of machinery to eliminate one message
-//! variant and one `track()` call. Not worth it.
+//! Every row is forced to `row_height` pixels via a fixed-height container, so
+//! the caller's row closure can return any `Element`. The parent owns the
+//! `ScrollState` because iced's `view()` is pure — the offset has to be set
+//! before the next frame reads it.
 
 use iced::{
     Element, Fill, Length,
@@ -81,9 +28,8 @@ pub struct ScrollState {
 
 impl Default for ScrollState {
     fn default() -> Self {
-        // Seed a viewport large enough to cover most monitors on first
-        // paint. The scrollable's first `on_scroll` overwrites this with
-        // the actual bounds.
+        // Large seed so the first paint covers typical monitors; on_scroll
+        // overwrites with the real bounds.
         Self {
             offset_y: 0.0,
             viewport_height: 1500.0,

@@ -37,7 +37,7 @@ This is the prescriptive guide for the `bitwarden-desktop-next` crate. It define
 **Enforcement:** Rust visibility is the primary mechanism. Bare `pub` is reserved for two places: **(a)** the documented public API of the archetype a file belongs to — `{View}View` / `{View}Message` / `{View}Event` / `view()` / `update()` / `new()` / named task factories for views, the `(data, callbacks, ctx) -> Element` constructors for components, the service's outward-facing methods. **(b)** enum/struct fields that are part of that public API. Internal helpers and state use the narrowest level that works:
 
 - `pub(in crate::views::<view>)` — visible only inside one view's subtree (including its `widgets/`). Use for view-local domain enums and state structs.
-- `pub(super)` — visible to the parent module. Use for sub-module internals (e.g. a `widgets/send_form/sections/details.rs` field helper that `view.rs` invokes).
+- `pub(super)` — visible to the parent module. Use for sub-module internals (e.g. a `widgets/send_edit/sections/details.rs` field helper that `view.rs` invokes).
 - `pub(crate)` — visible across the crate. Reserved for view archetype entry points and the event-handler carve-out (`handle_{view}_event`).
 - private (no `pub`) — default for struct fields and internal helpers.
 
@@ -73,21 +73,27 @@ crates/desktop/src/
 │   ├── global_hotkey/              # OS-level hotkey → Magnify toggle stream
 │   ├── menu/                       # muda binding + MENUS + MenuAction
 │   ├── tray/                       # TrayHandle + click stream
+│   ├── broadcast_stream.rs         # OnceLock<Receiver> → iced Stream adapter
 │   ├── i18n/                       # fluent loader + fl! macro target
 │   ├── instance_lock/              # single-instance guard + wake stream
 │   ├── preferences/                # per-user UserPreferences
 │   ├── settings/                   # Settings load/save
 │   └── animation/                  # global "any animation in progress" watermark
 │
-├── components/                     # shared UI atoms
-│   ├── buttons.rs                  # primary/secondary/ghost/ghost_icon/transparent
+├── components/                     # shared UI atoms (typography + layout helpers
+│   │                               #  live in mod.rs: section_label/heading/card,
+│   │                               #  pane_header/footer, styled_card, separator_h/v,
+│   │                               #  rail_scroll_style, favicon_icon, labeled_checkbox,
+│   │                               #  CARD_SHADOW)
+│   ├── buttons.rs                  # primary/secondary/ghost/ghost_icon/transparent + icon_button/delete_icon_button
 │   ├── icons.rs                    # bootstrap-icons font + constants
-│   ├── inputs.rs                   # field_frame, text_field, select_field, …
+│   ├── inputs/                     # field_frame, text_field, select_field, reveal_text_field, …
 │   ├── drop_down.rs                # iced_aw fork with BelowLeft/BelowRight/AboveRight
 │   ├── fade_in_out.rs              # lilt-backed open/close animator for overlays
 │   ├── spinner.rs / virtual_list.rs / totp.rs
 │   ├── bottom_sheet.rs / modal.rs  # window-level overlays composed at App root
 │   ├── collapsible_pane.rs         # list/detail split that stays mounted on close
+│   ├── shell_scope.rs              # Stack capture-leak isolation wrapper
 │   ├── sidebar.rs                  # app-level nav chrome (see "Sidebar + shared chrome")
 │   ├── toast/                      # folder: multi-file component
 │   └── account_switcher.rs         # avatar trigger + dropdown panel + header_switcher
@@ -208,6 +214,7 @@ pub struct RenderCtx<'a> {
     pub window_width: f32,
     pub active_user: Option<&'a UserId>,
     pub active_email: Option<&'a str>,
+    pub active_server_url: &'a str,
     pub accounts: &'a [AccountEntry],
     pub open_overlay: Option<Overlay>,
 }
@@ -290,7 +297,7 @@ Async SDK calls live as methods on [`PasswordManagerClient`](crates/desktop/src/
 ### Suffix discipline
 
 - `*Message` — inbound (widget events + async completions). The `update(msg)` argument. Imperative widget events (`LoginMessage::Unlock`) and past-tense async completions (`VaultMessage::ListLoaded`) both belong here.
-- `*Event` — outbound fact a sub-view bubbles up. Describes what *happened*, not what to do next. Examples: `LoginEvent::Unlocked`, `VaultEvent::ToastRequested`, `SettingsEvent::Applied`.
+- `*Event` — outbound fact a sub-view bubbles up. Describes what *happened*, not what to do next. Examples: `LoginEvent::Unlocked`, `VaultEvent::ItemSaved`, `SettingsEvent::Applied`. Toasts don't need event variants — views surface them directly via `Outcome::toast(t)`.
 - `*Action` — discriminant for an abstract operation: `MenuAction::Quit`, `WindowAction::Minimize`. Use as a payload on an `Event` when the view is requesting an app-level effect.
 
 Private widget-internal enums under `components/` don't participate in the router; they aren't governed by these conventions.
@@ -364,7 +371,7 @@ The pre-match block is **load-bearing**: any non-titlebar view message dismisses
 
 1. **Dependency direction** — enforced via visibility (`pub(super)` / `pub(crate)`). A view's internals are `pub(super)`; a component's helpers are `pub(super)`. Only documented archetype APIs are `pub(crate)`.
 
-2. **Size budget** — soft cap ~500 lines per file (cognitive load + git-diff readability + parallel work without conflicts). Trigger the archetype split when a file crosses ~400 lines and contains two or more separable concerns. Split in the order described in the View archetype above (state → message → update/view). Pure widget files (under `widgets/`) may exceed the cap temporarily; prefer extracting sub-sections (e.g., `cipher_form/sections/`) over folding growth back into `mod.rs`.
+2. **Size budget** — soft cap ~500 lines per file (cognitive load + git-diff readability + parallel work without conflicts). Trigger the archetype split when a file crosses ~400 lines and contains two or more separable concerns. Split in the order described in the View archetype above (state → message → update/view). Pure widget files (under `widgets/`) may exceed the cap temporarily; prefer extracting sub-sections (e.g., `cipher_edit/sections/`) over folding growth back into `mod.rs`.
 
 3. **No mandatory test policy** — the app is a POC. Tests are opt-in when a piece of logic is gnarly enough to warrant one. Revisit once the codebase stabilizes.
 
@@ -657,21 +664,11 @@ pub fn install_event_handler() {
 }
 
 pub fn event_stream() -> impl Stream<Item = MyEvent> {
-    iced::stream::channel(16, |mut out| async move {
-        let Some(rx) = EVENTS.get() else { return };
-        let mut rx = rx.resubscribe();
-        loop {
-            match rx.recv().await {
-                Ok(e) => { let _ = out.send(e).await; }
-                Err(broadcast::error::RecvError::Lagged(n)) => {
-                    tracing::warn!(dropped = n, "subscriber lagged");
-                }
-                Err(broadcast::error::RecvError::Closed) => break,
-            }
-        }
-    })
+    super::broadcast_stream::from_once_lock(&EVENTS, "my-source")
 }
 ```
+
+The pump body (resubscribe, recv-loop, lag-warn, close-break) lives in [`services/broadcast_stream.rs`](../crates/desktop/src/services/broadcast_stream.rs); each service exports a one-line `event_stream` wrapper around it.
 
 The App side wires it once via `Subscription::run(event_stream)` mapped onto a top-level `Message`. Three invariants worth burning in:
 
@@ -705,7 +702,7 @@ if shell.is_event_captured() { return; }
 
 In iced 0.15 (rev `4e0bdcf`) the readers are `widget/src/{stack.rs:242, button.rs:282, mouse_area.rs:221, scrollable.rs:783, helpers.rs:906}`. `button` / `mouse_area` / `scrollable` only skip their own self-targeted follow-up, so a stale flag from a sibling at most makes them no-op when the cursor isn't over them anyway — invisible. **`Stack` is the outlier**: its check sits inside the loop that delivers the event to its remaining children, so a sibling-set flag stops other children from running, which *is* observable.
 
-Concrete repro: two `pick_list`-bearing [`field_frame`](../crates/desktop/src/components/inputs.rs)s as siblings in a column. Open the second (its picker sets `is_open = true`). Click the first. The first's `Stack` reaches its picker (its own first child doesn't capture), the picker captures on open. iced's column then iterates to the second `field_frame`'s `Stack`, which processes its first child (label, no capture), checks `shell.is_event_captured()` — *true, set by the first stack's picker* — and returns before reaching its own picker. The second picker's close branch never runs, both menus end up open.
+Concrete repro: two `pick_list`-bearing [`field_frame`](../crates/desktop/src/components/inputs/mod.rs)s as siblings in a column. Open the second (its picker sets `is_open = true`). Click the first. The first's `Stack` reaches its picker (its own first child doesn't capture), the picker captures on open. iced's column then iterates to the second `field_frame`'s `Stack`, which processes its first child (label, no capture), checks `shell.is_event_captured()` — *true, set by the first stack's picker* — and returns before reaching its own picker. The second picker's close branch never runs, both menus end up open.
 
 **Fix shape:** give the inner subtree a private `Shell`, run `update` against it, then `Shell::merge` the result back. iced uses this exact pattern internally for [`combo_box::update`](https://github.com/iced-rs/iced/blob/4e0bdcf54aeaadec6753fffd1b1185087bf03b67/widget/src/combo_box.rs#L578) and [`lazy::component`](https://github.com/iced-rs/iced/blob/4e0bdcf54aeaadec6753fffd1b1185087bf03b67/widget/src/lazy/component.rs#L326) — both stash a `local_shell` so their child's capture status is computed in isolation. [`ShellScope`](../crates/desktop/src/components/shell_scope.rs) is the same pattern factored out as a reusable wrapper widget so any subtree containing a `Stack` can be insulated with `ShellScope::new(stack![...]).into()`. `field_frame` already wraps with it; if you write a new helper that uses `Stack` and is meant to live as a sibling of itself, do the same.
 

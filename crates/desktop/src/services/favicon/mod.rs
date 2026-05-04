@@ -125,6 +125,20 @@ impl FaviconService {
         IconState::Pending
     }
 
+    /// Resolve the favicon for a login's first URI to an `image::Handle`,
+    /// falling back to the globe icon when the URI is missing, unfetchable,
+    /// or the favicon hasn't loaded yet. Triggers a background fetch on
+    /// first sight via [`Self::get`].
+    pub fn handle_for_login_uri(&self, uid: &UserId, uri: Option<&str>) -> image::Handle {
+        uri.and_then(hostname_for_fetch)
+            .map(|h| self.get(uid, &h))
+            .and_then(|state| match state {
+                IconState::Found(handle) => Some(handle),
+                _ => None,
+            })
+            .unwrap_or_else(globe_handle)
+    }
+
     /// Drop the in-memory entry for `uid`. In-flight fetches for this user
     /// stay alive until they finish but their results no-op when the cache
     /// entry is gone.

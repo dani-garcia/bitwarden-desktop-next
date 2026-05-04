@@ -114,16 +114,7 @@ impl GeneratorView {
 
 // ── Shared render helpers ──────────────────────────────────────────────────
 
-pub(super) fn section_heading<'a>(
-    label: impl Into<String>,
-    colors: &'a AppColors,
-) -> Element<'a, GeneratorMessage, AppTheme> {
-    text(label.into())
-        .size(16)
-        .font(crate::APP_FONT_BOLD)
-        .color(colors.text_primary)
-        .into()
-}
+pub(super) use crate::components::section_heading;
 
 /// Segmented tab bar (three buttons in a rounded pill). The accent pill
 /// is a separate layer behind the buttons; its position interpolates

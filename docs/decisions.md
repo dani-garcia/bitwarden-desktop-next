@@ -211,9 +211,9 @@
 
 **Caveats**: `LocalUserDataKeyState` isn't in `get_sdk_managed_migrations()` but `initialize_user_crypto` writes to it, so a narrow `MemoryRepo<LocalUserDataKeyState>` is registered client-managed per user. We also hand-assemble the `PasswordManagerClient` via `ClientBuilder` with `StateRegistry::new()` because `PasswordManagerClient::new` defaults to `new_with_memory_db`, which pre-sets the database `OnceLock` and blocks our `initialize_database` call. Both sites have a TODO to switch to `PasswordManagerClient::load_from_state` once the SDK exposes it.
 
-**Dev passwords** (documented in `sdk.rs`): `alice@example.com` / `password`, `alice@acmecorp.com` / `123456`, `loadtest@example.com` / `loadtest` (20 k ciphers).
+**Dev passwords** (documented in `services/sdk/loader.rs`): `alice@example.com` / `password`, `alice@acmecorp.com` / `123456`, `loadtest@example.com` / `loadtest` (20 k ciphers).
 
-**Shared schema synchronization**: `MockVaultFile` / `MockUser` / `UnlockMethodsCfg` structs are defined independently in `crates/desktop/src/sdk.rs` and `tools/fake-data/src/main.rs`, with comments telling the reader to keep the field sets in sync. A shared schema crate (`tools/mock-schema`) is a future refactor — current synchronization is manual but easy to spot in review.
+**Shared schema synchronization**: `MockVaultFile` / `MockUser` / `UnlockMethodsCfg` structs are defined independently in `crates/desktop/src/services/sdk/loader.rs` and `tools/fake-data/src/main.rs`, with comments telling the reader to keep the field sets in sync. A shared schema crate (`tools/mock-schema`) is a future refactor — current synchronization is manual but easy to spot in review.
 
 ## Cipher UI Types: SDK Directly
 

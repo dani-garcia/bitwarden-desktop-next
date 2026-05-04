@@ -4,7 +4,7 @@ use bitwarden_vault::{CipherListView, CipherListViewType};
 use iced::{
     Alignment, Color, Element, Fill,
     widget::{
-        Space, column, container, image, row, scrollable, text,
+        Space, column, container, row, scrollable, text,
         text::{Ellipsis, Wrapping},
     },
 };
@@ -13,8 +13,8 @@ use crate::{
     app::RenderCtx,
     components::{self, buttons, icons, virtual_list},
     fl,
-    services::favicon::{self, IconState},
-    theme::{AppColors, AppTheme, RADIUS_MD, RADIUS_SM},
+    services::favicon,
+    theme::{AppColors, AppTheme, RADIUS_MD},
 };
 
 /// Total pixel height of a single vault row, including its trailing separator.
@@ -135,28 +135,19 @@ fn row_element<'a>(
     let icon: Element<'a, ItemListMessage, AppTheme> = if !show_favicons {
         initial_circle(&item.name, colors)
     } else {
-        match &item.r#type {
+        let handle = match &item.r#type {
             CipherListViewType::Login(login) => {
-                let resolved = login
+                let uri = login
                     .uris
                     .as_ref()
                     .and_then(|u| u.first())
-                    .and_then(|u| u.uri.as_deref())
-                    .and_then(favicon::hostname_for_fetch)
-                    .map(|h| favicon.get(active_user, &h));
-                match resolved {
-                    // `Handle` clones share the same `Id`, so iced's GPU
-                    // texture cache hits for the lifetime of the session.
-                    // `get()` also triggers a fetch on the first sight of
-                    // this hostname in the viewport.
-                    Some(IconState::Found(handle)) => png_icon(handle.clone()),
-                    // Pending / Missing / no URI / non-fetchable URI → globe.
-                    _ => png_icon(favicon::globe_handle()),
-                }
+                    .and_then(|u| u.uri.as_deref());
+                favicon.handle_for_login_uri(active_user, uri)
             }
             // TODO: replace with per-type BWI icons (Card/Identity/Note/SshKey).
-            _ => png_icon(favicon::globe_handle()),
-        }
+            _ => favicon::globe_handle(),
+        };
+        crate::components::favicon_icon(handle)
     };
 
     let info = column![
@@ -255,19 +246,3 @@ fn initial_circle<'a>(name: &str, colors: &'a AppColors) -> Element<'a, ItemList
         .into()
 }
 
-/// Render a pre-clipped icon in a 32×32 slot. The image has the rounded-rect
-/// alpha mask baked in by [`crate::favicon`], so iced just blits the decoded
-/// texture — no container-level clipping required (iced doesn't support it
-/// anyway).
-fn png_icon<'a>(handle: image::Handle) -> Element<'a, ItemListMessage, AppTheme> {
-    container(image::Image::new(handle).width(32).height(32))
-        .width(32)
-        .height(32)
-        // `RADIUS_SM` exists purely so future style closures that want a
-        // subtle surround (focus ring, selected outline) can reference the
-        // same constant as the baked-in alpha mask.
-        .style(|_theme: &AppTheme| {
-            container::Style::default().border(iced::border::rounded(RADIUS_SM))
-        })
-        .into()
-}

@@ -91,70 +91,50 @@ impl ServerOption {
     }
 }
 
-// ── Messages ───────────────────────────────────────────────────────────────
-
 #[derive(Debug, Clone)]
 pub enum LoginMessage {
-    // Unlock — master password
     PasswordChanged(String),
     Unlock,
-    /// Fires when the async `ClientManager::unlock` task completes.
     UnlockCompleted(UserId, Result<(), String>),
-    // Unlock — PIN
     PinChanged(String),
     UnlockWithPin,
-    // Unlock — biometrics
     UnlockWithBiometrics,
-    // Switch between unlock methods
     SwitchUnlockMethod(UnlockMethod),
 
-    // Login — email entry
     EmailChanged(String),
     ToggleRememberEmail(bool),
     ContinueWithEmail,
     UseSingleSignOn,
 
-    // Login — password entry
     LoginPasswordChanged(String),
     LoginWithPassword,
-    /// Fires when the async `ClientManager::login` task completes.
-    /// TODO: wire up once SDK login support lands.
     #[expect(dead_code)]
     LoginCompleted(UserId, Result<(), String>),
     BackToEmail,
     GetPasswordHint,
 
-    // Server selector
     ToggleServerSelector,
     SelectServer(ServerOption),
 
-    // Self-hosted environment modal
     SelfHostedUrlChanged(String),
     SelfHostedSave,
     SelfHostedCancel,
 
-    // Account switcher
     AccountSwitcher(AccountSwitcherMessage),
 }
-
-// ── Events ─────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
 pub enum LoginEvent {
     /// Unlock attempt completed successfully — App should flip to the vault
     /// screen and kick off the vault list load for this user.
     Unlocked { uid: UserId },
-    /// Fresh login via email + password completed successfully. Constructed
-    /// only by `LoginMessage::LoginCompleted` which is a stub until SDK
-    /// login support lands.
+    /// Email + password login completed.
     LoggedIn { uid: UserId },
     /// Account-switcher action. Forwarded verbatim to
     /// `App::handle_account_switcher_event` so login, vault, and send share
     /// one dispatch site.
     AccountSwitcher(AccountSwitcherEvent),
 }
-
-// ── View State ─────────────────────────────────────────────────────────────
 
 pub struct LoginView {
     pub(super) auth_page: AuthPage,
@@ -222,7 +202,6 @@ impl LoginView {
             ..
         } = ctx;
         match msg {
-            // ── Unlock: master password ────────────────────────────────────
             LoginMessage::PasswordChanged(pw) => {
                 if let AuthPage::Unlock { password_input, .. } = &mut self.auth_page {
                     *password_input = pw;
@@ -283,7 +262,6 @@ impl LoginView {
                 };
             }
 
-            // ── Unlock: PIN ────────────────────────────────────────────────
             LoginMessage::PinChanged(pin) => {
                 if let AuthPage::Unlock { pin_input, .. } = &mut self.auth_page {
                     *pin_input = pin;
@@ -299,7 +277,6 @@ impl LoginView {
                 ));
             }
 
-            // ── Unlock: biometrics ─────────────────────────────────────────
             LoginMessage::UnlockWithBiometrics => {
                 return Outcome::toast(Toast::warning(
                     crate::fl!("login-toast-biometrics-unsupported"),
@@ -307,7 +284,6 @@ impl LoginView {
                 ));
             }
 
-            // ── Switch unlock method ───────────────────────────────────────
             LoginMessage::SwitchUnlockMethod(method) => {
                 self.auth_page = AuthPage::new_unlock(method);
                 self.unlock_in_progress = false;
@@ -315,7 +291,6 @@ impl LoginView {
                 return Outcome::task(self.auto_focus_task());
             }
 
-            // ── Login: email entry ─────────────────────────────────────────
             LoginMessage::EmailChanged(email) => {
                 if let AuthPage::LoginEmail { email_input, .. } = &mut self.auth_page {
                     *email_input = email;
@@ -344,7 +319,6 @@ impl LoginView {
                 // TODO: SSO login flow
             }
 
-            // ── Login: password entry ──────────────────────────────────────
             LoginMessage::LoginPasswordChanged(pw) => {
                 if let AuthPage::LoginPassword { password_input, .. } = &mut self.auth_page {
                     *password_input = pw;
@@ -404,7 +378,6 @@ impl LoginView {
                 // TODO: password hint request flow
             }
 
-            // ── Server selector ────────────────────────────────────────────
             LoginMessage::ToggleServerSelector => {
                 *open_overlay = if *open_overlay == Some(crate::app::Overlay::ServerSelector) {
                     None
@@ -441,7 +414,6 @@ impl LoginView {
                 }
             }
 
-            // ── Self-hosted environment modal ──────────────────────────────
             LoginMessage::SelfHostedUrlChanged(url) => {
                 self.self_hosted_modal.url_input = url;
                 self.self_hosted_modal.url_error = false;
@@ -467,7 +439,6 @@ impl LoginView {
                 self.self_hosted_modal.fade.close();
             }
 
-            // ── Account switcher ───────────────────────────────────────────
             LoginMessage::AccountSwitcher(m) => {
                 return Outcome::from_option(
                     m.consume(open_overlay, crate::app::Overlay::AccountSwitcher)
@@ -533,13 +504,10 @@ impl LoginView {
         self_hosted_modal::view(&self.self_hosted_modal, ctx.colors)
     }
 
-    pub fn view<'a>(
-        &'a self,
-        ctx: &RenderCtx<'a>,
-        server: &'a str,
-    ) -> Element<'a, LoginMessage, AppTheme> {
+    pub fn view<'a>(&'a self, ctx: &RenderCtx<'a>) -> Element<'a, LoginMessage, AppTheme> {
         let colors = ctx.colors;
         let email = ctx.active_email;
+        let server = ctx.active_server_url;
         let (center_content, status_bar) = match &self.auth_page {
             AuthPage::Unlock {
                 method,

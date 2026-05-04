@@ -17,7 +17,7 @@
 
 use std::{collections::HashMap, sync::OnceLock};
 
-use iced::futures::{SinkExt, Stream};
+use iced::futures::Stream;
 use tokio::sync::broadcast;
 use tray_icon::{
     TrayIcon, TrayIconBuilder,
@@ -130,26 +130,7 @@ pub fn install_event_handler() {
 /// Iced-compatible stream of [`TrayAction`]s. Use as a `fn` pointer with
 /// [`iced::Subscription::run`].
 pub fn click_stream() -> impl Stream<Item = TrayAction> {
-    use iced::futures::channel::mpsc;
-    iced::stream::channel(16, |mut out: mpsc::Sender<_>| async move {
-        let mut rx = TRAY_EVENTS
-            .get()
-            .expect("tray::install_event_handler must run before subscribing")
-            .resubscribe();
-        loop {
-            match rx.recv().await {
-                Ok(action) => {
-                    if out.send(action).await.is_err() {
-                        break;
-                    }
-                }
-                Err(broadcast::error::RecvError::Lagged(n)) => {
-                    tracing::warn!(dropped = n, "tray event subscriber lagged");
-                }
-                Err(broadcast::error::RecvError::Closed) => break,
-            }
-        }
-    })
+    super::broadcast_stream::from_once_lock(&TRAY_EVENTS, "tray")
 }
 
 fn decode_icon() -> Result<tray_icon::Icon, Box<dyn std::error::Error>> {

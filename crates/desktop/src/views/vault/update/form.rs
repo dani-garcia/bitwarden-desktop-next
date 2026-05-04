@@ -16,7 +16,7 @@ use crate::views::vault::{
     VaultEvent, VaultMessage,
     message::FormOptions,
     state::VaultView,
-    widgets::cipher_edit::{CipherEditMessage, CipherForm, FolderOption, FormAction},
+    widgets::cipher_edit::{CipherEditMessage, CipherForm, FolderOption, FormEvent},
 };
 
 impl VaultView {
@@ -101,8 +101,8 @@ impl VaultView {
             return Outcome::None;
         };
         match form.update(msg) {
-            FormAction::None => Outcome::None,
-            FormAction::Cancel => {
+            FormEvent::None => Outcome::None,
+            FormEvent::Cancel => {
                 self.selection.form = None;
                 // No detail to fall back to (new-item flow) — close the pane
                 // so the right side doesn't linger as an empty column. Edit
@@ -117,7 +117,7 @@ impl VaultView {
                 }
                 Outcome::None
             }
-            FormAction::Save => {
+            FormEvent::Save => {
                 if !form.is_valid() {
                     return Outcome::toast(Toast::warning(fl!("toast-required-fields"), None));
                 }
@@ -139,7 +139,7 @@ impl VaultView {
         msg_uid: UserId,
         opts: FormOptions,
     ) -> Outcome<Self> {
-        if ctx.active_user != Some(&msg_uid) {
+        if !ctx.is_active_user(&msg_uid) {
             return Outcome::None;
         }
         let Some(form) = self.selection.form.as_mut() else {
@@ -160,7 +160,7 @@ impl VaultView {
         msg_uid: UserId,
         result: Result<NoDebug<Box<CipherView>>, String>,
     ) -> Outcome<Self> {
-        if ctx.active_user != Some(&msg_uid) {
+        if !ctx.is_active_user(&msg_uid) {
             return Outcome::None;
         }
         match result {
@@ -194,7 +194,7 @@ impl VaultView {
         cipher_id: CipherId,
         result: Result<(), String>,
     ) -> Outcome<Self> {
-        if ctx.active_user != Some(&msg_uid) {
+        if !ctx.is_active_user(&msg_uid) {
             return Outcome::None;
         }
         match result {

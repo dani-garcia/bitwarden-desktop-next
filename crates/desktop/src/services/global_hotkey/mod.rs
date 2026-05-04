@@ -15,7 +15,7 @@ use global_hotkey::{
     GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState,
     hotkey::{Code, HotKey, Modifiers},
 };
-use iced::futures::{SinkExt, Stream};
+use iced::futures::Stream;
 use tokio::sync::broadcast;
 
 /// One unit value per hotkey press. Only `Pressed` transitions are forwarded.
@@ -75,24 +75,5 @@ pub fn install_event_handler() {
 /// failed (e.g. Wayland), the channel was never initialised and the stream
 /// terminates immediately — leaving the subscription idle.
 pub fn event_stream() -> impl Stream<Item = MagnifyToggle> {
-    use iced::futures::channel::mpsc;
-    iced::stream::channel(16, |mut out: mpsc::Sender<_>| async move {
-        let Some(rx) = HOTKEY_EVENTS.get() else {
-            return;
-        };
-        let mut rx = rx.resubscribe();
-        loop {
-            match rx.recv().await {
-                Ok(toggle) => {
-                    if out.send(toggle).await.is_err() {
-                        break;
-                    }
-                }
-                Err(broadcast::error::RecvError::Lagged(n)) => {
-                    tracing::warn!(dropped = n, "global-hotkey subscriber lagged");
-                }
-                Err(broadcast::error::RecvError::Closed) => break,
-            }
-        }
-    })
+    super::broadcast_stream::from_once_lock(&HOTKEY_EVENTS, "global-hotkey")
 }

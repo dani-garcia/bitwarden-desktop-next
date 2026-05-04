@@ -73,7 +73,7 @@ impl App {
                         )
                     }
                     ViewMessage::Settings(m) => {
-                        let outcome = self.views.settings.update(m);
+                        let outcome = self.views.settings.update(m, uctx);
                         outcome.dispatch(
                             self,
                             Message::settings,

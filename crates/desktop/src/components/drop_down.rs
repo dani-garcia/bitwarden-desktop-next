@@ -66,7 +66,6 @@ pub enum Alignment {
 
 // ── Offset ─────────────────────────────────────────────────────────────────
 
-/// Represents an offset in a two-dimensional space.
 #[derive(Copy, Clone, Debug)]
 pub struct Offset {
     pub x: f32,
@@ -74,7 +73,6 @@ pub struct Offset {
 }
 
 impl Offset {
-    /// Construct a new [`Offset`]
     #[must_use]
     pub fn new(x: f32, y: f32) -> Self {
         Self { x, y }
@@ -174,35 +172,33 @@ where
         }
     }
 
-    /// The width of the overlay
     #[must_use]
     pub fn width(mut self, width: impl Into<Length>) -> Self {
         self.width = Some(width.into());
         self
     }
 
-    /// The height of the overlay
     #[must_use]
     pub fn height(mut self, height: impl Into<Length>) -> Self {
         self.height = height.into();
         self
     }
 
-    /// The alignment of the overlay relative to the underlay
     #[must_use]
     pub fn alignment(mut self, alignment: impl Into<Alignment>) -> Self {
         self.alignment = alignment.into();
         self
     }
 
-    /// The offset of the overlay
     #[must_use]
     pub fn offset(mut self, offset: impl Into<Offset>) -> Self {
         self.offset = offset.into();
         self
     }
 
-    /// Send a message when a click occur outside of the overlay when expanded
+    /// Click-outside-to-dismiss is opt-in: omit this on click-to-toggle
+    /// triggers (e.g. a button that opens the panel) so the same click that
+    /// opened the overlay doesn't immediately close it.
     #[must_use]
     pub fn on_dismiss(mut self, message: Message) -> Self {
         self.on_dismiss = Some(message);

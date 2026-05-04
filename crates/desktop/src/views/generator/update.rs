@@ -68,108 +68,58 @@ impl GeneratorView {
             }
             GeneratorMessage::Regenerate => self.regenerate_event(),
             // Password tab
-            GeneratorMessage::SetLength(raw) => {
-                if accept_digits(&raw) {
-                    self.password.length = raw;
-                    return self.regenerate_event();
-                }
-                Outcome::None
-            }
-            GeneratorMessage::BumpLength(delta) => {
-                self.password.length = bump_clamped(&self.password.length, delta, 14, 5, 128);
-                self.regenerate_event()
-            }
-            GeneratorMessage::ToggleLowercase(v) => {
-                self.password.lowercase = v;
-                self.regenerate_event()
-            }
-            GeneratorMessage::ToggleUppercase(v) => {
-                self.password.uppercase = v;
-                self.regenerate_event()
-            }
-            GeneratorMessage::ToggleNumbers(v) => {
-                self.password.numbers = v;
-                self.regenerate_event()
-            }
-            GeneratorMessage::ToggleSpecial(v) => {
-                self.password.special = v;
-                self.regenerate_event()
-            }
+            GeneratorMessage::SetLength(raw) => self.set_digit_field(raw, |s, r| s.password.length = r),
+            GeneratorMessage::BumpLength(delta) => self.mutate_and_regen(|s| {
+                s.password.length = bump_clamped(&s.password.length, delta, 14, 5, 128);
+            }),
+            GeneratorMessage::ToggleLowercase(v) => self.mutate_and_regen(|s| s.password.lowercase = v),
+            GeneratorMessage::ToggleUppercase(v) => self.mutate_and_regen(|s| s.password.uppercase = v),
+            GeneratorMessage::ToggleNumbers(v) => self.mutate_and_regen(|s| s.password.numbers = v),
+            GeneratorMessage::ToggleSpecial(v) => self.mutate_and_regen(|s| s.password.special = v),
             GeneratorMessage::SetMinNumber(raw) => {
-                if accept_digits(&raw) {
-                    self.password.min_number = raw;
-                    return self.regenerate_event();
-                }
-                Outcome::None
+                self.set_digit_field(raw, |s, r| s.password.min_number = r)
             }
-            GeneratorMessage::BumpMinNumber(delta) => {
-                self.password.min_number = bump_clamped(&self.password.min_number, delta, 1, 0, 9);
-                self.regenerate_event()
-            }
+            GeneratorMessage::BumpMinNumber(delta) => self.mutate_and_regen(|s| {
+                s.password.min_number = bump_clamped(&s.password.min_number, delta, 1, 0, 9);
+            }),
             GeneratorMessage::SetMinSpecial(raw) => {
-                if accept_digits(&raw) {
-                    self.password.min_special = raw;
-                    return self.regenerate_event();
-                }
-                Outcome::None
+                self.set_digit_field(raw, |s, r| s.password.min_special = r)
             }
-            GeneratorMessage::BumpMinSpecial(delta) => {
-                self.password.min_special =
-                    bump_clamped(&self.password.min_special, delta, 1, 0, 9);
-                self.regenerate_event()
-            }
+            GeneratorMessage::BumpMinSpecial(delta) => self.mutate_and_regen(|s| {
+                s.password.min_special = bump_clamped(&s.password.min_special, delta, 1, 0, 9);
+            }),
             GeneratorMessage::ToggleAvoidAmbiguous(v) => {
-                self.password.avoid_ambiguous = v;
-                self.regenerate_event()
+                self.mutate_and_regen(|s| s.password.avoid_ambiguous = v)
             }
             // Passphrase tab
             GeneratorMessage::SetNumWords(raw) => {
-                if accept_digits(&raw) {
-                    self.passphrase.num_words = raw;
-                    return self.regenerate_event();
-                }
-                Outcome::None
+                self.set_digit_field(raw, |s, r| s.passphrase.num_words = r)
             }
-            GeneratorMessage::BumpNumWords(delta) => {
-                self.passphrase.num_words =
-                    bump_clamped(&self.passphrase.num_words, delta, 6, 3, 20);
-                self.regenerate_event()
-            }
-            GeneratorMessage::SetWordSeparator(s) => {
-                // Cap at 1 character; the SDK's `word_separator` is a
-                // `String` but the screenshot shows a single-char field.
-                self.passphrase.word_separator = s.chars().take(1).collect();
-                self.regenerate_event()
-            }
+            GeneratorMessage::BumpNumWords(delta) => self.mutate_and_regen(|s| {
+                s.passphrase.num_words = bump_clamped(&s.passphrase.num_words, delta, 6, 3, 20);
+            }),
+            GeneratorMessage::SetWordSeparator(s) => self.mutate_and_regen(|st| {
+                // SDK's word_separator is a String but the screenshot shows a single-char field.
+                st.passphrase.word_separator = s.chars().take(1).collect();
+            }),
             GeneratorMessage::TogglePassphraseCapitalize(v) => {
-                self.passphrase.capitalize = v;
-                self.regenerate_event()
+                self.mutate_and_regen(|s| s.passphrase.capitalize = v)
             }
             GeneratorMessage::TogglePassphraseIncludeNumber(v) => {
-                self.passphrase.include_number = v;
-                self.regenerate_event()
+                self.mutate_and_regen(|s| s.passphrase.include_number = v)
             }
             // Username tab
             GeneratorMessage::SelectUsernameKind(k) => {
-                self.username.kind = k;
-                self.regenerate_event()
+                self.mutate_and_regen(|s| s.username.kind = k)
             }
             GeneratorMessage::ToggleUsernameCapitalize(v) => {
-                self.username.capitalize = v;
-                self.regenerate_event()
+                self.mutate_and_regen(|s| s.username.capitalize = v)
             }
             GeneratorMessage::ToggleUsernameIncludeNumber(v) => {
-                self.username.include_number = v;
-                self.regenerate_event()
+                self.mutate_and_regen(|s| s.username.include_number = v)
             }
-            GeneratorMessage::SetEmail(s) => {
-                self.username.email = s;
-                self.regenerate_event()
-            }
-            GeneratorMessage::SetDomain(s) => {
-                self.username.domain = s;
-                self.regenerate_event()
-            }
+            GeneratorMessage::SetEmail(s) => self.mutate_and_regen(|st| st.username.email = s),
+            GeneratorMessage::SetDomain(s) => self.mutate_and_regen(|st| st.username.domain = s),
             GeneratorMessage::Generated(Ok(value)) => {
                 self.current = Some(value.clone());
                 if let Some(uid) = ctx.active_user.copied() {
@@ -186,5 +136,23 @@ impl GeneratorView {
 
     pub(super) fn regenerate_event(&self) -> Outcome<Self> {
         Outcome::event(GeneratorEvent::Generate(self.current_request()))
+    }
+
+    fn mutate_and_regen(&mut self, f: impl FnOnce(&mut Self)) -> Outcome<Self> {
+        f(self);
+        self.regenerate_event()
+    }
+
+    fn set_digit_field(
+        &mut self,
+        raw: String,
+        assign: impl FnOnce(&mut Self, String),
+    ) -> Outcome<Self> {
+        if accept_digits(&raw) {
+            assign(self, raw);
+            self.regenerate_event()
+        } else {
+            Outcome::None
+        }
     }
 }

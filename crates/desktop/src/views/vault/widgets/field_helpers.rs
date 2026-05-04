@@ -2,24 +2,39 @@
 //! and `cipher_edit` (editable view). Extracted so both can wear the same
 //! section/card/label styling without duplicating the style closures.
 
-use iced::{Element, widget::text};
+use iced::{
+    Alignment, Element,
+    widget::{row, text},
+};
 
 use crate::{
-    components,
+    components::{self, buttons, icons},
     theme::{AppColors, AppTheme},
 };
 
-/// Section label (14 px, primary text color). Sits above a card. Accepts
-/// `impl Into<String>` so either a static literal or an owned `fl!()` value
-/// can be passed — the resulting widget owns the label.
-pub fn section_label<'a, M: 'a>(
+// Re-exports for callers that already import `field_helpers`. `styled_card`
+// keeps that name (instead of `card`) to avoid shadowing in scopes that use
+// `card` as a parameter name (e.g. `cipher_detail::card_details_card`).
+pub use components::{card_with_margin, section_label, styled_card};
+
+/// "+ Add X" secondary button used inside cipher-edit cards (URIs,
+/// passkeys, custom fields). 14 px label + 14 px PLUS icon at accent color.
+pub fn add_item_button<'a, M: 'a + Clone>(
     label: impl Into<String>,
+    msg: M,
     colors: &AppColors,
 ) -> Element<'a, M, AppTheme> {
-    text(label.into())
-        .size(14)
-        .color(colors.text_primary)
-        .into()
+    buttons::secondary(
+        row![
+            icons::PLUS.render(14.0, colors.accent),
+            text(label.into()).size(14),
+        ]
+        .spacing(6)
+        .align_y(Alignment::Center),
+    )
+    .on_press(msg)
+    .padding([6, 12])
+    .into()
 }
 
 /// Read-only `{label, value}` stacked pair. Used for displayed-only fields
@@ -35,26 +50,6 @@ pub fn field_readonly<'a, M: 'a>(
     ]
     .spacing(2)
     .into()
-}
-
-/// Wraps a card element with bottom margin for section spacing. Thin alias
-/// for `components::card_with_margin` — kept here so callers that already
-/// import `field_helpers` don't need a second import path.
-pub fn card_with_margin<'a, M: 'a>(
-    card: impl Into<Element<'a, M, AppTheme>>,
-) -> Element<'a, M, AppTheme> {
-    components::card_with_margin(card)
-}
-
-/// Styled card wrapper. Thin alias for `components::styled_card` — exposed
-/// here so callers that already import `field_helpers` don't need a second
-/// import path. Named `styled_card` (not `card`) to avoid shadowing in
-/// scopes that use `card` as a parameter name (e.g. `cipher_detail`'s
-/// `card_details_card(card: &CardView)`).
-pub fn styled_card<'a, M: 'a>(
-    content: impl Into<Element<'a, M, AppTheme>>,
-) -> Element<'a, M, AppTheme> {
-    components::styled_card(content)
 }
 
 /// Format a passkey's creation timestamp in local time using a short,

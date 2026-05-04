@@ -18,7 +18,7 @@ use crate::{
     },
 };
 
-use super::shared::card_section;
+use crate::components::section_card;
 
 pub(in super::super) fn details_card<'a>(
     form: &'a SendForm,
@@ -77,7 +77,11 @@ pub(in super::super) fn details_card<'a>(
         items.push(send_link_field(link, colors));
     }
 
-    card_section(fl!("send-form-details-heading"), items, colors)
+    section_card(
+        fl!("send-form-details-heading"),
+        iced::widget::column(items).spacing(12),
+        colors,
+    )
 }
 
 // ── Fields ────────────────────────────────────────────────────────────────

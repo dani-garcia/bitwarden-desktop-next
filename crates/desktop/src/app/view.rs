@@ -52,6 +52,7 @@ impl App {
             window_width: main_window_width,
             active_user: self.active_user.as_ref(),
             active_email: email,
+            active_server_url: server,
             accounts: &self.cache.accounts,
             open_overlay: self.open_overlay,
         };
@@ -64,7 +65,7 @@ impl App {
                 iced::widget::center(crate::components::spinner::spinner(48.0, colors.accent))
                     .into()
             }
-            Screen::Login => self.views.login.view(&rctx, server).map(Message::login),
+            Screen::Login => self.views.login.view(&rctx).map(Message::login),
             Screen::Vault => self.views.vault.view(&rctx).map(Message::vault),
             Screen::Send => self.views.send.view(&rctx).map(Message::send),
         };

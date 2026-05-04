@@ -2,8 +2,6 @@ use iced::Task;
 
 use crate::{
     app::{App, Message},
-    components::toast::Toast,
-    fl,
     services::sdk::ClientExt,
     views::new_folder::{NewFolderEvent, NewFolderMessage},
 };
@@ -15,18 +13,6 @@ impl App {
                 move |client| async move { client.create_folder(name).await.map(|_| ()) },
                 |_uid, res| Message::new_folder(NewFolderMessage::Saved(res)),
             ),
-            NewFolderEvent::ToastSuccess => {
-                self.push_toast(Toast::success(fl!("new-folder-toast-success"), None));
-                Task::none()
-            }
-            NewFolderEvent::ToastError(err) => {
-                tracing::warn!(%err, "create folder failed");
-                self.push_toast(Toast::error(
-                    fl!("new-folder-toast-failed-body"),
-                    Some(&fl!("new-folder-toast-failed-title")),
-                ));
-                Task::none()
-            }
         }
     }
 
@@ -36,6 +22,10 @@ impl App {
             return Task::none();
         }
         self.open_overlay = None;
-        self.views.new_folder.open().map(Message::new_folder)
+        self.views.new_folder.open();
+        crate::components::fade_in_out::focus_after_open(
+            crate::views::new_folder::NAME_FIELD_ID.clone(),
+        )
+        .map(Message::new_folder)
     }
 }

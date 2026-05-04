@@ -28,7 +28,7 @@ The `gpu` cargo feature (on by default) compiles wgpu into the binary. The runti
 - [docs/decisions.md](docs/decisions.md) — rationale for framework choice, theme system, overlay approach, MVU, startup lazy-load, packaging, etc. Read first when changing an architectural choice.
 - [docs/todo.md](docs/todo.md) — pending work tiers, deferred / upstream items.
 - [docs/design-reference.md](docs/design-reference.md) — official-app findings: button styles, palette, fonts, menu structure, screens.
-- [docs/skills/](docs/skills/) — periodic review outputs from code-architect / code-explorer / code-reviewer / simplify.
+- [.claude/skills/audit/SKILL.md](.claude/skills/audit/SKILL.md) — partition-by-directory + combined-lens audit recipe, runnable via the `audit` skill.
 
 ## Coding Conventions
 
@@ -54,6 +54,8 @@ The `gpu` cargo feature (on by default) compiles wgpu into the binary. The runti
 - Takes `impl Into<Element>`, returns `Button` for chaining.
 - `ghost(content, is_active, active_bg, hover_bg, radius)` — full knobs for sidebar + lists.
 - `ghost_icon(content, hover_bg)` — shorthand for icon-only transparent buttons (RADIUS_SM, no active state).
+- `icon_button(icon, msg, &AppColors)` — 18 px ghost-icon button, returns `Element`. Used for copy / launch row actions.
+- `delete_icon_button(msg, &AppColors)` — destructive variant of `icon_button` with the trash glyph in `titlebar_close_hover` (red).
 
 ### Icons
 - `icon.render(size, color)` — renders as Element for general use.
@@ -66,7 +68,7 @@ The `gpu` cargo feature (on by default) compiles wgpu into the binary. The runti
   - **Searchable single-select** (folder, organization) → `inputs::search_select_field` (iced `combo_box`).
   - **Checkbox panel or other custom trigger/panel content** (collection multi-select) → `inputs::multi_select_field` (our `DropDown`). Only reach for this when `pick_list` genuinely can't render what you need — the custom `DropDown`'s overlay positioning is naive (flips left past the viewport edge if the trigger sits in the right half of the window), so fields inside a right-side pane commonly misposition.
 - If you do use `DropDown` directly: always set `.on_dismiss(message)` for click-outside-to-close, and cross-view dismissal lives at the App router (see [docs/architecture.md](docs/architecture.md) → "Router + Cross-View Dismissal"). Sub-views provide `dismiss_dropdowns()` helpers; don't make sub-views aware of each other.
-- **Field chip background.** `field_frame` / `select_field` paint the floating-label chip with `colors.background` so the chip cleanly cuts the border behind it. When the field sits on a different surface (e.g. directly inside a dialog body painted with `card_bg`), the chip will read as a tile of contrasting colour. Reach for `field_frame_on` / `select_field_on` and pass the surface's colour token (`|c| c.card_bg`) so the chip blends.
+- **Field chip background.** `field_frame` / `select_field` paint the floating-label chip with `colors.background` so the chip cleanly cuts the border behind it. When the field sits on a different surface (e.g. directly inside a dialog body painted with `card_bg`), the chip will read as a tile of contrasting colour. Reach for `field_frame_on` / `select_field_on` (or `errored_field_frame_on` for the validation-error state) and pass the surface's colour token (`|c| c.card_bg`) so the chip blends. `TextField`'s builder routes `chip_bg` through both the normal and errored branches automatically.
 
 ### Dead Code
 - Use `#[expect(dead_code)]` (not `#[allow]`) — warns if suppression becomes unnecessary.
@@ -87,7 +89,15 @@ The `gpu` cargo feature (on by default) compiles wgpu into the binary. The runti
 - `modal::dialog(width, height, bg_picker, progress, body, on_dismiss)` — card-shape modal shell.
 - `components::rail_scroll_style` — `.style(...)` fn for the muted-rail scrollable look.
 - `components::rounded_top_pane(content, top_radius)` — right-pane shell painted with `card_bg`.
+- `components::pane_header(title, on_close, &AppColors)` / `components::pane_footer(content)` — 18 px title + close-X header (separator below) and `background`-coloured action bar (separator above) for right-pane shells. Used by cipher detail / cipher edit.
 - `components::CARD_SHADOW` — subtle 1px-down 20% black shadow used by `styled_card` and the generator history-row.
+- `components::section_label(label, &AppColors)` (14 px primary) / `components::section_heading(label, &AppColors)` (16 px bold primary) — typography for grouping labels above a card or settings sub-section.
+- `components::section_card(heading, body, &AppColors)` — bold 14 px heading stacked above a `styled_card` body. Used by send-edit; import has its own visually-distinct heading-inside-card variant.
+- `components::labeled_checkbox(checked, label, on_toggle)` — standard 18 px / 8 sp checkbox used across settings + generator tab toggles.
+- `components::favicon_icon(handle)` — 32×32 pre-clipped favicon slot. Pair with `FaviconService::handle_for_login_uri(uid, uri)` which folds the URI → hostname → cache lookup → globe-fallback chain into one call.
+- `field_helpers::add_item_button(label, msg, &AppColors)` — "+ Add X" secondary button used by cipher-edit cards.
+- `services::broadcast_stream::from_once_lock(&LOCK, "lag-label")` — iced `Stream` over a `OnceLock<broadcast::Receiver<T>>`. Used by `services/menu`, `services/tray`, `services/global_hotkey`.
+- `UpdateCtx::is_active_user(uid)` — `bool` for stale-result guards in async completion handlers.
 - `FadeInOut::close_with_finalize(msg)` — start the fade-out and emit `msg` once the animation duration elapses.
 - `fade_in_out::focus_after_open(id)` — `Task` that focuses a widget after the fade-in animation settles.
 

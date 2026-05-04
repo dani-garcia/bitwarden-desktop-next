@@ -31,7 +31,6 @@ pub fn view<'a>(
 
     let card = layout::auth_card(card_content(email, remember_email, colors));
 
-    // TODO: Create account navigates to registration view (not yet implemented)
     let create_account_link = row![
         text(format!("{} ", fl!("login-email-new-prompt")))
             .size(14)

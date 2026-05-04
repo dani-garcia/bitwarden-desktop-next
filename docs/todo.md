@@ -50,6 +50,7 @@ Each is small enough to land in one focused session.
 - **Magnify footer "More" expander** `[S]` — the launcher binds `Ctrl+C / Ctrl+Shift+C / Ctrl+T / Ctrl+U / Ctrl+Shift+N` but the hint bar still surfaces the first three only. Replace the trailing slots with a "More" disclosure (cursor-positioned popover or expand-on-hover row).
 - **Magnify decrypt-failure feedback** `[S]` `[blocked: tray-balloon / OS-notification path]` — `Err` from `full_cipher` only logs at `warn` and the launcher silently dismisses ([handlers/magnify.rs](../crates/desktop/src/app/handlers/magnify.rs) `FieldDecryptCompleted`). Hook into a notification path once one exists.
 - **Tray icon Linux test-VM verification** `[S]` `[blocked: Linux test machine]` — packaging-side wiring is in (`.deb` / `.pacman` declare `libayatana-appindicator3-1` / `libayatana-appindicator`; README notes the SNI-host requirement). Verify GNOME + AppIndicator extension, KDE Plasma, and sway + waybar on a VM.
+- **Extend `i18n-unused` to cover parity + duplicates** `[S]` — [tools/i18n-unused/src/main.rs](../tools/i18n-unused/src/main.rs) checks unused keys against the canonical English `.ftl` only. The source comment already names cross-locale parity as "the next obvious extension". Add: (a) per-locale parity diff against the canonical set (missing translations / stale keys) — iterate `assets/i18n/*/bitwarden_desktop_next.ftl`; (b) duplicate-key detection within a single `.ftl` (currently silently deduped by `BTreeSet` — switch to two-pass parse or count). Keep the existing exit-code contract for CI; report parity gaps as warnings (exit `0`) and duplicates as errors (exit `1`).
 
 ---
 
@@ -97,15 +98,15 @@ The SDK exposes `CipherType::BankAccount` / `CipherListViewType::BankAccount`; t
 
 ### Right-click context menu for text inputs `[M]`
 
-Cut / copy / paste / select-all on `TextInput` and the notes `TextEditor` in `cipher_form`. Iced 0.15 doesn't ship this — text widgets silently swallow right-clicks. Shape: a `components::context_menu` wrapper that stacks `MouseArea::on_right_press` over the child and shows our `DropDown` with the four actions. `TextEditor` already accepts `Action::{Copy,Cut,Paste,SelectAll}` via `on_action` (direct wire-up). `TextInput` needs a `widget::Id` per field + `widget::operation::text_input::{select_all, …}` dispatched as `Task`s; paste reuses iced's clipboard shell. First pass anchors the menu to the field (our `DropDown` is widget-anchored); cursor-anchored variant would need a small `DropDown` extension for absolute-offset placement.
+Cut / copy / paste / select-all on `TextInput` and the notes `TextEditor` in `cipher_edit`. Iced 0.15 doesn't ship this — text widgets silently swallow right-clicks. Shape: a `components::context_menu` wrapper that stacks `MouseArea::on_right_press` over the child and shows our `DropDown` with the four actions. `TextEditor` already accepts `Action::{Copy,Cut,Paste,SelectAll}` via `on_action` (direct wire-up). `TextInput` needs a `widget::Id` per field + `widget::operation::text_input::{select_all, …}` dispatched as `Task`s; paste reuses iced's clipboard shell. First pass anchors the menu to the field (our `DropDown` is widget-anchored); cursor-anchored variant would need a small `DropDown` extension for absolute-offset placement.
 
 ### Send — wire to real SDK `[L]`
 
-Sends live as decrypted `SendView`s in an in-memory `HashMap` on [`ClientManager`](../crates/desktop/src/services/sdk/mod.rs) (`list_sends` / `full_send` / `save_send` / `delete_send`). Empty at startup; mutations never leave the process. Replace the in-memory map with the SDK's `Repository<Send>` + `SendClient::{encrypt, decrypt, decrypt_list}`. `ClientManager`'s methods are already async + fallible so call sites don't change. Drop the `uuid::Uuid::new_v4()` id fabrication in `save_send`; the placeholder `access_id` should come from `CreateSendResponse`. Once the SDK returns a real `access_id` + key fragment, `SendForm::send_link` ([state.rs](../crates/desktop/src/views/send/widgets/send_form/state.rs)) can drop its `http://vault.bitwarden.test/#/send/{access_id}` stub and use the user's configured `server_url` with the actual URL shape.
+Sends live as decrypted `SendView`s in an in-memory `HashMap` on [`ClientManager`](../crates/desktop/src/services/sdk/mod.rs) (`list_sends` / `full_send` / `save_send` / `delete_send`). Empty at startup; mutations never leave the process. Replace the in-memory map with the SDK's `Repository<Send>` + `SendClient::{encrypt, decrypt, decrypt_list}`. `ClientManager`'s methods are already async + fallible so call sites don't change. Drop the `uuid::Uuid::new_v4()` id fabrication in `save_send`; the placeholder `access_id` should come from `CreateSendResponse`. Once the SDK returns a real `access_id` + key fragment, `SendForm::send_link` ([state.rs](../crates/desktop/src/views/send/widgets/send_edit/state.rs)) can drop its `http://vault.bitwarden.test/#/send/{access_id}` stub and use the user's configured `server_url` with the actual URL shape.
 
 ### Send — file creation flow `[M]`
 
-The "Choose file" button in the new-file-send branch ([widgets/send_form/view.rs](../crates/desktop/src/views/send/widgets/send_form/view.rs) `file_section`) is a placeholder — message fires, handler is a no-op. Needs `rfd::AsyncFileDialog::new().pick_file().await` (already a dep — see [app/handlers/export.rs](../crates/desktop/src/app/handlers/export.rs) for the `Task::perform` recipe) to populate `file_name` + `file_size_name`, plus `SendClient::encrypt_file` / `encrypt_buffer` wiring.
+The "Choose file" button in the new-file-send branch ([widgets/send_edit/view.rs](../crates/desktop/src/views/send/widgets/send_edit/view.rs) `file_section`) is a placeholder — message fires, handler is a no-op. Needs `rfd::AsyncFileDialog::new().pick_file().await` (already a dep — see [app/handlers/export.rs](../crates/desktop/src/app/handlers/export.rs) for the `Task::perform` recipe) to populate `file_name` + `file_size_name`, plus `SendClient::encrypt_file` / `encrypt_buffer` wiring.
 
 ### Send form — embedded password generator panel `[M]`
 
@@ -113,7 +114,7 @@ The password regenerate button currently fires `ClientManager::generate_password
 
 ### In-form validation surface `[M]` `[defer: 2nd required field on either form]`
 
-Both `CipherForm` and `SendForm` use a single `is_valid()` method + the `toast-required-fields` toast. Once required-field rules grow past one field, replace `is_valid() -> bool` with `validate() -> HashMap<FieldId, &'static str>` returning per-field error messages. Add `show_validation: bool` flipped on the first failed Save — keeps first-view UX clean. Add `inputs::validated_text_field(...)` in [components/inputs.rs](../crates/desktop/src/components/inputs.rs) that paints a red border via the `text_input::Style` closure when `Some(error)`. Toast stays as the global "can't save yet" nudge but demoted to title only.
+Both `CipherForm` and `SendForm` use a single `is_valid()` method + the `toast-required-fields` toast. Once required-field rules grow past one field, replace `is_valid() -> bool` with `validate() -> HashMap<FieldId, &'static str>` returning per-field error messages. Add `show_validation: bool` flipped on the first failed Save — keeps first-view UX clean. Add `inputs::validated_text_field(...)` in [components/inputs/](../crates/desktop/src/components/inputs/mod.rs) that paints a red border via the `text_input::Style` closure when `Some(error)`. Toast stays as the global "can't save yet" nudge but demoted to title only.
 
 ### Precompute lowercase search keys `[M]`
 
@@ -201,7 +202,7 @@ Sketch: drop `system-theme` from `Cargo.toml`; replace `ThemeState.system: Rc<sy
 
 ### Vault + Send event-handler dedup `[S]` `[defer: shared list-view primitive]`
 
-[`vault/handler.rs`](../crates/desktop/src/views/vault/handler.rs) and [`send/handler.rs`](../crates/desktop/src/views/send/handler.rs) dispatch the same five event arms (`AccountSwitcher` / `ToastRequested` / `ItemSaved` / `ItemDeleted` / `ClipboardCopyRequested`), differing only in toast strings and which list-reload task they call. Folds for free into the list-view primitive above via a shared `ListEvent<V>`; don't fix in isolation.
+[`vault/handler.rs`](../crates/desktop/src/views/vault/handler.rs) and [`send/handler.rs`](../crates/desktop/src/views/send/handler.rs) dispatch four overlapping event arms (`AccountSwitcher` / `ItemSaved` / `ItemDeleted` / `ClipboardCopyRequested`), differing only in toast strings and which list-reload task they call. Folds for free into the list-view primitive above via a shared `ListEvent<V>`; don't fix in isolation.
 
 ---
 
@@ -235,7 +236,7 @@ Before more call sites accumulate (unlock failure, copy-to-clipboard, sync error
 - **`Toast` schema** — today `{ title, body, status }`. Future callers may want action button (Undo), icon override, sticky flag, custom timeout. Plan the schema before ten call sites exist.
 - Document the final design in `decisions.md`.
 
-"Toast emission from anywhere" is already solved by compositional MVU — sub-views emit `*Event::ToastRequested(Toast)` events that the App handler routes to `push_toast()`.
+"Toast emission from anywhere" is already solved: views call `Outcome::toast(Toast::*)` and the dispatch helper routes it directly to `push_toast()` — no per-view `ToastRequested` event variant needed.
 
 ---
 
@@ -282,6 +283,14 @@ Park until V2 ships in the Electron client. When unblocked: `ApprovalRequester` 
 ### Drop `ShellScope` if iced fixes `Stack`'s capture leak
 
 `iced::widget::Stack::update` short-circuits between its children on `shell.is_event_captured()`, but the shell is shared across the whole event pass — sibling captures leak. We work around it by wrapping `field_frame`'s output in [`components::shell_scope::ShellScope`](../crates/desktop/src/components/shell_scope.rs) (full write-up: [architecture.md → Shell Capture Isolation](./architecture.md#shell-capture-isolation-shellscope)). The minimal upstream patch is `was_captured_before = shell.is_event_captured()` once at the top of `Stack::update` and short-circuit only on captures that happen during the loop. If accepted upstream, drop `ShellScope` + the wrap call in `field_frame`.
+
+### Replace `virtual_list` with upstream when iced lands native virtualization
+
+iced has an open issue for first-class virtualized list support:
+<https://github.com/iced-rs/iced/issues/160>, targeted at iced 1.0. When a
+native widget lands, [components/virtual_list.rs](../crates/desktop/src/components/virtual_list.rs)
+can become a thin adapter — or be deleted outright if the upstream API fits
+our usage directly.
 
 ### Scrollbar minimum thumb height
 

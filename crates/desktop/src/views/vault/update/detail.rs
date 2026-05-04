@@ -112,7 +112,7 @@ impl VaultView {
         result: Result<NoDebug<Box<CipherView>>, String>,
     ) -> Outcome<Self> {
         // Stale-check: user switched while full_cipher was in flight.
-        if ctx.active_user != Some(&msg_uid) {
+        if !ctx.is_active_user(&msg_uid) {
             tracing::debug!(
                 uid = %msg_uid,
                 cipher_id = %id,

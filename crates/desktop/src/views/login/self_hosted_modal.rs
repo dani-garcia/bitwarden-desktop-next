@@ -5,12 +5,12 @@
 //! `selected_server` on Save.
 
 use iced::{
-    Alignment, Element, Fill, Padding,
-    widget::{self, Space, column, container, row, text},
+    Element, Fill, Padding,
+    widget::{self, column, container, text},
 };
 
 use crate::{
-    components::{buttons, icons, inputs, modal},
+    components::{inputs, modal},
     fl,
     theme::{AppColors, AppTheme},
 };
@@ -25,20 +25,11 @@ pub fn view<'a>(
 ) -> Option<Element<'a, LoginMessage, AppTheme>> {
     let progress = state.fade.progress_if_visible()?;
 
-    let header = row![
-        text(fl!("login-self-hosted-modal-title"))
-            .size(18)
-            .font(crate::APP_FONT_BOLD)
-            .color(colors.text_primary),
-        Space::new().width(Fill),
-        buttons::ghost_icon(
-            icons::X_LG.render(16.0, colors.text_primary),
-            colors.item_hover,
-        )
-        .padding([6, 6])
-        .on_press(LoginMessage::SelfHostedCancel),
-    ]
-    .align_y(Alignment::Center);
+    let header = modal::dialog_header(
+        fl!("login-self-hosted-modal-title"),
+        LoginMessage::SelfHostedCancel,
+        colors,
+    );
 
     let url_input = inputs::bare_text_input(&state.url_input)
         .id(SELF_HOSTED_URL_FIELD_ID)

@@ -4,11 +4,11 @@
 use bitwarden_vault::{CipherType, CipherView};
 use iced::{
     Alignment, Element, Fill,
-    widget::{Space, column, container, row, scrollable, text},
+    widget::{Space, column, row, scrollable, text},
 };
 
 use crate::{
-    components::{self, buttons, icons},
+    components::{self, buttons},
     fl,
     theme::{AppColors, AppTheme},
 };
@@ -100,7 +100,7 @@ pub fn view<'a>(
 
 fn header_row<'a>(
     item: &'a CipherView,
-    colors: &AppColors,
+    colors: &'a AppColors,
 ) -> Element<'a, CipherDetailMessage, AppTheme> {
     let category_label = match item.r#type {
         CipherType::Login => fl!("detail-header-login"),
@@ -110,42 +110,15 @@ fn header_row<'a>(
         CipherType::SshKey => fl!("detail-header-ssh-key"),
         CipherType::BankAccount => fl!("detail-header-bank-account"),
     };
-
-    let title = text(category_label).size(18).color(colors.text_primary);
-
-    let close_btn = buttons::ghost_icon(
-        icons::BWI_CLOSE.render(32.0, colors.text_secondary),
-        colors.item_hover,
-    )
-    .on_press(CipherDetailMessage::Close)
-    .padding([1, 1]);
-
-    // No background fill — would mask the parent's rounded top corners.
-    let header =
-        container(row![title, Space::new().width(Fill), close_btn].align_y(Alignment::Center))
-            .padding([8, 20]);
-
-    column![header, components::separator_h()].spacing(0).into()
+    components::pane_header(category_label, CipherDetailMessage::Close, colors)
 }
 
-fn bottom_bar<'a>(colors: &AppColors) -> Element<'a, CipherDetailMessage, AppTheme> {
+fn bottom_bar<'a>(colors: &'a AppColors) -> Element<'a, CipherDetailMessage, AppTheme> {
     let edit_btn = buttons::primary(text(fl!("detail-edit-button")).size(14))
         .on_press(CipherDetailMessage::Edit)
         .padding([8, 20]);
-
-    let delete_btn = buttons::ghost_icon(
-        icons::BWI_TRASH.render(18.0, colors.titlebar_close_hover),
-        colors.item_hover,
+    let delete_btn = buttons::delete_icon_button(CipherDetailMessage::Delete, colors);
+    components::pane_footer(
+        row![edit_btn, Space::new().width(Fill), delete_btn].align_y(Alignment::Center),
     )
-    .on_press(CipherDetailMessage::Delete)
-    .padding([6, 6]);
-
-    let bar =
-        container(row![edit_btn, Space::new().width(Fill), delete_btn].align_y(Alignment::Center))
-            .padding([8, 20])
-            .style(|theme: &AppTheme| {
-                container::Style::default().background(theme.colors.background)
-            });
-
-    column![components::separator_h(), bar].spacing(0).into()
 }

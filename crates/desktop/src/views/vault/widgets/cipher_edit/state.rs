@@ -109,11 +109,7 @@ pub struct CipherForm {
     pub(super) folder_combo_state: combo_box::State<FolderChoice>,
     pub(super) org_combo_state: combo_box::State<OrgChoice>,
 
-    // The collections multi-select still uses our custom DropDown widget
-    // (iced's pick_list is single-select). Single-select dropdowns
-    // (`select_field`) and reveal-toggle password fields (`reveal_text_field`)
-    // manage their transient state inside iced's widget tree, so only the
-    // multi-select needs an explicit flag here.
+    // Custom DropDown widget; pick_list is single-select.
     pub(super) collections_dropdown_open: bool,
 
     /// Multi-line editor buffer for the Notes field. `text_editor` requires

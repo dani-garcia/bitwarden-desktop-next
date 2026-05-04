@@ -105,7 +105,7 @@ pub fn transparent<'a, M: 'a>(
 }
 
 /// Small 18 px icon button with ghost-style hover; used for the copy /
-/// launch / delete icon buttons in list rows and fields.
+/// launch icon buttons in list rows and fields.
 pub fn icon_button<'a, M: 'a + Clone>(
     icon: icons::BwiIcon,
     msg: M,
@@ -115,4 +115,20 @@ pub fn icon_button<'a, M: 'a + Clone>(
         .on_press(msg)
         .padding([6, 6])
         .into()
+}
+
+/// Destructive-action variant of [`icon_button`]: a trash glyph in
+/// `titlebar_close_hover` (red). Used by cipher-edit / cipher-detail and
+/// send-edit panes for delete / remove-row affordances.
+pub fn delete_icon_button<'a, M: 'a + Clone>(
+    msg: M,
+    colors: &AppColors,
+) -> Element<'a, M, AppTheme> {
+    ghost_icon(
+        icons::BWI_TRASH.render(18.0, colors.titlebar_close_hover),
+        colors.item_hover,
+    )
+    .on_press(msg)
+    .padding([6, 6])
+    .into()
 }

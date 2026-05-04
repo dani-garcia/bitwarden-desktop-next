@@ -81,32 +81,27 @@ impl<'de> Deserialize<'de> for ZoomFactor {
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(default)]
 pub struct Settings {
-    // ── Appearance ─────────────────────────────────────────────────────────
     pub theme: ThemePreference,
     /// BCP-47 language tag (e.g. `"en"`, `"es"`) or [`LANGUAGE_SYSTEM`] for OS
     /// preferred. Plain string so new locales need only an `assets/i18n/<tag>/`
     /// directory, no code change.
     pub language: String,
 
-    // ── Security ───────────────────────────────────────────────────────────
     /// Stub (not wired) — shown in the Security tab.
     pub open_at_login: bool,
 
-    // ── Integrations (all currently stubbed) ──────────────────────────────
+    /// Integrations group — all stubs.
     pub browser_integration: bool,
     pub browser_integration_fingerprint: bool,
     pub ssh_agent: bool,
     pub duck_duck_go: bool,
 
-    // ── Autotype & copy ───────────────────────────────────────────────────
     /// Stub — the real autotype engine hasn't been ported yet.
     pub autotype_enabled: bool,
 
-    // ── Appearance ─────────────────────────────────────────────────────────
     /// Stub — domain icon fetching isn't wired yet.
     pub show_favicons: bool,
 
-    // ── Advanced — Tray ────────────────────────────────────────────────────
     /// Master switch: keep the tray icon visible even when the app is in the
     /// foreground.
     pub show_tray_icon: bool,
@@ -117,16 +112,15 @@ pub struct Settings {
     /// Auto-creates the tray if not already shown.
     pub close_to_tray: bool,
 
-    // ── Advanced — platform (all currently stubbed) ───────────────────────
+    /// Advanced platform group — all stubs.
     pub always_show_dock: bool,
     pub hardware_acceleration: bool,
     pub allow_screenshots: bool,
 
-    // ── wgpu backend cache ────────────────────────────────────────────────
-    // Only meaningful when the `gpu` Cargo feature is on. Pre-existing fields
-    // in settings.json are silently dropped on deserialize when the feature
-    // is off (no `deny_unknown_fields`), and re-populated on the first launch
-    // after re-enabling the feature.
+    // wgpu backend cache — only meaningful with the `gpu` Cargo feature.
+    // Pre-existing fields in settings.json are silently dropped on deserialize
+    // when the feature is off (no `deny_unknown_fields`), and re-populated on
+    // the first launch after re-enabling the feature.
     /// Backend wgpu used last time we reached first paint. Reused on the next
     /// launch via `WGPU_BACKEND` to skip the multi-backend enumeration walk
     /// (saves ~325 ms on a warm machine — see `select_backend` in `main.rs`).
@@ -138,12 +132,10 @@ pub struct Settings {
     #[cfg(feature = "gpu")]
     pub wgpu_backend_pending: Option<String>,
 
-    // ── Per-user preferences ───────────────────────────────────────────────
-    /// Keyed by `UserId`. Populated lazily; persisted alongside the app-wide
+    /// Per-user preferences. Populated lazily; persisted alongside the app-wide
     /// fields so unlock-with-PIN, clipboard delay, etc. survive across launches.
     pub user_preferences: HashMap<UserId, UserPreferences>,
 
-    // ── Zoom ──────────────────────────────────────────────────────────────
     /// UI scale fed into iced's per-window `scale_factor` callback. Composes
     /// multiplicatively with OS DPI. Stepped from the View → Zoom in / out / reset menu.
     pub zoom_factor: ZoomFactor,

@@ -4,7 +4,7 @@ use crate::{
     app::{App, Message},
     fl,
     services::{clipboard::Sensitivity, sdk::ClientExt},
-    views::generator::{GenerateKind, GeneratorEvent, GeneratorMessage},
+    views::generator::{GenerateKind, GeneratorEvent, GeneratorMessage, Mode},
 };
 
 impl App {
@@ -52,7 +52,7 @@ impl App {
             return Task::none();
         };
         self.open_overlay = None;
-        self.views.generator.open_as_generator();
+        self.views.generator.open(Mode::Generator);
         let history = self.client_manager.password_history(&uid);
         self.views.generator.set_history(history);
         let kind = self.views.generator.current_request();
@@ -66,7 +66,7 @@ impl App {
             return Task::none();
         };
         self.open_overlay = None;
-        self.views.generator.open_as_history();
+        self.views.generator.open(Mode::History);
         let history = self.client_manager.password_history(&uid);
         self.views.generator.set_history(history);
         Task::none()

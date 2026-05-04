@@ -11,13 +11,13 @@
 mod handler;
 
 use iced::{
-    Element, Fill, Padding, Task,
+    Element, Fill, Padding,
     widget::{self, column, container, text},
 };
 
 use crate::{
     app::{Outcome, UpdateCtx, ViewTypes},
-    components::{FadeInOut, fade_in_out, inputs, modal},
+    components::{FadeInOut, inputs, modal, toast::Toast},
     fl,
     theme::AppTheme,
 };
@@ -47,11 +47,6 @@ pub enum NewFolderMessage {
 pub enum NewFolderEvent {
     /// Encrypt + persist the entered name. App spawns the SDK call.
     Run(String),
-    /// Save succeeded — push a success toast (the modal closes itself).
-    ToastSuccess,
-    /// Save failed — push an error toast and leave the modal open so the
-    /// user can correct + retry.
-    ToastError(String),
 }
 
 impl ViewTypes for NewFolderView {
@@ -70,11 +65,10 @@ impl NewFolderView {
         }
     }
 
-    pub fn open(&mut self) -> Task<NewFolderMessage> {
+    pub fn open(&mut self) {
         self.fade.open();
         self.name.clear();
         self.saving = false;
-        fade_in_out::focus_after_open(NAME_FIELD_ID.clone())
     }
 
     pub fn update(&mut self, msg: NewFolderMessage, _ctx: UpdateCtx<'_>) -> Outcome<Self> {
@@ -100,11 +94,15 @@ impl NewFolderView {
             NewFolderMessage::Saved(Ok(_)) => {
                 self.saving = false;
                 self.fade.close();
-                Outcome::event(NewFolderEvent::ToastSuccess)
+                Outcome::toast(Toast::success(fl!("new-folder-toast-success"), None))
             }
             NewFolderMessage::Saved(Err(err)) => {
                 self.saving = false;
-                Outcome::event(NewFolderEvent::ToastError(err))
+                tracing::warn!(%err, "create folder failed");
+                Outcome::toast(Toast::error(
+                    fl!("new-folder-toast-failed-body"),
+                    Some(&fl!("new-folder-toast-failed-title")),
+                ))
             }
         }
     }

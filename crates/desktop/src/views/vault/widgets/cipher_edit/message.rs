@@ -1,4 +1,4 @@
-//! `CipherEditMessage` + `FormAction` (the return shape of `update()`).
+//! `CipherEditMessage` + `FormEvent` (the return shape of `update()`).
 
 use bitwarden_collections::collection::CollectionId;
 use bitwarden_core::OrganizationId;
@@ -75,7 +75,7 @@ pub enum CipherEditMessage {
 /// Result of applying a form message. Most messages only mutate the form;
 /// Save/Cancel bubble up so the vault router can kick off the save task or
 /// dispose the form.
-pub enum FormAction {
+pub enum FormEvent {
     None,
     Save,
     Cancel,

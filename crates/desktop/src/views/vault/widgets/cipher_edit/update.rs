@@ -6,12 +6,12 @@ use bitwarden_vault::{
 };
 
 use super::{
-    message::{CipherEditMessage, FormAction},
+    message::{CipherEditMessage, FormEvent},
     state::CipherForm,
 };
 
 impl CipherForm {
-    pub fn update(&mut self, msg: CipherEditMessage) -> FormAction {
+    pub fn update(&mut self, msg: CipherEditMessage) -> FormEvent {
         use CipherEditMessage::*;
         match msg {
             // Item details
@@ -241,10 +241,10 @@ impl CipherForm {
             }
 
             // Flow
-            Save => return FormAction::Save,
-            Cancel => return FormAction::Cancel,
+            Save => return FormEvent::Save,
+            Cancel => return FormEvent::Cancel,
         }
-        FormAction::None
+        FormEvent::None
     }
 }
 

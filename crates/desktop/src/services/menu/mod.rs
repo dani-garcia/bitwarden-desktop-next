@@ -21,7 +21,7 @@ mod shortcut;
 
 use std::sync::OnceLock;
 
-use iced::futures::{SinkExt, Stream};
+use iced::futures::Stream;
 use tokio::sync::broadcast;
 
 pub use definitions::{MENUS, find_shortcut_action};
@@ -50,26 +50,7 @@ pub fn install_event_handler() {
 /// Iced-compatible stream of [`muda::MenuEvent`] values, one per muda-managed
 /// menu click. Use as a `fn` pointer with [`iced::Subscription::run`].
 pub fn muda_event_stream() -> impl Stream<Item = muda::MenuEvent> {
-    use iced::futures::channel::mpsc;
-    iced::stream::channel(16, |mut out: mpsc::Sender<_>| async move {
-        let mut rx = MUDA_EVENTS
-            .get()
-            .expect("menu::install_event_handler must run before subscribing")
-            .resubscribe();
-        loop {
-            match rx.recv().await {
-                Ok(ev) => {
-                    if out.send(ev).await.is_err() {
-                        break;
-                    }
-                }
-                Err(broadcast::error::RecvError::Lagged(n)) => {
-                    tracing::warn!(dropped = n, "muda event subscriber lagged");
-                }
-                Err(broadcast::error::RecvError::Closed) => break,
-            }
-        }
-    })
+    super::broadcast_stream::from_once_lock(&MUDA_EVENTS, "muda")
 }
 
 // ── Platform-specific selection ───────────────────────────────────────────

@@ -12,7 +12,8 @@ use crate::{
     views::send::widgets::send_edit::{SendEditMessage, SendForm},
 };
 
-use super::shared::card_section;
+use crate::components::section_card;
+use iced::widget::column;
 
 pub(in super::super) fn additional_options_card<'a>(
     form: &'a SendForm,
@@ -36,7 +37,11 @@ pub(in super::super) fn additional_options_card<'a>(
     );
     items.push(notes_field(form, colors));
 
-    card_section(fl!("send-form-additional-heading"), items, colors)
+    section_card(
+        fl!("send-form-additional-heading"),
+        column(items).spacing(12),
+        colors,
+    )
 }
 
 // ── Fields ────────────────────────────────────────────────────────────────

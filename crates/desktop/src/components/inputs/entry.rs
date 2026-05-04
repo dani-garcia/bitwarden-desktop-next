@@ -10,7 +10,9 @@ use crate::{
     theme::{AppColors, AppTheme},
 };
 
-use super::{bare_text_input, errored_field_frame, field_frame, field_frame_on};
+use super::{
+    bare_text_input, errored_field_frame, errored_field_frame_on, field_frame, field_frame_on,
+};
 
 /// Labeled single-line text input — the workhorse field builder.
 ///
@@ -121,12 +123,13 @@ impl<'a, M: Clone + 'a> From<TextField<'a, M>> for Element<'a, M, AppTheme> {
         }
 
         let content: Element<'a, M, AppTheme> = input.into();
-        if errored {
-            errored_field_frame(label, content, colors)
-        } else if let Some(chip_bg) = chip_bg {
-            field_frame_on(label, content, move |c| chip_bg(c), colors)
-        } else {
-            field_frame(label, content, colors)
+        match (errored, chip_bg) {
+            (true, Some(chip_bg)) => {
+                errored_field_frame_on(label, content, move |c| chip_bg(c), colors)
+            }
+            (true, None) => errored_field_frame(label, content, colors),
+            (false, Some(chip_bg)) => field_frame_on(label, content, move |c| chip_bg(c), colors),
+            (false, None) => field_frame(label, content, colors),
         }
     }
 }

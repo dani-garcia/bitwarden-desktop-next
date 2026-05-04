@@ -12,7 +12,7 @@
 //!
 //! File layout:
 //! - `state.rs`     — `CipherForm` + choice enums + constructors
-//! - `message.rs`   — `CipherEditMessage`, `FormAction`
+//! - `message.rs`   — `CipherEditMessage`, `FormEvent`
 //! - `update.rs`    — `CipherForm::update`
 //! - `view.rs`      — `view()` entry + header/bottom-bar
 //! - `selectors.rs` — folder/org/collections selectors + dropdown primitive
@@ -25,7 +25,7 @@ mod state;
 mod update;
 mod view;
 
-pub use message::{CipherEditMessage, FormAction};
+pub use message::{CipherEditMessage, FormEvent};
 pub use sections::shared::NAME_INPUT_ID;
 pub use state::{CipherForm, FolderOption};
 pub use view::view;
