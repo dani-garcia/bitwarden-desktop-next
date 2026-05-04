@@ -3,7 +3,7 @@
 
 use bitwarden_send::SendType;
 use iced::{
-    Alignment, Background, Border, Color, Element, Fill, Padding, Shadow,
+    Alignment, Border, Element, Fill, Padding,
     widget::{Space, column, container, row, scrollable, text},
 };
 
@@ -75,20 +75,15 @@ pub fn view<'a>(
         }),
     )
     .height(Fill)
-    .style(scrollable_style)
+    .style(crate::components::rail_scroll_style)
     .into();
 
     let footer = footer(form, colors);
 
-    container(column![header_container, separator_h(), body, footer].height(Fill))
-        .width(Fill)
-        .height(Fill)
-        .style(move |theme: &AppTheme| {
-            container::Style::default()
-                .background(theme.colors.card_bg)
-                .border(Border::default().rounded(iced::border::top(top_radius)))
-        })
-        .into()
+    crate::components::rounded_top_pane(
+        column![header_container, separator_h(), body, footer].height(Fill),
+        top_radius,
+    )
 }
 
 // ── Footer (Save / Cancel / Delete) ───────────────────────────────────────
@@ -135,31 +130,3 @@ fn footer<'a>(form: &'a SendForm, colors: &'a AppColors) -> Element<'a, SendEdit
         .into()
 }
 
-fn scrollable_style(theme: &AppTheme, _status: scrollable::Status) -> scrollable::Style {
-    scrollable::Style {
-        container: container::Style::default(),
-        vertical_rail: scrollable::Rail {
-            background: None,
-            border: Border::default(),
-            scroller: scrollable::Scroller {
-                background: Background::Color(theme.colors.item_hover),
-                border: Border::default().rounded(4),
-            },
-        },
-        horizontal_rail: scrollable::Rail {
-            background: None,
-            border: Border::default(),
-            scroller: scrollable::Scroller {
-                background: Background::Color(theme.colors.item_hover),
-                border: Border::default().rounded(4),
-            },
-        },
-        gap: None,
-        auto_scroll: scrollable::AutoScroll {
-            background: Background::Color(Color::TRANSPARENT),
-            border: Border::default(),
-            shadow: Shadow::default(),
-            icon: Color::TRANSPARENT,
-        },
-    }
-}

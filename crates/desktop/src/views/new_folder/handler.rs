@@ -36,7 +36,6 @@ impl App {
             return Task::none();
         }
         self.open_overlay = None;
-        self.views.new_folder.open();
-        Task::none()
+        self.views.new_folder.open().map(Message::new_folder)
     }
 }

@@ -17,7 +17,7 @@ use iced::{
 };
 
 use crate::{
-    components::{icons, separator_h},
+    components::{self, icons, separator_h},
     fl,
     services::favicon::FaviconService,
     theme::{AppColors, AppTheme, MAGNIFY_SURFACE_ALPHA, RADIUS_PILL, RADIUS_XL},
@@ -231,32 +231,7 @@ fn results_list<'a>(
             .id(MAGNIFY_RESULTS_SCROLL_ID)
             .on_scroll(MagnifyMessage::Scrolled)
             .height(Fill)
-            .style(|theme: &AppTheme, _status| scrollable::Style {
-                container: container::Style::default(),
-                vertical_rail: scrollable::Rail {
-                    background: None,
-                    border: Border::default(),
-                    scroller: scrollable::Scroller {
-                        background: Background::Color(theme.colors.scrollbar_thumb),
-                        border: Border::default().rounded(4),
-                    },
-                },
-                horizontal_rail: scrollable::Rail {
-                    background: None,
-                    border: Border::default(),
-                    scroller: scrollable::Scroller {
-                        background: Background::Color(theme.colors.scrollbar_thumb),
-                        border: Border::default().rounded(4),
-                    },
-                },
-                gap: None,
-                auto_scroll: scrollable::AutoScroll {
-                    background: Background::Color(Color::TRANSPARENT),
-                    border: Border::default(),
-                    shadow: iced::Shadow::default(),
-                    icon: Color::TRANSPARENT,
-                },
-            })
+            .style(components::rail_scroll_style)
             .into()
     }
 }

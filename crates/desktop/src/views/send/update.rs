@@ -49,14 +49,14 @@ impl SendView {
             }
             SendMessage::CloseFormPane => {
                 // Start the outro and defer the selection clear so the
-                // sheet form stays alive for ~180 ms while the slide
-                // animates out. Wide-mode pane closes immediately.
-                self.selection.sheet_fade.close();
+                // sheet form stays alive while the slide animates out.
+                // Wide-mode pane closes immediately.
+                let task = self
+                    .selection
+                    .sheet_fade
+                    .close_with_finalize(SendMessage::FinalizeSheetClose);
                 self.pane.close();
-                return Outcome::perform(
-                    tokio::time::sleep(std::time::Duration::from_millis(180)),
-                    |_| SendMessage::FinalizeSheetClose,
-                );
+                return Outcome::task(task);
             }
             SendMessage::FinalizeSheetClose => {
                 self.selection.clear();
@@ -168,10 +168,7 @@ impl SendView {
             }
             FormAction::Save => {
                 if !form.is_valid() {
-                    return Outcome::event(SendEvent::ToastRequested(Toast::warning(
-                        fl!("toast-required-fields"),
-                        None,
-                    )));
+                    return Outcome::toast(Toast::warning(fl!("toast-required-fields"), None));
                 }
                 let Some(uid) = ctx.active_user.copied() else {
                     return Outcome::None;
@@ -269,10 +266,10 @@ impl SendView {
             }
             Err(err) => {
                 tracing::error!(send_id = %id, %err, "full_send failed");
-                return Outcome::event(SendEvent::ToastRequested(Toast::error(
+                return Outcome::toast(Toast::error(
                     fl!("send-toast-load-failed-body"),
                     Some(&fl!("send-toast-load-failed-title")),
-                )));
+                ));
             }
         }
         Outcome::None
@@ -287,7 +284,7 @@ impl SendView {
         if ctx.active_user != Some(&msg_uid) {
             return Outcome::None;
         }
-        let event = match result {
+        match result {
             Ok(NoDebug(view)) => {
                 // Re-bind selection to the persisted id (new sends start with
                 // id=None; `save_send` assigns one) so subsequent reloads
@@ -295,20 +292,19 @@ impl SendView {
                 self.selection.id = view.id;
                 self.selection.form = Some(SendForm::edit(*view));
                 self.selection.sheet_fade.open();
-                SendEvent::ItemSaved { uid: msg_uid }
+                Outcome::event(SendEvent::ItemSaved { uid: msg_uid })
             }
             Err(err) => {
                 tracing::error!(%err, "save_send failed");
                 if let Some(form) = self.selection.form.as_mut() {
                     form.saving = false;
                 }
-                SendEvent::ToastRequested(Toast::error(
+                Outcome::toast(Toast::error(
                     fl!("send-toast-save-failed-body"),
                     Some(&fl!("send-toast-save-failed-title")),
                 ))
             }
-        };
-        Outcome::event(event)
+        }
     }
 
     fn handle_password_generated(
@@ -324,10 +320,7 @@ impl SendView {
             }
             Err(err) => {
                 tracing::warn!(%err, "send password regenerate failed");
-                Outcome::event(SendEvent::ToastRequested(Toast::warning(
-                    err,
-                    Some(&fl!("generator-toast-failed")),
-                )))
+                Outcome::toast(Toast::warning(err, Some(&fl!("generator-toast-failed"))))
             }
         }
     }
@@ -342,21 +335,20 @@ impl SendView {
         if ctx.active_user != Some(&msg_uid) {
             return Outcome::None;
         }
-        let event = match result {
+        match result {
             Ok(()) => {
                 self.selection.clear();
                 self.pane.close();
-                SendEvent::ItemDeleted { uid: msg_uid }
+                Outcome::event(SendEvent::ItemDeleted { uid: msg_uid })
             }
             Err(err) => {
                 tracing::error!(send_id = %send_id, %err, "delete_send failed");
-                SendEvent::ToastRequested(Toast::error(
+                Outcome::toast(Toast::error(
                     fl!("send-toast-delete-failed-body"),
                     Some(&fl!("send-toast-delete-failed-title")),
                 ))
             }
-        };
-        Outcome::event(event)
+        }
     }
 }
 

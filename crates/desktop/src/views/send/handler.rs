@@ -14,10 +14,6 @@ impl App {
     pub(crate) fn handle_send_event(&mut self, event: SendEvent) -> Task<Message> {
         match event {
             SendEvent::AccountSwitcher(e) => self.handle_account_switcher_event(e),
-            SendEvent::ToastRequested(t) => {
-                self.push_toast(t);
-                Task::none()
-            }
             SendEvent::ItemSaved { uid } => {
                 self.push_toast(Toast::success(fl!("send-toast-item-saved"), None));
                 self.load_send_list_task(uid)

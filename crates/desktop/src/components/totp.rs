@@ -13,7 +13,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use bitwarden_vault::{TotpResponse, generate_totp};
 use iced::{
-    Alignment, Color, Element, Event, Fill, Length, Point, Rectangle, Renderer, Size, Vector,
+    Alignment, Element, Event, Fill, Length, Point, Rectangle, Renderer, Size, Vector,
     advanced::{
         Layout, Renderer as _, Shell, Widget,
         graphics::geometry::Renderer as _,
@@ -40,7 +40,6 @@ const RING_SIZE: f32 = 30.0;
 const RING_STROKE: f32 = 3.0;
 /// Flip the arc + code colour to red at this many seconds remaining.
 const URGENT_THRESHOLD: u32 = 5;
-const URGENT_COLOR: Color = Color::from_rgb(0.91, 0.28, 0.28);
 const CODE_FONT_SIZE: f32 = 18.0;
 /// Slack past the next-whole-second instant so we read the new integer
 /// second, not the old one.
@@ -205,12 +204,12 @@ where
         match self.current() {
             Some((resp, rem, urgent)) => {
                 let code_color = if urgent {
-                    URGENT_COLOR
+                    self.colors.danger
                 } else {
                     self.colors.text_primary
                 };
                 let arc_color = if urgent {
-                    URGENT_COLOR
+                    self.colors.danger
                 } else {
                     self.colors.accent
                 };

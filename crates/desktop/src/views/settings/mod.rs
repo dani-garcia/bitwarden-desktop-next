@@ -282,20 +282,7 @@ impl SettingsView {
     }
 
     fn content_pane<'a>(&'a self, colors: &'a AppColors) -> Element<'a, SettingsMessage, AppTheme> {
-        let header = row![
-            text(self.active.title())
-                .size(20)
-                .font(crate::APP_FONT_BOLD)
-                .color(colors.text_primary),
-            Space::new().width(Fill),
-            buttons::ghost_icon(
-                icons::X_LG.render(16.0, colors.text_primary),
-                colors.item_hover,
-            )
-            .padding([6, 6])
-            .on_press(SettingsMessage::Close),
-        ]
-        .align_y(Alignment::Center);
+        let header = modal::dialog_header(self.active.title(), SettingsMessage::Close, colors);
 
         let body = match self.active {
             CategoryKind::Security => tabs::security::view(&self.snapshot, colors),

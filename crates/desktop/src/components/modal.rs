@@ -15,7 +15,7 @@ use iced::{
 };
 
 use crate::{
-    components::buttons,
+    components::{buttons, icons},
     theme::{AppColors, AppTheme, RADIUS_LG},
 };
 
@@ -102,6 +102,61 @@ where
                 .shadow(shadow)
         });
     view(card, on_dismiss, progress)
+}
+
+/// Title row with a trailing close-X button — the standard header for
+/// app dialog modals (export / import / new folder / generator / settings
+/// content pane / generic 20-pt-titled modals). The X fires `on_close`.
+pub fn dialog_header<'a, M>(
+    title_text: impl Into<String>,
+    on_close: M,
+    colors: &AppColors,
+) -> Element<'a, M, AppTheme>
+where
+    M: Clone + 'a,
+{
+    row![
+        text(title_text.into())
+            .size(20)
+            .font(crate::APP_FONT_BOLD)
+            .color(colors.text_primary),
+        Space::new().width(Fill),
+        buttons::ghost_icon(
+            icons::X_LG.render(16.0, colors.text_primary),
+            colors.item_hover,
+        )
+        .padding([6, 6])
+        .on_press(on_close),
+    ]
+    .align_y(Alignment::Center)
+    .into()
+}
+
+/// Standard primary + secondary button row for app dialog footers
+/// (export / import / new folder / login self-hosted modal). The primary
+/// button is rendered enabled when `on_primary` is `Some(_)`, otherwise
+/// it's disabled (no `on_press`). Buttons are left-aligned with 8 px gap.
+pub fn footer_actions<'a, M>(
+    primary_label: impl Into<String>,
+    on_primary: Option<M>,
+    secondary_label: impl Into<String>,
+    on_secondary: M,
+) -> Element<'a, M, AppTheme>
+where
+    M: Clone + 'a,
+{
+    let mut primary_btn = buttons::primary(text(primary_label.into()).size(14)).padding([8, 20]);
+    if let Some(msg) = on_primary {
+        primary_btn = primary_btn.on_press(msg);
+    }
+    let secondary_btn = buttons::secondary(text(secondary_label.into()).size(14))
+        .on_press(on_secondary)
+        .padding([8, 20]);
+
+    row![primary_btn, secondary_btn]
+        .spacing(8)
+        .align_y(Alignment::Center)
+        .into()
 }
 
 /// Confirmation dialog with a title, body text, and primary/secondary

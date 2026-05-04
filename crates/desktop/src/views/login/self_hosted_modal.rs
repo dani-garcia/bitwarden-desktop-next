@@ -61,21 +61,14 @@ pub fn view<'a>(
             .into()
     };
 
-    let save_btn = buttons::primary(text(fl!("login-self-hosted-modal-save")).size(14))
-        .on_press(LoginMessage::SelfHostedSave)
-        .padding([8, 20]);
-    let cancel_btn = buttons::secondary(text(fl!("login-self-hosted-modal-cancel")).size(14))
-        .on_press(LoginMessage::SelfHostedCancel)
-        .padding([8, 20]);
+    let footer = modal::footer_actions(
+        fl!("login-self-hosted-modal-save"),
+        Some(LoginMessage::SelfHostedSave),
+        fl!("login-self-hosted-modal-cancel"),
+        LoginMessage::SelfHostedCancel,
+    );
 
-    let body = column![
-        header,
-        url_field,
-        info_row,
-        row![save_btn, cancel_btn]
-            .spacing(8)
-            .align_y(Alignment::Center),
-    ]
+    let body = column![header, url_field, info_row, footer]
     .spacing(16)
     .padding(Padding::from([20, 24]))
     .width(Fill);

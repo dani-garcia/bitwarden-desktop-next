@@ -22,6 +22,7 @@ use bitwarden_pm::PasswordManagerClient;
 use iced::Task;
 
 use crate::{
+    components::toast::Toast,
     domain::UserId,
     services::{
         favicon::FaviconService,
@@ -136,14 +137,17 @@ pub trait ViewTypes {
     type Event;
 }
 
-/// The return shape for a view's `update()`. Three mutually-exclusive cases:
+/// The return shape for a view's `update()`. Mutually-exclusive cases:
 ///
 /// - [`Outcome::None`] — the common case, nothing bubbles out.
 /// - [`Outcome::Task(t)`] — an async SDK call was spawned; wait for its
 ///   completion message.
 /// - [`Outcome::Event(e)`] — a declarative fact for App to route.
+/// - [`Outcome::Toast(t)`] — a toast to surface. Routed by [`dispatch`]
+///   directly so views don't need a `ToastRequested` event variant just to
+///   forward it.
 ///
-/// Use `event.into()` or `Outcome::spawn(...)` at call sites. App routes a
+/// Use `event.into()` or `Outcome::perform(...)` at call sites. App routes a
 /// view's `Outcome` via [`Outcome::dispatch`].
 ///
 /// The "both task and event" case is deliberately excluded — views that need
@@ -153,6 +157,7 @@ pub enum Outcome<V: ViewTypes> {
     None,
     Task(Task<V::Message>),
     Event(V::Event),
+    Toast(Toast),
 }
 
 impl<V: ViewTypes> Outcome<V> {
@@ -163,9 +168,15 @@ impl<V: ViewTypes> Outcome<V> {
     }
 
     /// Escape hatch for pre-built tasks (`Task::batch`, `Task::done`, widget
-    /// operations). Prefer [`Outcome::spawn`] for the async-block pattern.
+    /// operations). Prefer [`Outcome::perform`] for the async-block pattern.
     pub fn task(task: Task<V::Message>) -> Self {
         Self::Task(task)
+    }
+
+    /// Surface a toast. Routed directly by [`Outcome::dispatch`] — views
+    /// don't need a `ToastRequested` event variant just to forward it.
+    pub fn toast(toast: Toast) -> Self {
+        Self::Toast(toast)
     }
 
     /// `Some(e)` → `Event(e)`, `None` → `None`.
@@ -189,18 +200,29 @@ where
         Self::Task(Task::perform(future, on_complete))
     }
 
-    /// App-side router: lifts the view's `Message` via `wrap` and routes an
-    /// event through `handle_event`, returning a single `Task` for App to
-    /// schedule.
-    pub fn dispatch<TopMsg: Send + 'static>(
+    /// App-side router: lifts the view's `Message` via `wrap`, dispatches
+    /// events through `handle_event`, and forwards toasts directly via
+    /// `push_toast`. The `state` reference threads `&mut App` through both
+    /// closures so callers don't have to capture it twice (which would
+    /// borrow-check as overlapping `&mut self`).
+    pub fn dispatch<S, TopMsg: Send + 'static, F>(
         self,
+        state: &mut S,
         wrap: fn(V::Message) -> TopMsg,
-        handle_event: impl FnOnce(V::Event) -> Task<TopMsg>,
-    ) -> Task<TopMsg> {
+        handle_event: F,
+        push_toast: fn(&mut S, Toast),
+    ) -> Task<TopMsg>
+    where
+        F: FnOnce(&mut S, V::Event) -> Task<TopMsg>,
+    {
         match self {
             Self::None => Task::none(),
             Self::Task(t) => t.map(wrap),
-            Self::Event(e) => handle_event(e),
+            Self::Event(e) => handle_event(state, e),
+            Self::Toast(t) => {
+                push_toast(state, t);
+                Task::none()
+            }
         }
     }
 }

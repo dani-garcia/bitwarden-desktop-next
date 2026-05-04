@@ -74,6 +74,17 @@ impl FadeInOut {
         animation::extend(DEFAULT_DURATION);
     }
 
+    /// Start the closing transition and schedule `finalize` to fire once the
+    /// outro animation completes. The bottom-sheet pattern: the sheet keeps
+    /// painting its content while sliding off-screen; the finalize message
+    /// clears the underlying selection only after the animation is gone.
+    pub fn close_with_finalize<M: Clone + Send + 'static>(&mut self, finalize: M) -> Task<M> {
+        self.close();
+        Task::perform(tokio::time::sleep(DEFAULT_DURATION), move |_| {
+            finalize.clone()
+        })
+    }
+
     /// The logical open/closed value — flips immediately on `open()` /
     /// `close()` (the animation runs against this target).
     pub fn is_open(&self) -> bool {

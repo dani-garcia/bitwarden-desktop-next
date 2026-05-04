@@ -182,7 +182,7 @@ Always a folder:
 ### Domain (`domain.rs`)
 
 - Cross-cutting types only: `UserId`, `Screen`, `UnlockMethod`, `UnlockMethods`.
-- View-local domain lives in the owning view's `state.rs` or `mod.rs` (e.g. `SidebarFilter`, `NavSection`, `SidebarMode` in `views/vault/mod.rs`; the login view's local types in `views/login/`).
+- View-local domain lives in the owning view's `state.rs` or `mod.rs`. Examples: `VaultFilter` in [views/vault/state.rs](crates/desktop/src/views/vault/state.rs), `SendFilter` in [views/send/state.rs](crates/desktop/src/views/send/state.rs); login view's local types in `views/login/`. `SidebarMode` and `NavSection` live in [components/sidebar.rs](crates/desktop/src/components/sidebar.rs) (the only "view-aware" component, intentionally cross-cutting — it imports `VaultFilter` and `SendFilter` for nav buttons).
 - No logic beyond `impl` on the types (`Display`, `From`, parse).
 
 ## Context Bundles
@@ -193,7 +193,7 @@ Signatures with 5+ args use a bundle. Two bundles are defined in `app/ctx.rs`:
 // Update-time: services + session + sidebar selection + the open-overlay cell.
 // Used only by view update() paths.
 pub struct UpdateCtx<'a> {
-    pub client_manager: &'a Arc<ClientManager>,
+    pub client_manager: &'a mut ClientManager,
     pub active_user: Option<&'a UserId>,
     pub active_vault_filter: VaultFilter,
     pub active_send_filter: SendFilter,
@@ -238,30 +238,52 @@ pub enum Outcome<V: ViewTypes> {
     None,
     Task(Task<V::Message>),
     Event(V::Event),
+    Toast(Toast),
 }
 ```
 
-Three mutually-exclusive cases. Call sites use named constructors:
+Mutually-exclusive cases. Call sites use named constructors:
 
 ```rust
-Outcome::None                                           // fallthrough / no-op
-return Outcome::event(LoginEvent::Unlocked { uid });    // bubble a fact
-return Outcome::spawn(async move { ... }, |r| msg);     // spawn an SDK task
-return Outcome::from_option(maybe_event);               // Some/None → Event/None
+Outcome::None                                            // fallthrough / no-op
+return Outcome::event(LoginEvent::Unlocked { uid });     // bubble a fact
+return Outcome::perform(async move { ... }, |r| msg);    // spawn an SDK task
+return Outcome::toast(Toast::error(body, Some(&title))); // surface a toast directly
+return Outcome::from_option(maybe_event);                // Some/None → Event/None
 ```
 
 No `From<Event>` blanket impl — Rust's coherence rules conflict with the reflexive `From<T> for T` from stdlib. The named `Outcome::event(e)` constructor is the accepted equivalent.
 
-App-side routing uses the `dispatch` method:
-
-```rust
-Message::Vault(m) => self
-    .vault_view
-    .update(m, &uctx)
-    .dispatch(Message::Vault, |e| self.handle_vault_event(e)),
-```
+App-side routing uses the `dispatch` method (see "Router + cross-view dismissal" below for the full signature). `Outcome::Toast(t)` is routed by `dispatch` directly through `App::push_toast` — views construct toasts with `Outcome::toast(t)` rather than threading a `ToastRequested` event variant.
 
 **The `Both(Task, Event)` case is deliberately excluded.** When a view wants both to spawn a task *and* bubble an event (typically "SDK op succeeded → reload list + show success toast"), it emits a richer event (e.g. `VaultEvent::ItemSaved { uid }`) and App's handler fires both effects. The view reports the fact; App decides the follow-up.
+
+### `perform_with_active_client` helpers
+
+The most common shape is "extract the active user's `PasswordManagerClient`, run async, dispatch result". Helpers on both App and `UpdateCtx` capture that pattern:
+
+```rust
+// From app/helpers.rs — App-side, returns Task<Message>:
+self.perform_with_active_client(
+    move |client| client.list_ciphers(),
+    |uid, res| Message::vault(VaultMessage::ListLoaded(uid, res)),
+)
+
+// From app/ctx.rs — view-side, returns Outcome<Self>:
+ctx.perform_with_active_client(
+    move |client| client.save_cipher(view),
+    move |uid, res| VaultMessage::SaveCompleted(uid, res),
+)
+
+// Variant for callers with an explicit uid (from a message payload):
+ctx.perform_with_client(uid, move |client| client.full_cipher(id), …)
+```
+
+Internally these call `ClientManager::client_for(uid)` (cheap-clone, internally `Arc`-backed) and wrap `Task::perform` so the manager is never borrowed across `.await`.
+
+### `ClientExt` extension trait
+
+Async SDK calls live as methods on [`PasswordManagerClient`](crates/desktop/src/services/sdk/client_ext.rs) via the `ClientExt` trait — `client.list_ciphers().await`, `client.save_cipher(view).await`, `client.export_vault(format).await`, etc. Importing `services::sdk::ClientExt` brings them in scope. Unlock is the exception: it lives on `UnlockData` (returned by `ClientManager::unlock_data_for(uid)`) because it needs more than the client.
 
 ## Messages + Events
 
@@ -293,30 +315,50 @@ Async callbacks live inside sub-messages, not at the top level. `LoginMessage::U
 
 ```rust
 pub enum Message {
-    Login(LoginMessage),
-    Vault(VaultMessage),
-    TitleBar(TitleBarMessage),
+    View(ViewMessage),          // per-view messages, fanned out below
     About(AboutMessage),
-    Settings(SettingsMessage),
     Window(WindowMessage),      // per-window OS events
     System(SystemMessage),      // MudaEvent, TrayClick, ThemeChanged, etc.
+    Sidebar(SidebarMessage),
+    Magnify(MagnifyMessage),
     Favicon(FaviconMessage),    // fetch completions
+    AnimationTick,              // 60 fps tick while any animation is running
+}
+
+pub enum ViewMessage {
+    Login(LoginMessage),
+    Vault(VaultMessage),
+    Send(SendMessage),
+    TitleBar(TitleBarMessage),
+    Settings(SettingsMessage),
+    Generator(GeneratorMessage),
+    Import(ImportMessage),
+    Export(ExportMessage),
+    NewFolder(NewFolderMessage),
 }
 ```
 
+`Message` builders (`Message::login(m)`, `Message::vault(m)`, …) are `fn` constants on `Message` so they can be passed to `dispatch` without a closure.
+
 ### Router + cross-view dismissal
 
-`App::update` is a pre-match dismissal block followed by the per-variant router:
+`App::update`'s `Message::View` arm has a pre-match dismissal block followed by the per-variant router:
 
 ```rust
-Message::Vault(m) => self
-    .views
-    .vault
-    .update(m, uctx)
-    .dispatch(Message::vault, |e| self.handle_vault_event(e)),
+ViewMessage::Vault(m) => {
+    let outcome = self.views.vault.update(m, uctx);
+    outcome.dispatch(
+        self,
+        Message::vault,
+        |s, e| s.handle_vault_event(e),
+        App::push_toast,
+    )
+}
 ```
 
-[`Outcome::dispatch`](crates/desktop/src/app/ctx.rs) lifts the view's local message type via `wrap` and routes events through `handle_event`. The pre-match block is **load-bearing**: any login/vault message dismisses the title-bar menu, and any title-bar message dismisses the login/vault dropdowns. Without it, an accidental menu click from the vault would leave the account-switcher dropdown open.
+[`Outcome::dispatch`](crates/desktop/src/app/ctx.rs) takes `&mut S` (the App) and four arguments: the message wrapper (`fn(V::Message) -> TopMsg`), an event-handler closure (`FnOnce(&mut S, V::Event) -> Task<TopMsg>`), and a toast-router fn pointer (`fn(&mut S, Toast)`). The `&mut S` pass-through is required because the borrow checker can't hold two `&mut self`-capturing closures simultaneously. `Outcome::Toast(t)` is routed directly via `push_toast` — views construct toasts with `Outcome::toast(t)` rather than threading a `ToastRequested` event variant.
+
+The pre-match block is **load-bearing**: any non-titlebar view message dismisses the title-bar menu, and any title-bar message dismisses other overlays (AccountSwitcher / ServerSelector / NewItemMenu). Without it, an accidental menu click from the vault would leave the account-switcher dropdown open.
 
 ## Cross-Cutting Rules
 
@@ -396,9 +438,6 @@ impl GeneratorView {
         Outcome::None
     }
 
-    /// Close any local overlays when a message destined for another view arrives.
-    pub fn dismiss_dropdowns(&mut self) {}
-
     pub fn view<'a>(
         &'a self,
         _ctx: &RenderCtx<'a>,
@@ -406,6 +445,17 @@ impl GeneratorView {
         iced::widget::text("Generator").into()
     }
 }
+```
+
+**Convention:** in every view-side method, `ctx` (the `UpdateCtx` or `RenderCtx`) is the first parameter after `&mut self` / `&self`. Per-message handlers split out of `update()` follow the same rule:
+
+```rust
+fn handle_save_completed(
+    &mut self,
+    ctx: &UpdateCtx<'_>,
+    msg_uid: UserId,
+    result: Result<…>,
+) -> Outcome<Self> { … }
 ```
 
 Register in `crates/desktop/src/views/mod.rs`:
@@ -423,45 +473,41 @@ pub enum Message {
 }
 ```
 
-### 3. Add the view struct field on `App` in `app/mod.rs`
+### 3. Add the view to `Views` in `app/mod.rs`
 
 ```rust
-pub struct App {
+pub struct Views {
     // existing fields...
-    pub(super) generator_view: generator::GeneratorView,
+    pub(super) generator: generator::GeneratorView,
+}
+
+impl Views {
+    pub fn new() -> Self {
+        Self {
+            // existing initializers...
+            generator: generator::GeneratorView::new(),
+        }
+    }
 }
 ```
 
-Initialize in `App::new()`: `generator_view: generator::GeneratorView::new(),`.
+The `Views` substruct exists so `App::update` can split borrows: the view-dispatch arm takes `&mut self.views` plus `&mut self.open_overlay` via `UpdateCtx`, while event handlers reborrow other App fields without overlap.
 
 ### 4. Add the router arm in `App::update`
 
 ```rust
-Message::Generator(m) => self
-    .views
-    .generator
-    .update(m, uctx)
-    .dispatch(Message::generator, |e| self.handle_generator_event(e)),
-```
-
-Add `Message::Generator(_)` to the cross-view dismissal pre-match block at the top of `App::update`, so an accidental click into the generator doesn't leave other views' overlays open. It looks like this:
-
-```rust
-match &message {
-    Message::Login(_) | Message::Vault(_) | Message::Generator(_) => {
-        self.title_bar.dismiss_menu();
-    }
-    Message::TitleBar(_) => {
-        self.login_view.dismiss_dropdowns();
-        self.vault_view.dismiss_dropdowns();
-        self.generator_view.dismiss_dropdowns(); // if the view has overlays
-    }
-    Message::Settings(_) => self.dismiss_all_overlays(),
-    Message::About(_) | Message::Window(_) | Message::System(_) | Message::Favicon(_) => {}
+ViewMessage::Generator(m) => {
+    let outcome = self.views.generator.update(m, uctx);
+    outcome.dispatch(
+        self,
+        Message::generator,
+        |s, e| s.handle_generator_event(e),
+        App::push_toast,
+    )
 }
 ```
 
-Only add a `dismiss_dropdowns()` hook for the new view if it owns overlays (dropdowns, popovers). Stateless views and simple forms don't need one.
+Cross-view dismissal lives at the top of the `Message::View` arm in `App::update`: a pre-match block closes the title-bar menu when a non-titlebar view message arrives, and closes other overlays (AccountSwitcher / ServerSelector / NewItemMenu) when a title-bar message arrives. New view types automatically participate — the block matches on titlebar-vs-others, not on a per-view enumeration, so you don't need to extend it for a typical new view.
 
 ### 5. Implement the event handler in `views/generator/handler.rs`
 

@@ -14,10 +14,7 @@ use bitwarden_vault::{CipherId, CipherListView, CipherType, CipherView};
 use iced::widget::pane_grid;
 
 use crate::{
-    components::{
-        account_switcher::{AccountSwitcherEvent, AccountSwitcherMessage},
-        toast::Toast,
-    },
+    components::account_switcher::{AccountSwitcherEvent, AccountSwitcherMessage},
     debug_fmt::{NoDebug, Summary},
     domain::UserId,
     services::{
@@ -98,7 +95,6 @@ pub enum VaultEvent {
     /// `App::handle_account_switcher_event` so login, vault, and send share
     /// one dispatch site.
     AccountSwitcher(AccountSwitcherEvent),
-    ToastRequested(Toast),
     /// A save completed successfully. App pushes a success toast and kicks
     /// off a list reload so the sidebar reflects renames / ownership moves.
     ItemSaved {

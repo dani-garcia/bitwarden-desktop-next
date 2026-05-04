@@ -12,10 +12,6 @@ impl App {
     pub(crate) fn handle_vault_event(&mut self, event: VaultEvent) -> Task<Message> {
         match event {
             VaultEvent::AccountSwitcher(e) => self.handle_account_switcher_event(e),
-            VaultEvent::ToastRequested(t) => {
-                self.push_toast(t);
-                Task::none()
-            }
             VaultEvent::ItemSaved { uid } => {
                 self.push_toast(Toast::success(fl!("vault-toast-item-saved"), None));
                 self.load_vault_list_task(uid)

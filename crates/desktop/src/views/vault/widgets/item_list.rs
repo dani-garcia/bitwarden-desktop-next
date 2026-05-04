@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use bitwarden_vault::{CipherListView, CipherListViewType};
 use iced::{
-    Alignment, Background, Border, Color, Element, Fill, Shadow,
+    Alignment, Color, Element, Fill,
     widget::{
         Space, column, container, image, row, scrollable, text,
         text::{Ellipsis, Wrapping},
@@ -97,32 +97,7 @@ pub fn view<'a>(
         ItemListMessage::Scrolled,
     )
     .height(Fill)
-    .style(|theme: &AppTheme, _status| scrollable::Style {
-        container: container::Style::default(),
-        vertical_rail: scrollable::Rail {
-            background: None,
-            border: Border::default(),
-            scroller: scrollable::Scroller {
-                background: Background::Color(theme.colors.item_hover),
-                border: Border::default().rounded(4),
-            },
-        },
-        horizontal_rail: scrollable::Rail {
-            background: None,
-            border: Border::default(),
-            scroller: scrollable::Scroller {
-                background: Background::Color(theme.colors.item_hover),
-                border: Border::default().rounded(4),
-            },
-        },
-        gap: None,
-        auto_scroll: scrollable::AutoScroll {
-            background: Background::Color(Color::TRANSPARENT),
-            border: Border::default(),
-            shadow: Shadow::default(),
-            icon: Color::TRANSPARENT,
-        },
-    });
+    .style(components::rail_scroll_style);
 
     column![table_header, header_divider, list]
         .width(Fill)

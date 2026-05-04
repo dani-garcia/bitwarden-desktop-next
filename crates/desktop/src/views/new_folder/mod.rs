@@ -11,16 +11,18 @@
 mod handler;
 
 use iced::{
-    Alignment, Element, Fill, Padding,
-    widget::{Space, column, container, row, text},
+    Element, Fill, Padding, Task,
+    widget::{self, column, container, text},
 };
 
 use crate::{
     app::{Outcome, UpdateCtx, ViewTypes},
-    components::{FadeInOut, buttons, icons, inputs, modal},
+    components::{FadeInOut, fade_in_out, inputs, modal},
     fl,
     theme::AppTheme,
 };
+
+pub const NAME_FIELD_ID: widget::Id = widget::Id::new("new-folder-name-field");
 
 // ── State ─────────────────────────────────────────────────────────────────
 
@@ -68,10 +70,11 @@ impl NewFolderView {
         }
     }
 
-    pub fn open(&mut self) {
+    pub fn open(&mut self) -> Task<NewFolderMessage> {
         self.fade.open();
         self.name.clear();
         self.saving = false;
+        fade_in_out::focus_after_open(NAME_FIELD_ID.clone())
     }
 
     pub fn update(&mut self, msg: NewFolderMessage, _ctx: UpdateCtx<'_>) -> Outcome<Self> {
@@ -112,20 +115,11 @@ impl NewFolderView {
     ) -> Option<Element<'a, NewFolderMessage, AppTheme>> {
         let progress = self.fade.progress_if_visible()?;
 
-        let header = row![
-            text(fl!("new-folder-modal-title"))
-                .size(20)
-                .font(crate::APP_FONT_BOLD)
-                .color(ctx.colors.text_primary),
-            Space::new().width(Fill),
-            buttons::ghost_icon(
-                icons::X_LG.render(16.0, ctx.colors.text_primary),
-                ctx.colors.item_hover,
-            )
-            .padding([6, 6])
-            .on_press(NewFolderMessage::Close),
-        ]
-        .align_y(Alignment::Center);
+        let header = modal::dialog_header(
+            fl!("new-folder-modal-title"),
+            NewFolderMessage::Close,
+            ctx.colors,
+        );
 
         // Modal sits on `card_bg`, so the floating-label chip needs the
         // matching surface colour to blend cleanly.
@@ -134,6 +128,7 @@ impl NewFolderView {
             self.name.as_str(),
             ctx.colors,
         )
+        .id(NAME_FIELD_ID.clone())
         .chip_bg(|c| c.card_bg)
         .disabled(self.saving);
         if !self.saving {
@@ -147,23 +142,15 @@ impl NewFolderView {
             .color(ctx.colors.text_secondary);
 
         let submit_disabled = self.saving || self.name.trim().is_empty();
-        let mut submit_btn =
-            buttons::primary(text(fl!("new-folder-modal-save")).size(14)).padding([8, 20]);
-        if !submit_disabled {
-            submit_btn = submit_btn.on_press(NewFolderMessage::Submit);
-        }
-        let cancel_btn = buttons::secondary(text(fl!("new-folder-modal-cancel")).size(14))
-            .on_press(NewFolderMessage::Close)
-            .padding([8, 20]);
+        let on_submit = (!submit_disabled).then_some(NewFolderMessage::Submit);
+        let footer = modal::footer_actions(
+            fl!("new-folder-modal-save"),
+            on_submit,
+            fl!("new-folder-modal-cancel"),
+            NewFolderMessage::Close,
+        );
 
-        let body = column![
-            header,
-            name_field,
-            helper,
-            row![submit_btn, cancel_btn]
-                .spacing(8)
-                .align_y(Alignment::Center),
-        ]
+        let body = column![header, name_field, helper, footer]
         .spacing(14)
         .padding(Padding::from([20, 24]))
         .width(Fill);

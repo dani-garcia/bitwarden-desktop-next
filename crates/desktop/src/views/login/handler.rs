@@ -25,10 +25,6 @@ impl App {
                 ])
             }
             LoginEvent::AccountSwitcher(e) => self.handle_account_switcher_event(e),
-            LoginEvent::ToastRequested(t) => {
-                self.push_toast(t);
-                Task::none()
-            }
         }
     }
 

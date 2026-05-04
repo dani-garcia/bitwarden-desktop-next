@@ -65,7 +65,7 @@ fn main() -> iced::Result {
 
     select_backend();
 
-    services::sdk::ClientManager::verify_data_dir();
+    services::sdk::verify_data_dir();
 
     iced::daemon(App::new, App::update, App::view)
         .settings(iced::Settings {

@@ -10,7 +10,7 @@ use crate::{
 };
 
 use super::{
-    super::{GeneratorMessage, PasswordForm, section_heading},
+    super::{GeneratorMessage, state::PasswordForm, view::section_heading},
     tab_checkbox,
 };
 

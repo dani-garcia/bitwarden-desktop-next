@@ -24,10 +24,6 @@ impl App {
                 // generated usernames feeding future credentials).
                 self.copy_and_toast(value, Sensitivity::Sensitive, fl!("generator-toast-copied"))
             }
-            GeneratorEvent::Toast(t) => {
-                self.push_toast(t);
-                Task::none()
-            }
         }
     }
 

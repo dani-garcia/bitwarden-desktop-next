@@ -14,12 +14,12 @@
 use bitwarden_core::OrganizationId;
 use iced::{
     Alignment, Element, Fill, Padding,
-    widget::{self, Space, column, container, row, stack, text},
+    widget::{self, column, container, row, stack, text},
 };
 
 use crate::{
     app::{Outcome, UpdateCtx, ViewTypes},
-    components::{FadeInOut, buttons, fade_in_out, icons, inputs, modal},
+    components::{FadeInOut, fade_in_out, icons, inputs, modal},
     domain::UserId,
     fl,
     services::sdk::{ClientExt, Organization},
@@ -362,20 +362,7 @@ impl ExportView {
         colors: &'a AppColors,
         progress: f32,
     ) -> Element<'a, ExportMessage, AppTheme> {
-        let header = row![
-            text(fl!("export-modal-title"))
-                .size(20)
-                .font(crate::APP_FONT_BOLD)
-                .color(colors.text_primary),
-            Space::new().width(Fill),
-            buttons::ghost_icon(
-                icons::X_LG.render(16.0, colors.text_primary),
-                colors.item_hover,
-            )
-            .padding([6, 6])
-            .on_press(ExportMessage::Close),
-        ]
-        .align_y(Alignment::Center);
+        let header = modal::dialog_header(fl!("export-modal-title"), ExportMessage::Close, colors);
 
         let banner = self.banner(colors);
 
@@ -422,21 +409,16 @@ impl ExportView {
         let continue_disabled = matches!(self.selected_format, ExportFormatChoice::EncryptedJson)
             && self.file_password.is_empty();
 
-        let mut continue_btn =
-            buttons::primary(text(fl!("export-modal-continue")).size(14)).padding([8, 20]);
-        if !continue_disabled {
-            continue_btn = continue_btn.on_press(ExportMessage::Continue);
-        }
-        let cancel_btn = buttons::secondary(text(fl!("export-modal-cancel")).size(14))
-            .on_press(ExportMessage::Close)
-            .padding([8, 20]);
+        let on_continue = (!continue_disabled).then_some(ExportMessage::Continue);
+        let footer = modal::footer_actions(
+            fl!("export-modal-continue"),
+            on_continue,
+            fl!("export-modal-cancel"),
+            ExportMessage::Close,
+        );
 
         let body = body
-            .push(
-                row![continue_btn, cancel_btn]
-                    .spacing(8)
-                    .align_y(Alignment::Center),
-            )
+            .push(footer)
             .padding(Padding::from([20, 24]))
             .width(Fill);
 
@@ -493,20 +475,11 @@ impl ExportView {
         colors: &'a AppColors,
         progress: f32,
     ) -> Element<'a, ExportMessage, AppTheme> {
-        let header = row![
-            text(fl!("export-confirm-title"))
-                .size(20)
-                .font(crate::APP_FONT_BOLD)
-                .color(colors.text_primary),
-            Space::new().width(Fill),
-            buttons::ghost_icon(
-                icons::X_LG.render(16.0, colors.text_primary),
-                colors.item_hover,
-            )
-            .padding([6, 6])
-            .on_press(ExportMessage::BackToCompose),
-        ]
-        .align_y(Alignment::Center);
+        let header = modal::dialog_header(
+            fl!("export-confirm-title"),
+            ExportMessage::BackToCompose,
+            colors,
+        );
 
         // `fl!` is a proc macro that requires a literal id, so the
         // format → key mapping has to live in match arms here. Mirrors
@@ -541,24 +514,15 @@ impl ExportView {
             .color(colors.text_secondary);
 
         let confirm_disabled = self.master_password.is_empty() || self.validating;
-        let mut confirm_btn =
-            buttons::primary(text(fl!("export-modal-continue")).size(14)).padding([8, 20]);
-        if !confirm_disabled {
-            confirm_btn = confirm_btn.on_press(ExportMessage::ConfirmSubmit);
-        }
-        let cancel_btn = buttons::secondary(text(fl!("export-modal-cancel")).size(14))
-            .on_press(ExportMessage::BackToCompose)
-            .padding([8, 20]);
+        let on_confirm = (!confirm_disabled).then_some(ExportMessage::ConfirmSubmit);
+        let footer = modal::footer_actions(
+            fl!("export-modal-continue"),
+            on_confirm,
+            fl!("export-modal-cancel"),
+            ExportMessage::BackToCompose,
+        );
 
-        let body = column![
-            header,
-            warning,
-            password_field,
-            helper,
-            row![confirm_btn, cancel_btn]
-                .spacing(8)
-                .align_y(Alignment::Center),
-        ]
+        let body = column![header, warning, password_field, helper, footer]
         .spacing(16)
         .padding(Padding::from([20, 24]))
         .width(Fill);

@@ -17,11 +17,72 @@ pub(crate) mod virtual_list;
 pub(crate) use fade_in_out::FadeInOut;
 
 use iced::{
-    Color, Element, Fill, Padding, Shadow,
-    widget::{container, rule},
+    Background, Border, Color, Element, Fill, Padding, Shadow, Vector,
+    widget::{container, rule, scrollable},
 };
 
 use crate::theme::{AppTheme, RADIUS_LG};
+
+/// Subtle drop shadow used by `styled_card`, the generator history-row, and
+/// the send-edit section card. A 1px-down soft shadow at 20% black; pulls
+/// cards a hair off their background without a heavy halo.
+pub const CARD_SHADOW: Shadow = Shadow {
+    color: Color {
+        r: 0.0,
+        g: 0.0,
+        b: 0.0,
+        a: 0.20,
+    },
+    offset: Vector::new(0.0, 1.0),
+    blur_radius: 2.0,
+};
+
+/// Right-pane shell shared by the cipher detail, cipher edit, and send edit
+/// panes: full-fill container painted with `card_bg` and rounded only at the
+/// top so it sits cleanly under the title bar without a visible top edge
+/// while the bottom flushes against the window. Caller composes the
+/// header + body + footer column inside.
+pub fn rounded_top_pane<'a, M: 'a>(
+    content: impl Into<Element<'a, M, AppTheme>>,
+    top_radius: f32,
+) -> Element<'a, M, AppTheme> {
+    container(content)
+        .width(Fill)
+        .height(Fill)
+        .style(move |theme: &AppTheme| {
+            container::Style::default()
+                .background(theme.colors.card_bg)
+                .border(Border::default().rounded(iced::border::top(top_radius)))
+        })
+        .into()
+}
+
+/// Style fn for `scrollable`'s muted-rail look used by every list/scroller in
+/// the main window: transparent rail, accent-on-hover thumb tinted from
+/// `item_hover`, no overscroll affordance. Use as
+/// `.style(components::rail_scroll_style)`.
+pub fn rail_scroll_style(theme: &AppTheme, _status: scrollable::Status) -> scrollable::Style {
+    let rail = scrollable::Rail {
+        background: None,
+        border: Border::default(),
+        scroller: scrollable::Scroller {
+            background: Background::Color(theme.colors.item_hover),
+            border: Border::default().rounded(4),
+        },
+    };
+    scrollable::Style {
+        container: container::Style::default(),
+        vertical_rail: rail,
+        horizontal_rail: rail,
+        gap: None,
+        auto_scroll: scrollable::AutoScroll {
+            background: Background::Color(Color::TRANSPARENT),
+            border: Border::default(),
+            shadow: Shadow::default(),
+            icon: Color::TRANSPARENT,
+        },
+    }
+}
 
 pub fn separator_h<'a, M: 'a>() -> Element<'a, M, AppTheme> {
     rule::horizontal(1)
@@ -55,11 +116,7 @@ pub fn styled_card<'a, M: 'a>(
             container::Style::default()
                 .background(theme.colors.background)
                 .border(iced::border::rounded(RADIUS_LG))
-                .shadow(Shadow {
-                    color: Color::from_rgba(0.0, 0.0, 0.0, 0.20),
-                    offset: iced::Vector::new(0.0, 1.0),
-                    blur_radius: 2.0,
-                })
+                .shadow(CARD_SHADOW)
         })
         .into()
 }

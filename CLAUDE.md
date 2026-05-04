@@ -75,6 +75,22 @@ The `gpu` cargo feature (on by default) compiles wgpu into the binary. The runti
 ### Widget IDs
 - Widget IDs referenced from more than one file live as `pub const <NAME>: widget::Id = widget::Id::new("...")` in the widget's own module (e.g. `views/vault/widgets/search_bar.rs::SEARCH_ID`).
 
+### MVU + SDK
+- `ClientManager` ([services/sdk/mod.rs](crates/desktop/src/services/sdk/mod.rs)) holds plain `HashMap<UserId, _>`s, no internal locking. Mutating methods take `&mut self` and run sync from `App::update`. Async SDK calls go through `ClientExt` methods on `PasswordManagerClient` (cheap-clone, `Arc`-internal), so the manager is never borrowed across `.await`. Use `ClientManager::client_for(uid)` to get the handle, or `unlock_data_for(uid)` / `validation_data_for(uid)` when the call needs more than the client.
+- The "extract per-user client + run async + dispatch result" shape is `App::perform_with_active_client` / `App::perform_with_client` (returning `Task<Message>`) and the matching `UpdateCtx::perform_with_active_client` / `perform_with_client` (returning `Outcome<V>`). Reach for these before re-implementing.
+- `Outcome::perform(future, on_complete)` is the analogue of `Task::perform`. `Outcome::toast(t)` surfaces a toast via `dispatch` directly — views don't need a `ToastRequested` event variant.
+- `ctx` is the first parameter after `self` in every view handler / view function. Both `UpdateCtx` and `RenderCtx`.
+
+### Standard helpers
+- `modal::dialog_header(title, on_close, &AppColors)` — title + close-X row at 20pt.
+- `modal::footer_actions(primary, on_primary: Option<M>, secondary, on_secondary)` — left-aligned primary/secondary button row. Disable the primary by passing `None`.
+- `modal::dialog(width, height, bg_picker, progress, body, on_dismiss)` — card-shape modal shell.
+- `components::rail_scroll_style` — `.style(...)` fn for the muted-rail scrollable look.
+- `components::rounded_top_pane(content, top_radius)` — right-pane shell painted with `card_bg`.
+- `components::CARD_SHADOW` — subtle 1px-down 20% black shadow used by `styled_card` and the generator history-row.
+- `FadeInOut::close_with_finalize(msg)` — start the fade-out and emit `msg` once the animation duration elapses.
+- `fade_in_out::focus_after_open(id)` — `Task` that focuses a widget after the fade-in animation settles.
+
 ## Iced Gotchas
 
 - `button::Style` / `rule::Style` require `snap: false` — missing it produces a confusing compile error pointing at the struct literal, not the field.

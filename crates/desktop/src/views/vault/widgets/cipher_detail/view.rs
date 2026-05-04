@@ -92,18 +92,10 @@ pub fn view<'a>(
     let body = scrollable(column(sections).spacing(4).padding([12, 20])).height(Fill);
     let bottom = bottom_bar(colors);
 
-    container(column![header, body, bottom].spacing(0).height(Fill))
-        .width(Fill)
-        .height(Fill)
-        .style(move |theme: &AppTheme| {
-            container::Style::default()
-                .background(theme.colors.card_bg)
-                .border(
-                    iced::Border::default()
-                        .rounded(iced::border::top_left(top_radius).top_right(top_radius)),
-                )
-        })
-        .into()
+    components::rounded_top_pane(
+        column![header, body, bottom].spacing(0).height(Fill),
+        top_radius,
+    )
 }
 
 fn header_row<'a>(

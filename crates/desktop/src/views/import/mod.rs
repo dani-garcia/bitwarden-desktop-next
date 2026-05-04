@@ -8,12 +8,12 @@
 use bitwarden_core::OrganizationId;
 use iced::{
     Alignment, Element, Fill, Length, Padding,
-    widget::{Space, column, container, row, text, text_editor},
+    widget::{column, container, row, text, text_editor},
 };
 
 use crate::{
     app::{Outcome, UpdateCtx, ViewTypes},
-    components::{FadeInOut, buttons, icons, inputs, modal},
+    components::{FadeInOut, buttons, inputs, modal},
     fl,
     services::sdk::{Collection, Organization},
     theme::{AppColors, AppTheme, RADIUS_LG},
@@ -508,20 +508,11 @@ impl ImportView {
     ) -> Option<Element<'a, ImportMessage, AppTheme>> {
         let progress = self.fade.progress_if_visible()?;
 
-        let header = row![
-            text(fl!("import-modal-title"))
-                .size(20)
-                .font(crate::APP_FONT_BOLD)
-                .color(ctx.colors.text_primary),
-            Space::new().width(Fill),
-            buttons::ghost_icon(
-                icons::X_LG.render(16.0, ctx.colors.text_primary),
-                ctx.colors.item_hover,
-            )
-            .padding([6, 6])
-            .on_press(ImportMessage::Close),
-        ]
-        .align_y(Alignment::Center);
+        let header = modal::dialog_header(
+            fl!("import-modal-title"),
+            ImportMessage::Close,
+            ctx.colors,
+        );
 
         let vault_picker = inputs::select_field(
             fl!("import-modal-vault-label"),
@@ -601,21 +592,14 @@ impl ImportView {
             ctx.colors,
         );
 
-        let submit_btn = buttons::primary(text(fl!("import-modal-submit")).size(14))
-            .on_press(ImportMessage::Submit)
-            .padding([8, 20]);
-        let cancel_btn = buttons::secondary(text(fl!("import-modal-cancel")).size(14))
-            .on_press(ImportMessage::Close)
-            .padding([8, 20]);
+        let footer = modal::footer_actions(
+            fl!("import-modal-submit"),
+            Some(ImportMessage::Submit),
+            fl!("import-modal-cancel"),
+            ImportMessage::Close,
+        );
 
-        let body = column![
-            header,
-            destination_card,
-            data_card,
-            row![submit_btn, cancel_btn]
-                .spacing(8)
-                .align_y(Alignment::Center),
-        ]
+        let body = column![header, destination_card, data_card, footer]
         .spacing(16)
         .padding(Padding::from([20, 24]))
         .width(Fill);

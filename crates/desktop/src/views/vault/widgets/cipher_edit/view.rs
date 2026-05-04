@@ -7,7 +7,7 @@ use iced::{
 };
 
 use crate::{
-    components::{self, buttons, icons},
+    components::{self, buttons, icons, modal},
     fl,
     theme::{AppColors, AppTheme},
 };
@@ -98,18 +98,10 @@ pub fn view<'a>(
     let body = scrollable(column(sections).spacing(4).padding([12, 20])).height(Fill);
     let bottom_bar = bottom_bar(form, colors);
 
-    container(column![header, body, bottom_bar].spacing(0).height(Fill))
-        .width(Fill)
-        .height(Fill)
-        .style(move |theme: &AppTheme| {
-            container::Style::default()
-                .background(theme.colors.card_bg)
-                .border(
-                    iced::Border::default()
-                        .rounded(iced::border::top_left(top_radius).top_right(top_radius)),
-                )
-        })
-        .into()
+    components::rounded_top_pane(
+        column![header, body, bottom_bar].spacing(0).height(Fill),
+        top_radius,
+    )
 }
 
 fn header_row<'a>(
@@ -154,23 +146,18 @@ fn bottom_bar<'a>(
     } else {
         fl!("form-save")
     };
-    let mut save_btn = buttons::primary(text(save_label).size(14)).padding([8, 20]);
-    if !form.saving {
-        save_btn = save_btn.on_press(CipherEditMessage::Save);
-    }
+    let on_save = (!form.saving).then_some(CipherEditMessage::Save);
+    let actions = modal::footer_actions(
+        save_label,
+        on_save,
+        fl!("form-cancel"),
+        CipherEditMessage::Cancel,
+    );
 
-    let cancel_btn = buttons::secondary(text(fl!("form-cancel")).size(14))
-        .on_press(CipherEditMessage::Cancel)
-        .padding([8, 20]);
-
-    let bar = container(
-        row![save_btn, cancel_btn]
-            .spacing(8)
-            .align_y(Alignment::Center),
-    )
-    .width(Fill)
-    .padding([8, 20])
-    .style(|theme: &AppTheme| container::Style::default().background(theme.colors.background));
+    let bar = container(actions)
+        .width(Fill)
+        .padding([8, 20])
+        .style(|theme: &AppTheme| container::Style::default().background(theme.colors.background));
 
     column![components::separator_h(), bar].spacing(0).into()
 }

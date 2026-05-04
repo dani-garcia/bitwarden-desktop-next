@@ -1,0 +1,48 @@
+//! Public data types exposed by the sdk module.
+//!
+//! Plain `Clone`/`Debug` POD: every field is read by the UI directly. Kept
+//! separate from the manager so callers needing just a type don't pull in
+//! the full `ClientManager` surface.
+
+use bitwarden_collections::collection::CollectionId;
+use bitwarden_core::{OrganizationId, UserId};
+use bitwarden_crypto::UnsignedSharedKey;
+use serde::Deserialize;
+
+/// App-level org metadata. The SDK has no `Repository<Organization>` for
+/// this UI-only stub, so we read it from `mock.json` and hold it here.
+#[derive(Deserialize, Clone, Debug)]
+pub struct Organization {
+    pub id: OrganizationId,
+    pub name: String,
+    /// Org's symmetric key, wrapped with the user's public key. Replayed on
+    /// `unlock` via `initialize_org_crypto`. `None` for orgs added without a key.
+    #[serde(default)]
+    pub wrapped_key: Option<UnsignedSharedKey>,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct Collection {
+    pub id: CollectionId,
+    pub organization_id: OrganizationId,
+    pub name: String,
+}
+
+/// UI-facing snapshot of a single user account. App caches one
+/// `Vec<AccountEntry>` and hands it to views via `RenderCtx::accounts`.
+pub struct AccountEntry {
+    pub user_id: UserId,
+    pub email: String,
+    #[expect(dead_code)] // Not displayed yet; reserved for future avatar / profile views.
+    pub display_name: String,
+    pub server_url: String,
+    pub locked: bool,
+}
+
+/// One entry in the in-memory generator history. Flat across password /
+/// passphrase / username — matches the official Bitwarden client.
+#[derive(Debug, Clone)]
+pub struct PasswordHistoryEntry {
+    pub value: String,
+    pub created: chrono::DateTime<chrono::Utc>,
+}

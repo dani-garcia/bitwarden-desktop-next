@@ -6,10 +6,7 @@ use bitwarden_send::{SendId, SendView as SdkSendView};
 use iced::widget::pane_grid;
 
 use crate::{
-    components::{
-        account_switcher::{AccountSwitcherEvent, AccountSwitcherMessage},
-        toast::Toast,
-    },
+    components::account_switcher::{AccountSwitcherEvent, AccountSwitcherMessage},
     debug_fmt::{NoDebug, Summary},
     domain::UserId,
     services::clipboard::Sensitivity,
@@ -49,7 +46,6 @@ pub enum SendMessage {
 #[derive(Debug, Clone)]
 pub enum SendEvent {
     AccountSwitcher(AccountSwitcherEvent),
-    ToastRequested(Toast),
     ItemSaved {
         uid: UserId,
     },

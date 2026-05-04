@@ -297,7 +297,7 @@ Style closures on the row widgets capture an `Rc<Cell<ToastVisuals>>` at constru
 - Translation files under `assets/i18n/{lang}/bitwarden_desktop_next.ftl` — colocated with other binary resources (fonts, SVGs) because they're assets, not source code.
 - `crates/desktop/i18n.toml` points at `assets_dir = "../../assets/i18n"`; the `#[derive(RustEmbed)] #[folder = "../../assets/i18n"]` struct mirrors the same path. Both macros resolve relative to `CARGO_MANIFEST_DIR`. The compile-time `fl!` check reads `i18n.toml` + the `.ftl` files via the same resolution, verified in `i18n-embed-fl/src/lib.rs`.
 - File stem must match the crate identifier with underscores (`bitwarden_desktop_next.ftl`, not `bitwarden-desktop-next.ftl`) — `i18n-embed-fl` converts hyphens in the crate name but reads the file by the converted name.
-- Static loader at `crate::i18n::LANGUAGE_LOADER` (`std::sync::LazyLock<FluentLanguageLoader>`), initialized once from `main()` via `i18n::init()` before `iced::daemon` starts.
+- Static loader at `crate::services::i18n::LANGUAGE_LOADER` (`std::sync::LazyLock<FluentLanguageLoader>`), initialized once from `main()` via `services::i18n::init()` before `iced::daemon` starts.
 
 **Convenience `fl!` macro** at the crate root (`main.rs`):
 
@@ -305,10 +305,10 @@ Style closures on the row widgets capture an `Rc<Cell<ToastVisuals>>` at constru
 #[macro_export]
 macro_rules! fl {
     ($message_id:literal) => {{
-        i18n_embed_fl::fl!($crate::i18n::LANGUAGE_LOADER, $message_id)
+        i18n_embed_fl::fl!($crate::services::i18n::LANGUAGE_LOADER, $message_id)
     }};
     ($message_id:literal, $($args:expr),*) => {{
-        i18n_embed_fl::fl!($crate::i18n::LANGUAGE_LOADER, $message_id, $($args),*)
+        i18n_embed_fl::fl!($crate::services::i18n::LANGUAGE_LOADER, $message_id, $($args),*)
     }};
 }
 ```

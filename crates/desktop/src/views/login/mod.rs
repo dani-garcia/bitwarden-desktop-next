@@ -148,8 +148,6 @@ pub enum LoginEvent {
     /// only by `LoginMessage::LoginCompleted` which is a stub until SDK
     /// login support lands.
     LoggedIn { uid: UserId },
-    /// LoginView wants to show a cross-cutting toast notification.
-    ToastRequested(Toast),
     /// Account-switcher action. Forwarded verbatim to
     /// `App::handle_account_switcher_event` so login, vault, and send share
     /// one dispatch site.
@@ -277,10 +275,10 @@ impl LoginView {
                             %err,
                             "SDK initialize_user_crypto failed"
                         );
-                        Outcome::event(LoginEvent::ToastRequested(Toast::error(
+                        Outcome::toast(Toast::error(
                             crate::fl!("login-toast-unlock-failed-body"),
                             Some(&crate::fl!("login-toast-unlock-failed-title")),
-                        )))
+                        ))
                     }
                 };
             }
@@ -295,18 +293,18 @@ impl LoginView {
                 if let AuthPage::Unlock { pin_input, .. } = &mut self.auth_page {
                     pin_input.clear();
                 }
-                return Outcome::event(LoginEvent::ToastRequested(Toast::warning(
+                return Outcome::toast(Toast::warning(
                     crate::fl!("login-toast-pin-unsupported"),
                     None,
-                )));
+                ));
             }
 
             // ── Unlock: biometrics ─────────────────────────────────────────
             LoginMessage::UnlockWithBiometrics => {
-                return Outcome::event(LoginEvent::ToastRequested(Toast::warning(
+                return Outcome::toast(Toast::warning(
                     crate::fl!("login-toast-biometrics-unsupported"),
                     None,
-                )));
+                ));
             }
 
             // ── Switch unlock method ───────────────────────────────────────
@@ -376,10 +374,10 @@ impl LoginView {
                         // sanitized message to the user — see the matching
                         // treatment in `UnlockCompleted`.
                         tracing::warn!(uid = %msg_uid, %err, "SDK login failed");
-                        Outcome::event(LoginEvent::ToastRequested(Toast::error(
+                        Outcome::toast(Toast::error(
                             crate::fl!("login-toast-login-failed-body"),
                             Some(&crate::fl!("login-toast-login-failed-title")),
-                        )))
+                        ))
                     }
                 };
             }

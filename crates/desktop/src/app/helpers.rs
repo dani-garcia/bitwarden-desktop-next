@@ -9,7 +9,7 @@ use crate::{
     services::{clipboard::Sensitivity, sdk::AccountEntry},
 };
 
-use super::{App, Message, WindowKind};
+use super::{App, Message, window::WindowKind};
 
 impl App {
     pub(crate) fn main_window_id(&self) -> iced::window::Id {
