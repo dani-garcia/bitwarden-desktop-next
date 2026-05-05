@@ -1,6 +1,12 @@
 //! Drop down menu widget
 //!
-//! Copied from iced_aw 0.13.1 to allow local modifications.
+//! Copied from iced_aw 0.13.1 to allow local modifications. The local
+//! customisations on top of upstream are: extra `Alignment` variants
+//! (`BelowLeft` / `BelowRight` / `AboveRight`), an auto-shadow wrap in
+//! [`DropDown::new`], and a slide animation driven by an internal
+//! [`lilt::Animated`] that participates in the global animation watermark.
+
+use std::time::{Duration, Instant};
 
 use iced::{
     Border, Color, Element, Event, Length, Point, Rectangle, Shadow, Size, Vector,
@@ -9,14 +15,26 @@ use iced::{
         layout::{Limits, Node},
         mouse::{self, Cursor},
         overlay, renderer,
-        widget::{self, Operation, Tree},
+        widget::{self, Operation, Tree, tree},
     },
     keyboard::{self, key::Named},
     touch,
     widget::container,
 };
+use lilt::{Animated, Easing};
 
-use crate::theme::RADIUS_LG;
+use crate::{services::animation, theme::RADIUS_LG};
+
+/// Open animation duration. Snappier than the 180 ms modal slide because
+/// dropdowns travel a shorter visual distance and a menu shouldn't keep
+/// the user waiting before they can act on it. Close is a snap.
+const ANIM_DURATION_MS: f32 = 80.0;
+const ANIM_DURATION: Duration = Duration::from_millis(ANIM_DURATION_MS as u64);
+
+/// Vertical slide distance. The panel starts offset by this amount along
+/// its open direction (above for "below" alignments, below for "above")
+/// and animates to its anchored position.
+const SLIDE_PX: f32 = 8.0;
 
 /// Drop shadow applied by [`DropDown::new`] behind panels. Border radius
 /// matches [`RADIUS_LG`] so the shadow follows panels' rounded corners.
@@ -122,6 +140,23 @@ where
     alignment: Alignment,
     offset: Offset,
     expanded: bool,
+}
+
+/// Per-instance state held in iced's widget tree. Drives the slide
+/// animation and keeps the overlay mounted through the close transition.
+#[derive(Debug)]
+struct AnimState {
+    anim: Animated<bool, Instant>,
+}
+
+impl Default for AnimState {
+    fn default() -> Self {
+        Self {
+            anim: Animated::new(false)
+                .duration(ANIM_DURATION_MS)
+                .easing(Easing::EaseOut),
+        }
+    }
 }
 
 impl<'a, Message, Theme, Renderer> DropDown<'a, Message, Theme, Renderer>
@@ -247,8 +282,29 @@ where
         vec![Tree::new(&self.underlay), Tree::new(&self.overlay)]
     }
 
+    fn tag(&self) -> tree::Tag {
+        tree::Tag::of::<AnimState>()
+    }
+
+    fn state(&self) -> tree::State {
+        tree::State::new(AnimState::default())
+    }
+
     fn diff(&self, tree: &mut Tree) {
         tree.diff_children(&[&self.underlay, &self.overlay]);
+
+        // Sync the animator's target with the prop. Open animates;
+        // close is a snap — mutually-exclusive menus (title bar) would
+        // overlap visually if both the closing and opening panels
+        // animated, and click-outside dismissal feels laggier with a
+        // close transition.
+        let state = tree.state.downcast_mut::<AnimState>();
+        if state.anim.value != self.expanded {
+            state.anim.transition(self.expanded, Instant::now());
+            if self.expanded {
+                animation::extend(ANIM_DURATION);
+            }
+        }
     }
 
     fn operate<'b>(
@@ -273,6 +329,20 @@ where
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
+        // Self-drive frames while the open animation is in flight. The
+        // App-level `animation::extend` watermark is queried from
+        // `subscription()` BEFORE the next `diff()` runs, so we can't
+        // rely on it to start frames the same tick as the transition —
+        // request the next frame here instead. Same pattern as `spinner`.
+        // Close is a snap (see `diff`), so only need to drive while the
+        // animator is targeting `true`.
+        if let Event::Window(iced::window::Event::RedrawRequested(_)) = event {
+            let anim = &state.state.downcast_ref::<AnimState>().anim;
+            if anim.value && anim.in_progress(Instant::now()) {
+                shell.request_redraw();
+            }
+        }
+
         self.underlay.as_widget_mut().update(
             &mut state.children[0],
             event,
@@ -309,7 +379,12 @@ where
         viewport: &Rectangle,
         translation: Vector,
     ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
-        if !self.expanded {
+        // Open animates (slide-in over `ANIM_DURATION`); close snaps —
+        // see `diff` for the rationale. Visibility tracks `anim.value`
+        // alone so the overlay unmounts the moment a close is requested.
+        let now = Instant::now();
+        let anim = &state.state.downcast_ref::<AnimState>().anim;
+        if !anim.value {
             return self.underlay.as_widget_mut().overlay(
                 &mut state.children[0],
                 layout,
@@ -318,6 +393,7 @@ where
                 translation,
             );
         }
+        let progress = anim.animate_bool(0.0, 1.0, now);
 
         Some(overlay::Element::new(Box::new(DropDownOverlay::new(
             &mut state.children[1],
@@ -330,6 +406,7 @@ where
             layout.bounds(),
             layout.position() + translation,
             *viewport,
+            progress,
         ))))
     }
 }
@@ -361,6 +438,9 @@ where
     underlay_bounds: Rectangle,
     position: Point,
     viewport: Rectangle,
+    /// 0.0 = fully closed (overlay slid to its start position),
+    /// 1.0 = fully open (overlay at its anchored position).
+    progress: f32,
 }
 
 impl<'a, 'b, Message, Theme, Renderer> DropDownOverlay<'a, 'b, Message, Theme, Renderer>
@@ -380,6 +460,7 @@ where
         underlay_bounds: Rectangle,
         position: Point,
         viewport: Rectangle,
+        progress: f32,
     ) -> Self {
         DropDownOverlay {
             state,
@@ -392,6 +473,7 @@ where
             underlay_bounds,
             position,
             viewport,
+            progress,
         }
     }
 }
@@ -509,6 +591,24 @@ where
             new_position.y = 0.0;
         }
 
+        // Slide the panel along its open direction. Applied after
+        // viewport clamping so the in-flight position can briefly cross
+        // the viewport edge — that's the visual the animation wants.
+        let slide_amount = SLIDE_PX * (1.0 - self.progress);
+        let slide_dy = match self.alignment {
+            Alignment::Top
+            | Alignment::TopStart
+            | Alignment::TopEnd
+            | Alignment::AboveRight => slide_amount,
+            Alignment::Bottom
+            | Alignment::BottomEnd
+            | Alignment::BottomStart
+            | Alignment::BelowLeft
+            | Alignment::BelowRight => -slide_amount,
+            Alignment::Start | Alignment::End => 0.0,
+        };
+        new_position.y += slide_dy;
+
         node.move_to(new_position)
     }
 
@@ -520,10 +620,20 @@ where
         layout: Layout<'_>,
         cursor: Cursor,
     ) {
+        // Force a sub-layer for the panel content. Within a single iced
+        // layer the renderer batches text and quad pipelines separately
+        // (all backgrounds first, then all text), so two visible
+        // overlays sharing a layer would composite as "all backgrounds,
+        // then all text" — text from the lower overlay can leak above
+        // the upper overlay's background. `with_layer` flushes pending
+        // primitives before/after, keeping each panel's quads + text
+        // composited as a unit. See CLAUDE.md → Iced Gotchas.
         let bounds = layout.bounds();
-        self.element
-            .as_widget()
-            .draw(self.state, renderer, theme, style, layout, cursor, &bounds);
+        renderer.with_layer(bounds, |renderer| {
+            self.element
+                .as_widget()
+                .draw(self.state, renderer, theme, style, layout, cursor, &bounds);
+        });
     }
 
     fn update(
