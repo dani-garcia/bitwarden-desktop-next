@@ -16,46 +16,44 @@ impl App {
         match self.windows.get(&window_id).map(|w| w.kind) {
             Some(WindowKind::Main) => self.view_main(),
             Some(WindowKind::About) => {
-                crate::views::about::view(&self.theme.current.colors).map(Message::About)
+                let rctx = self.render_ctx(window_id);
+                crate::views::about::view(&rctx).map(Message::About)
             }
-            Some(WindowKind::Magnify) => crate::views::magnify::view(
-                &self.magnify,
-                &self.favicon,
-                self.settings.show_favicons,
-                self.active_user.as_ref(),
-                &self.theme.current.colors,
-            )
-            .map(Message::Magnify),
+            Some(WindowKind::Magnify) => {
+                let rctx = self.render_ctx(window_id);
+                crate::views::magnify::view(&self.magnify, &rctx).map(Message::Magnify)
+            }
             // Defensive: all windows are inserted at creation, but a stray
             // unknown id renders as empty space rather than panicking.
             None => iced::widget::Space::new().into(),
         }
     }
 
-    fn view_main(&self) -> Element<'_, Message, AppTheme> {
-        let colors = &self.theme.current.colors;
-
+    /// Build a `RenderCtx` keyed to a specific window's width. Shared between
+    /// `view_main` and the About / Magnify secondary windows.
+    fn render_ctx(&self, window_id: iced::window::Id) -> RenderCtx<'_> {
         let active = self.active_account_entry();
-        let email = active.map(|a| a.email.as_str());
-        let server = active.map(|a| a.server_url.as_str()).unwrap_or("");
-
-        let main_window_width = self
+        let window_width = self
             .windows
-            .get(&self.main_window_id())
+            .get(&window_id)
             .map(|info| info.size.width)
             .unwrap_or(1024.0);
-
-        let rctx = RenderCtx {
-            colors,
+        RenderCtx {
+            colors: &self.theme.current.colors,
             favicon: &self.favicon,
             show_favicons: self.settings.show_favicons,
-            window_width: main_window_width,
+            window_width,
             active_user: self.active_user.as_ref(),
-            active_email: email,
-            active_server_url: server,
+            active_email: active.map(|a| a.email.as_str()),
+            active_server_url: active.map(|a| a.server_url.as_str()).unwrap_or(""),
             accounts: &self.cache.accounts,
             open_overlay: self.open_overlay,
-        };
+        }
+    }
+
+    fn view_main(&self) -> Element<'_, Message, AppTheme> {
+        let rctx = self.render_ctx(self.main_window_id());
+        let colors = rctx.colors;
 
         // Vault / Send return just the right-hand content area — the sidebar
         // is composed below so it persists across screen switches without
@@ -167,13 +165,9 @@ impl App {
             .modal_view(&rctx)
             .map(|el| el.map(Message::new_folder));
 
-        let fingerprint_modal = crate::views::fingerprint_phrase::modal_view(
-            &rctx,
-            &self.fingerprint,
-            Message::System(SystemMessage::CopyFingerprint),
-            Message::System(SystemMessage::CloseFingerprintModal),
-            Message::System(SystemMessage::OpenLearnMoreFingerprint),
-        );
+        let fingerprint_modal =
+            crate::views::fingerprint_phrase::modal_view(&self.fingerprint, rctx.colors)
+                .map(|el| el.map(Message::fingerprint));
 
         let use_custom_menu_bar = crate::services::menu::should_use_custom_menu_bar();
 

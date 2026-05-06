@@ -5,6 +5,7 @@
 
 mod account_switcher;
 mod export;
+mod fingerprint;
 mod import;
 pub(super) mod magnify;
 #[cfg(target_os = "macos")]

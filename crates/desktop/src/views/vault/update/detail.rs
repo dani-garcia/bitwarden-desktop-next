@@ -11,9 +11,7 @@ use crate::{
 };
 
 use crate::views::vault::{
-    VaultEvent,
-    state::VaultView,
-    widgets::cipher_detail::CipherDetailMessage,
+    VaultEvent, state::VaultView, widgets::cipher_detail::CipherDetailMessage,
 };
 
 use super::list::clipboard_outcome;

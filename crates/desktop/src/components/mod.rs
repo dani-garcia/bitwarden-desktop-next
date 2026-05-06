@@ -66,7 +66,7 @@ pub fn rail_scroll_style(theme: &AppTheme, _status: scrollable::Status) -> scrol
         background: None,
         border: Border::default(),
         scroller: scrollable::Scroller {
-            background: Background::Color(theme.colors.item_hover),
+            background: Background::Color(theme.colors.scrollbar_thumb),
             border: Border::default().rounded(4),
         },
     };
@@ -178,7 +178,9 @@ pub fn pane_header<'a, M: Clone + 'a>(
         row![title_el, Space::new().width(Fill), close_btn].align_y(iced::Alignment::Center),
     )
     .padding([8, 20]);
-    iced::widget::column![header, separator_h()].spacing(0).into()
+    iced::widget::column![header, separator_h()]
+        .spacing(0)
+        .into()
 }
 
 /// Right-pane footer: separator above + `background`-coloured action bar.

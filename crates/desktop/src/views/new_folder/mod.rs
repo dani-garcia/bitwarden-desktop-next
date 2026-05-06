@@ -149,9 +149,9 @@ impl NewFolderView {
         );
 
         let body = column![header, name_field, helper, footer]
-        .spacing(14)
-        .padding(Padding::from([20, 24]))
-        .width(Fill);
+            .spacing(14)
+            .padding(Padding::from([20, 24]))
+            .width(Fill);
 
         Some(modal::dialog(
             480.0,

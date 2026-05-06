@@ -23,7 +23,9 @@ pub(in super::super) fn login_card<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
 ) -> Element<'a, CipherEditMessage, AppTheme> {
-    let login = form.modified.login.as_ref().expect("ensure_sub_structs");
+    let Some(login) = form.modified.login.as_ref() else {
+        return iced::widget::Space::new().into();
+    };
 
     let mut body = column![
         text_field(
@@ -61,10 +63,8 @@ pub(in super::super) fn login_card<'a>(
                 ),
                 colors,
             );
-            let remove_btn = buttons::delete_icon_button(
-                CipherEditMessage::PasskeyRemoved(idx),
-                colors,
-            );
+            let remove_btn =
+                buttons::delete_icon_button(CipherEditMessage::PasskeyRemoved(idx), colors);
 
             body = body.push(
                 row![container(info).width(Fill), remove_btn]
@@ -102,10 +102,8 @@ pub(in super::super) fn autofill_card<'a>(
             let input = text_field(fl!("form-uri"), value, colors)
                 .on_input(move |s| CipherEditMessage::UriChanged(idx, s))
                 .disabled(form.saving);
-            let remove_btn = buttons::delete_icon_button(
-                CipherEditMessage::UriRemoved(idx),
-                colors,
-            );
+            let remove_btn =
+                buttons::delete_icon_button(CipherEditMessage::UriRemoved(idx), colors);
 
             body = body.push(
                 row![container(input).width(Fill), remove_btn,]
@@ -115,11 +113,13 @@ pub(in super::super) fn autofill_card<'a>(
         }
     }
 
-    body = body.push(crate::views::vault::widgets::field_helpers::add_item_button(
-        fl!("form-add-website"),
-        CipherEditMessage::UriAdded,
-        colors,
-    ));
+    body = body.push(
+        crate::views::vault::widgets::field_helpers::add_item_button(
+            fl!("form-add-website"),
+            CipherEditMessage::UriAdded,
+            colors,
+        ),
+    );
 
     card_with_margin(styled_card(body))
 }

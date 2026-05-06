@@ -65,38 +65,44 @@ impl App {
         }
     }
 
-    /// Transition to the Vault screen and focus the search input. Same-screen
-    /// calls (filter switch) preserve the query so the user can refine inside
-    /// the new filter; cross-screen calls land via `apply_filter` reset.
-    fn switch_to_vault(&mut self) -> Task<Message> {
-        if self.screen == Screen::Vault {
-            return self.views.vault.auto_focus_task().map(Message::vault);
+    /// Transition to a list screen (Vault or Send) and focus the search input.
+    /// Same-screen calls (filter switch) preserve the query so the user can
+    /// refine inside the new filter; cross-screen calls land via
+    /// `apply_filter` reset. Clicking the sidebar while on Login mustn't flip
+    /// the screen underneath the login flow.
+    fn switch_to_list_screen(&mut self, target: Screen) -> Task<Message> {
+        let (auto_focus, focus, load) = match target {
+            Screen::Vault => (
+                self.views.vault.auto_focus_task().map(Message::vault),
+                self.views.vault.focus_search_task().map(Message::vault),
+                self.active_user.map(|uid| self.load_vault_list_task(uid)),
+            ),
+            Screen::Send => (
+                self.views.send.auto_focus_task().map(Message::send),
+                self.views.send.focus_search_task().map(Message::send),
+                self.active_user.map(|uid| self.load_send_list_task(uid)),
+            ),
+            Screen::Loading | Screen::Login => return Task::none(),
+        };
+
+        if self.screen == target {
+            return auto_focus;
         }
-        // Clicking the sidebar while on Login mustn't flip the screen
-        // underneath the login flow.
         if !matches!(self.screen, Screen::Vault | Screen::Send) {
             return Task::none();
         }
-        self.set_screen(Screen::Vault);
-        let focus = self.views.vault.focus_search_task().map(Message::vault);
-        match self.active_user {
-            Some(uid) => Task::batch([self.load_vault_list_task(uid), focus]),
+        self.set_screen(target);
+        match load {
+            Some(load) => Task::batch([load, focus]),
             None => focus,
         }
     }
 
+    fn switch_to_vault(&mut self) -> Task<Message> {
+        self.switch_to_list_screen(Screen::Vault)
+    }
+
     fn switch_to_send(&mut self) -> Task<Message> {
-        if self.screen == Screen::Send {
-            return self.views.send.auto_focus_task().map(Message::send);
-        }
-        if !matches!(self.screen, Screen::Vault | Screen::Send) {
-            return Task::none();
-        }
-        self.set_screen(Screen::Send);
-        let focus = self.views.send.focus_search_task().map(Message::send);
-        match self.active_user {
-            Some(uid) => Task::batch([self.load_send_list_task(uid), focus]),
-            None => focus,
-        }
+        self.switch_to_list_screen(Screen::Send)
     }
 }

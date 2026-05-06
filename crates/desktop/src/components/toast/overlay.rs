@@ -3,11 +3,7 @@
 //! Owns the per-frame state machine: appearing → visible → dismissing →
 //! dropped. Refreshes visuals every `RedrawRequested` tick.
 
-use std::{
-    cell::Cell,
-    rc::Rc,
-    time::Duration,
-};
+use std::{cell::Cell, rc::Rc, time::Duration};
 
 use iced::{
     Alignment, Element, Event, Length, Point, Rectangle, Size, Vector,
@@ -84,9 +80,9 @@ where
             let mut child_layouts = layout.children();
 
             for ((index, slot), cell) in self.timers.iter_mut().enumerate().zip(self.cells.iter()) {
-                let child_layout = child_layouts
-                    .next()
-                    .expect("child layout exists for every timer");
+                let Some(child_layout) = child_layouts.next() else {
+                    continue;
+                };
                 let Some(timer) = slot.as_mut() else {
                     continue;
                 };
@@ -209,4 +205,3 @@ where
             .unwrap_or_default()
     }
 }
-

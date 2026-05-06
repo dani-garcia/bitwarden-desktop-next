@@ -29,54 +29,30 @@ pub fn view<'a>(
 
     match form.modified.r#type {
         CipherType::Login => {
-            sections.push(section_label(
-                fl!("form-section-login-credentials"),
-                colors,
-            ));
+            sections.push(section_label(fl!("form-section-login-credentials"), colors));
             sections.push(sections::login::login_card(form, colors));
-            sections.push(section_label(
-                fl!("form-section-autofill-options"),
-                colors,
-            ));
+            sections.push(section_label(fl!("form-section-autofill-options"), colors));
             sections.push(sections::login::autofill_card(form, colors));
         }
         CipherType::Card => {
-            sections.push(section_label(
-                fl!("form-section-card-details"),
-                colors,
-            ));
+            sections.push(section_label(fl!("form-section-card-details"), colors));
             sections.push(sections::card::card_details_card(form, colors));
         }
         CipherType::Identity => {
-            sections.push(section_label(
-                fl!("form-section-personal-details"),
-                colors,
-            ));
+            sections.push(section_label(fl!("form-section-personal-details"), colors));
             sections.push(sections::identity::identity_personal_card(form, colors));
-            sections.push(section_label(
-                fl!("form-section-identification"),
-                colors,
-            ));
+            sections.push(section_label(fl!("form-section-identification"), colors));
             sections.push(sections::identity::identity_identification_card(
                 form, colors,
             ));
-            sections.push(section_label(
-                fl!("form-section-contact-info"),
-                colors,
-            ));
+            sections.push(section_label(fl!("form-section-contact-info"), colors));
             sections.push(sections::identity::identity_contact_card(form, colors));
-            sections.push(section_label(
-                fl!("form-section-address"),
-                colors,
-            ));
+            sections.push(section_label(fl!("form-section-address"), colors));
             sections.push(sections::identity::identity_address_card(form, colors));
         }
         CipherType::SecureNote => { /* notes live in the shared "Additional options" card below */ }
         CipherType::SshKey => {
-            sections.push(section_label(
-                fl!("form-section-ssh-key"),
-                colors,
-            ));
+            sections.push(section_label(fl!("form-section-ssh-key"), colors));
             sections.push(sections::ssh_key::ssh_key_card(form, colors));
         }
         // TODO(bank-account): no type-specific section yet — only the shared
@@ -90,10 +66,7 @@ pub fn view<'a>(
     ));
     sections.push(sections::shared::additional_options_card(form, colors));
 
-    sections.push(section_label(
-        fl!("form-section-custom-fields"),
-        colors,
-    ));
+    sections.push(section_label(fl!("form-section-custom-fields"), colors));
     sections.push(sections::shared::custom_fields_card(form, colors));
 
     let body = scrollable(column(sections).spacing(4).padding([12, 20])).height(Fill);

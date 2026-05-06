@@ -17,10 +17,14 @@ use iced::{
 };
 
 use crate::{
+    app::RenderCtx,
     components::{self, icons, separator_h},
     fl,
     services::favicon::FaviconService,
-    theme::{AppColors, AppTheme, MAGNIFY_SURFACE_ALPHA, RADIUS_PILL, RADIUS_XL},
+    theme::{
+        AppColors, AppTheme, MAGNIFY_OVERLAY_ALPHA_FAINT, MAGNIFY_SURFACE_ALPHA, RADIUS_PILL,
+        RADIUS_XL,
+    },
     views::magnify::{
         MAGNIFY_RESULTS_SCROLL_ID, MAGNIFY_SEARCH_ID, MagnifyMessage, MagnifyView, Mode, dims,
         widgets::{chip, footer, row::view as row_view},
@@ -30,16 +34,20 @@ use crate::{
 /// Build the launcher window's view tree. The outer container draws the
 /// rounded background; the per-window theme returns `background: TRANSPARENT`
 /// so the OS window stays see-through outside the rounded region.
-pub fn view<'a>(
+pub(crate) fn view<'a>(
     state: &'a MagnifyView,
-    favicon: &'a FaviconService,
-    show_favicons: bool,
-    active_user: Option<&'a crate::domain::UserId>,
-    colors: &'a AppColors,
+    ctx: &RenderCtx<'a>,
 ) -> Element<'a, MagnifyMessage, AppTheme> {
+    let colors = ctx.colors;
     let body: Element<'a, MagnifyMessage, AppTheme> = match state.mode {
         Mode::Locked => locked_body(colors),
-        Mode::Unlocked => unlocked_body(state, favicon, show_favicons, active_user, colors),
+        Mode::Unlocked => unlocked_body(
+            state,
+            ctx.favicon,
+            ctx.show_favicons,
+            ctx.active_user,
+            colors,
+        ),
     };
 
     container(body)
@@ -160,7 +168,10 @@ fn search_row<'a>(
                 .padding([4, 10])
                 .style(|theme: &AppTheme| {
                     container::Style::default()
-                        .background(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.06)))
+                        .background(Background::Color(Color {
+                            a: MAGNIFY_OVERLAY_ALPHA_FAINT,
+                            ..Color::WHITE
+                        }))
                         .border(
                             Border::default()
                                 .color(theme.colors.border)

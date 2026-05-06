@@ -18,6 +18,15 @@ pub const RADIUS_PILL: f32 = 20.0;
 /// a different blend.
 pub const MAGNIFY_SURFACE_ALPHA: f32 = 0.95;
 
+/// Faint translucent overlay used for the Magnify launcher's chip
+/// background and unselected row backdrop. Theme-invariant — the launcher
+/// surface is dark in both themes (window-level translucent dark glass).
+pub const MAGNIFY_OVERLAY_ALPHA_FAINT: f32 = 0.06;
+
+/// Stronger translucent overlay used for the Magnify launcher's selected
+/// row state. Theme-invariant for the same reason as the faint variant.
+pub const MAGNIFY_OVERLAY_ALPHA_MEDIUM: f32 = 0.15;
+
 /// The application's custom theme, carrying a full set of semantic colors.
 #[derive(Debug, Clone)]
 pub struct AppTheme {
@@ -42,17 +51,15 @@ pub enum ThemePreference {
 }
 
 impl ThemePreference {
-    /// Resolve the preference to a concrete `AppTheme`. For `System`, uses
-    /// the given OS scheme (defaults to light if unavailable).
-    pub fn resolve(
-        self,
-        scheme: Result<system_theme::ThemeScheme, system_theme::error::Error>,
-    ) -> AppTheme {
+    /// Resolve the preference to a concrete `AppTheme`. `System` queries
+    /// the given OS observer; anything other than `Ok(Dark)` (including a
+    /// missing observer or platform error) falls back to light.
+    pub fn resolve(self, system: Option<&system_theme::SystemTheme>) -> AppTheme {
         match self {
             ThemePreference::Light => AppTheme::light(),
             ThemePreference::Dark => AppTheme::dark(),
-            ThemePreference::System => match scheme {
-                Ok(system_theme::ThemeScheme::Dark) => AppTheme::dark(),
+            ThemePreference::System => match system.map(|s| s.get_scheme()) {
+                Some(Ok(system_theme::ThemeScheme::Dark)) => AppTheme::dark(),
                 _ => AppTheme::light(),
             },
         }
@@ -156,8 +163,11 @@ pub struct AppColors {
     pub button_primary_hover: Color,
     /// Subtle button hover (toggle, logout)
     pub button_hover_subtle: Color,
-    /// Avatar circle background
-    pub avatar_bg: Color,
+    /// Avatar circle palette — the user's avatar colour is a hash of their
+    /// id mod the palette length, so the selection is stable across launches
+    /// for a given account. Theme-invariant today; per-theme palettes can
+    /// diverge by populating the field differently in `dark.rs` / `light.rs`.
+    pub avatar_palette: [Color; 5],
     /// Table column header text
     pub table_header: Color,
     /// Title bar close button hover

@@ -185,4 +185,3 @@ pub(super) fn collections_selector<'a>(
         colors,
     )
 }
-

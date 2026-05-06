@@ -110,11 +110,13 @@ pub(in super::super) fn custom_fields_card<'a>(
         }
     }
 
-    body = body.push(crate::views::vault::widgets::field_helpers::add_item_button(
-        fl!("form-add-custom-field"),
-        CipherEditMessage::CustomFieldAdded,
-        colors,
-    ));
+    body = body.push(
+        crate::views::vault::widgets::field_helpers::add_item_button(
+            fl!("form-add-custom-field"),
+            CipherEditMessage::CustomFieldAdded,
+            colors,
+        ),
+    );
 
     card_with_margin(styled_card(body))
 }

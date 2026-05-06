@@ -3,7 +3,7 @@ use iced::{
     widget::{button, container, mouse_area, row, text},
 };
 
-use crate::theme::AppTheme;
+use crate::{components::shell_scope::ShellScope, theme::AppTheme};
 
 use super::{TITLE_BAR_HEIGHT, WINDOW_BTN_WIDTH};
 
@@ -169,5 +169,8 @@ pub fn resize_wrapper<'a, M: Clone + 'a>(
     })
     .into();
 
-    iced::widget::stack![content, top_row, bottom_row, left_edge, right_edge].into()
+    ShellScope::new(iced::widget::stack![
+        content, top_row, bottom_row, left_edge, right_edge
+    ])
+    .into()
 }

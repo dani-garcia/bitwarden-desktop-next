@@ -17,7 +17,9 @@ pub(in super::super) fn identity_personal_card<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
 ) -> Element<'a, CipherEditMessage, AppTheme> {
-    let i = form.modified.identity.as_ref().expect("ensure_sub_structs");
+    let Some(i) = form.modified.identity.as_ref() else {
+        return iced::widget::Space::new().into();
+    };
     let body = column![
         title_selector(form, colors),
         text_field(
@@ -64,7 +66,9 @@ pub(in super::super) fn identity_identification_card<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
 ) -> Element<'a, CipherEditMessage, AppTheme> {
-    let i = form.modified.identity.as_ref().expect("ensure_sub_structs");
+    let Some(i) = form.modified.identity.as_ref() else {
+        return iced::widget::Space::new().into();
+    };
     let body = column![
         reveal_text_field(
             fl!("form-identity-ssn"),
@@ -96,7 +100,9 @@ pub(in super::super) fn identity_contact_card<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
 ) -> Element<'a, CipherEditMessage, AppTheme> {
-    let i = form.modified.identity.as_ref().expect("ensure_sub_structs");
+    let Some(i) = form.modified.identity.as_ref() else {
+        return iced::widget::Space::new().into();
+    };
     let body = column![
         text_field(
             fl!("form-identity-email"),
@@ -121,7 +127,9 @@ pub(in super::super) fn identity_address_card<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
 ) -> Element<'a, CipherEditMessage, AppTheme> {
-    let i = form.modified.identity.as_ref().expect("ensure_sub_structs");
+    let Some(i) = form.modified.identity.as_ref() else {
+        return iced::widget::Space::new().into();
+    };
     let body = column![
         text_field(
             fl!("form-identity-address1"),

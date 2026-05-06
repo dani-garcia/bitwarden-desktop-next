@@ -5,11 +5,7 @@ use iced::{
     widget::{Space, column, container, row, text},
 };
 
-use crate::{
-    components::buttons,
-    fl,
-    theme::{AppColors, AppTheme},
-};
+use crate::{app::RenderCtx, components::buttons, fl, theme::AppTheme};
 
 #[derive(Debug, Clone)]
 pub enum AboutMessage {
@@ -33,7 +29,8 @@ pub fn info_string() -> String {
     )
 }
 
-pub fn view(colors: &AppColors) -> Element<'_, AboutMessage, AppTheme> {
+pub(crate) fn view<'a>(ctx: &RenderCtx<'a>) -> Element<'a, AboutMessage, AppTheme> {
+    let colors = ctx.colors;
     // "Bitwarden" is the product name — kept untranslated.
     let title = text("Bitwarden")
         .size(28)

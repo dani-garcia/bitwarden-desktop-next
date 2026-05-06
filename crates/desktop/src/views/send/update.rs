@@ -198,9 +198,7 @@ impl SendView {
                 sensitivity: crate::services::clipboard::Sensitivity::Sensitive,
                 toast_label: fl!("send-toast-copied-password"),
             }),
-            FormEvent::RegeneratePassword => {
-                Outcome::event(SendEvent::RegeneratePasswordRequested)
-            }
+            FormEvent::RegeneratePassword => Outcome::event(SendEvent::RegeneratePasswordRequested),
         }
     }
 

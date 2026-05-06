@@ -5,11 +5,7 @@
 //! the interesting bits are `state` / `diff` (timer bookkeeping) and
 //! `overlay` (which spawns [`super::overlay::ToastOverlay`]).
 
-use std::{
-    cell::Cell,
-    rc::Rc,
-    time::Instant,
-};
+use std::{cell::Cell, rc::Rc, time::Instant};
 
 use iced::{
     Alignment, Border, Color, Element, Event, Fill, Length, Rectangle, Size, Vector,

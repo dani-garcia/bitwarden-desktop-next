@@ -77,28 +77,20 @@ impl AccountSwitcherMessage {
     }
 }
 
-const AVATAR_PALETTE: [Color; 5] = [
-    Color::from_rgb8(0x00, 0x7c, 0x95),
-    Color::from_rgb8(0xc7, 0x18, 0x00),
-    Color::from_rgb8(0x17, 0x5d, 0xdc),
-    Color::from_rgb8(0x00, 0x82, 0x36),
-    Color::from_rgb8(0x82, 0x00, 0xdb),
-];
-
-fn avatar_color_for(id: &str) -> Color {
+fn avatar_color_for(id: &str, palette: &[Color]) -> Color {
     use std::hash::{Hash as _, Hasher as _};
     let mut hasher = std::hash::DefaultHasher::new();
     id.hash(&mut hasher);
     let hash = hasher.finish();
 
-    AVATAR_PALETTE[hash as usize % AVATAR_PALETTE.len()]
+    palette[hash as usize % palette.len()]
 }
 
-pub fn avatar_trigger<'a>(
+fn avatar_trigger<'a>(
     active_email: &'a str,
-    _colors: &AppColors,
+    colors: &AppColors,
 ) -> Element<'a, AccountSwitcherMessage, AppTheme> {
-    buttons::transparent(avatar(active_email, 36.0))
+    buttons::transparent(avatar(active_email, 36.0, &colors.avatar_palette))
         .on_press(AccountSwitcherMessage::ToggleDropdown)
         .padding(0)
         .into()
@@ -204,9 +196,9 @@ pub fn dropdown<'a>(
 /// Renders the initials avatar. Email keys both the initials (first two
 /// chars) and the palette color. The Angular clients hash the UUID instead,
 /// but cross-client color parity per user isn't required here.
-fn avatar<'a, M: 'a>(email: &str, size: f32) -> Element<'a, M, AppTheme> {
+fn avatar<'a, M: 'a>(email: &str, size: f32, palette: &[Color]) -> Element<'a, M, AppTheme> {
     let initials = email.chars().take(2).collect::<String>().to_uppercase();
-    let bg = avatar_color_for(email);
+    let bg = avatar_color_for(email, palette);
     container(
         text(initials)
             .size(size * 0.4)
@@ -230,7 +222,7 @@ fn active_account_card<'a>(
     colors: &'a AppColors,
 ) -> Element<'a, AccountSwitcherMessage, AppTheme> {
     let identity = row![
-        avatar(&entry.email, 40.0),
+        avatar(&entry.email, 40.0, &colors.avatar_palette),
         column![
             text(&entry.email).size(14).color(colors.text_primary),
             text(&entry.server_url)
@@ -287,7 +279,7 @@ fn other_account_row<'a>(
 
     buttons::ghost(
         row![
-            avatar(&entry.email, 32.0),
+            avatar(&entry.email, 32.0, &colors.avatar_palette),
             column![
                 text(&entry.email).size(14).color(colors.text_primary),
                 text(&entry.server_url)

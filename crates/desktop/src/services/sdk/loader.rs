@@ -14,8 +14,7 @@ use std::{
 };
 
 use bitwarden_core::{
-    ClientBuilder, ClientSettings, UserId,
-    key_management::LocalUserDataKeyState,
+    ClientBuilder, ClientSettings, UserId, key_management::LocalUserDataKeyState,
 };
 use bitwarden_crypto::{EncString, Kdf};
 use bitwarden_pm::PasswordManagerClient;
@@ -90,10 +89,21 @@ pub async fn load_users() -> HashMap<UserId, Box<UserEntry>> {
         meta.users.into_iter().map(|u| (u.user_id, u)).collect();
 
     let mut users = HashMap::with_capacity(meta_by_id.len());
-    let entries = std::fs::read_dir(&data_dir)
-        .unwrap_or_else(|e| panic!("failed to read {}: {e}", data_dir.display()));
+    let entries = match std::fs::read_dir(&data_dir) {
+        Ok(entries) => entries,
+        Err(err) => {
+            tracing::error!(path = %data_dir.display(), %err, "failed to read data dir");
+            return HashMap::new();
+        }
+    };
     for entry in entries {
-        let path = entry.expect("directory entry readable").path();
+        let path = match entry {
+            Ok(entry) => entry.path(),
+            Err(err) => {
+                tracing::warn!(%err, "skipping unreadable directory entry");
+                continue;
+            }
+        };
         if path.extension().and_then(|s| s.to_str()) != Some("sqlite") {
             continue;
         }
@@ -189,35 +199,52 @@ struct MemoryRepo<T: RepositoryItem + Clone> {
 #[async_trait::async_trait]
 impl<T: RepositoryItem + Clone> Repository<T> for MemoryRepo<T> {
     async fn get(&self, key: T::Key) -> Result<Option<T>, RepositoryError> {
-        Ok(self.data.lock().unwrap().get(&key.to_string()).cloned())
+        Ok(self
+            .data
+            .lock()
+            .expect("MemoryRepo mutex poisoned")
+            .get(&key.to_string())
+            .cloned())
     }
     async fn list(&self) -> Result<Vec<T>, RepositoryError> {
-        Ok(self.data.lock().unwrap().values().cloned().collect())
+        Ok(self
+            .data
+            .lock()
+            .expect("MemoryRepo mutex poisoned")
+            .values()
+            .cloned()
+            .collect())
     }
     async fn set(&self, key: T::Key, value: T) -> Result<(), RepositoryError> {
-        self.data.lock().unwrap().insert(key.to_string(), value);
+        self.data
+            .lock()
+            .expect("MemoryRepo mutex poisoned")
+            .insert(key.to_string(), value);
         Ok(())
     }
     async fn set_bulk(&self, values: Vec<(T::Key, T)>) -> Result<(), RepositoryError> {
-        let mut map = self.data.lock().unwrap();
+        let mut map = self.data.lock().expect("MemoryRepo mutex poisoned");
         for (k, v) in values {
             map.insert(k.to_string(), v);
         }
         Ok(())
     }
     async fn remove(&self, key: T::Key) -> Result<(), RepositoryError> {
-        self.data.lock().unwrap().remove(&key.to_string());
+        self.data
+            .lock()
+            .expect("MemoryRepo mutex poisoned")
+            .remove(&key.to_string());
         Ok(())
     }
     async fn remove_bulk(&self, keys: Vec<T::Key>) -> Result<(), RepositoryError> {
-        let mut map = self.data.lock().unwrap();
+        let mut map = self.data.lock().expect("MemoryRepo mutex poisoned");
         for k in keys {
             map.remove(&k.to_string());
         }
         Ok(())
     }
     async fn remove_all(&self) -> Result<(), RepositoryError> {
-        self.data.lock().unwrap().clear();
+        self.data.lock().expect("MemoryRepo mutex poisoned").clear();
         Ok(())
     }
 }

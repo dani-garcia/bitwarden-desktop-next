@@ -186,14 +186,26 @@ impl UsernameForm {
                     "email": self.email,
                 }
             }))
-            .expect("username subaddress request JSON matches SDK schema"),
+            .unwrap_or_else(|err| {
+                tracing::error!(%err, "subaddress request schema mismatch; falling back to Word");
+                UsernameGeneratorRequest::Word {
+                    capitalize: false,
+                    include_number: false,
+                }
+            }),
             UsernameKind::Catchall => serde_json::from_value(serde_json::json!({
                 "catchall": {
                     "type": "random",
                     "domain": self.domain,
                 }
             }))
-            .expect("username catchall request JSON matches SDK schema"),
+            .unwrap_or_else(|err| {
+                tracing::error!(%err, "catchall request schema mismatch; falling back to Word");
+                UsernameGeneratorRequest::Word {
+                    capitalize: false,
+                    include_number: false,
+                }
+            }),
         }
     }
 }

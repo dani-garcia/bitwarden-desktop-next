@@ -158,7 +158,11 @@ impl App {
                 Task::none()
             }
             SystemMessage::ClientManagerLoaded(slot) => {
-                let Some(mgr) = slot.lock().unwrap().take() else {
+                let Some(mgr) = slot
+                    .lock()
+                    .expect("ClientManager hand-off mutex poisoned")
+                    .take()
+                else {
                     tracing::error!("ClientManager slot was already drained");
                     return Task::none();
                 };
@@ -197,27 +201,6 @@ impl App {
                         ));
                     }
                 }
-                Task::none()
-            }
-            SystemMessage::CloseFingerprintModal => {
-                self.fingerprint.close();
-                Task::none()
-            }
-            SystemMessage::OpenLearnMoreFingerprint => {
-                crate::views::fingerprint_phrase::open_learn_more();
-                self.fingerprint.close();
-                Task::none()
-            }
-            SystemMessage::CopyFingerprint => {
-                let phrase = self.fingerprint.phrase().to_string();
-                if phrase.is_empty() {
-                    return Task::none();
-                }
-                // Skip `copy_and_toast` here so `minimize_on_copy` doesn't
-                // hide the still-open modal out from under the user.
-                self.clipboard
-                    .copy(phrase, crate::services::clipboard::Sensitivity::Normal);
-                self.push_toast(Toast::success(fl!("vault-toast-copied-fingerprint"), None));
                 Task::none()
             }
             #[cfg(feature = "gpu")]

@@ -37,9 +37,9 @@ pub fn view<'a>(
         .size(28)
         .color(colors.text_primary);
 
-    // Invariant: the unlock screen is only reached via an active user.
-    let email = email.expect("unlock::view without active email");
-    let email_label = text(email).size(16).color(colors.text_secondary);
+    let email_label = text(email.unwrap_or(""))
+        .size(16)
+        .color(colors.text_secondary);
 
     let card = layout::auth_card(card_content(
         method,

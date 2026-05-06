@@ -60,9 +60,9 @@ pub fn view<'a>(
     );
 
     let body = column![header, url_field, info_row, footer]
-    .spacing(16)
-    .padding(Padding::from([20, 24]))
-    .width(Fill);
+        .spacing(16)
+        .padding(Padding::from([20, 24]))
+        .width(Fill);
 
     Some(modal::dialog(
         460.0,

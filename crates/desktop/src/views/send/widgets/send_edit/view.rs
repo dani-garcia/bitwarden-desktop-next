@@ -111,4 +111,3 @@ fn footer<'a>(form: &'a SendForm, colors: &'a AppColors) -> Element<'a, SendEdit
         })
         .into()
 }
-

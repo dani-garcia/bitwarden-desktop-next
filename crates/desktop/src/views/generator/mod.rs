@@ -33,11 +33,7 @@ use std::time::Instant;
 
 use lilt::{Animated, Easing};
 
-use crate::{
-    app::ViewTypes,
-    components,
-    services::sdk::PasswordHistoryEntry,
-};
+use crate::{app::ViewTypes, components, services::sdk::PasswordHistoryEntry};
 
 pub use message::{GenerateKind, GeneratorEvent, GeneratorMessage};
 pub use state::{TabKind, UsernameKind};

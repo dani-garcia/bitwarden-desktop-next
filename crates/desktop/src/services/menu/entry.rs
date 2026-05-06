@@ -113,7 +113,7 @@ pub(super) const SEP: MenuEntry = MenuEntry {
 };
 
 /// `label` is a Fluent message ID.
-#[allow(non_snake_case)]
+#[expect(non_snake_case)]
 pub(super) const fn E(label: &'static str) -> MenuEntry {
     MenuEntry {
         label,
@@ -127,7 +127,7 @@ pub(super) const fn E(label: &'static str) -> MenuEntry {
 
 /// **Literal** label — rendered verbatim, no Fluent lookup. Use for brand /
 /// platform names that shouldn't be translated (Chrome, Firefox, iOS, …).
-#[allow(non_snake_case)]
+#[expect(non_snake_case)]
 pub(super) const fn L(label: &'static str) -> MenuEntry {
     MenuEntry {
         label,

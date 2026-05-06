@@ -495,9 +495,9 @@ impl ExportView {
         );
 
         let body = column![header, warning, password_field, helper, footer]
-        .spacing(16)
-        .padding(Padding::from([20, 24]))
-        .width(Fill);
+            .spacing(16)
+            .padding(Padding::from([20, 24]))
+            .width(Fill);
 
         modal::dialog(
             460.0,

@@ -27,7 +27,7 @@ use crate::{
 // ── Types ──────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum AuthPage {
+pub(in crate::views::login) enum AuthPage {
     Unlock {
         method: UnlockMethod,
         password_input: String,
@@ -137,7 +137,7 @@ pub enum LoginEvent {
 }
 
 pub struct LoginView {
-    pub(super) auth_page: AuthPage,
+    pub(in crate::views::login) auth_page: AuthPage,
     /// True between `LoginMessage::Unlock` firing and `UnlockCompleted` arriving.
     /// Drives the in-progress spinner on the unlock screen and gates re-entry.
     pub(super) unlock_in_progress: bool,
@@ -149,11 +149,11 @@ pub struct LoginView {
     pub(super) unlock_alternatives: Vec<UnlockMethod>,
     /// Working URL + animation state for the self-hosted environment modal.
     /// `fade.is_open()` is the source of truth for "modal logically open".
-    pub(super) self_hosted_modal: SelfHostedModal,
+    pub(in crate::views::login) self_hosted_modal: SelfHostedModal,
 }
 
 #[derive(Default)]
-pub struct SelfHostedModal {
+pub(in crate::views::login) struct SelfHostedModal {
     pub(super) fade: FadeInOut,
     pub(super) url_input: String,
     /// Set on Save when validation fails. Cleared on every keystroke so the

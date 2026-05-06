@@ -36,7 +36,7 @@ impl App {
         match change {
             SettingChange::Theme(p) => {
                 self.theme.preference = p;
-                self.theme.current = p.resolve(self.theme.system.get_scheme());
+                self.theme.current = p.resolve(self.theme.system.as_deref());
             }
             SettingChange::Language(tag) => {
                 if tag.is_empty() {

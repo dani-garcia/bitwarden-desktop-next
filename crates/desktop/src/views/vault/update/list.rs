@@ -12,9 +12,7 @@ use crate::{
 };
 
 use crate::views::vault::{
-    VaultFilter, VaultMessage,
-    state::VaultView,
-    widgets::item_list::ItemListMessage,
+    VaultFilter, VaultMessage, state::VaultView, widgets::item_list::ItemListMessage,
 };
 
 impl VaultView {
@@ -185,12 +183,11 @@ pub(super) fn clipboard_outcome(
     sensitivity: crate::services::clipboard::Sensitivity,
     toast_label: String,
 ) -> Outcome<VaultView> {
-    Outcome::from_option(
-        value.map(|value| crate::views::vault::VaultEvent::ClipboardCopyRequested {
+    Outcome::from_option(value.map(|value| {
+        crate::views::vault::VaultEvent::ClipboardCopyRequested {
             value,
             sensitivity,
             toast_label,
-        }),
-    )
+        }
+    }))
 }
-

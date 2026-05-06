@@ -10,7 +10,7 @@ use iced::{
 use crate::{
     components::icons,
     services::favicon::FaviconService,
-    theme::{AppColors, AppTheme, RADIUS_PILL, RADIUS_SM},
+    theme::{AppColors, AppTheme, MAGNIFY_OVERLAY_ALPHA_MEDIUM, RADIUS_PILL, RADIUS_SM},
     views::magnify::{MagnifyMessage, dims::ROW_HEIGHT, widgets::chip::keybind},
 };
 
@@ -131,7 +131,10 @@ fn action_pill<'a>(
     .padding([4, 10])
     .style(|_theme: &AppTheme| {
         container::Style::default()
-            .background(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.15)))
+            .background(Background::Color(Color {
+                a: MAGNIFY_OVERLAY_ALPHA_MEDIUM,
+                ..Color::WHITE
+            }))
             .border(Border::default().rounded(RADIUS_PILL))
     })
     .into()
@@ -144,35 +147,35 @@ fn icon_for<'a>(
     active_user: Option<&'a crate::domain::UserId>,
     colors: &'a AppColors,
 ) -> Element<'a, MagnifyMessage, AppTheme> {
-    let inner: Element<'a, MagnifyMessage, AppTheme> =
-        if let CipherListViewType::Login(login) = &item.r#type
-            && show_favicons
-            && let Some(uid) = active_user
-        {
-            let uri = login
-                .uris
-                .as_ref()
-                .and_then(|u| u.first())
-                .and_then(|u| u.uri.as_deref());
-            crate::components::favicon_icon(favicon.handle_for_login_uri(uid, uri))
-        } else {
-            let icon = match item.r#type {
-                CipherListViewType::Card(_) => icons::BWI_CREDIT_CARD,
-                CipherListViewType::Identity => icons::BWI_IDENTITY,
-                CipherListViewType::SecureNote => icons::BWI_NOTE,
-                CipherListViewType::SshKey => icons::BWI_KEY,
-                CipherListViewType::Login(_) => icons::BWI_LOGIN,
-                // TODO(bank-account): borrow the credit-card glyph until the
-                // type is properly supported (see docs/todo.md).
-                CipherListViewType::BankAccount => icons::BWI_CREDIT_CARD,
-            };
-            container(icon.render(20.0, colors.text_primary))
-                .width(32)
-                .height(32)
-                .center_x(32)
-                .center_y(32)
-                .into()
+    let inner: Element<'a, MagnifyMessage, AppTheme> = if let CipherListViewType::Login(login) =
+        &item.r#type
+        && show_favicons
+        && let Some(uid) = active_user
+    {
+        let uri = login
+            .uris
+            .as_ref()
+            .and_then(|u| u.first())
+            .and_then(|u| u.uri.as_deref());
+        crate::components::favicon_icon(favicon.handle_for_login_uri(uid, uri))
+    } else {
+        let icon = match item.r#type {
+            CipherListViewType::Card(_) => icons::BWI_CREDIT_CARD,
+            CipherListViewType::Identity => icons::BWI_IDENTITY,
+            CipherListViewType::SecureNote => icons::BWI_NOTE,
+            CipherListViewType::SshKey => icons::BWI_KEY,
+            CipherListViewType::Login(_) => icons::BWI_LOGIN,
+            // TODO(bank-account): borrow the credit-card glyph until the
+            // type is properly supported (see docs/todo.md).
+            CipherListViewType::BankAccount => icons::BWI_CREDIT_CARD,
         };
+        container(icon.render(20.0, colors.text_primary))
+            .width(32)
+            .height(32)
+            .center_x(32)
+            .center_y(32)
+            .into()
+    };
 
     icon_backdrop(inner)
 }
@@ -187,9 +190,11 @@ fn icon_backdrop<'a>(
         .padding(2)
         .style(|_theme: &AppTheme| {
             container::Style::default()
-                .background(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.15)))
+                .background(Background::Color(Color {
+                    a: MAGNIFY_OVERLAY_ALPHA_MEDIUM,
+                    ..Color::WHITE
+                }))
                 .border(Border::default().rounded(RADIUS_SM))
         })
         .into()
 }
-

@@ -7,7 +7,7 @@ use iced::{
 };
 
 use crate::{
-    theme::{AppColors, AppTheme, RADIUS_SM},
+    theme::{AppColors, AppTheme, MAGNIFY_OVERLAY_ALPHA_FAINT, RADIUS_SM},
     views::magnify::message::MagnifyMessage,
 };
 
@@ -21,7 +21,10 @@ pub fn keybind<'a>(
         .padding([2, 6])
         .style(|theme: &AppTheme| {
             container::Style::default()
-                .background(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.06)))
+                .background(Background::Color(Color {
+                    a: MAGNIFY_OVERLAY_ALPHA_FAINT,
+                    ..Color::WHITE
+                }))
                 .border(
                     Border::default()
                         .color(theme.colors.border)

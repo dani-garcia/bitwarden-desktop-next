@@ -177,10 +177,10 @@ where
         Theme: container::Catalog + 'a,
         <Theme as container::Catalog>::Class<'a>: From<container::StyleFn<'a, Theme>>,
     {
-        let shadowed = container(overlay).style(|_theme: &Theme| container::Style {
-            shadow: PANEL_SHADOW,
-            border: Border::default().rounded(RADIUS_LG),
-            ..container::Style::default()
+        let shadowed = container(overlay).style(|_theme: &Theme| {
+            container::Style::default()
+                .border(Border::default().rounded(RADIUS_LG))
+                .shadow(PANEL_SHADOW)
         });
         Self::new_no_shadow(underlay, shadowed, expanded)
     }
@@ -596,10 +596,9 @@ where
         // the viewport edge — that's the visual the animation wants.
         let slide_amount = SLIDE_PX * (1.0 - self.progress);
         let slide_dy = match self.alignment {
-            Alignment::Top
-            | Alignment::TopStart
-            | Alignment::TopEnd
-            | Alignment::AboveRight => slide_amount,
+            Alignment::Top | Alignment::TopStart | Alignment::TopEnd | Alignment::AboveRight => {
+                slide_amount
+            }
             Alignment::Bottom
             | Alignment::BottomEnd
             | Alignment::BottomStart

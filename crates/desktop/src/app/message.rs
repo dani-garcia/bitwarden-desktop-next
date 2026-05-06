@@ -4,10 +4,10 @@ use crate::{
     components::sidebar::SidebarMessage,
     services::{favicon::FaviconMessage, sdk::ClientManager},
     views::{
-        about::AboutMessage, export::ExportMessage, generator::GeneratorMessage,
-        import::ImportMessage, login::LoginMessage, magnify::MagnifyMessage,
-        new_folder::NewFolderMessage, send::SendMessage, settings::SettingsMessage,
-        title_bar::TitleBarMessage, vault::VaultMessage,
+        about::AboutMessage, export::ExportMessage, fingerprint_phrase::FingerprintMessage,
+        generator::GeneratorMessage, import::ImportMessage, login::LoginMessage,
+        magnify::MagnifyMessage, new_folder::NewFolderMessage, send::SendMessage,
+        settings::SettingsMessage, title_bar::TitleBarMessage, vault::VaultMessage,
     },
 };
 
@@ -33,6 +33,11 @@ pub enum Message {
     /// Routed at the top level (not via `ViewMessage`) because the launcher
     /// owns its own window and can't share `UpdateCtx` with screen views.
     Magnify(MagnifyMessage),
+    /// Account → Fingerprint phrase modal actions. Routed at the top level
+    /// (not via `ViewMessage`) because the modal isn't a `View` — its state
+    /// lives directly on `App` (single string + fade), and the actions
+    /// handle in one place without needing `UpdateCtx`.
+    Fingerprint(FingerprintMessage),
 }
 
 /// Sub-view messages, bundled so `App::update` builds `UpdateCtx` in one
@@ -87,6 +92,10 @@ impl Message {
 
     pub fn new_folder(m: NewFolderMessage) -> Self {
         Self::View(ViewMessage::NewFolder(m))
+    }
+
+    pub fn fingerprint(m: FingerprintMessage) -> Self {
+        Self::Fingerprint(m)
     }
 }
 
@@ -146,12 +155,4 @@ pub enum SystemMessage {
     /// `Result` shape is kept so a real sync flow can drop in without
     /// rippling through the message hierarchy.
     SyncCompleted(Result<(), String>),
-    /// User dismissed the Account → Fingerprint phrase modal.
-    CloseFingerprintModal,
-    /// "Learn more" pressed inside the fingerprint phrase modal — opens the
-    /// help page in the default browser.
-    OpenLearnMoreFingerprint,
-    /// Copy icon pressed in the fingerprint phrase modal — pushes the phrase
-    /// onto the clipboard via the standard manager + toast pipeline.
-    CopyFingerprint,
 }

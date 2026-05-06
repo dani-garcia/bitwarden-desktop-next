@@ -15,8 +15,7 @@ use crate::{
 };
 
 use super::{
-    GeneratorView,
-    history,
+    GeneratorView, history,
     message::GeneratorMessage,
     state::{Mode, TabKind},
     tabs,

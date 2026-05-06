@@ -17,7 +17,7 @@ mod widgets;
 
 pub use message::MagnifyMessage;
 pub use state::{CopyField, MAGNIFY_RESULTS_SCROLL_ID, MAGNIFY_SEARCH_ID, MagnifyView, Mode};
-pub use view::view;
+pub(crate) use view::view;
 
 /// Window dimensions and layout constants. Shared between the view (for
 /// rendering) and the handler (for OS-level `window::resize` calls).

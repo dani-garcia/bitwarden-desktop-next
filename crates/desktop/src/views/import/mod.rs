@@ -483,11 +483,8 @@ impl ImportView {
     ) -> Option<Element<'a, ImportMessage, AppTheme>> {
         let progress = self.fade.progress_if_visible()?;
 
-        let header = modal::dialog_header(
-            fl!("import-modal-title"),
-            ImportMessage::Close,
-            ctx.colors,
-        );
+        let header =
+            modal::dialog_header(fl!("import-modal-title"), ImportMessage::Close, ctx.colors);
 
         let personal_label = fl!("import-modal-vault-personal");
         let vault_picker = inputs::select_field(
@@ -576,9 +573,9 @@ impl ImportView {
         );
 
         let body = column![header, destination_card, data_card, footer]
-        .spacing(16)
-        .padding(Padding::from([20, 24]))
-        .width(Fill);
+            .spacing(16)
+            .padding(Padding::from([20, 24]))
+            .width(Fill);
 
         Some(modal::dialog(
             580.0,

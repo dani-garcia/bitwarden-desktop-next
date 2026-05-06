@@ -132,19 +132,26 @@ impl Views {
 }
 
 /// Theme state bundle: user preference, resolved `AppTheme` instance,
-/// and the OS observer we subscribe to for system-theme changes.
+/// and the OS observer we subscribe to for system-theme changes. The
+/// observer is `None` on platforms where construction failed (headless
+/// CI, sandboxed installs); the resolver falls back to a static theme
+/// when the OS scheme can't be queried.
 pub struct ThemeState {
     pub(super) preference: ThemePreference,
     pub current: AppTheme,
-    pub(super) system: Rc<system_theme::SystemTheme>,
+    pub(super) system: Option<Rc<system_theme::SystemTheme>>,
 }
 
 impl ThemeState {
     pub fn new(preference: ThemePreference) -> Self {
-        let system = Rc::new(
-            system_theme::SystemTheme::new().expect("failed to initialize system theme observer"),
-        );
-        let current = preference.resolve(system.get_scheme());
+        let system = match system_theme::SystemTheme::new() {
+            Ok(s) => Some(Rc::new(s)),
+            Err(err) => {
+                tracing::warn!(%err, "failed to init system theme observer; using static fallback");
+                None
+            }
+        };
+        let current = preference.resolve(system.as_deref());
         Self {
             preference,
             current,
@@ -154,7 +161,7 @@ impl ThemeState {
 
     pub fn refresh(&mut self) {
         if self.preference == ThemePreference::System {
-            self.current = self.preference.resolve(self.system.get_scheme());
+            self.current = self.preference.resolve(self.system.as_deref());
         }
     }
 }

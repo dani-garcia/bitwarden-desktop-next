@@ -68,12 +68,18 @@ impl GeneratorView {
             }
             GeneratorMessage::Regenerate => self.regenerate_event(),
             // Password tab
-            GeneratorMessage::SetLength(raw) => self.set_digit_field(raw, |s, r| s.password.length = r),
+            GeneratorMessage::SetLength(raw) => {
+                self.set_digit_field(raw, |s, r| s.password.length = r)
+            }
             GeneratorMessage::BumpLength(delta) => self.mutate_and_regen(|s| {
                 s.password.length = bump_clamped(&s.password.length, delta, 14, 5, 128);
             }),
-            GeneratorMessage::ToggleLowercase(v) => self.mutate_and_regen(|s| s.password.lowercase = v),
-            GeneratorMessage::ToggleUppercase(v) => self.mutate_and_regen(|s| s.password.uppercase = v),
+            GeneratorMessage::ToggleLowercase(v) => {
+                self.mutate_and_regen(|s| s.password.lowercase = v)
+            }
+            GeneratorMessage::ToggleUppercase(v) => {
+                self.mutate_and_regen(|s| s.password.uppercase = v)
+            }
             GeneratorMessage::ToggleNumbers(v) => self.mutate_and_regen(|s| s.password.numbers = v),
             GeneratorMessage::ToggleSpecial(v) => self.mutate_and_regen(|s| s.password.special = v),
             GeneratorMessage::SetMinNumber(raw) => {

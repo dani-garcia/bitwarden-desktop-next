@@ -7,12 +7,35 @@
 //! `unlock` lives on [`super::UnlockData`] instead because it needs more
 //! than the client (kdf, email, key envelopes).
 
+use std::sync::Arc;
+
 use bitwarden_core::{OrganizationId, key_management::SymmetricKeySlotId};
 use bitwarden_generators::{
     PassphraseGeneratorRequest, PasswordGeneratorRequest, UsernameGeneratorRequest,
 };
 use bitwarden_pm::PasswordManagerClient;
+use bitwarden_state::repository::Repository;
 use bitwarden_vault::{Cipher, CipherId, CipherListView, CipherView, Folder, FolderView};
+
+/// Acquire the per-user `Cipher` repository, with the registry's error
+/// type stringified to match the rest of the trait.
+fn cipher_repo(client: &PasswordManagerClient) -> Result<Arc<dyn Repository<Cipher>>, String> {
+    client
+        .platform()
+        .state()
+        .get::<Cipher>()
+        .map_err(|e| e.to_string())
+}
+
+/// Acquire the per-user `Folder` repository, with the registry's error
+/// type stringified to match the rest of the trait.
+fn folder_repo(client: &PasswordManagerClient) -> Result<Arc<dyn Repository<Folder>>, String> {
+    client
+        .platform()
+        .state()
+        .get::<Folder>()
+        .map_err(|e| e.to_string())
+}
 
 #[async_trait::async_trait]
 pub trait ClientExt {
@@ -118,11 +141,7 @@ impl ClientExt for PasswordManagerClient {
     }
 
     async fn full_cipher(self, cipher_id: CipherId) -> Result<CipherView, String> {
-        let repo = self
-            .platform()
-            .state()
-            .get::<Cipher>()
-            .map_err(|e| e.to_string())?;
+        let repo = cipher_repo(&self)?;
         let cipher = repo
             .get(cipher_id)
             .await
@@ -154,11 +173,7 @@ impl ClientExt for PasswordManagerClient {
             .id
             .ok_or_else(|| "encrypted cipher missing id".to_string())?;
 
-        let repo = self
-            .platform()
-            .state()
-            .get::<Cipher>()
-            .map_err(|e| e.to_string())?;
+        let repo = cipher_repo(&self)?;
         repo.set(id, cipher.clone())
             .await
             .map_err(|e| e.to_string())?;
@@ -171,11 +186,7 @@ impl ClientExt for PasswordManagerClient {
     }
 
     async fn soft_delete_cipher(self, cipher_id: CipherId) -> Result<(), String> {
-        let repo = self
-            .platform()
-            .state()
-            .get::<Cipher>()
-            .map_err(|e| e.to_string())?;
+        let repo = cipher_repo(&self)?;
         let mut cipher = repo
             .get(cipher_id)
             .await
@@ -201,7 +212,7 @@ impl ClientExt for PasswordManagerClient {
         // `FoldersClient::encrypt` is marked deprecated upstream in favour of
         // a higher-level `create()` that posts to the API — we want only the
         // encrypt step, since we're persisting locally.
-        #[allow(deprecated)]
+        #[expect(deprecated)]
         let encrypted = self
             .vault()
             .folders()
@@ -214,18 +225,14 @@ impl ClientExt for PasswordManagerClient {
         // Decrypt the encrypted folder back into a `FolderView` for the
         // return value. Cheaper than re-encrypting/cloning, and keeps the
         // returned name in sync with what was persisted.
-        #[allow(deprecated)]
+        #[expect(deprecated)]
         let decrypted = self
             .vault()
             .folders()
             .decrypt(encrypted.clone())
             .map_err(|e| e.to_string())?;
 
-        let repo = self
-            .platform()
-            .state()
-            .get::<Folder>()
-            .map_err(|e| e.to_string())?;
+        let repo = folder_repo(&self)?;
         repo.set(id, encrypted).await.map_err(|e| e.to_string())?;
         Ok(decrypted)
     }
@@ -242,19 +249,14 @@ impl ClientExt for PasswordManagerClient {
         self,
         format: bitwarden_exporters::ExportFormat,
     ) -> Result<String, String> {
-        let cipher_repo = self
-            .platform()
-            .state()
-            .get::<Cipher>()
+        let ciphers = cipher_repo(&self)?
+            .list()
+            .await
             .map_err(|e| e.to_string())?;
-        let folder_repo = self
-            .platform()
-            .state()
-            .get::<Folder>()
+        let folders = folder_repo(&self)?
+            .list()
+            .await
             .map_err(|e| e.to_string())?;
-
-        let ciphers = cipher_repo.list().await.map_err(|e| e.to_string())?;
-        let folders = folder_repo.list().await.map_err(|e| e.to_string())?;
 
         self.exporters()
             .export_vault(folders, ciphers, format)

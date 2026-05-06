@@ -10,10 +10,7 @@ use crate::{
 };
 
 use super::{
-    super::{
-        GeneratorMessage, UsernameKind,
-        state::UsernameForm,
-    },
+    super::{GeneratorMessage, UsernameKind, state::UsernameForm},
     tab_checkbox,
 };
 

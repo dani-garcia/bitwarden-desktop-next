@@ -24,10 +24,7 @@ use std::time::Duration;
 
 use iced::Color;
 
-use crate::{
-    components::icons,
-    theme::AppColors,
-};
+use crate::{components::icons, theme::AppColors};
 
 pub use widget::Manager;
 

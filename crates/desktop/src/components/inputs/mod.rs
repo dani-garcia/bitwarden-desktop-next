@@ -160,16 +160,17 @@ fn field_frame_styled<'a, M: 'a>(
             container::Style::default().background(chip_bg(&theme.colors))
         });
 
-    let bordered = container(content).width(Fill).style(move |theme: &AppTheme| {
-        let border_color = if errored {
-            theme.colors.danger
-        } else {
-            theme.colors.border
-        };
-        container::Style::default().border(
-            Border::default().color(border_color).width(1.0).rounded(4),
-        )
-    });
+    let bordered = container(content)
+        .width(Fill)
+        .style(move |theme: &AppTheme| {
+            let border_color = if errored {
+                theme.colors.danger
+            } else {
+                theme.colors.border
+            };
+            container::Style::default()
+                .border(Border::default().color(border_color).width(1.0).rounded(4))
+        });
 
     crate::components::shell_scope::ShellScope::new(stack![
         column![Space::new().height(Length::Fixed(8.0)), bordered],

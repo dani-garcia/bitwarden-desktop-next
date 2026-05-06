@@ -4,11 +4,7 @@
 //! per-frame snapshot the overlay writes and the toast row's style closures
 //! read at draw time.
 
-use std::{
-    cell::Cell,
-    rc::Rc,
-    time::Instant,
-};
+use std::{cell::Cell, rc::Rc, time::Instant};
 
 use iced::{
     Background, Border, Length, Rectangle, Size,
@@ -157,4 +153,3 @@ impl<Message> Widget<Message, AppTheme, iced::Renderer> for ToastProgressBar {
         );
     }
 }
-

@@ -16,7 +16,9 @@ pub(in super::super) fn card_details_card<'a>(
     form: &'a CipherForm,
     colors: &'a AppColors,
 ) -> Element<'a, CipherEditMessage, AppTheme> {
-    let c = form.modified.card.as_ref().expect("ensure_sub_structs");
+    let Some(c) = form.modified.card.as_ref() else {
+        return iced::widget::Space::new().into();
+    };
 
     let body = column![
         text_field(

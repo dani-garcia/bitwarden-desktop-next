@@ -13,7 +13,8 @@ use crate::{
 
 use super::{
     App, MAIN_WINDOW_SIZE, Message, SystemMessage, ThemeState, ViewCache, Views, WindowMessage,
-    handlers, helpers::main_window_platform_specific,
+    handlers,
+    helpers::main_window_platform_specific,
     window::{WindowInfo, WindowKind},
 };
 
@@ -194,8 +195,11 @@ impl App {
             Subscription::none()
         };
 
-        let theme_sub = Subscription::run_with(self.theme.system.clone(), |st| st.subscribe())
-            .map(|_| Message::System(SystemMessage::ThemeChanged));
+        let theme_sub = match &self.theme.system {
+            Some(s) => Subscription::run_with(s.clone(), |st| st.subscribe())
+                .map(|_| Message::System(SystemMessage::ThemeChanged)),
+            None => Subscription::none(),
+        };
 
         // Second-launch wake-up: listener bound once inside this stream, kept
         // alive across `update()` cycles because iced hashes the subscription

@@ -245,4 +245,3 @@ fn initial_circle<'a>(name: &str, colors: &'a AppColors) -> Element<'a, ItemList
         })
         .into()
 }
-
