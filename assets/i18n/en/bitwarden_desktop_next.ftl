@@ -368,13 +368,11 @@ tray-show-hide = Show / Hide
 tray-lock-vault = Lock vault
 tray-exit = Exit
 
-# Native names shown in the Appearance tab's language picker. DO NOT
-# TRANSLATE — each value should always be the language's own endonym
-# (English, Español, 日本語, …) regardless of the active locale. Defined
-# only here so translators of other .ftl files never accidentally rewrite
-# them; the runtime looks `language-name-<tag>` up against this file directly.
-language-name-en = English
-language-name-es = Español
+# Native name (endonym) of this locale, shown in the Appearance tab's
+# language picker. Each `.ftl` file declares its own — the runtime reads
+# this key from each locale's bundle directly so the value renders in
+# its own script regardless of the active locale.
+language-name-self = English
 
 ## Settings modal
 settings-title = Settings

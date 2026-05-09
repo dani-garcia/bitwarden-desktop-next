@@ -366,6 +366,9 @@ tray-show-hide = Mostrar / Ocultar
 tray-lock-vault = Bloquear caja fuerte
 tray-exit = Salir
 
+# Endonym — see comment in the canonical en file.
+language-name-self = Español
+
 ## Modal de ajustes
 settings-title = Ajustes
 settings-tab-security = Seguridad
@@ -505,6 +508,56 @@ send-delete-modal-title = Eliminar Send
 send-delete-modal-body = ¿Seguro que quieres eliminar "{$name}"?
 send-delete-modal-cancel = Cancelar
 send-delete-modal-confirm = Eliminar
+
+## Generador
+generator-title = Generador
+generator-tab-password = Contraseña
+generator-tab-passphrase = Frase de contraseña
+generator-tab-username = Nombre de usuario
+
+# Pestaña de contraseña
+generator-length = Longitud
+generator-length-hint = El valor debe estar entre 5 y 128.
+generator-include = Incluir
+generator-include-uppercase = A-Z
+generator-include-lowercase = a-z
+generator-include-numbers = 0-9
+generator-include-special = !@#$%^&*
+generator-min-number = Mínimo de números
+generator-min-special = Mínimo de especiales
+generator-avoid-ambiguous = Evitar caracteres ambiguos
+
+# Pestaña de frase de contraseña
+generator-num-words = Número de palabras
+generator-num-words-hint = El valor debe estar entre 3 y 20. Usa 6 palabras o más para generar una frase de contraseña segura.
+generator-word-separator = Separador de palabras
+generator-passphrase-capitalize = Mayúsculas iniciales
+generator-passphrase-include-number = Incluir número
+
+# Pestaña de nombre de usuario
+generator-username-type = Tipo
+generator-username-kind-word = Palabra aleatoria
+generator-username-kind-subaddress = Correo con sub-dirección
+generator-username-kind-catchall = Correo catch-all
+generator-username-capitalize = Mayúsculas iniciales
+generator-username-include-number = Incluir número
+generator-username-email = Correo
+generator-username-domain = Dominio
+
+# Historial
+generator-history-open = Historial del generador
+generator-history-title = Historial del generador
+generator-history-heading = Reciente
+generator-history-empty = Sin valores recientes.
+generator-history-clear = Borrar historial
+generator-history-just-now = ahora mismo
+generator-history-minutes-ago = hace {$count} m
+generator-history-hours-ago = hace {$count} h
+generator-history-days-ago = hace {$count} d
+
+# Toasts
+generator-toast-copied = Copiado
+generator-toast-failed = No se pudo generar
 
 # Magnify launcher
 magnify-search-placeholder = Bitwarden Magnify

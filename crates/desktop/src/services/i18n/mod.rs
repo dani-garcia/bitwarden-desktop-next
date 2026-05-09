@@ -26,7 +26,7 @@
 //! iced will re-render on the next frame and every `fl!()` call will return the
 //! new translation — no restart required.
 
-use std::sync::LazyLock;
+use std::{collections::HashMap, sync::LazyLock};
 
 use i18n_embed::{
     DesktopLanguageRequester, LanguageLoader,
@@ -79,17 +79,41 @@ pub fn available_languages() -> Vec<LanguageIdentifier> {
         .unwrap_or_default()
 }
 
-/// Human-readable label for a language tag, shown in the settings language
-/// picker. Native names live in the English FTL under `language-name-<tag>`
-/// keys (marked "do not translate") so they render in their own script
-/// regardless of the active locale. Falls back to the raw tag when missing.
-pub fn language_label(tag: &str) -> String {
-    let key = format!("language-name-{tag}");
-    if LANGUAGE_LOADER.has(&key) {
-        LANGUAGE_LOADER.get(&key)
-    } else {
-        tag.to_string()
+/// Conventional key each locale defines to declare its own native name
+/// (endonym), e.g. `language-name-self = Español` in `es/...ftl`. Read at
+/// startup and cached in [`ENDONYMS`]; never resolved through the active
+/// loader so the value always renders in its own script.
+const ENDONYM_KEY: &str = "language-name-self";
+
+/// Map of language tag → native name, populated once on first access by
+/// loading each available locale into a throwaway [`FluentLanguageLoader`]
+/// and reading [`ENDONYM_KEY`] out of it. Adding a new locale is purely a
+/// filesystem operation: drop a new
+/// `assets/i18n/<tag>/bitwarden_desktop_next.ftl` containing a
+/// `language-name-self = <Endonym>` line and it surfaces in the picker.
+static ENDONYMS: LazyLock<HashMap<String, String>> = LazyLock::new(|| {
+    let mut out = HashMap::new();
+    for tag in available_languages() {
+        let probe: FluentLanguageLoader = fluent_language_loader!();
+        if let Err(e) = probe.load_languages(&Localizations, std::slice::from_ref(&tag)) {
+            tracing::warn!(%tag, %e, "failed to load locale for endonym lookup");
+            continue;
+        }
+        if probe.has(ENDONYM_KEY) {
+            out.insert(tag.to_string(), probe.get(ENDONYM_KEY));
+        }
     }
+    out
+});
+
+/// Human-readable label for a language tag, shown in the settings language
+/// picker. Falls back to the raw tag when the locale's `.ftl` doesn't
+/// declare `language-name-self`.
+pub fn language_label(tag: &str) -> String {
+    ENDONYMS
+        .get(tag)
+        .cloned()
+        .unwrap_or_else(|| tag.to_string())
 }
 
 /// Runtime key lookup. Prefer [`fl!`][crate::fl] for literal keys (compile-
