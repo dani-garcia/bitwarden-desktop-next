@@ -13,10 +13,12 @@ pub enum AboutMessage {
     Close,
 }
 
-/// Pinned SDK revision, displayed in the About dialog. Keep in sync with
-/// `bitwarden-*` git revs in the workspace root `Cargo.toml`. A `build.rs`
-/// that parses this out automatically is tracked in docs/todo.md.
-const SDK_REV_SHORT: &str = "6c25425";
+/// Pinned SDK revision, displayed in the About dialog. Resolved at build
+/// time by `build.rs` from the workspace `Cargo.lock` so it always
+/// matches the `bitwarden-*` git rev actually being compiled in. Falls
+/// back to `"unknown"` (with a build warning) if the lockfile shape
+/// changes — see `build.rs::extract_sdk_rev`.
+const SDK_REV_SHORT: &str = env!("SDK_REV_SHORT");
 
 /// Build the multi-line info string for the clipboard Copy action.
 pub fn info_string() -> String {

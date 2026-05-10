@@ -4,6 +4,69 @@ const FONT_VERSION: &str = "1.13.1";
 
 fn main() {
     generate_bootstrap_icons();
+    embed_sdk_rev();
+}
+
+/// Read the resolved git revision of `bitwarden-core` out of the workspace
+/// `Cargo.lock` and expose it as the `SDK_REV_SHORT` env var for `env!()`.
+/// All `bitwarden-*` crates pin to the same rev, so any of them would work
+/// — `bitwarden-core` is the canonical pick.
+///
+/// Reading from `Cargo.lock` rather than `Cargo.toml` is robust to changes
+/// in how the dep is declared (`rev = "..."` vs `branch = "..."`): Cargo
+/// always resolves to a `source = "git+...?rev=HEX#HEX"` entry.
+fn embed_sdk_rev() {
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR set");
+    let lock_path = Path::new(&manifest_dir).join("../../Cargo.lock");
+    println!("cargo:rerun-if-changed={}", lock_path.display());
+
+    let short = match std::fs::read_to_string(&lock_path) {
+        Ok(contents) => match extract_sdk_rev(&contents) {
+            Some(rev) => rev[..rev.len().min(7)].to_string(),
+            None => {
+                println!("cargo:warning=SDK_REV_SHORT: source rev not found in Cargo.lock");
+                "unknown".into()
+            }
+        },
+        Err(e) => {
+            println!("cargo:warning=SDK_REV_SHORT: failed to read Cargo.lock ({e})");
+            "unknown".into()
+        }
+    };
+
+    println!("cargo:rustc-env=SDK_REV_SHORT={short}");
+}
+
+/// Walk `Cargo.lock` looking for the `bitwarden-core` `[[package]]` block
+/// and return the hash from its `source = "git+...?rev=HEX#HEX"` line.
+fn extract_sdk_rev(lock: &str) -> Option<String> {
+    let mut in_target = false;
+    for line in lock.lines() {
+        let line = line.trim();
+        if line == "[[package]]" {
+            in_target = false;
+            continue;
+        }
+        if line == r#"name = "bitwarden-core""# {
+            in_target = true;
+            continue;
+        }
+        if !in_target {
+            continue;
+        }
+        let Some(src) = line.strip_prefix("source = \"") else {
+            continue;
+        };
+        let src = src.strip_suffix('"').unwrap_or(src);
+        // Expected shape: git+https://...?rev=HEX#HEX
+        let (_, after) = src.split_once("?rev=")?;
+        let rev = after.split_once('#').map_or(after, |(r, _)| r);
+        if rev.len() >= 7 && rev.chars().all(|c| c.is_ascii_hexdigit()) {
+            return Some(rev.to_string());
+        }
+        return None;
+    }
+    None
 }
 
 fn generate_bootstrap_icons() {

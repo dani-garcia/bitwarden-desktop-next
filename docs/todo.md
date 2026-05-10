@@ -51,7 +51,6 @@ Each is small enough to land in one focused session.
 - **Magnify decrypt-failure feedback** `[S]` `[blocked: tray-balloon / OS-notification path]` — `Err` from `full_cipher` only logs at `warn` and the launcher silently dismisses ([handlers/magnify.rs](../crates/desktop/src/app/handlers/magnify.rs) `FieldDecryptCompleted`). Hook into a notification path once one exists.
 - **Tray icon Linux test-VM verification** `[S]` `[blocked: Linux test machine]` — packaging-side wiring is in (`.deb` / `.pacman` declare `libayatana-appindicator3-1` / `libayatana-appindicator`; README notes the SNI-host requirement). Verify GNOME + AppIndicator extension, KDE Plasma, and sway + waybar on a VM.
 - **Per-type item-list icons** `[S]` — non-login ciphers fall back to `favicon::globe_handle()` in [views/vault/widgets/item_list.rs](../crates/desktop/src/views/vault/widgets/item_list.rs). Card / Identity / Note / SSH-key entries each have a BWI glyph already used in the magnify launcher and detail headers; mirror that mapping here so the list shows a type-specific icon.
-- **Automate `SDK_REV_SHORT`** `[S]` — [views/about/mod.rs](../crates/desktop/src/views/about/mod.rs) hardcodes `SDK_REV_SHORT = "..."` and asks the maintainer to keep it in sync with the workspace `Cargo.toml`. A `build.rs` that parses the SDK git rev out of the lockfile (or runs `git -C <submodule> rev-parse --short HEAD`) and emits an `env!`-readable string would remove the manual step.
 
 ---
 
@@ -77,7 +76,7 @@ After a successful `ContinueWithEmail`, the server may demand TOTP / Duo / WebAu
 
 ### Per-user `icons_url` for self-hosted `[M]` `[blocked: login command]`
 
-All users currently resolve to `https://icons.bitwarden.net` via [services/favicon.rs](../crates/desktop/src/services/favicon.rs). Add `icons_url: String` on `UserEntry` ([services/sdk/](../crates/desktop/src/services/sdk/)), populate from `/api/config`'s `environment.icons` at login (cloud defaults: US `icons.bitwarden.net`, EU `icons.bitwarden.eu` per the Angular clients' `default-environment.service.ts`), expose `ClientManager::icons_url(&uid) -> Option<String>`, and swap the resolver closure in [app/mod.rs](../crates/desktop/src/app/mod.rs) (per-fetch closure → re-auth picks up the new URL without restart, fallback to US cloud when `None`).
+All users currently resolve to `https://icons.bitwarden.net` via [services/favicon/](../crates/desktop/src/services/favicon/mod.rs). Add `icons_url: String` on `UserEntry` ([services/sdk/](../crates/desktop/src/services/sdk/)), populate from `/api/config`'s `environment.icons` at login (cloud defaults: US `icons.bitwarden.net`, EU `icons.bitwarden.eu` per the Angular clients' `default-environment.service.ts`), expose `ClientManager::icons_url(&uid) -> Option<String>`, and swap the resolver closure in [app/lifecycle.rs](../crates/desktop/src/app/lifecycle.rs) (per-fetch closure → re-auth picks up the new URL without restart, fallback to US cloud when `None`).
 
 ### `LoginView` per-`AuthPage` field grouping `[M]` `[defer: Registration view]`
 
@@ -187,10 +186,6 @@ Verify before swapping:
 3. **Linux Wayland coverage.** XDG portals work consistently. winit's Wayland reading has been spottier; test on at least one Wayland compositor.
 
 Sketch: drop `system-theme` from `Cargo.toml`; replace `ThemeState.system: Rc<system_theme::SystemTheme>` with the resolved mode; dispatch `iced::system::theme()` from `App::new` (handle as `SystemMessage::SystemThemeResolved(Mode)`); replace `theme_sub` with `iced::system::theme_changes().map(...)` carrying the mode payload directly. Net: −1 crate, −1 thread, ~30 lines simpler.
-
-### `refresh_cache` invalidation split `[M]` `[blocked: bench]`
-
-`App::post_update()` calls `refresh_cache()` on every message. `refresh_cache` rebuilds `Vec<AccountEntry>` (3 string allocations per user), recomputes `unlock_alternatives`, and calls `sync_native_enabled` which iterates every menu item and crosses an FFI boundary on Windows. At 16ms muda polling this runs ~60×/sec continuously. Drive invalidation from specific handlers (`ClientManagerLoaded`, `SignOutRequested`, `LockAllVaults`, account-switch, auth-page change); keep `post_update` a no-op in the default path; split `refresh_cache` into per-concern refreshers. Bench both paths before / after with the loadtest account + native menus.
 
 ### `UpdateCtx` filter leak `[M]` `[defer: N=3 sidebar filter]`
 
