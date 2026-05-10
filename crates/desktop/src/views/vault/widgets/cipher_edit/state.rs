@@ -22,15 +22,17 @@ pub struct FolderOption {
     pub name: String,
 }
 
-impl From<FolderView> for FolderOption {
-    fn from(v: FolderView) -> Self {
-        Self {
-            // Folders from `FoldersClient::list()` always have an id populated
-            // by the SDK — we require it here so dropdown selection doesn't
-            // have to cope with `Option<FolderId>` per entry.
-            id: v.id.expect("decrypted folder missing id"),
+impl TryFrom<FolderView> for FolderOption {
+    type Error = ();
+
+    fn try_from(v: FolderView) -> Result<Self, Self::Error> {
+        // Folders from `FoldersClient::list()` are documented to always
+        // carry an id — but a partial-sync edge case or upstream regression
+        // shouldn't crash the app. Drop entries without an id at load.
+        Ok(Self {
+            id: v.id.ok_or(())?,
             name: v.name,
-        }
+        })
     }
 }
 

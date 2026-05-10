@@ -47,19 +47,20 @@ impl App {
         let delay = self.settings.preferences_for(&uid).clear_clipboard;
         self.clipboard.set_timeout(delay.as_duration());
 
+        // Becoming the active user counts as activity (parity with the
+        // Electron client's `setAccountActivity` on `switchAccount`). Only
+        // bump when already unlocked — the unlock-success path will
+        // enroll otherwise.
+        if self.client_manager.is_unlocked(&uid) {
+            crate::services::session_timeout::record_activity(uid);
+        }
+        self.refresh_session_timeout_deadline();
+
         if !self.client_manager.is_unlocked(&uid) {
-            self.views
-                .login
-                .show_unlock_for(Some(&uid), &self.client_manager);
-            self.set_screen(Screen::Login);
-            self.views.login.auto_focus_task().map(Message::login)
+            self.show_login_for_active()
         } else {
             self.set_screen(Screen::Vault);
-            Task::batch([
-                self.load_vault_list_task(uid),
-                self.load_send_list_task(uid),
-                crate::views::vault::VaultView::delayed_auto_focus_task().map(Message::vault),
-            ])
+            self.switch_to_vault_task(uid)
         }
     }
 }

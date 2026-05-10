@@ -162,9 +162,12 @@ impl SendView {
         match form.update(msg) {
             FormEvent::None => Outcome::None,
             FormEvent::Cancel => {
-                self.selection.clear();
+                let task = self
+                    .selection
+                    .sheet_fade
+                    .close_with_finalize(SendMessage::FinalizeSheetClose);
                 self.pane.close();
-                Outcome::None
+                Outcome::task(task)
             }
             FormEvent::Save => {
                 if !form.is_valid() {
@@ -206,10 +209,13 @@ impl SendView {
         self.selection.confirm_delete.close();
         let Some(send_id) = self.selection.id else {
             // New-item form hasn't been saved yet — "delete" just dismisses
-            // the draft.
-            self.selection.clear();
+            // the draft via the same sheet-fade outro as cancel.
+            let task = self
+                .selection
+                .sheet_fade
+                .close_with_finalize(SendMessage::FinalizeSheetClose);
             self.pane.close();
-            return Outcome::None;
+            return Outcome::task(task);
         };
         let Some(uid) = ctx.active_user.copied() else {
             return Outcome::None;

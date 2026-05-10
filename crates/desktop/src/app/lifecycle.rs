@@ -39,6 +39,9 @@ impl App {
         // Global hotkey registration failure (e.g. Wayland) is logged
         // internally; Magnify is then just unreachable.
         crate::services::global_hotkey::install_event_handler();
+        // Spawn the session-timeout driver in iced's tokio runtime. Idle
+        // (parked on `pending()`) until the first user enrolls.
+        crate::services::session_timeout::init();
 
         // `--autostart` forces the app to launch hidden in the tray. Force
         // the tray to build in that case even if no tray settings are on,
@@ -117,6 +120,7 @@ impl App {
 
             windows,
             main_window: main_id,
+            main_window_focused: true,
             magnify: magnify::MagnifyView::new(magnify_id),
 
             theme: ThemeState::new(user_theme),
@@ -166,11 +170,21 @@ impl App {
         // message for daemon multi-window dispatch.
         let event_sub = iced::event::listen_with(|event, _status, id| match event {
             iced::Event::Keyboard(ev) => Some(Message::Window(WindowMessage::KeyPressed(id, ev))),
+            // Mouse button presses count as session-timeout activity. Cursor
+            // moves are intentionally skipped — they fire ~per-frame while
+            // the cursor is in the window and would prevent any lock from
+            // ever firing.
+            iced::Event::Mouse(iced::mouse::Event::ButtonPressed(_)) => {
+                Some(Message::Window(WindowMessage::MouseInput(id)))
+            }
             iced::Event::Window(iced::window::Event::Resized(size)) => {
                 Some(Message::Window(WindowMessage::Resized(id, size)))
             }
             iced::Event::Window(iced::window::Event::CloseRequested) => {
                 Some(Message::Window(WindowMessage::CloseRequested(id)))
+            }
+            iced::Event::Window(iced::window::Event::Focused) => {
+                Some(Message::Window(WindowMessage::Focused(id)))
             }
             iced::Event::Window(iced::window::Event::Unfocused) => {
                 Some(Message::Window(WindowMessage::Unfocused(id)))
@@ -212,6 +226,13 @@ impl App {
         let session_sub = Subscription::run(session_events::event_stream)
             .map(|ev| Message::System(SystemMessage::SessionEvent(ev)));
 
+        // Session-timeout driver. Sleeps until the soonest enrolled deadline
+        // and pushes a tick when it elapses; the App handler re-checks each
+        // user and applies lock/log-out as needed. Idle (parked on
+        // `pending()`) when no user has a finite timeout.
+        let session_timeout_sub = Subscription::run(crate::services::session_timeout::tick_stream)
+            .map(|_| Message::System(SystemMessage::SessionTimeoutCheck));
+
         // Idle when OS-side hotkey registration failed (Wayland, missing
         // permissions) — the stream terminates and the subscription stays
         // dormant.
@@ -241,6 +262,7 @@ impl App {
             theme_sub,
             wake_sub,
             session_sub,
+            session_timeout_sub,
             favicon_sub,
             anim_sub,
             magnify_sub,

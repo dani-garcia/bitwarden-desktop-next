@@ -9,7 +9,7 @@ use iced::{
 };
 
 use crate::{
-    components::{self, buttons, icons, modal},
+    components::{self, buttons, icons, modal, shell_scope::ShellScope},
     fl,
     theme::{AppColors, AppTheme, RADIUS_LG, RADIUS_PILL},
 };
@@ -46,12 +46,7 @@ impl GeneratorView {
         // bar isn't a stark white sliver against the dark dialog.
         let scrolled = scrollable(
             container(body)
-                .padding(Padding {
-                    top: 0.0,
-                    right: 12.0,
-                    bottom: 0.0,
-                    left: 0.0,
-                })
+                .padding(Padding::default().right(12))
                 .width(Fill),
         )
         .height(Fill)
@@ -159,8 +154,11 @@ fn tab_row<'a>(
     }
 
     // `push_under` puts the indicator behind the buttons without affecting
-    // the stack's intrinsic size — the buttons row dictates height.
-    let stacked = Stack::new().push(buttons_row).push_under(indicator);
+    // the stack's intrinsic size — the buttons row dictates height. Wrap
+    // in `ShellScope` so a `pick_list` opening in a sibling option card
+    // doesn't bleed `is_event_captured` across this Stack and swallow tab
+    // clicks (see CLAUDE.md → "Iced Gotchas").
+    let stacked = ShellScope::new(Stack::new().push(buttons_row).push_under(indicator));
 
     container(stacked)
         .padding(Padding::from([2, 2]))

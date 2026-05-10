@@ -27,7 +27,11 @@ impl GeneratorView {
                     return Outcome::None;
                 }
                 self.active_tab = tab;
-                let new_index = TabKind::ALL.iter().position(|t| *t == tab).unwrap_or(0) as f32;
+                let new_index = match tab {
+                    TabKind::Password => 0.0_f32,
+                    TabKind::Passphrase => 1.0,
+                    TabKind::Username => 2.0,
+                };
                 self.tab_anim.transition(new_index, Instant::now());
                 animation::extend(Duration::from_millis(TAB_ANIM_MS as u64));
                 self.current = None;
@@ -105,7 +109,8 @@ impl GeneratorView {
                 s.passphrase.num_words = bump_clamped(&s.passphrase.num_words, delta, 6, 3, 20);
             }),
             GeneratorMessage::SetWordSeparator(s) => self.mutate_and_regen(|st| {
-                // SDK's word_separator is a String but the screenshot shows a single-char field.
+                // Single-char only — matches the official client even though
+                // the SDK accepts a full String here.
                 st.passphrase.word_separator = s.chars().take(1).collect();
             }),
             GeneratorMessage::TogglePassphraseCapitalize(v) => {

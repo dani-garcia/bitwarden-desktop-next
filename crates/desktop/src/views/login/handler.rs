@@ -17,12 +17,14 @@ impl App {
                     );
                     return Task::none();
                 }
+                // Stamp `last_activity` so neither timer has a retroactive
+                // head-start — the throttle path doesn't matter here since
+                // there's no prior entry to suppress against.
+                crate::services::session_timeout::record_activity(uid);
+                self.refresh_session_timeout_deadline();
                 self.set_screen(Screen::Vault);
-                tracing::info!(%uid, "unlock succeeded; loading vault list");
-                Task::batch([
-                    self.load_vault_list_task(uid),
-                    crate::views::vault::VaultView::delayed_auto_focus_task().map(Message::vault),
-                ])
+                tracing::info!(%uid, "unlock succeeded; loading vault + send lists");
+                self.switch_to_vault_task(uid)
             }
             LoginEvent::AccountSwitcher(e) => self.handle_account_switcher_event(e),
         }
@@ -41,20 +43,16 @@ impl App {
     /// return to the login screen when no accounts remain.
     pub(crate) fn handle_log_out(&mut self) -> Task<Message> {
         if let Some(uid) = self.active_user {
-            self.views.vault.remove_user_items(&uid);
-            self.views.send.remove_user_items(&uid);
-            self.favicon.evict_user(&uid);
-            self.client_manager.log_out(&uid);
+            self.log_out_user(&uid);
+            self.refresh_session_timeout_deadline();
         }
         // Drop any sticky Magnify search keyed to the user we just signed
         // out — otherwise the launcher still holds Arc clones of their
         // decrypted ciphers in `results`.
         self.magnify_reset_sticky();
-        let next_uid = self
-            .client_manager
-            .user_ids()
-            .into_iter()
-            .find(|id| self.active_user.as_ref() != Some(id));
+        // The user we just logged out is already gone from `user_ids()`, so
+        // any remaining id is a candidate for the next active user.
+        let next_uid = self.client_manager.user_ids().into_iter().next();
         match next_uid {
             Some(uid) => self.handle_user_switch(uid),
             None => {

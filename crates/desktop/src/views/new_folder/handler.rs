@@ -18,10 +18,9 @@ impl App {
 
     /// Open the New folder modal. No-op when no user is active.
     pub(crate) fn open_new_folder_modal(&mut self) -> Task<Message> {
-        if self.active_user.is_none() {
+        if self.require_active_user_and_close_overlay().is_none() {
             return Task::none();
         }
-        self.open_overlay = None;
         self.views.new_folder.open();
         crate::components::fade_in_out::focus_after_open(
             crate::views::new_folder::NAME_FIELD_ID.clone(),

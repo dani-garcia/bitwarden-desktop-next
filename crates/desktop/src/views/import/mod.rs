@@ -14,9 +14,8 @@ use iced::{
 use crate::{
     app::{Outcome, UpdateCtx, ViewTypes},
     components::{FadeInOut, buttons, inputs, modal},
-    domain::VaultChoice,
     fl,
-    services::sdk::{Collection, Organization},
+    services::sdk::{Collection, Organization, VaultChoice},
     theme::{AppColors, AppTheme, RADIUS_LG},
 };
 
@@ -312,13 +311,20 @@ const REGULAR_FORMATS: &[ImportFormat] = &[
     },
 ];
 
-fn all_formats() -> Vec<ImportFormat> {
+/// Featured first, then regular sorted by display name. Computed once and
+/// reused across `modal_view` calls so the format dropdown doesn't pay a
+/// `sort_by_key` per frame.
+static SORTED_FORMATS: std::sync::LazyLock<Vec<ImportFormat>> = std::sync::LazyLock::new(|| {
     let mut out = Vec::with_capacity(FEATURED_FORMATS.len() + REGULAR_FORMATS.len());
     out.extend(FEATURED_FORMATS.iter().copied());
     let mut regular: Vec<ImportFormat> = REGULAR_FORMATS.to_vec();
     regular.sort_by_key(|f| f.name);
     out.extend(regular);
     out
+});
+
+fn all_formats() -> Vec<ImportFormat> {
+    SORTED_FORMATS.clone()
 }
 
 // ── State ─────────────────────────────────────────────────────────────────

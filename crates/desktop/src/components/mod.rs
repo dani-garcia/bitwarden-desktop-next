@@ -23,6 +23,11 @@ use iced::{
 
 use crate::theme::{AppColors, AppTheme, RADIUS_LG};
 
+/// Backdrop opacity used by the modal and bottom-sheet shells when fully
+/// open. The actual paint multiplies this by the fade-in progress so the
+/// scrim cross-fades with the foreground.
+pub const BACKDROP_ALPHA: f32 = 0.45;
+
 /// Subtle drop shadow used by `styled_card`, the generator history-row, and
 /// the send-edit section card. A 1px-down soft shadow at 20% black; pulls
 /// cards a hair off their background without a heavy halo.

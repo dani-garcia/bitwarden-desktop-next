@@ -48,10 +48,9 @@ impl App {
     /// value. Called from the View → Generator menu action and the
     /// sidebar's Generator section. No-op when no user is active.
     pub(crate) fn open_generator_modal(&mut self) -> Task<Message> {
-        let Some(uid) = self.active_user else {
+        let Some(uid) = self.require_active_user_and_close_overlay() else {
             return Task::none();
         };
-        self.open_overlay = None;
         self.views.generator.open(Mode::Generator);
         let history = self.client_manager.password_history(&uid);
         self.views.generator.set_history(history);
@@ -62,10 +61,9 @@ impl App {
     /// Open the Generator modal directly into history mode. Called from
     /// the View → Generator history menu action.
     pub(crate) fn open_generator_history(&mut self) -> Task<Message> {
-        let Some(uid) = self.active_user else {
+        let Some(uid) = self.require_active_user_and_close_overlay() else {
             return Task::none();
         };
-        self.open_overlay = None;
         self.views.generator.open(Mode::History);
         let history = self.client_manager.password_history(&uid);
         self.views.generator.set_history(history);

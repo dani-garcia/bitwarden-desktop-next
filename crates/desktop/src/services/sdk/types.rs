@@ -21,6 +21,37 @@ pub struct Organization {
     pub wrapped_key: Option<UnsignedSharedKey>,
 }
 
+/// Source / destination vault picker shared by the import and export modals:
+/// the user's personal vault, or one of their organizations.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VaultChoice {
+    Personal,
+    Org { id: OrganizationId, name: String },
+}
+
+impl VaultChoice {
+    /// Caller supplies the localized "personal" label so each modal can use
+    /// its own fluent key without this type owning either.
+    pub fn label(&self, personal_label: &str) -> String {
+        match self {
+            Self::Personal => personal_label.to_string(),
+            Self::Org { name, .. } => name.clone(),
+        }
+    }
+
+    pub fn list_with_personal(orgs: &[Organization]) -> Vec<Self> {
+        let mut choices = Vec::with_capacity(orgs.len() + 1);
+        choices.push(Self::Personal);
+        for org in orgs {
+            choices.push(Self::Org {
+                id: org.id,
+                name: org.name.clone(),
+            });
+        }
+        choices
+    }
+}
+
 #[derive(Deserialize, Clone, Debug)]
 pub struct Collection {
     pub id: CollectionId,

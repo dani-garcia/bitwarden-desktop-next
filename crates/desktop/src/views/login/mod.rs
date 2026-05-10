@@ -108,6 +108,9 @@ pub enum LoginMessage {
 
     LoginPasswordChanged(String),
     LoginWithPassword,
+    // Forward stub: the handler arm exists and is correct, but no caller
+    // dispatches this until `LoginWithPassword` is wired to the SDK login
+    // call. Remove the `#[expect]` then.
     #[expect(dead_code)]
     LoginCompleted(UserId, Result<(), String>),
     BackToEmail,
@@ -190,10 +193,6 @@ impl LoginView {
         };
     }
 
-    /// Compositional MVU update. Returns a task (for async work the view
-    /// owns) and an optional event (cross-cutting fact for App to route).
-    /// `client_manager` and `active_user` are injected at call-time so the
-    /// view can construct `Task::perform` calls without owning shared state.
     pub fn update(&mut self, msg: LoginMessage, ctx: UpdateCtx<'_>) -> Outcome<Self> {
         let UpdateCtx {
             client_manager,
@@ -316,7 +315,7 @@ impl LoginView {
                 }
             }
             LoginMessage::UseSingleSignOn => {
-                // TODO: SSO login flow
+                // Stub. See `SSO login flow` in docs/todo.md.
             }
 
             LoginMessage::LoginPasswordChanged(pw) => {
@@ -325,13 +324,10 @@ impl LoginView {
                 }
             }
             LoginMessage::LoginWithPassword => {
-                // TODO: call `client_manager.login(email, password).await`
-                // once SDK login support lands. For now this is a stub — we
-                // clear the input and emit nothing so the button press is
-                // visibly consumed.
-                if let AuthPage::LoginPassword { password_input, .. } = &mut self.auth_page {
-                    let _password = std::mem::take(password_input);
-                }
+                // Stub. See `Implement the login command` in docs/todo.md —
+                // until the SDK call lands the press is a deliberate no-op
+                // (clearing the field would surprise the user without
+                // feedback as to why).
             }
             LoginMessage::LoginCompleted(msg_uid, result) => {
                 if active_user != Some(&msg_uid) {
@@ -375,7 +371,7 @@ impl LoginView {
                 return Outcome::task(self.auto_focus_task());
             }
             LoginMessage::GetPasswordHint => {
-                // TODO: password hint request flow
+                // Stub. See `Master-password hint request` in docs/todo.md.
             }
 
             LoginMessage::ToggleServerSelector => {

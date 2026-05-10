@@ -265,12 +265,7 @@ impl TitleBarView {
         ]
         .spacing(0)
         .align_y(Alignment::Center)
-        .padding(Padding {
-            top: 0.0,
-            right: 0.0,
-            bottom: 0.0,
-            left: 4.0,
-        });
+        .padding(Padding::default().left(4));
 
         let bar = container(bar_content)
             .width(Fill)

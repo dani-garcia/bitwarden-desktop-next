@@ -3,42 +3,7 @@
 //! View-local types live in the owning view's `state.rs` (or `mod.rs` while
 //! the archetype split is pending). Keep this file small.
 
-use bitwarden_core::OrganizationId;
-
 pub use bitwarden_core::UserId;
-
-use crate::services::sdk::Organization;
-
-/// Source / destination vault picker shared by import and export modals:
-/// the user's personal vault, or one of their organizations.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum VaultChoice {
-    Personal,
-    Org { id: OrganizationId, name: String },
-}
-
-impl VaultChoice {
-    /// Caller supplies the localized "personal" label so each modal can use
-    /// its own fluent key without this type owning either.
-    pub fn label(&self, personal_label: &str) -> String {
-        match self {
-            Self::Personal => personal_label.to_string(),
-            Self::Org { name, .. } => name.clone(),
-        }
-    }
-
-    pub fn list_with_personal(orgs: &[Organization]) -> Vec<Self> {
-        let mut choices = Vec::with_capacity(orgs.len() + 1);
-        choices.push(Self::Personal);
-        for org in orgs {
-            choices.push(Self::Org {
-                id: org.id,
-                name: org.name.clone(),
-            });
-        }
-        choices
-    }
-}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Screen {

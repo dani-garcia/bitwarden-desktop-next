@@ -448,7 +448,10 @@ where
     Message: Clone,
     Renderer: renderer::Renderer,
 {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "internal overlay constructor; the only caller is DropDown::overlay and bundling these into a struct would just relay them through"
+    )]
     fn new(
         state: &'b mut Tree,
         element: &'b mut Element<'a, Message, Theme, Renderer>,

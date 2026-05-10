@@ -41,7 +41,7 @@ use self::user_entry::UserEntry;
 
 pub use client_ext::ClientExt;
 pub use loader::verify_data_dir;
-pub use types::{AccountEntry, Collection, Organization, PasswordHistoryEntry};
+pub use types::{AccountEntry, Collection, Organization, PasswordHistoryEntry, VaultChoice};
 pub use unlock::{UnlockData, sync};
 
 use crate::domain::UnlockMethods;
@@ -240,21 +240,11 @@ impl ClientManager {
     pub fn save_send(&mut self, user_id: UserId, mut view: SendView) -> SendView {
         // Mock-only: a real backend would assign id + access_id on POST and
         // return them. With no server, generate them here.
-        if view.id.is_none() {
-            view.id = Some(SendId::new_v4());
-        }
+        let id = *view.id.get_or_insert_with(SendId::new_v4);
         if view.access_id.is_none() {
-            view.access_id = Some(
-                uuid::Uuid::new_v4()
-                    .simple()
-                    .to_string()
-                    .chars()
-                    .take(16)
-                    .collect(),
-            );
+            view.access_id = Some(format!("{:.16}", uuid::Uuid::new_v4().simple()));
         }
 
-        let id = view.id.expect("id generated above");
         let entry = self.sends.entry(user_id).or_default();
         if let Some(slot) = entry.iter_mut().find(|s| s.id == Some(id)) {
             *slot = view.clone();

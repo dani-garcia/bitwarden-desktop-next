@@ -82,10 +82,33 @@ impl App {
                 }
                 Task::none()
             }
+            WindowMessage::Focused(id) => {
+                if id == self.main_window_id() {
+                    self.main_window_focused = true;
+                    // The active user just became eligible for the grace
+                    // exemption from `lock_after`; recompute drops their
+                    // `lock_after` deadline from the watch.
+                    self.refresh_session_timeout_deadline();
+                }
+                Task::none()
+            }
             WindowMessage::Unfocused(id) => {
                 if id == self.magnify.window {
                     return self
                         .handle_magnify_message(crate::views::magnify::MagnifyMessage::Hide);
+                }
+                if id == self.main_window_id() {
+                    self.main_window_focused = false;
+                    self.refresh_session_timeout_deadline();
+                }
+                Task::none()
+            }
+            WindowMessage::MouseInput(id) => {
+                // Only main-window clicks count toward the active user's
+                // session timer; the Magnify launcher dismisses on
+                // focus-loss, so its clicks shouldn't extend the timer.
+                if id == self.main_window_id() {
+                    self.record_session_activity();
                 }
                 Task::none()
             }
@@ -101,6 +124,10 @@ impl App {
                 if id != self.main_window_id() {
                     return Task::none();
                 }
+                // Recorded before the shortcut dispatch so e.g. Ctrl+L
+                // (lock vault) pushes back any logout deadline before the
+                // lock takes effect.
+                self.record_session_activity();
                 let iced::keyboard::Event::KeyPressed { key, modifiers, .. } = ev else {
                     return Task::none();
                 };
@@ -158,38 +185,40 @@ impl App {
                 Task::none()
             }
             SystemMessage::ClientManagerLoaded(slot) => {
-                let Some(mgr) = slot
-                    .lock()
-                    .expect("ClientManager hand-off mutex poisoned")
-                    .take()
-                else {
+                // Recover the inner Option even if the load future panicked
+                // before sending — the value (if any) is still valid.
+                let Some(mgr) = slot.lock().unwrap_or_else(|e| e.into_inner()).take() else {
                     tracing::error!("ClientManager slot was already drained");
                     return Task::none();
                 };
                 self.client_manager = mgr;
                 self.active_user = self.client_manager.user_ids().into_iter().next();
-                self.views
-                    .login
-                    .show_unlock_for(self.active_user.as_ref(), &self.client_manager);
-                self.set_screen(Screen::Login);
-                self.views.login.auto_focus_task().map(Message::login)
+                self.show_login_for_active()
             }
             SystemMessage::InstanceWakeRequested => self.show_main_window(),
             SystemMessage::SessionEvent(ev) => {
                 use session_events::SessionEvent;
-                if !matches!(ev, SessionEvent::Locked | SessionEvent::Suspended) {
-                    return Task::none();
+                match ev {
+                    SessionEvent::Suspended => {
+                        // Snapshot wall + monotonic so we can compute the
+                        // suspend gap on resume. Users with the
+                        // `lock_on_system_lock` preference are locked
+                        // immediately; the rest stay enrolled so their
+                        // `last_activity` can be back-dated on `Resumed`.
+                        crate::services::session_timeout::note_suspend();
+                        self.lock_system_lock_users()
+                    }
+                    SessionEvent::Locked => self.lock_system_lock_users(),
+                    SessionEvent::Resumed => {
+                        // Reconcile last_activity for the time CLOCK_MONOTONIC
+                        // missed during suspend, then re-check timeouts.
+                        crate::services::session_timeout::note_resume();
+                        self.run_session_timeout_check()
+                    }
+                    SessionEvent::Unlocked => Task::none(),
                 }
-                let to_lock: Vec<_> = self
-                    .settings
-                    .user_preferences
-                    .iter()
-                    .filter(|(_, p)| p.lock_on_system_lock)
-                    .map(|(uid, _)| *uid)
-                    .collect();
-                let tasks: Vec<_> = to_lock.iter().map(|uid| self.lock_user(uid)).collect();
-                Task::batch(tasks)
             }
+            SystemMessage::SessionTimeoutCheck => self.run_session_timeout_check(),
             SystemMessage::SyncCompleted(res) => {
                 match res {
                     Ok(()) => self.push_toast(Toast::success(fl!("menu-toast-sync-success"), None)),

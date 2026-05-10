@@ -146,9 +146,9 @@ impl Settings {
     pub fn preferences_for(&self, uid: &UserId) -> UserPreferences {
         self.user_preferences.get(uid).copied().unwrap_or_default()
     }
-}
 
-impl Settings {
+    // ── Persistence ───────────────────────────────────────────────────────
+
     /// Missing file → defaults. Malformed → defaults + `tracing::warn!`.
     pub fn load() -> Self {
         let path = crate::paths::data_dir().join("settings.json");

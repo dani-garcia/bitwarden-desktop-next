@@ -6,7 +6,6 @@ use iced::Task;
 
 use crate::{
     app::{App, Message},
-    domain::UserId,
     services::sdk::ClientExt,
     views::export::{ExportEvent, ExportMessage},
 };
@@ -31,14 +30,7 @@ impl App {
                 self.perform_with_client(
                     uid,
                     move |client| {
-                        pick_and_export(
-                            client,
-                            uid,
-                            organization_id,
-                            format,
-                            extension,
-                            default_name,
-                        )
+                        pick_and_export(client, organization_id, format, extension, default_name)
                     },
                     |r| Message::export(ExportMessage::Completed(r)),
                 )
@@ -50,10 +42,9 @@ impl App {
     /// personal-vault banner can name the user, and seeding the source-vault
     /// dropdown from the cached org snapshot held by `VaultView`.
     pub(crate) fn open_export_modal(&mut self) -> Task<Message> {
-        let Some(uid) = self.active_user else {
+        let Some(uid) = self.require_active_user_and_close_overlay() else {
             return Task::none();
         };
-        self.open_overlay = None;
         let email = self
             .active_account_entry()
             .map(|a| a.email.clone())
@@ -89,7 +80,6 @@ fn extension_for(format: &bitwarden_exporters::ExportFormat) -> &'static str {
 /// `Task::perform` runtime.
 async fn pick_and_export(
     client: PasswordManagerClient,
-    uid: UserId,
     organization_id: Option<OrganizationId>,
     format: bitwarden_exporters::ExportFormat,
     extension: &'static str,
@@ -104,7 +94,7 @@ async fn pick_and_export(
         return Ok(None);
     };
     let path: PathBuf = handle.path().to_path_buf();
-    write_export(client, uid, organization_id, format, path)
+    write_export(client, organization_id, format, path)
         .await
         .map(Some)
 }
@@ -114,7 +104,6 @@ async fn pick_and_export(
 /// the runtime worker — large vaults can serialize to tens of MB.
 async fn write_export(
     client: PasswordManagerClient,
-    _uid: UserId,
     organization_id: Option<OrganizationId>,
     format: bitwarden_exporters::ExportFormat,
     path: PathBuf,

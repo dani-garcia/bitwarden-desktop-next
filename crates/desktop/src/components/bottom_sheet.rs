@@ -3,7 +3,7 @@ use iced::{
     widget::{Space, column, container, mouse_area, opaque, stack},
 };
 
-use crate::theme::AppTheme;
+use crate::{components::BACKDROP_ALPHA, theme::AppTheme};
 
 /// Below this window width (logical px) the right-hand pane (vault detail,
 /// send form) collapses into a bottom sheet rendered over the list pane.
@@ -18,9 +18,6 @@ pub const SHEET_TOP_INSET_PX: f32 = 64.0;
 
 /// Top-corner radius of the sheet's content surface.
 pub const SHEET_TOP_RADIUS_PX: f32 = 16.0;
-
-/// Backdrop alpha at full open, modulated by `progress`.
-const BACKDROP_ALPHA: f32 = 0.45;
 
 /// How far below its rest position the sheet starts during the open
 /// transition. Faked via animated top-padding inside the offset column —

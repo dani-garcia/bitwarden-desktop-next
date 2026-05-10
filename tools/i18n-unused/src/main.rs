@@ -146,7 +146,10 @@ fn main() -> ExitCode {
     let other_locales = match discover_other_locales(&i18n_root) {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("error: enumerating locales under {}: {e}", i18n_root.display());
+            eprintln!(
+                "error: enumerating locales under {}: {e}",
+                i18n_root.display()
+            );
             return ExitCode::FAILURE;
         }
     };

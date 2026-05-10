@@ -3,12 +3,12 @@
 
 use bitwarden_send::SendType;
 use iced::{
-    Alignment, Border, Element, Fill,
-    widget::{Space, column, container, row, scrollable, text},
+    Alignment, Element, Fill,
+    widget::{Space, column, row, scrollable, text},
 };
 
 use crate::{
-    components::{buttons, icons, separator_h},
+    components::{self, buttons},
     fl,
     theme::{AppColors, AppTheme},
 };
@@ -33,28 +33,7 @@ pub fn view<'a>(
         (false, SendType::File) => fl!("send-form-title-edit-file"),
     };
 
-    let header = row![
-        text(title)
-            .size(18)
-            .color(colors.text_primary)
-            .font(crate::APP_FONT_BOLD)
-            .width(Fill),
-        buttons::ghost_icon(
-            icons::BWI_CLOSE.render(16.0, colors.text_secondary),
-            colors.item_hover,
-        )
-        .on_press(SendEditMessage::CancelPressed)
-        .padding([6, 8]),
-    ]
-    .align_y(Alignment::Center);
-
-    let header_container = container(header)
-        .padding([16, 20])
-        .style(move |theme: &AppTheme| {
-            container::Style::default()
-                .background(theme.colors.card_bg)
-                .border(Border::default().rounded(iced::border::top(top_radius)))
-        });
+    let header = components::pane_header(title, SendEditMessage::CancelPressed, colors);
 
     let body: Element<'a, SendEditMessage, AppTheme> = scrollable(
         column![
@@ -65,20 +44,20 @@ pub fn view<'a>(
         .padding([16, 20]),
     )
     .height(Fill)
-    .style(crate::components::rail_scroll_style)
+    .style(components::rail_scroll_style)
     .into();
 
-    let footer = footer(form, colors);
+    let footer = components::pane_footer(footer_content(form, colors));
 
-    crate::components::rounded_top_pane(
-        column![header_container, separator_h(), body, footer].height(Fill),
-        top_radius,
-    )
+    components::rounded_top_pane(column![header, body, footer].height(Fill), top_radius)
 }
 
 // ── Footer (Save / Cancel / Delete) ───────────────────────────────────────
 
-fn footer<'a>(form: &'a SendForm, colors: &'a AppColors) -> Element<'a, SendEditMessage, AppTheme> {
+fn footer_content<'a>(
+    form: &'a SendForm,
+    colors: &'a AppColors,
+) -> Element<'a, SendEditMessage, AppTheme> {
     let mut save = buttons::primary(text(fl!("send-form-save")).size(14)).padding([8, 20]);
     if !form.saving {
         save = save.on_press(SendEditMessage::SavePressed);
@@ -101,13 +80,5 @@ fn footer<'a>(form: &'a SendForm, colors: &'a AppColors) -> Element<'a, SendEdit
         ));
     }
 
-    container(left_row)
-        .padding([12, 20])
-        .width(Fill)
-        .style(|theme: &AppTheme| {
-            container::Style::default()
-                .background(theme.colors.card_bg)
-                .border(Border::default().color(theme.colors.border).width(1.0))
-        })
-        .into()
+    left_row.into()
 }

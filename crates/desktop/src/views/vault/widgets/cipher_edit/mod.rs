@@ -26,6 +26,9 @@ mod update;
 mod view;
 
 pub use message::{CipherEditMessage, FormEvent};
-pub use sections::shared::NAME_INPUT_ID;
 pub use state::{CipherForm, FolderOption};
 pub use view::view;
+
+/// Widget id for the cipher form's name field. Referenced from the vault
+/// router to focus the input when a fresh "+New item" form mounts.
+pub const NAME_INPUT_ID: iced::widget::Id = iced::widget::Id::new("cipher-edit-name");

@@ -144,25 +144,163 @@ impl App {
     /// Lock a user's keystore. If `uid` is the active user, also transitions
     /// to the login screen with their unlock prompt; otherwise the call is
     /// silent and the lock is reflected next time the user is selected.
+    ///
+    /// Does **not** unenroll from `session_timeout` — `logout_after` keeps
+    /// ticking while the user is locked. The deadline is recomputed because
+    /// `lock_after` is no longer relevant for this user.
     pub(crate) fn lock_user(&mut self, uid: &UserId) -> Task<Message> {
         self.client_manager.lock(uid);
+        self.refresh_session_timeout_deadline();
         if self.active_user.as_ref() == Some(uid) {
-            self.show_login_after_lock()
+            self.show_login_for_active()
         } else {
             Task::none()
         }
     }
 
-    /// Standard post-lock transition: drop sticky Magnify state, route the
-    /// login view to the active user's unlock prompt, switch to
-    /// [`Screen::Login`], and return the auto-focus task.
-    fn show_login_after_lock(&mut self) -> Task<Message> {
+    /// Modal-open preamble shared across the four `open_*_modal` helpers:
+    /// returns the active user (or `None` to bail) and clears any other
+    /// overlay so a stale dropdown doesn't sit behind the new modal.
+    pub(crate) fn require_active_user_and_close_overlay(&mut self) -> Option<UserId> {
+        let uid = self.active_user?;
+        self.open_overlay = None;
+        Some(uid)
+    }
+
+    /// Lock every user whose `lock_on_system_lock` preference is set. Called
+    /// from the OS-session-event handler on `Locked` / `Suspended`.
+    pub(crate) fn lock_system_lock_users(&mut self) -> Task<Message> {
+        let uids: Vec<UserId> = self
+            .settings
+            .user_preferences
+            .iter()
+            .filter(|(_, p)| p.lock_on_system_lock)
+            .map(|(uid, _)| *uid)
+            .collect();
+        Task::batch(
+            uids.iter()
+                .map(|uid| self.lock_user(uid))
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    /// Snapshot every signed-in user for the session-timeout module: pairs
+    /// each `UserId` with their preferences and current unlock state.
+    pub(crate) fn session_timeout_snapshots(
+        &self,
+    ) -> Vec<crate::services::session_timeout::UserSnapshot> {
+        self.client_manager
+            .user_ids()
+            .into_iter()
+            .map(|uid| crate::services::session_timeout::UserSnapshot {
+                uid,
+                prefs: self.settings.preferences_for(&uid),
+                is_unlocked: self.client_manager.is_unlocked(&uid),
+            })
+            .collect()
+    }
+
+    /// Recompute and push the soonest deadline. Called on every transition
+    /// that may shift it: input event (after the throttle), unlock, lock,
+    /// log-out, settings change, user switch, suspend/resume, focus change.
+    pub(crate) fn refresh_session_timeout_deadline(&self) {
+        let snaps = self.session_timeout_snapshots();
+        crate::services::session_timeout::recompute_and_push_deadline(
+            &snaps,
+            self.active_user.as_ref(),
+            self.main_window_focused,
+        );
+    }
+
+    /// Record an input event for the active user, then recompute the
+    /// deadline if the throttle didn't suppress the bump.
+    pub(crate) fn record_session_activity(&mut self) {
+        let Some(uid) = self.active_user else {
+            return;
+        };
+        if crate::services::session_timeout::record_activity(uid) {
+            self.refresh_session_timeout_deadline();
+        }
+    }
+
+    /// Inline cleanup for a single user log-out. Same shape as the body of
+    /// [`Self::handle_log_out`] but without the active-user-transition
+    /// step, so callers that want to log out a non-active user (or batch
+    /// multiple) don't trip the screen swap.
+    pub(crate) fn log_out_user(&mut self, uid: &UserId) {
+        self.views.vault.remove_user_items(uid);
+        self.views.send.remove_user_items(uid);
+        self.favicon.evict_user(uid);
+        self.client_manager.log_out(uid);
+        crate::services::session_timeout::unenroll(uid);
+    }
+
+    /// Apply session-timeout actions for every signed-in user.
+    pub(crate) fn run_session_timeout_check(&mut self) -> Task<Message> {
+        use crate::services::session_timeout::{Action, expired};
+        let snaps = self.session_timeout_snapshots();
+        let active = self.active_user;
+        let focused = self.main_window_focused;
+
+        let mut to_logout: Vec<UserId> = Vec::new();
+        let mut to_lock: Vec<UserId> = Vec::new();
+        for snap in &snaps {
+            match expired(snap, active.as_ref(), focused) {
+                Some(Action::Logout) => to_logout.push(snap.uid),
+                Some(Action::Lock) => to_lock.push(snap.uid),
+                None => {}
+            }
+        }
+
+        // Process non-active logouts inline so `handle_log_out`'s
+        // next-active-user logic only runs once, after `client_manager`
+        // already reflects the other removals. Otherwise `handle_log_out`
+        // would switch to the next user, that user might also be in
+        // `to_logout`, and the loop would inline-clean a now-active user.
+        let active_logged_out = active.is_some_and(|a| to_logout.contains(&a));
+        for uid in &to_logout {
+            if Some(*uid) != active {
+                self.log_out_user(uid);
+            }
+        }
+        let mut tasks: Vec<Task<Message>> = Vec::new();
+        if active_logged_out {
+            tasks.push(self.handle_log_out());
+        }
+        for uid in to_lock {
+            tasks.push(self.lock_user(&uid));
+        }
+
+        self.refresh_session_timeout_deadline();
+        Task::batch(tasks)
+    }
+
+    /// Standard route-to-login transition: drop sticky Magnify state, point
+    /// the login view at the active user's unlock prompt, switch to
+    /// [`Screen::Login`], and return the auto-focus task. Used after lock,
+    /// after the initial `ClientManager` load, after switching to a locked
+    /// user, and from the Magnify launcher when it routes back to the main
+    /// window.
+    pub(crate) fn show_login_for_active(&mut self) -> Task<Message> {
         self.magnify_reset_sticky();
         self.views
             .login
             .show_unlock_for(self.active_user.as_ref(), &self.client_manager);
         self.set_screen(Screen::Login);
         self.views.login.auto_focus_task().map(Message::login)
+    }
+
+    /// Standard post-unlock transition: load both the vault list and the
+    /// send list, plus the delayed auto-focus task. Used after a successful
+    /// unlock and after switching to an already-unlocked user; keeping the
+    /// three-task batch in one place stops the unlock and switch paths from
+    /// drifting (e.g. one path forgetting to reload the Send list).
+    pub(crate) fn switch_to_vault_task(&self, uid: UserId) -> Task<Message> {
+        Task::batch([
+            self.load_vault_list_task(uid),
+            self.load_send_list_task(uid),
+            crate::views::vault::VaultView::delayed_auto_focus_task().map(Message::vault),
+        ])
     }
 
     /// Lift `VaultView::load_list_task` into a top-level `Task<Message>`,

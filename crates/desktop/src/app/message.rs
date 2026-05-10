@@ -112,8 +112,17 @@ pub enum WindowMessage {
     CloseRequested(iced::window::Id),
     Closed(iced::window::Id),
     KeyPressed(iced::window::Id, iced::keyboard::Event),
+    /// Mouse-button down anywhere in a window. Carried separately from
+    /// `KeyPressed` so the session-timeout handler can record activity
+    /// without us having to materialise a synthetic `keyboard::Event`.
+    /// Cursor moves are deliberately *not* included — they fire ~per-frame
+    /// while the cursor is in the window and would defeat any timeout.
+    MouseInput(iced::window::Id),
     Resized(iced::window::Id, iced::Size),
-    /// Used by Magnify for click-outside-to-dismiss; other windows ignore it.
+    /// Used by the session-timeout handler to skip the active+focused
+    /// defensive grace, and by Magnify for click-outside-to-dismiss; other
+    /// windows ignore the latter.
+    Focused(iced::window::Id),
     Unfocused(iced::window::Id),
 }
 
@@ -155,4 +164,8 @@ pub enum SystemMessage {
     /// `Result` shape is kept so a real sync flow can drop in without
     /// rippling through the message hierarchy.
     SyncCompleted(Result<(), String>),
+    /// `services::session_timeout`'s driver task fired — at least one user
+    /// has crossed their `lock_after` or `logout_after` deadline. Handler
+    /// re-runs the per-user check and applies lock / log-out as needed.
+    SessionTimeoutCheck,
 }

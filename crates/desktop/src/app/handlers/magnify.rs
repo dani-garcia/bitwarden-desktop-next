@@ -8,7 +8,6 @@ use iced::Task;
 
 use crate::{
     app::{App, Message},
-    domain::Screen,
     services::{clipboard::Sensitivity, cursor_monitor, sdk::ClientExt},
     views::magnify::{
         CopyField, MAGNIFY_RESULTS_SCROLL_ID, MAGNIFY_SEARCH_ID, MagnifyMessage, Mode, dims,
@@ -243,12 +242,8 @@ impl App {
             iced::window::set_mode(main_id, iced::window::Mode::Windowed),
             iced::window::gain_focus(main_id),
         ]);
-        self.views
-            .login
-            .show_unlock_for(self.active_user.as_ref(), &self.client_manager);
-        self.set_screen(Screen::Login);
-        let focus = self.views.login.auto_focus_task().map(Message::login);
-        Task::batch([hide, show, focus])
+        let route = self.show_login_for_active();
+        Task::batch([hide, show, route])
     }
 
     fn magnify_copy_field(&mut self, field: CopyField) -> Task<Message> {

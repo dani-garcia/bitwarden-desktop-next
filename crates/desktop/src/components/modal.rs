@@ -15,12 +15,9 @@ use iced::{
 };
 
 use crate::{
-    components::{buttons, icons},
+    components::{BACKDROP_ALPHA, buttons, icons},
     theme::{AppColors, AppTheme, RADIUS_LG},
 };
-
-/// Scrim alpha at full open, modulated by `progress`.
-const BACKDROP_ALPHA: f32 = 0.45;
 
 /// Drop-shadow alpha at full open, modulated by `progress`.
 const SHADOW_ALPHA: f32 = 0.45;

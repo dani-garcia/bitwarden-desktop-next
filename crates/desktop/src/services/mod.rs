@@ -15,5 +15,6 @@ pub mod menu;
 pub mod preferences;
 pub mod sdk;
 pub mod search;
+pub mod session_timeout;
 pub mod settings;
 pub mod tray;

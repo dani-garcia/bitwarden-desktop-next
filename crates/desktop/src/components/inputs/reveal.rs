@@ -116,12 +116,16 @@ impl<'a, Message: Clone + 'a> Component<Message, AppTheme> for RevealTextField<'
             input = input.secure(true);
         }
 
+        // Match the read-only `reveal_field` variant: BWI font, 18 px,
+        // text_primary, "show what clicking does" convention (BWI_EYE = click
+        // to reveal). Otherwise the same form would render two different
+        // glyph families for the same affordance.
         let eye_icon = if state.revealed {
-            icons::EYE
+            icons::BWI_EYE_SLASH
         } else {
-            icons::EYE_SLASH
+            icons::BWI_EYE
         }
-        .render(16.0, self.colors.text_secondary);
+        .render(18.0, self.colors.text_primary);
 
         let mut toggle_button =
             buttons::ghost_icon(eye_icon, self.colors.item_hover).padding([10, 12]);

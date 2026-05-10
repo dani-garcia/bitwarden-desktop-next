@@ -17,7 +17,10 @@
 //!   [`multi_select_field`].
 //! - [`reveal`] — [`reveal_text_field`] / [`reveal_field`] (eye toggle).
 
-#![allow(deprecated)] // `Component` is deprecation-tagged upstream; see `reveal_text_field` docs.
+#![expect(
+    deprecated,
+    reason = "`Component` is deprecation-tagged upstream; see `reveal_text_field` docs."
+)]
 
 mod entry;
 mod reveal;

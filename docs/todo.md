@@ -50,6 +50,8 @@ Each is small enough to land in one focused session.
 - **Magnify footer "More" expander** `[S]` — the launcher binds `Ctrl+C / Ctrl+Shift+C / Ctrl+T / Ctrl+U / Ctrl+Shift+N` but the hint bar still surfaces the first three only. Replace the trailing slots with a "More" disclosure (cursor-positioned popover or expand-on-hover row).
 - **Magnify decrypt-failure feedback** `[S]` `[blocked: tray-balloon / OS-notification path]` — `Err` from `full_cipher` only logs at `warn` and the launcher silently dismisses ([handlers/magnify.rs](../crates/desktop/src/app/handlers/magnify.rs) `FieldDecryptCompleted`). Hook into a notification path once one exists.
 - **Tray icon Linux test-VM verification** `[S]` `[blocked: Linux test machine]` — packaging-side wiring is in (`.deb` / `.pacman` declare `libayatana-appindicator3-1` / `libayatana-appindicator`; README notes the SNI-host requirement). Verify GNOME + AppIndicator extension, KDE Plasma, and sway + waybar on a VM.
+- **Per-type item-list icons** `[S]` — non-login ciphers fall back to `favicon::globe_handle()` in [views/vault/widgets/item_list.rs](../crates/desktop/src/views/vault/widgets/item_list.rs). Card / Identity / Note / SSH-key entries each have a BWI glyph already used in the magnify launcher and detail headers; mirror that mapping here so the list shows a type-specific icon.
+- **Automate `SDK_REV_SHORT`** `[S]` — [views/about/mod.rs](../crates/desktop/src/views/about/mod.rs) hardcodes `SDK_REV_SHORT = "..."` and asks the maintainer to keep it in sync with the workspace `Cargo.toml`. A `build.rs` that parses the SDK git rev out of the lockfile (or runs `git -C <submodule> rev-parse --short HEAD`) and emits an `env!`-readable string would remove the manual step.
 
 ---
 
@@ -152,7 +154,6 @@ V1 ships behind `Ctrl+Shift+Space` ([views/magnify/](../crates/desktop/src/views
 ### SDK integration
 
 - **PIN unlock** `[M]` — per-user PIN state via `bitwarden_auth` + keystore wrapping.
-- **Session timeout** (Lock after / Log out after) `[M]` — background timer driven by `iced::time::every`, locks the active user on expiry.
 - **Browser integration (+ fingerprint)** `[L]` — native-messaging host registration.
 - **Autotype engine** `[L]` — Windows Premium feature, whole subsystem.
 

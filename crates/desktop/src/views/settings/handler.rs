@@ -68,14 +68,19 @@ impl App {
             | SettingChange::HardwareAcceleration(_)
             | SettingChange::LockOnSystemLock(_) => {}
 
+            // Both timeouts are consumed by `services::session_timeout`'s
+            // deadline computation — bump it now so the new value takes
+            // effect without waiting for the next event.
+            SettingChange::LockAfter(_) | SettingChange::LogoutAfter(_) => {
+                self.refresh_session_timeout_deadline();
+            }
+
             // Every remaining variant is currently unwired — the value was
             // persisted above, but the feature doesn't react yet. Let the
             // user know with a toast.
             SettingChange::OpenAtLogin(_)
             | SettingChange::PinUnlock(_)
             | SettingChange::TouchIdUnlock(_)
-            | SettingChange::LockAfter(_)
-            | SettingChange::LogoutAfter(_)
             | SettingChange::BrowserIntegration(_)
             | SettingChange::BrowserIntegrationFingerprint(_)
             | SettingChange::SshAgent(_)

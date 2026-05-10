@@ -23,10 +23,9 @@ impl App {
     /// and spawn an async folder list fetch — same SDK call shape as the
     /// cipher edit form.
     pub(crate) fn open_import_modal(&mut self) -> Task<Message> {
-        let Some(uid) = self.active_user else {
+        let Some(uid) = self.require_active_user_and_close_overlay() else {
             return Task::none();
         };
-        self.open_overlay = None;
         self.views.import.open();
 
         let orgs = self

@@ -20,9 +20,9 @@ use iced::{
 use crate::{
     app::{Outcome, UpdateCtx, ViewTypes},
     components::{FadeInOut, fade_in_out, icons, inputs, modal, toast::Toast},
-    domain::{UserId, VaultChoice},
+    domain::UserId,
     fl,
-    services::sdk::{ClientExt, Organization},
+    services::sdk::{ClientExt, Organization, VaultChoice},
     theme::{AppColors, AppTheme, RADIUS_LG},
 };
 

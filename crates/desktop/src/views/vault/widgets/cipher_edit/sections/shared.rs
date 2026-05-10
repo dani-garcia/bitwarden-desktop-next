@@ -5,13 +5,9 @@
 
 use bitwarden_vault::{CipherRepromptType, FieldType, FieldView};
 use iced::{
-    Alignment, Element, Fill, Length, widget,
+    Alignment, Element, Fill, Length,
     widget::{checkbox, column, container, row, text, text_editor},
 };
-
-/// Shared widget id for the cipher form's name field. Referenced from the
-/// vault router to focus the input when a fresh "+New item" form mounts.
-pub const NAME_INPUT_ID: widget::Id = widget::Id::new("cipher-edit-name");
 
 use crate::{
     components::{
@@ -21,7 +17,7 @@ use crate::{
     fl,
     theme::{AppColors, AppTheme},
     views::vault::widgets::{
-        cipher_edit::{CipherEditMessage, CipherForm, selectors},
+        cipher_edit::{CipherEditMessage, CipherForm, NAME_INPUT_ID, selectors},
         field_helpers::{card_with_margin, styled_card},
     },
 };

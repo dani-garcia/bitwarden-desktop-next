@@ -14,8 +14,8 @@ pub enum AboutMessage {
 }
 
 /// Pinned SDK revision, displayed in the About dialog. Keep in sync with
-/// `bitwarden-*` git revs in the workspace root `Cargo.toml`.
-/// TODO: automate via a build.rs that parses the workspace manifest.
+/// `bitwarden-*` git revs in the workspace root `Cargo.toml`. A `build.rs`
+/// that parses this out automatically is tracked in docs/todo.md.
 const SDK_REV_SHORT: &str = "6c25425";
 
 /// Build the multi-line info string for the clipboard Copy action.

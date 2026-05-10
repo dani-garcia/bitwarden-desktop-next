@@ -8,6 +8,7 @@ use crate::{
     components::{
         account_switcher::{self, AccountSwitcherMessage},
         icons,
+        shell_scope::ShellScope,
     },
     services::sdk::AccountEntry,
     theme::{AppColors, AppTheme},
@@ -108,7 +109,10 @@ pub fn auth_page_shell<'a>(
     .width(Fill)
     .height(Fill);
 
-    let layered = stack![bg_illustrations, foreground];
+    // Wrap in ShellScope so a future interactive element in
+    // `bg_illustrations` can't leak `is_event_captured` into the foreground
+    // and break the account-switcher dropdown / server selector inside it.
+    let layered = ShellScope::new(stack![bg_illustrations, foreground]);
 
     container(layered)
         .width(Fill)

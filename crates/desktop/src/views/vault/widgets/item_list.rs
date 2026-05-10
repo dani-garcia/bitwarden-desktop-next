@@ -144,7 +144,8 @@ fn row_element<'a>(
                     .and_then(|u| u.uri.as_deref());
                 favicon.handle_for_login_uri(active_user, uri)
             }
-            // TODO: replace with per-type BWI icons (Card/Identity/Note/SshKey).
+            // Non-login ciphers fall back to the generic globe; per-type
+            // BWI glyphs are tracked in docs/todo.md.
             _ => favicon::globe_handle(),
         };
         crate::components::favicon_icon(handle)

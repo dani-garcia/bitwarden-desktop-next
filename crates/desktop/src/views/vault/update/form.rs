@@ -67,10 +67,12 @@ impl VaultView {
         let collections = ctx.client_manager.list_collections(&uid);
         Task::perform(
             async move {
-                let folders = client
-                    .list_folders()
-                    .await
-                    .map(|folders| folders.into_iter().map(FolderOption::from).collect());
+                let folders = client.list_folders().await.map(|folders| {
+                    folders
+                        .into_iter()
+                        .filter_map(|f| FolderOption::try_from(f).ok())
+                        .collect()
+                });
                 FormOptions {
                     folders,
                     organizations,

@@ -64,6 +64,12 @@ pub struct App {
     /// Always present from `App::new` until `iced::exit`. Child windows
     /// (About) are not tracked here.
     pub(super) main_window: iced::window::Id,
+    /// Tracked from `WindowMessage::Focused`/`Unfocused` for the main window.
+    /// Defaults to `true` because the process is foreground when launched
+    /// (and iced doesn't always emit a `Focused` event for the initial
+    /// surface). Consumed by `services::session_timeout::expired` so an
+    /// active+focused user is exempt from `lock_after`.
+    pub(super) main_window_focused: bool,
     pub(super) magnify: magnify::MagnifyView,
 
     // ── Native chrome ─────────────────────────────────────────────────────
@@ -138,7 +144,7 @@ impl Views {
 /// when the OS scheme can't be queried.
 pub struct ThemeState {
     pub(super) preference: ThemePreference,
-    pub current: AppTheme,
+    pub(super) current: AppTheme,
     pub(super) system: Option<Rc<system_theme::SystemTheme>>,
 }
 

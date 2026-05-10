@@ -120,10 +120,13 @@ pub fn view<'a, M: 'a + Clone>(
 
     PaneGrid::new(&pane.state, move |_pane, side, _maximized| match side {
         Side::Left => {
+            // iced's pane_grid contractually invokes this closure once per
+            // pane per layout pass, but match the right slot's defensive
+            // fallback rather than panic if that ever shifts.
             let element = left_slot
                 .borrow_mut()
                 .take()
-                .expect("left pane view built twice");
+                .unwrap_or_else(|| Space::new().into());
             pane_grid::Content::new(element)
         }
         Side::Right => {
