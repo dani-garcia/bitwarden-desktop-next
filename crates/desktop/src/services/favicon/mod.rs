@@ -14,7 +14,7 @@ use std::{
     sync::{Arc, OnceLock, RwLock},
 };
 
-use iced::{futures::Stream, widget::image};
+use iced::widget::image;
 use tokio::sync::{Semaphore, broadcast};
 
 use crate::domain::UserId;
@@ -54,8 +54,10 @@ struct FaviconInner {
     /// which is a synchronous context; using the handle explicitly avoids
     /// relying on tokio TLS being set on every iced render tick.
     runtime: tokio::runtime::Handle,
-    /// Broadcast sender for fetch completions. The matching receiver is
-    /// stashed in [`EVENTS`] and consumed by [`favicon_event_stream`].
+    /// Broadcast sender for fetch completions. App's subscription clones this
+    /// and calls [`broadcast::Sender::subscribe`] each time it (re)builds the
+    /// stream, so receivers follow the App's lifetime instead of process
+    /// lifetime.
     tx: broadcast::Sender<FaviconMessage>,
 }
 
@@ -75,8 +77,8 @@ pub enum IconState {
     Missing,
 }
 
-/// Fetch-completion message delivered via [`favicon_event_stream`]. Arrival
-/// drives the row's globe→favicon swap.
+/// Fetch-completion message delivered via [`FaviconService::event_sender`].
+/// Arrival drives the row's globe→favicon swap.
 #[derive(Debug, Clone)]
 pub enum FaviconMessage {
     IconResolved { uid: UserId, hostname: Hostname },
@@ -94,11 +96,7 @@ impl FaviconService {
             .build()
             .expect("reqwest client should build with rustls");
 
-        let (tx, rx) = broadcast::channel::<FaviconMessage>(1024);
-        // First-caller wins; if a previous `FaviconService` was constructed
-        // (e.g. in a test), keep its receiver alive so subscribers don't
-        // miss events. Production has exactly one service.
-        let _ = EVENTS.set(rx);
+        let (tx, _rx) = broadcast::channel::<FaviconMessage>(1024);
 
         Self {
             inner: Arc::new(FaviconInner {
@@ -110,6 +108,14 @@ impl FaviconService {
                 tx,
             }),
         }
+    }
+
+    /// Sender clone for App's subscription wiring. Each
+    /// `Subscription::run`-style call uses [`broadcast::Sender::subscribe`]
+    /// to mint a fresh receiver, so this can be called freely from
+    /// `App::subscription`.
+    pub fn event_sender(&self) -> broadcast::Sender<FaviconMessage> {
+        self.inner.tx.clone()
     }
 
     /// Render-time lookup. Fast path is a single read lock and a clone. Slow
@@ -205,19 +211,6 @@ pub fn hostname_for_fetch(uri: &str) -> Option<Hostname> {
         return None;
     }
     Some(host)
-}
-
-// ── Broadcast fan-out (iced subscription) ─────────────────────────────────
-
-/// Process-global receiver for fetch completions. Stored at the first
-/// `FaviconService::new` call; subsequent constructions keep the original
-/// receiver alive so existing subscribers don't see channel closure.
-static EVENTS: OnceLock<broadcast::Receiver<FaviconMessage>> = OnceLock::new();
-
-/// Iced-compatible stream of fetch completions. Use as a `fn` pointer with
-/// [`iced::Subscription::run`].
-pub fn favicon_event_stream() -> impl Stream<Item = FaviconMessage> {
-    super::broadcast_stream::from_once_lock(&EVENTS, "favicon")
 }
 
 // ── Fetch pipeline ─────────────────────────────────────────────────────────

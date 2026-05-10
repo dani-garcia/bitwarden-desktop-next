@@ -205,14 +205,14 @@ impl App {
                         // `lock_on_system_lock` preference are locked
                         // immediately; the rest stay enrolled so their
                         // `last_activity` can be back-dated on `Resumed`.
-                        crate::services::session_timeout::note_suspend();
+                        self.session_timeout.note_suspend();
                         self.lock_system_lock_users()
                     }
                     SessionEvent::Locked => self.lock_system_lock_users(),
                     SessionEvent::Resumed => {
                         // Reconcile last_activity for the time CLOCK_MONOTONIC
                         // missed during suspend, then re-check timeouts.
-                        crate::services::session_timeout::note_resume();
+                        self.session_timeout.note_resume();
                         self.run_session_timeout_check()
                     }
                     SessionEvent::Unlocked => Task::none(),

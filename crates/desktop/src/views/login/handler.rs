@@ -20,7 +20,7 @@ impl App {
                 // Stamp `last_activity` so neither timer has a retroactive
                 // head-start — the throttle path doesn't matter here since
                 // there's no prior entry to suppress against.
-                crate::services::session_timeout::record_activity(uid);
+                self.session_timeout.record_activity(uid);
                 self.refresh_session_timeout_deadline();
                 self.set_screen(Screen::Vault);
                 tracing::info!(%uid, "unlock succeeded; loading vault + send lists");

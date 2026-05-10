@@ -205,7 +205,7 @@ impl App {
     /// log-out, settings change, user switch, suspend/resume, focus change.
     pub(crate) fn refresh_session_timeout_deadline(&self) {
         let snaps = self.session_timeout_snapshots();
-        crate::services::session_timeout::recompute_and_push_deadline(
+        self.session_timeout.recompute_and_push_deadline(
             &snaps,
             self.active_user.as_ref(),
             self.main_window_focused,
@@ -218,7 +218,7 @@ impl App {
         let Some(uid) = self.active_user else {
             return;
         };
-        if crate::services::session_timeout::record_activity(uid) {
+        if self.session_timeout.record_activity(uid) {
             self.refresh_session_timeout_deadline();
         }
     }
@@ -232,12 +232,12 @@ impl App {
         self.views.send.remove_user_items(uid);
         self.favicon.evict_user(uid);
         self.client_manager.log_out(uid);
-        crate::services::session_timeout::unenroll(uid);
+        self.session_timeout.unenroll(uid);
     }
 
     /// Apply session-timeout actions for every signed-in user.
     pub(crate) fn run_session_timeout_check(&mut self) -> Task<Message> {
-        use crate::services::session_timeout::{Action, expired};
+        use crate::services::session_timeout::Action;
         let snaps = self.session_timeout_snapshots();
         let active = self.active_user;
         let focused = self.main_window_focused;
@@ -245,7 +245,7 @@ impl App {
         let mut to_logout: Vec<UserId> = Vec::new();
         let mut to_lock: Vec<UserId> = Vec::new();
         for snap in &snaps {
-            match expired(snap, active.as_ref(), focused) {
+            match self.session_timeout.expired(snap, active.as_ref(), focused) {
                 Some(Action::Logout) => to_logout.push(snap.uid),
                 Some(Action::Lock) => to_lock.push(snap.uid),
                 None => {}

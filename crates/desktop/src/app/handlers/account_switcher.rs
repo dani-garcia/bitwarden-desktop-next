@@ -52,7 +52,7 @@ impl App {
         // bump when already unlocked — the unlock-success path will
         // enroll otherwise.
         if self.client_manager.is_unlocked(&uid) {
-            crate::services::session_timeout::record_activity(uid);
+            self.session_timeout.record_activity(uid);
         }
         self.refresh_session_timeout_deadline();
 

@@ -40,8 +40,9 @@ impl App {
         // internally; Magnify is then just unreachable.
         crate::services::global_hotkey::install_event_handler();
         // Spawn the session-timeout driver in iced's tokio runtime. Idle
-        // (parked on `pending()`) until the first user enrolls.
-        crate::services::session_timeout::init();
+        // (parked on `pending()`) until the first user enrolls. Owned by
+        // App; aborted on drop.
+        let session_timeout = crate::services::session_timeout::SessionTimeout::new();
 
         // `--autostart` forces the app to launch hidden in the tray. Force
         // the tray to build in that case even if no tray settings are on,
@@ -108,6 +109,14 @@ impl App {
             "https://icons.bitwarden.net".to_string()
         }));
 
+        // Construct the animation watermark and register it so `extend()` /
+        // `any_in_progress()` reach it from animation primitives without
+        // threading a reference through every constructor. The Arc is
+        // owned by `App`; when it drops, the `Weak` registry upgrade fails
+        // and the free functions become no-ops.
+        let animation = crate::services::animation::AnimationWatermark::new();
+        crate::services::animation::register(&animation);
+
         let app = Self {
             active_user: None,
             client_manager: ClientManager::empty(),
@@ -129,6 +138,8 @@ impl App {
 
             clipboard: ClipboardManager::new(),
             favicon,
+            animation,
+            session_timeout,
 
             open_overlay: None,
             toasts: Vec::new(),
@@ -230,8 +241,11 @@ impl App {
         // and pushes a tick when it elapses; the App handler re-checks each
         // user and applies lock/log-out as needed. Idle (parked on
         // `pending()`) when no user has a finite timeout.
-        let session_timeout_sub = Subscription::run(crate::services::session_timeout::tick_stream)
-            .map(|_| Message::System(SystemMessage::SessionTimeoutCheck));
+        let session_timeout_sub = crate::services::broadcast_stream::subscription_from_sender(
+            "session-timeout",
+            self.session_timeout.tick_sender(),
+        )
+        .map(|_| Message::System(SystemMessage::SessionTimeoutCheck));
 
         // Idle when OS-side hotkey registration failed (Wayland, missing
         // permissions) — the stream terminates and the subscription stays
@@ -241,14 +255,18 @@ impl App {
 
         // Favicon fetch completions. Each message flips one row from globe
         // to real icon by virtue of arriving.
-        let favicon_sub =
-            Subscription::run(crate::services::favicon::favicon_event_stream).map(Message::Favicon);
+        let favicon_sub = crate::services::broadcast_stream::subscription_from_sender(
+            "favicon",
+            self.favicon.event_sender(),
+        )
+        .map(Message::Favicon);
 
         // Only subscribed while at least one transition might still be
-        // running. `any_in_progress` is a single global-watermark read, so
-        // animation primitives that call `animation::extend(...)`
-        // auto-register here without extra wiring.
-        let anim_sub = if crate::services::animation::any_in_progress() {
+        // running. Reads the App-owned watermark directly; animation
+        // primitives that call `animation::extend(...)` reach the same
+        // instance via the module's `Weak` registry without any per-call
+        // wiring.
+        let anim_sub = if self.animation.any_in_progress() {
             iced::window::frames().map(|_| Message::AnimationTick)
         } else {
             Subscription::none()

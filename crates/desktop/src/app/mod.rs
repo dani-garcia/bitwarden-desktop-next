@@ -67,8 +67,8 @@ pub struct App {
     /// Tracked from `WindowMessage::Focused`/`Unfocused` for the main window.
     /// Defaults to `true` because the process is foreground when launched
     /// (and iced doesn't always emit a `Focused` event for the initial
-    /// surface). Consumed by `services::session_timeout::expired` so an
-    /// active+focused user is exempt from `lock_after`.
+    /// surface). Consumed by `SessionTimeout::expired` so an active+focused
+    /// user is exempt from `lock_after`.
     pub(super) main_window_focused: bool,
     pub(super) magnify: magnify::MagnifyView,
 
@@ -82,6 +82,14 @@ pub struct App {
     /// auto-clear bookkeeping sees every write.
     pub(super) clipboard: ClipboardManager,
     pub(super) favicon: crate::services::favicon::FaviconService,
+    /// Drives `App::subscription`'s per-frame gate. Held as `Arc` so the
+    /// `services::animation` module can hold a `Weak` and reach it from
+    /// animation primitives without threading a reference through every
+    /// constructor.
+    pub(super) animation: std::sync::Arc<crate::services::animation::AnimationWatermark>,
+    /// Per-user lock/logout timer driver. Owns the deadline watch,
+    /// tick-broadcast, and the spawned tokio task (aborted on drop).
+    pub(super) session_timeout: crate::services::session_timeout::SessionTimeout,
 
     // ── Transient UI ──────────────────────────────────────────────────────
     /// Source of truth for which dropdown/menu is open. Writing auto-
