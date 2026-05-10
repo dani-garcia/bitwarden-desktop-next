@@ -246,3 +246,196 @@ fn find_in_entries(
     }
     None
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::services::menu::{EnabledWhen, shortcut::ShortcutKey};
+    use iced::keyboard::{Key, Modifiers, key::Named};
+
+    fn key_char(c: &str) -> Key {
+        Key::Character(c.into())
+    }
+
+    fn unlocked() -> MenuState {
+        MenuState {
+            is_locked: false,
+            has_accounts: true,
+            has_lockable_accounts: true,
+        }
+    }
+
+    fn locked_no_accounts() -> MenuState {
+        MenuState {
+            is_locked: true,
+            has_accounts: false,
+            has_lockable_accounts: false,
+        }
+    }
+
+    fn locked_with_accounts() -> MenuState {
+        MenuState {
+            is_locked: true,
+            has_accounts: true,
+            has_lockable_accounts: false,
+        }
+    }
+
+    // The platform-aware modifier — `Modifiers::COMMAND` resolves to LOGO on
+    // macOS and CTRL elsewhere, matching `Shortcut::matches`.
+    fn cmd_only() -> Modifiers {
+        Modifiers::COMMAND
+    }
+    fn cmd_shift_mods() -> Modifiers {
+        Modifiers::COMMAND | Modifiers::SHIFT
+    }
+
+    // ── find_shortcut_action: enable-gates ────────────────────────────────
+
+    #[test]
+    fn cmd_n_blocked_when_locked() {
+        // File → New login is `Unlocked`-gated.
+        assert_eq!(
+            find_shortcut_action(&key_char("n"), cmd_only(), &locked_no_accounts()),
+            None
+        );
+    }
+
+    #[test]
+    fn cmd_n_routes_to_new_login_when_unlocked() {
+        let action = find_shortcut_action(&key_char("n"), cmd_only(), &unlocked());
+        assert_eq!(
+            action,
+            Some(MenuAction::NewItem(bitwarden_vault::CipherType::Login))
+        );
+    }
+
+    #[test]
+    fn cmd_l_requires_has_accounts() {
+        // Lock all vaults requires HasAccounts even when the vault is locked.
+        assert_eq!(
+            find_shortcut_action(&key_char("l"), cmd_only(), &locked_no_accounts()),
+            None
+        );
+        assert_eq!(
+            find_shortcut_action(&key_char("l"), cmd_only(), &locked_with_accounts()),
+            Some(MenuAction::LockAllVaults)
+        );
+    }
+
+    #[test]
+    fn never_gated_entries_never_fire() {
+        // Edit → Undo is `EnabledWhen::Never`. The shortcut must always
+        // return `None` so it falls through to focused text widgets.
+        for state in [unlocked(), locked_no_accounts(), locked_with_accounts()] {
+            assert_eq!(
+                find_shortcut_action(&key_char("z"), cmd_only(), &state),
+                None,
+                "cmd+Z fired in state {state:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn shortcut_in_submenu_resolves() {
+        // File → New item → Secure note (cmd+shift+S) lives inside a sub.
+        let action = find_shortcut_action(&key_char("s"), cmd_shift_mods(), &unlocked());
+        assert_eq!(
+            action,
+            Some(MenuAction::NewItem(bitwarden_vault::CipherType::SecureNote))
+        );
+    }
+
+    #[test]
+    fn fkey_shortcut_with_no_modifiers_resolves() {
+        // F11 → ToggleFullScreen, always-enabled.
+        let action = find_shortcut_action(&Key::Named(Named::F11), Modifiers::empty(), &unlocked());
+        assert_eq!(action, Some(MenuAction::ToggleFullScreen));
+    }
+
+    #[test]
+    fn unbound_combination_returns_none() {
+        // No menu binds cmd+shift+`q`.
+        assert_eq!(
+            find_shortcut_action(&key_char("q"), cmd_shift_mods(), &unlocked()),
+            None
+        );
+    }
+
+    #[test]
+    fn shortcut_requires_correct_modifiers() {
+        // cmd+`n` is bound; `n` alone (no modifiers) is not.
+        assert_eq!(
+            find_shortcut_action(&key_char("n"), Modifiers::empty(), &unlocked()),
+            None
+        );
+        // Adding shift shouldn't match either.
+        assert_eq!(
+            find_shortcut_action(&key_char("n"), cmd_shift_mods(), &unlocked()),
+            None
+        );
+    }
+
+    // ── MENUS table-wide invariants ───────────────────────────────────────
+
+    /// Recursively collect every `(modifiers, key)` triple bound by an entry
+    /// that *can* fire (anything but `Never`).
+    fn collect_active_shortcuts(
+        entries: &[MenuEntry],
+        out: &mut Vec<((bool, bool, ShortcutKey), &'static str)>,
+    ) {
+        for entry in entries {
+            if let Some(s) = entry.shortcut
+                && !matches!(entry.enabled, EnabledWhen::Never)
+            {
+                out.push(((s.ctrl_cmd, s.shift, s.key), entry.label));
+            }
+            collect_active_shortcuts(entry.children, out);
+        }
+    }
+
+    #[test]
+    fn active_shortcuts_have_no_collisions() {
+        // A duplicate `(ctrl_cmd, shift, key)` between two non-`Never` entries
+        // means `find_shortcut_action` returns whichever appears first in the
+        // walk — the second one is silently unreachable.
+        let mut all = Vec::new();
+        for (_label, entries) in MENUS {
+            collect_active_shortcuts(entries, &mut all);
+        }
+        for (i, (a, label_a)) in all.iter().enumerate() {
+            for (b, label_b) in all.iter().skip(i + 1) {
+                // `assert!` rather than `assert_ne!` to avoid requiring
+                // `Debug` on `ShortcutKey` purely for test diagnostics.
+                assert!(
+                    a != b,
+                    "shortcut collision between {label_a:?} and {label_b:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn active_shortcuts_round_trip_through_muda() {
+        // Each shortcut display string must be parseable as a
+        // `muda::accelerator::Accelerator` — otherwise the native macOS menu
+        // silently drops it. Cheap to assert here because our `display()`
+        // and muda's parser are the contract we own.
+        let mut all = Vec::new();
+        for (_label, entries) in MENUS {
+            collect_active_shortcuts(entries, &mut all);
+        }
+        for ((ctrl_cmd, shift, key), label) in all {
+            let s = super::super::shortcut::Shortcut {
+                ctrl_cmd,
+                shift,
+                key,
+            };
+            assert!(
+                s.to_accelerator().is_some(),
+                "shortcut for {label:?} ({}) didn't parse as a muda accelerator",
+                s.display()
+            );
+        }
+    }
+}

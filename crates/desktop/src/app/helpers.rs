@@ -235,39 +235,27 @@ impl App {
         self.session_timeout.unenroll(uid);
     }
 
-    /// Apply session-timeout actions for every signed-in user.
+    /// Apply session-timeout actions for every signed-in user. Pure
+    /// classification lives on [`SessionTimeout::plan_timeout_actions`];
+    /// this method only sequences the side effects the plan implies.
     pub(crate) fn run_session_timeout_check(&mut self) -> Task<Message> {
-        use crate::services::session_timeout::Action;
         let snaps = self.session_timeout_snapshots();
-        let active = self.active_user;
-        let focused = self.main_window_focused;
+        let plan = self.session_timeout.plan_timeout_actions(
+            &snaps,
+            self.active_user.as_ref(),
+            self.main_window_focused,
+        );
 
-        let mut to_logout: Vec<UserId> = Vec::new();
-        let mut to_lock: Vec<UserId> = Vec::new();
-        for snap in &snaps {
-            match self.session_timeout.expired(snap, active.as_ref(), focused) {
-                Some(Action::Logout) => to_logout.push(snap.uid),
-                Some(Action::Lock) => to_lock.push(snap.uid),
-                None => {}
-            }
-        }
-
-        // Process non-active logouts inline so `handle_log_out`'s
-        // next-active-user logic only runs once, after `client_manager`
-        // already reflects the other removals. Otherwise `handle_log_out`
-        // would switch to the next user, that user might also be in
-        // `to_logout`, and the loop would inline-clean a now-active user.
-        let active_logged_out = active.is_some_and(|a| to_logout.contains(&a));
-        for uid in &to_logout {
-            if Some(*uid) != active {
-                self.log_out_user(uid);
-            }
+        // Inline logouts run first so `handle_log_out`'s next-active-user
+        // hand-off only sees the post-cleanup `client_manager`.
+        for uid in &plan.inline_logouts {
+            self.log_out_user(uid);
         }
         let mut tasks: Vec<Task<Message>> = Vec::new();
-        if active_logged_out {
+        if plan.handle_active_logout {
             tasks.push(self.handle_log_out());
         }
-        for uid in to_lock {
+        for uid in plan.locks {
             tasks.push(self.lock_user(&uid));
         }
 

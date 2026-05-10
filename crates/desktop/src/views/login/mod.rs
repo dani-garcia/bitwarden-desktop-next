@@ -78,6 +78,36 @@ pub enum ServerOption {
     SelfHosted(String),
 }
 
+/// Result of validating user input for the self-hosted server URL field.
+/// The three states match the modal's UX contract: empty input is a no-op
+/// (don't surface an error, don't persist), invalid input toggles the
+/// error state, and accepted input is the trimmed URL ready to persist.
+#[derive(Debug, PartialEq, Eq)]
+pub(in crate::views::login) enum SelfHostedUrl {
+    /// User submitted an empty (or whitespace-only) field. No-op.
+    Empty,
+    /// User submitted a non-empty URL that didn't pass validation. The
+    /// modal should flip its error indicator and stay open.
+    Invalid,
+    /// User submitted an `https://` URL. Persist this exact (trimmed)
+    /// string as the active self-hosted server.
+    Accepted(String),
+}
+
+/// Gate for the self-hosted server URL field. The only requirement enforced
+/// here is `https://` — anything `http`, `javascript:`, etc. is rejected
+/// because the SDK then issues authenticated requests against this origin.
+pub(in crate::views::login) fn validate_self_hosted_url(raw: &str) -> SelfHostedUrl {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return SelfHostedUrl::Empty;
+    }
+    if !trimmed.starts_with("https://") {
+        return SelfHostedUrl::Invalid;
+    }
+    SelfHostedUrl::Accepted(trimmed.to_string())
+}
+
 impl ServerOption {
     pub fn display_name(&self) -> String {
         match self {
@@ -415,21 +445,22 @@ impl LoginView {
                 self.self_hosted_modal.url_error = false;
             }
             LoginMessage::SelfHostedSave => {
-                let url = self.self_hosted_modal.url_input.trim().to_string();
-                if url.is_empty() {
-                    return Outcome::None;
+                match validate_self_hosted_url(&self.self_hosted_modal.url_input) {
+                    SelfHostedUrl::Empty => return Outcome::None,
+                    SelfHostedUrl::Invalid => {
+                        self.self_hosted_modal.url_error = true;
+                        return Outcome::None;
+                    }
+                    SelfHostedUrl::Accepted(url) => {
+                        if let AuthPage::LoginEmail {
+                            selected_server, ..
+                        } = &mut self.auth_page
+                        {
+                            *selected_server = ServerOption::SelfHosted(url);
+                        }
+                        self.self_hosted_modal.fade.close();
+                    }
                 }
-                if !url.starts_with("https://") {
-                    self.self_hosted_modal.url_error = true;
-                    return Outcome::None;
-                }
-                if let AuthPage::LoginEmail {
-                    selected_server, ..
-                } = &mut self.auth_page
-                {
-                    *selected_server = ServerOption::SelfHosted(url);
-                }
-                self.self_hosted_modal.fade.close();
             }
             LoginMessage::SelfHostedCancel => {
                 self.self_hosted_modal.fade.close();
@@ -554,5 +585,89 @@ impl LoginView {
             account_switcher_open,
             colors,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{SelfHostedUrl, validate_self_hosted_url};
+
+    #[test]
+    fn empty_input_is_no_op() {
+        assert_eq!(validate_self_hosted_url(""), SelfHostedUrl::Empty);
+    }
+
+    #[test]
+    fn whitespace_only_is_no_op() {
+        // Trim before checking — the user pressing Submit on a blank
+        // (or accidentally-spaces) field shouldn't surface an error.
+        assert_eq!(validate_self_hosted_url("   "), SelfHostedUrl::Empty);
+        assert_eq!(validate_self_hosted_url("\t\n"), SelfHostedUrl::Empty);
+    }
+
+    #[test]
+    fn https_url_is_accepted() {
+        assert_eq!(
+            validate_self_hosted_url("https://vault.example.com"),
+            SelfHostedUrl::Accepted("https://vault.example.com".into())
+        );
+    }
+
+    #[test]
+    fn surrounding_whitespace_is_trimmed() {
+        // Common case: user pastes a URL with a trailing newline.
+        assert_eq!(
+            validate_self_hosted_url("  https://vault.example.com  \n"),
+            SelfHostedUrl::Accepted("https://vault.example.com".into())
+        );
+    }
+
+    #[test]
+    fn http_is_rejected() {
+        // The whole point of the gate — http would let the SDK send
+        // master-password-derived auth headers in the clear.
+        assert_eq!(
+            validate_self_hosted_url("http://vault.example.com"),
+            SelfHostedUrl::Invalid
+        );
+    }
+
+    #[test]
+    fn bare_host_is_rejected() {
+        // No scheme at all → not auto-promoted to https; validation is
+        // strict because the user will see this exact string back.
+        assert_eq!(
+            validate_self_hosted_url("vault.example.com"),
+            SelfHostedUrl::Invalid
+        );
+    }
+
+    #[test]
+    fn dangerous_schemes_are_rejected() {
+        // Defense in depth — even though the SDK would error, the modal
+        // shouldn't store hostile URIs as the active server.
+        assert_eq!(
+            validate_self_hosted_url("javascript:alert(1)"),
+            SelfHostedUrl::Invalid
+        );
+        assert_eq!(
+            validate_self_hosted_url("file:///etc/passwd"),
+            SelfHostedUrl::Invalid
+        );
+        assert_eq!(
+            validate_self_hosted_url("ftp://vault.example.com"),
+            SelfHostedUrl::Invalid
+        );
+    }
+
+    #[test]
+    fn https_check_is_case_sensitive() {
+        // `starts_with` is case-sensitive. `HTTPS://` is rejected — the
+        // browser will normalize it but our validation doesn't, and we
+        // store the user's exact string. Case-pedantic but durable.
+        assert_eq!(
+            validate_self_hosted_url("HTTPS://vault.example.com"),
+            SelfHostedUrl::Invalid
+        );
     }
 }

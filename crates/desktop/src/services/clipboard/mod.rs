@@ -194,29 +194,118 @@ fn arboard_write(
 
 // ── URL launching ─────────────────────────────────────────────────────────
 
-/// Open `uri` in the default browser, but only if the scheme is `http` or
-/// `https` and the host is non-empty. `file://`, `javascript:`, and `data:`
-/// must never be handed to `open::that_detached`.
+/// Validate that `uri` is safe to hand to `open::that_detached`. Returns
+/// the parsed URL when the scheme is `http`/`https` and the host is
+/// non-empty; rejects everything else. `file://`, `javascript:`, and
+/// `data:` must never reach the launcher.
 ///
 /// Bitwarden frequently stores URIs without a scheme (e.g.
-/// `acmecorp.atlassian.net`). If the first parse fails, retry with
-/// `https://` prepended.
-pub fn launch_url(uri: &str) {
-    let Ok(parsed) = url::Url::parse(uri).or_else(|_| url::Url::parse(&format!("https://{uri}")))
-    else {
-        tracing::debug!(uri, "launch_url: unparseable URI");
-        return;
+/// `acmecorp.atlassian.net`); when the input has no `://` the function
+/// prepends `https://` so bare hosts launch correctly. Inputs that
+/// already contain `://` are parsed strictly — without that gate, an
+/// input like `https://` would fall back to `https://https://` and
+/// accept it with host = `"https"`.
+fn validate_launchable_url(uri: &str) -> Option<url::Url> {
+    let parsed = if uri.contains("://") {
+        url::Url::parse(uri).ok()?
+    } else {
+        url::Url::parse(&format!("https://{uri}")).ok()?
     };
     if !matches!(parsed.scheme(), "http" | "https") {
-        tracing::debug!(scheme = parsed.scheme(), "launch_url: scheme rejected");
-        return;
+        return None;
     }
     if parsed.host_str().is_none_or(str::is_empty) {
-        tracing::debug!(uri, "launch_url: empty host");
-        return;
+        return None;
     }
+    Some(parsed)
+}
 
+/// Open `uri` in the default browser, but only if it passes
+/// [`validate_launchable_url`].
+pub fn launch_url(uri: &str) {
+    let Some(parsed) = validate_launchable_url(uri) else {
+        tracing::debug!(uri, "launch_url: rejected");
+        return;
+    };
     if let Err(e) = open::that_detached(parsed.as_str()) {
         tracing::warn!(%e, "open::that_detached failed");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn launch_https_url_is_accepted() {
+        let url = validate_launchable_url("https://example.com/path").expect("accepted");
+        assert_eq!(url.scheme(), "https");
+        assert_eq!(url.host_str(), Some("example.com"));
+    }
+
+    #[test]
+    fn launch_http_url_is_accepted() {
+        let url = validate_launchable_url("http://example.com").expect("accepted");
+        assert_eq!(url.scheme(), "http");
+    }
+
+    #[test]
+    fn launch_bare_host_gets_https_prepended() {
+        // Mirrors how Bitwarden stores URIs (no scheme).
+        let url = validate_launchable_url("acmecorp.atlassian.net").expect("accepted");
+        assert_eq!(url.scheme(), "https");
+        assert_eq!(url.host_str(), Some("acmecorp.atlassian.net"));
+    }
+
+    #[test]
+    fn launch_bare_host_with_path_gets_https_prepended() {
+        let url = validate_launchable_url("example.com/login").expect("accepted");
+        assert_eq!(url.scheme(), "https");
+        assert_eq!(url.path(), "/login");
+    }
+
+    #[test]
+    fn launch_rejects_javascript_scheme() {
+        // The headline attack: stored URI with `javascript:` would otherwise
+        // execute in whatever browser handles the protocol.
+        assert!(validate_launchable_url("javascript:alert(1)").is_none());
+    }
+
+    #[test]
+    fn launch_rejects_file_scheme() {
+        assert!(validate_launchable_url("file:///etc/passwd").is_none());
+    }
+
+    #[test]
+    fn launch_rejects_data_scheme() {
+        assert!(validate_launchable_url("data:text/html,<script>alert(1)</script>").is_none());
+    }
+
+    #[test]
+    fn launch_rejects_other_schemes() {
+        // Schemes that use `://` go down the strict path and reject via
+        // the scheme allowlist.
+        assert!(validate_launchable_url("ftp://example.com/").is_none());
+        assert!(validate_launchable_url("ssh://example.com").is_none());
+        // Schemes that use opaque payloads (`scheme:payload`) hit the
+        // fallback path; their payload mangles into an invalid host or
+        // port, so the parse fails outright.
+        assert!(validate_launchable_url("vbscript:msgbox").is_none());
+        assert!(validate_launchable_url("tel:+15551234").is_none());
+    }
+
+    #[test]
+    fn launch_rejects_empty_input() {
+        assert!(validate_launchable_url("").is_none());
+        assert!(validate_launchable_url("   ").is_none());
+    }
+
+    #[test]
+    fn launch_rejects_empty_host_after_scheme() {
+        // The fallback `https://`-prepend used to corrupt this into
+        // `https://https://`, accepting it as host = "https". The strict
+        // path now rejects it cleanly.
+        assert!(validate_launchable_url("https://").is_none());
+        assert!(validate_launchable_url("http://").is_none());
     }
 }

@@ -199,3 +199,108 @@ impl Settings {
         self.show_tray_icon || self.minimize_to_tray || self.close_to_tray
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── ZoomFactor::new — clamping ─────────────────────────────────────────
+
+    #[test]
+    fn new_clamps_below_min_to_min() {
+        assert_eq!(ZoomFactor::new(0).0, ZoomFactor::MIN);
+        assert_eq!(ZoomFactor::new(ZoomFactor::MIN - 1).0, ZoomFactor::MIN);
+    }
+
+    #[test]
+    fn new_clamps_above_max_to_max() {
+        assert_eq!(ZoomFactor::new(ZoomFactor::MAX + 1).0, ZoomFactor::MAX);
+        assert_eq!(ZoomFactor::new(255).0, ZoomFactor::MAX);
+    }
+
+    #[test]
+    fn new_passes_through_in_range() {
+        assert_eq!(ZoomFactor::new(ZoomFactor::DEFAULT).0, ZoomFactor::DEFAULT);
+        assert_eq!(ZoomFactor::new(ZoomFactor::MIN).0, ZoomFactor::MIN);
+        assert_eq!(ZoomFactor::new(ZoomFactor::MAX).0, ZoomFactor::MAX);
+    }
+
+    #[test]
+    fn default_is_one_x_scale() {
+        assert_eq!(ZoomFactor::default().scale(), 1.0);
+        assert_eq!(ZoomFactor::default().0, ZoomFactor::DEFAULT);
+    }
+
+    // ── step_in / step_out / reset bool returns ────────────────────────────
+
+    #[test]
+    fn step_in_at_max_returns_false_and_does_not_overflow() {
+        let mut z = ZoomFactor::new(ZoomFactor::MAX);
+        assert!(!z.step_in());
+        assert_eq!(z.0, ZoomFactor::MAX);
+    }
+
+    #[test]
+    fn step_in_below_max_increments_and_returns_true() {
+        let mut z = ZoomFactor::new(ZoomFactor::MAX - 1);
+        assert!(z.step_in());
+        assert_eq!(z.0, ZoomFactor::MAX);
+    }
+
+    #[test]
+    fn step_out_at_min_returns_false_and_does_not_underflow() {
+        let mut z = ZoomFactor::new(ZoomFactor::MIN);
+        assert!(!z.step_out());
+        assert_eq!(z.0, ZoomFactor::MIN);
+    }
+
+    #[test]
+    fn step_out_above_min_decrements_and_returns_true() {
+        let mut z = ZoomFactor::new(ZoomFactor::MIN + 1);
+        assert!(z.step_out());
+        assert_eq!(z.0, ZoomFactor::MIN);
+    }
+
+    #[test]
+    fn reset_at_default_returns_false() {
+        let mut z = ZoomFactor::default();
+        assert!(!z.reset());
+        assert_eq!(z.0, ZoomFactor::DEFAULT);
+    }
+
+    #[test]
+    fn reset_from_non_default_restores_and_returns_true() {
+        let mut z = ZoomFactor::new(ZoomFactor::MAX);
+        assert!(z.reset());
+        assert_eq!(z.0, ZoomFactor::DEFAULT);
+    }
+
+    // ── Deserialize re-routes through new() ────────────────────────────────
+
+    #[test]
+    fn deserialize_clamps_below_min() {
+        // The "hand-edited 0 doesn't brick the UI" guarantee.
+        let z: ZoomFactor = serde_json::from_str("0").expect("u8 deserializes");
+        assert_eq!(z.0, ZoomFactor::MIN);
+    }
+
+    #[test]
+    fn deserialize_clamps_above_max() {
+        let z: ZoomFactor = serde_json::from_str("255").expect("u8 deserializes");
+        assert_eq!(z.0, ZoomFactor::MAX);
+    }
+
+    #[test]
+    fn deserialize_in_range_round_trips() {
+        let z: ZoomFactor =
+            serde_json::from_str(&ZoomFactor::DEFAULT.to_string()).expect("u8 deserializes");
+        assert_eq!(z, ZoomFactor::default());
+    }
+
+    #[test]
+    fn serialize_is_bare_integer() {
+        // `#[serde(transparent)]` ensures we don't write `{"0": 10}` or similar.
+        let s = serde_json::to_string(&ZoomFactor::default()).expect("serializes");
+        assert_eq!(s, ZoomFactor::DEFAULT.to_string());
+    }
+}

@@ -236,3 +236,139 @@ pub(super) fn bump_clamped(raw: &str, delta: i32, default: u8, min: u8, max: u8)
     let next = (current + delta).clamp(min as i32, max as i32);
     next.to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── parse_u8 ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn parse_u8_empty_uses_default() {
+        assert_eq!(parse_u8("", 14, 5, 128), 14);
+    }
+
+    #[test]
+    fn parse_u8_garbage_uses_default() {
+        assert_eq!(parse_u8("abc", 14, 5, 128), 14);
+        assert_eq!(parse_u8("12abc", 14, 5, 128), 14);
+        assert_eq!(parse_u8("-5", 14, 5, 128), 14); // u32 parse rejects negatives
+    }
+
+    #[test]
+    fn parse_u8_in_range_passes_through() {
+        assert_eq!(parse_u8("7", 14, 5, 128), 7);
+        assert_eq!(parse_u8("128", 14, 5, 128), 128);
+        assert_eq!(parse_u8("5", 14, 5, 128), 5);
+    }
+
+    #[test]
+    fn parse_u8_clamps_below_min() {
+        assert_eq!(parse_u8("3", 14, 5, 128), 5);
+        assert_eq!(parse_u8("0", 14, 5, 128), 5);
+    }
+
+    #[test]
+    fn parse_u8_clamps_above_max() {
+        assert_eq!(parse_u8("500", 14, 5, 128), 128);
+        // 256 would overflow a direct `u8::parse` — the function parses as
+        // u32 and then clamps, so this must succeed at `max`.
+        assert_eq!(parse_u8("256", 14, 5, 128), 128);
+    }
+
+    #[test]
+    fn parse_u8_trims_whitespace() {
+        assert_eq!(parse_u8("  14  ", 5, 5, 128), 14);
+        assert_eq!(parse_u8("\t7\n", 5, 5, 128), 7);
+    }
+
+    #[test]
+    fn parse_u8_overflowing_u32_uses_default() {
+        // Beyond u32::MAX — parsing fails entirely, falling back to default.
+        assert_eq!(parse_u8("99999999999999", 14, 5, 128), 14);
+    }
+
+    // ── accept_digits ─────────────────────────────────────────────────────
+
+    #[test]
+    fn accept_digits_allows_empty() {
+        // Empty must be allowed so the user can clear the field temporarily;
+        // `parse_u8` then falls back to default.
+        assert!(accept_digits(""));
+    }
+
+    #[test]
+    fn accept_digits_allows_ascii_digits() {
+        assert!(accept_digits("0"));
+        assert!(accept_digits("123"));
+        assert!(accept_digits("99999999"));
+    }
+
+    #[test]
+    fn accept_digits_rejects_letters() {
+        assert!(!accept_digits("a"));
+        assert!(!accept_digits("12a"));
+        assert!(!accept_digits("a12"));
+    }
+
+    #[test]
+    fn accept_digits_rejects_whitespace() {
+        // accept_digits gates each *keystroke*; whitespace shouldn't be
+        // typeable into a number field.
+        assert!(!accept_digits(" "));
+        assert!(!accept_digits(" 12"));
+        assert!(!accept_digits("12 "));
+    }
+
+    #[test]
+    fn accept_digits_rejects_non_ascii_digits() {
+        // `is_ascii_digit` only — Arabic-Indic, Devanagari, etc. all reject.
+        assert!(!accept_digits("\u{0660}")); // Arabic-Indic 0
+        assert!(!accept_digits("\u{0967}")); // Devanagari 1
+    }
+
+    #[test]
+    fn accept_digits_rejects_signs_and_decimals() {
+        assert!(!accept_digits("-5"));
+        assert!(!accept_digits("+5"));
+        assert!(!accept_digits("3.14"));
+    }
+
+    // ── bump_clamped ──────────────────────────────────────────────────────
+
+    #[test]
+    fn bump_clamped_step_in_range() {
+        assert_eq!(bump_clamped("5", 1, 14, 5, 128), "6");
+        assert_eq!(bump_clamped("14", -1, 14, 5, 128), "13");
+    }
+
+    #[test]
+    fn bump_clamped_clamps_at_max() {
+        assert_eq!(bump_clamped("128", 1, 14, 5, 128), "128");
+        assert_eq!(bump_clamped("100", 1000, 14, 5, 128), "128");
+    }
+
+    #[test]
+    fn bump_clamped_clamps_at_min() {
+        assert_eq!(bump_clamped("5", -1, 14, 5, 128), "5");
+        assert_eq!(bump_clamped("10", -1000, 14, 5, 128), "5");
+    }
+
+    #[test]
+    fn bump_clamped_empty_uses_default_then_steps() {
+        // Default is 14; +1 → 15.
+        assert_eq!(bump_clamped("", 1, 14, 5, 128), "15");
+        // Default is 14; -1 → 13.
+        assert_eq!(bump_clamped("", -1, 14, 5, 128), "13");
+    }
+
+    #[test]
+    fn bump_clamped_invalid_uses_default() {
+        assert_eq!(bump_clamped("abc", 1, 14, 5, 128), "15");
+    }
+
+    #[test]
+    fn bump_clamped_trims_whitespace() {
+        assert_eq!(bump_clamped("  10  ", 1, 14, 5, 128), "11");
+    }
+}

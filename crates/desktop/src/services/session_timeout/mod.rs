@@ -243,6 +243,40 @@ impl SessionTimeout {
         next
     }
 
+    /// Partition expired users into the three buckets the App applies
+    /// after a tick: non-active logouts (processed inline so the
+    /// "next active user" hand-off only runs once), an active-user
+    /// logout flag (drives `handle_log_out`), and locks.
+    ///
+    /// Splitting the active-user logout into its own boolean — rather
+    /// than letting it land in `inline_logouts` — prevents the bug
+    /// the comment in `App::run_session_timeout_check` used to guard
+    /// against: if `handle_log_out` runs first, it switches to the
+    /// "next" user, and that user might also be in the logout list,
+    /// causing the loop to inline-clean a now-active user.
+    pub fn plan_timeout_actions(
+        &self,
+        snapshots: &[UserSnapshot],
+        active: Option<&UserId>,
+        focused: bool,
+    ) -> TimeoutPlan {
+        let mut plan = TimeoutPlan::default();
+        for snap in snapshots {
+            match self.expired(snap, active, focused) {
+                Some(Action::Logout) => {
+                    if active == Some(&snap.uid) {
+                        plan.handle_active_logout = true;
+                    } else {
+                        plan.inline_logouts.push(snap.uid);
+                    }
+                }
+                Some(Action::Lock) => plan.locks.push(snap.uid),
+                None => {}
+            }
+        }
+        plan
+    }
+
     /// Decide what (if anything) should fire for `snap` right now.
     ///
     /// - `Logout` wins over `Lock` (it's strictly more aggressive).
@@ -318,6 +352,19 @@ pub struct UserSnapshot {
     pub uid: UserId,
     pub prefs: UserPreferences,
     pub is_unlocked: bool,
+}
+
+/// Output of [`SessionTimeout::plan_timeout_actions`]. App processes the
+/// plan in-order: inline logouts → active-user logout (if any) → locks.
+#[derive(Default, Debug, PartialEq, Eq)]
+pub struct TimeoutPlan {
+    /// Non-active users to log out before any user-switch happens.
+    pub inline_logouts: Vec<UserId>,
+    /// Whether the active user expired-for-Logout. App should call
+    /// `handle_log_out` (which transitions to the next user) when set.
+    pub handle_active_logout: bool,
+    /// Users (active or not) that should be locked.
+    pub locks: Vec<UserId>,
 }
 
 /// Yields candidate deadlines (lock + logout, in order, skipping NEVER).
@@ -501,5 +548,157 @@ mod tests {
         st.note_resume();
         let after = st.state.lock().unwrap().last_activity[&a];
         assert_eq!(before, after);
+    }
+
+    // ── plan_timeout_actions ──────────────────────────────────────────────
+
+    /// Force a user's `last_activity` to the past so `expired` fires now.
+    fn backdate(st: &SessionTimeout, user: UserId, ago: Duration) {
+        let mut s = st.state.lock().unwrap();
+        s.last_activity
+            .insert(user, Instant::now().checked_sub(ago).unwrap());
+    }
+
+    #[tokio::test]
+    async fn plan_empty_when_no_users() {
+        let st = fresh();
+        assert_eq!(
+            st.plan_timeout_actions(&[], None, false),
+            TimeoutPlan::default()
+        );
+    }
+
+    #[tokio::test]
+    async fn plan_routes_active_logout_to_handle_flag_not_inline() {
+        // The whole reason this method exists: when the active user
+        // expires for Logout, it must NOT land in `inline_logouts` —
+        // otherwise the App's iteration would log out a user whose
+        // hand-off to the next active hasn't run yet.
+        let st = fresh();
+        let a = uid("a");
+        st.record_activity(a);
+        backdate(&st, a, Duration::from_secs(120));
+
+        let snaps = [UserSnapshot {
+            uid: a,
+            prefs: prefs(0, 60), // logout = 60s, lock = NEVER
+            is_unlocked: true,
+        }];
+
+        let plan = st.plan_timeout_actions(&snaps, Some(&a), false);
+        assert!(plan.handle_active_logout);
+        assert!(plan.inline_logouts.is_empty());
+        assert!(plan.locks.is_empty());
+    }
+
+    #[tokio::test]
+    async fn plan_inlines_non_active_logouts() {
+        let st = fresh();
+        let a = uid("a");
+        let b = uid("b");
+        let c = uid("c");
+        st.record_activity(a);
+        st.record_activity(b);
+        st.record_activity(c);
+        // a is active and fresh; b and c expired-for-Logout.
+        backdate(&st, b, Duration::from_secs(120));
+        backdate(&st, c, Duration::from_secs(120));
+
+        let snaps = [
+            UserSnapshot {
+                uid: a,
+                prefs: prefs(0, 0),
+                is_unlocked: true,
+            },
+            UserSnapshot {
+                uid: b,
+                prefs: prefs(0, 60),
+                is_unlocked: true,
+            },
+            UserSnapshot {
+                uid: c,
+                prefs: prefs(0, 60),
+                is_unlocked: true,
+            },
+        ];
+
+        let plan = st.plan_timeout_actions(&snaps, Some(&a), false);
+        assert!(!plan.handle_active_logout);
+        assert_eq!(plan.inline_logouts, vec![b, c]);
+        assert!(plan.locks.is_empty());
+    }
+
+    #[tokio::test]
+    async fn plan_collects_locks_separately_from_logouts() {
+        let st = fresh();
+        let a = uid("a");
+        let b = uid("b");
+        st.record_activity(a);
+        st.record_activity(b);
+        backdate(&st, a, Duration::from_secs(120));
+        backdate(&st, b, Duration::from_secs(120));
+
+        let snaps = [
+            // a: only `lock_after` set, expired.
+            UserSnapshot {
+                uid: a,
+                prefs: prefs(60, 0),
+                is_unlocked: true,
+            },
+            // b: `logout_after` set, expired.
+            UserSnapshot {
+                uid: b,
+                prefs: prefs(0, 60),
+                is_unlocked: true,
+            },
+        ];
+
+        let plan = st.plan_timeout_actions(&snaps, None, false);
+        assert!(!plan.handle_active_logout);
+        assert_eq!(plan.locks, vec![a]);
+        assert_eq!(plan.inline_logouts, vec![b]);
+    }
+
+    #[tokio::test]
+    async fn plan_respects_active_focused_lock_grace() {
+        let st = fresh();
+        let a = uid("a");
+        st.record_activity(a);
+        backdate(&st, a, Duration::from_secs(120));
+        let snaps = [UserSnapshot {
+            uid: a,
+            prefs: prefs(60, 0), // lock_after expired, no logout
+            is_unlocked: true,
+        }];
+
+        // Active+focused → lock is suppressed.
+        let plan = st.plan_timeout_actions(&snaps, Some(&a), true);
+        assert!(plan.locks.is_empty());
+        assert!(!plan.handle_active_logout);
+        assert!(plan.inline_logouts.is_empty());
+
+        // Same user, unfocused → lock fires.
+        let plan = st.plan_timeout_actions(&snaps, Some(&a), false);
+        assert_eq!(plan.locks, vec![a]);
+    }
+
+    #[tokio::test]
+    async fn plan_logout_wins_over_lock_for_same_user() {
+        // `expired` returns Logout when both timers have fired; the
+        // planner must surface that — never duplicate the user across
+        // both buckets.
+        let st = fresh();
+        let a = uid("a");
+        st.record_activity(a);
+        backdate(&st, a, Duration::from_secs(120));
+        let snaps = [UserSnapshot {
+            uid: a,
+            prefs: prefs(30, 60), // both fired (120s elapsed > each)
+            is_unlocked: true,
+        }];
+
+        let plan = st.plan_timeout_actions(&snaps, None, false);
+        assert!(plan.locks.is_empty());
+        assert_eq!(plan.inline_logouts, vec![a]);
     }
 }

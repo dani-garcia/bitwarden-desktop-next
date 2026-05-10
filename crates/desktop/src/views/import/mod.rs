@@ -622,3 +622,75 @@ fn section_card<'a>(
         })
         .into()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    #[test]
+    fn merged_length_matches_inputs() {
+        // Sanity: the static can't have lost or duplicated entries during
+        // construction.
+        let merged = all_formats();
+        assert_eq!(merged.len(), FEATURED_FORMATS.len() + REGULAR_FORMATS.len());
+    }
+
+    #[test]
+    fn featured_formats_lead_in_declaration_order() {
+        // The dropdown promise: featured entries appear first, in the order
+        // they're declared in the source — *not* alphabetised.
+        let merged = all_formats();
+        for (i, expected) in FEATURED_FORMATS.iter().enumerate() {
+            assert_eq!(
+                merged[i].id, expected.id,
+                "featured slot {i} expected {} but got {}",
+                expected.id, merged[i].id
+            );
+        }
+    }
+
+    #[test]
+    fn tail_after_featured_is_alphabetical() {
+        // The cheap durability assertion: post-featured tail must be
+        // non-decreasing by `name`. Hard-coding individual positions would
+        // break every time the upstream importer list grows.
+        let merged = all_formats();
+        let tail = &merged[FEATURED_FORMATS.len()..];
+        for window in tail.windows(2) {
+            assert!(
+                window[0].name <= window[1].name,
+                "tail not sorted: {:?} > {:?}",
+                window[0].name,
+                window[1].name
+            );
+        }
+    }
+
+    #[test]
+    fn no_duplicate_ids_across_merged_table() {
+        // Both halves of the table are large and easy to copy-paste-collide.
+        // `id` is what flows into the SDK importer dispatch, so a duplicate
+        // means one importer is silently unreachable.
+        let merged = all_formats();
+        let mut seen: HashSet<&str> = HashSet::with_capacity(merged.len());
+        for f in &merged {
+            assert!(seen.insert(f.id), "duplicate import format id: {:?}", f.id);
+        }
+    }
+
+    #[test]
+    fn no_id_collision_between_featured_and_regular() {
+        // Belt-and-braces: the previous test catches any duplicate, but
+        // pinning down "the two halves don't overlap" makes the regression
+        // message actionable when it fires.
+        let featured: HashSet<&str> = FEATURED_FORMATS.iter().map(|f| f.id).collect();
+        for f in REGULAR_FORMATS {
+            assert!(
+                !featured.contains(f.id),
+                "{:?} appears in both FEATURED and REGULAR",
+                f.id
+            );
+        }
+    }
+}

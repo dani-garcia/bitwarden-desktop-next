@@ -378,3 +378,194 @@ pub fn globe_handle() -> image::Handle {
         .get_or_init(|| image::Handle::from_bytes(crate::assets::BWI_GLOBE_PNG))
         .clone()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── hostname_for_fetch ────────────────────────────────────────────────
+
+    #[test]
+    fn hostname_extracts_https_host() {
+        assert_eq!(
+            hostname_for_fetch("https://example.com/path?q=1"),
+            Some("example.com".into())
+        );
+    }
+
+    #[test]
+    fn hostname_extracts_http_host() {
+        assert_eq!(
+            hostname_for_fetch("http://example.com"),
+            Some("example.com".into())
+        );
+    }
+
+    #[test]
+    fn hostname_lowercases() {
+        assert_eq!(
+            hostname_for_fetch("https://Mail.Google.COM/inbox"),
+            Some("mail.google.com".into())
+        );
+    }
+
+    #[test]
+    fn hostname_preserves_subdomain() {
+        // The doc comment promises full hostname, not eTLD+1.
+        assert_eq!(
+            hostname_for_fetch("https://mail.google.com/"),
+            Some("mail.google.com".into())
+        );
+        assert_eq!(
+            hostname_for_fetch("https://google.com/"),
+            Some("google.com".into())
+        );
+        assert_ne!(
+            hostname_for_fetch("https://mail.google.com/"),
+            hostname_for_fetch("https://google.com/")
+        );
+    }
+
+    #[test]
+    fn hostname_scheme_prepend_retry_recovers_bare_host() {
+        assert_eq!(
+            hostname_for_fetch("example.com"),
+            Some("example.com".into())
+        );
+        assert_eq!(
+            hostname_for_fetch("Example.com/path"),
+            Some("example.com".into())
+        );
+    }
+
+    #[test]
+    fn hostname_rejects_ipv4() {
+        assert_eq!(hostname_for_fetch("https://1.2.3.4/"), None);
+        assert_eq!(hostname_for_fetch("http://192.168.0.1"), None);
+    }
+
+    #[test]
+    fn hostname_rejects_ipv6() {
+        assert_eq!(hostname_for_fetch("https://[::1]/"), None);
+        assert_eq!(hostname_for_fetch("https://[2001:db8::1]/"), None);
+    }
+
+    #[test]
+    fn hostname_rejects_single_label() {
+        // No dot = unfit for a public favicon fetch (e.g. `localhost`,
+        // intranet hostnames).
+        assert_eq!(hostname_for_fetch("https://localhost/"), None);
+        assert_eq!(hostname_for_fetch("myhost"), None);
+    }
+
+    #[test]
+    fn hostname_rejects_onion_and_i2p() {
+        assert_eq!(hostname_for_fetch("https://example.onion/"), None);
+        assert_eq!(hostname_for_fetch("http://example.i2p/"), None);
+        // The match is suffix-based, so a multi-label `.onion` still rejects.
+        assert_eq!(hostname_for_fetch("https://foo.bar.onion/"), None);
+    }
+
+    #[test]
+    fn hostname_rejects_non_http_schemes() {
+        assert_eq!(hostname_for_fetch("ftp://example.com/"), None);
+        assert_eq!(hostname_for_fetch("file:///etc/passwd"), None);
+        assert_eq!(hostname_for_fetch("mailto:foo@example.com"), None);
+        assert_eq!(hostname_for_fetch("javascript:alert(1)"), None);
+    }
+
+    #[test]
+    fn hostname_rejects_unparseable() {
+        assert_eq!(hostname_for_fetch(""), None);
+        assert_eq!(hostname_for_fetch("   "), None);
+        assert_eq!(hostname_for_fetch("not a url at all"), None);
+    }
+
+    // ── apply_rounded_mask ─────────────────────────────────────────────────
+
+    /// Build a 32×32 RGBA image with every pixel fully opaque white.
+    fn opaque_white_32() -> ::image::RgbaImage {
+        ::image::RgbaImage::from_pixel(32, 32, ::image::Rgba([255, 255, 255, 255]))
+    }
+
+    #[test]
+    fn rounded_mask_zero_radius_is_no_op() {
+        let mut img = opaque_white_32();
+        apply_rounded_mask(&mut img, 0.0);
+        // Every pixel still alpha = 255.
+        assert!(img.pixels().all(|p| p.0[3] == 255));
+    }
+
+    #[test]
+    fn rounded_mask_negative_radius_is_no_op() {
+        let mut img = opaque_white_32();
+        apply_rounded_mask(&mut img, -1.0);
+        assert!(img.pixels().all(|p| p.0[3] == 255));
+    }
+
+    #[test]
+    fn rounded_mask_clears_corner_pixel() {
+        let mut img = opaque_white_32();
+        apply_rounded_mask(&mut img, 4.0);
+        // Pixel (0,0) sits well outside the inner-rectangle arc — coverage
+        // collapses to 0 and the alpha is fully cleared.
+        assert_eq!(img.get_pixel(0, 0).0[3], 0, "top-left corner not cleared");
+        assert_eq!(img.get_pixel(31, 0).0[3], 0, "top-right corner not cleared");
+        assert_eq!(
+            img.get_pixel(0, 31).0[3],
+            0,
+            "bottom-left corner not cleared"
+        );
+        assert_eq!(
+            img.get_pixel(31, 31).0[3],
+            0,
+            "bottom-right corner not cleared"
+        );
+    }
+
+    #[test]
+    fn rounded_mask_preserves_centre() {
+        let mut img = opaque_white_32();
+        apply_rounded_mask(&mut img, 4.0);
+        assert_eq!(img.get_pixel(16, 16).0[3], 255, "centre not opaque");
+    }
+
+    #[test]
+    fn rounded_mask_preserves_straight_edge_midpoint() {
+        // Mid-edge pixels (16,0) etc. fall in the straight-edge region where
+        // the clamped point equals the pixel itself, so coverage is full.
+        let mut img = opaque_white_32();
+        apply_rounded_mask(&mut img, 4.0);
+        assert_eq!(
+            img.get_pixel(16, 0).0[3],
+            255,
+            "top edge midpoint not opaque"
+        );
+        assert_eq!(
+            img.get_pixel(0, 16).0[3],
+            255,
+            "left edge midpoint not opaque"
+        );
+        assert_eq!(
+            img.get_pixel(31, 16).0[3],
+            255,
+            "right edge midpoint not opaque"
+        );
+        assert_eq!(
+            img.get_pixel(16, 31).0[3],
+            255,
+            "bottom edge midpoint not opaque"
+        );
+    }
+
+    #[test]
+    fn rounded_mask_does_not_change_color_channels() {
+        let mut img = opaque_white_32();
+        apply_rounded_mask(&mut img, 4.0);
+        // Every pixel keeps RGB = (255,255,255); only alpha is touched.
+        assert!(
+            img.pixels()
+                .all(|p| p.0[0] == 255 && p.0[1] == 255 && p.0[2] == 255)
+        );
+    }
+}
