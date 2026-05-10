@@ -13,6 +13,7 @@ impl App {
             Message::Sidebar(m) => self.handle_sidebar_message(m),
             Message::Magnify(m) => self.handle_magnify_message(m),
             Message::Fingerprint(m) => self.handle_fingerprint_message(m),
+            Message::ScreenshotConfirm(m) => self.handle_screenshot_confirm_message(m),
             // No-op — the redraw the message triggers is the entire point.
             // Subscription rebuilds and unsubscribes once nothing's animating.
             Message::AnimationTick => Task::none(),

@@ -99,7 +99,10 @@ pub struct Settings {
     /// Stub — the real autotype engine hasn't been ported yet.
     pub autotype_enabled: bool,
 
-    /// Stub — domain icon fetching isn't wired yet.
+    /// Vault and magnify rows render fetched favicons (via
+    /// [`crate::services::favicon`]) when `true`; an initial-letter
+    /// circle otherwise. Read by the item-list / magnify-row renderers
+    /// straight off `RenderCtx` — no startup wiring needed.
     pub show_favicons: bool,
 
     /// Master switch: keep the tray icon visible even when the app is in the
@@ -112,9 +115,19 @@ pub struct Settings {
     /// Auto-creates the tray if not already shown.
     pub close_to_tray: bool,
 
-    /// Advanced platform group — all stubs.
+    /// Stub — macOS-only `NSApplication.activationPolicy` toggle.
     pub always_show_dock: bool,
+    /// Read once at startup by `select_backend()` in `main.rs`; live
+    /// changes only take effect after a restart.
     pub hardware_acceleration: bool,
+    /// Whether the user permits screen capture / screen recording. When
+    /// `false` (the [`bool`] default), the main window is excluded from
+    /// captures via [`crate::services::screenshot_protection`] —
+    /// secure-by-default, diverging from the official client which
+    /// ships protection off. Toggling on (= flipping protection off)
+    /// opens a confirm-still-visible dialog with auto-revert. Linux has
+    /// no upstream protocol, so the toggle no-ops there after a
+    /// one-shot toast.
     pub allow_screenshots: bool,
 
     // wgpu backend cache — only meaningful with the `gpu` Cargo feature.

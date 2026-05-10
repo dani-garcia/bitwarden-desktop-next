@@ -144,6 +144,8 @@ impl App {
             open_overlay: None,
             toasts: Vec::new(),
             fingerprint: crate::views::fingerprint_phrase::FingerprintModal::default(),
+            screenshot_confirm:
+                crate::views::screenshot_confirm::ScreenshotConfirmModal::default(),
 
             cache: ViewCache::default(),
         };
@@ -160,6 +162,16 @@ impl App {
         #[cfg(not(feature = "gpu"))]
         let info_task = Task::none();
 
+        // Re-apply the persisted screen-capture setting once the main
+        // window is alive. Skip the work entirely when the user hasn't
+        // opted in (the default) — a no-op call would still pay for the
+        // window-thread round-trip otherwise.
+        let screenshot_task = if app.settings.allow_screenshots {
+            Task::none()
+        } else {
+            crate::services::screenshot_protection::apply(main_id, true).discard()
+        };
+
         (
             app,
             Task::batch([
@@ -167,6 +179,7 @@ impl App {
                 magnify_open_task,
                 load_task,
                 info_task,
+                screenshot_task,
             ]),
         )
     }

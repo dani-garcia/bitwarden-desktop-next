@@ -384,6 +384,12 @@ settings-tab-advanced = Advanced
 
 settings-toast-not-supported = This setting isn't supported yet.
 
+# Allow screenshots — confirm-still-visible dialog
+settings-confirm-window-visible-title = Confirm window still visible
+settings-confirm-window-visible-body = Click OK within 5 seconds to keep screen capture blocked. If you can't see this dialog, the setting will revert automatically.
+settings-confirm-window-visible-ok = OK
+settings-allow-screenshots-unsupported = Screen capture protection isn't supported on this platform.
+
 # Security tab
 settings-security-access-options = Access options
 settings-security-open-at-login = Open Bitwarden at device login

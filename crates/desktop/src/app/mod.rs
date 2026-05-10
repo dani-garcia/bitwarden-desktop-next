@@ -99,6 +99,10 @@ pub struct App {
     /// Account → Fingerprint phrase modal. Closed unless the user explicitly
     /// opened it via the menu.
     pub(super) fingerprint: crate::views::fingerprint_phrase::FingerprintModal,
+    /// Settings → Allow screenshots: post-toggle "is the window still
+    /// visible?" dialog with auto-revert. Closed unless the user just
+    /// enabled screen-capture protection.
+    pub(super) screenshot_confirm: crate::views::screenshot_confirm::ScreenshotConfirmModal,
 
     // ── Derived ───────────────────────────────────────────────────────────
     pub(super) cache: ViewCache,

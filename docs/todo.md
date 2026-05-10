@@ -148,7 +148,7 @@ V1 ships behind `Ctrl+Shift+Space` ([views/magnify/](../crates/desktop/src/views
 ### OS-glue (no SDK work)
 
 - **Open at device login** `[M]` — platform autostart: registry on Windows, LaunchAgent on macOS, `.desktop` file on Linux.
-- **Allow screenshots** `[M]` — Windows `SetWindowDisplayAffinity`; macOS / Linux set at window creation, so restart-required.
+- **Allow screenshots — branded screenshot decoy** `[M]` `[defer]` — V1 ships protection-only via [services/screenshot_protection/](../crates/desktop/src/services/screenshot_protection/mod.rs) with the "confirm window still visible" auto-revert dialog. Open follow-up: render a custom branded panel (flat color + logo + "Screen capture is disabled" text) inside a second window stacked just below the main window, so screenshots / RDP captures show that panel instead of the OS's blank exclusion. See chat 2026-05-10 for the design (two-window stack, z-order management). Magnify launcher excluded by design — too short-lived to matter.
 
 ### SDK integration
 

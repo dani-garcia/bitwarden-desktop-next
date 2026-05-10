@@ -173,6 +173,15 @@ impl SettingsView {
         self.fade.close();
     }
 
+    /// Force the working snapshot's `allow_screenshots` flag back to `true`.
+    /// Used by the screen-capture confirm-still-visible auto-revert path so
+    /// the checkbox flips back visually if the modal happens to be open
+    /// when the timeout fires; no-op-equivalent if it isn't (the next
+    /// `open_with` replaces the whole snapshot anyway).
+    pub fn revert_allow_screenshots(&mut self) {
+        self.snapshot.settings.allow_screenshots = true;
+    }
+
     pub fn update(&mut self, msg: SettingsMessage, _ctx: UpdateCtx<'_>) -> Outcome<Self> {
         match msg {
             SettingsMessage::Close => self.fade.close(),

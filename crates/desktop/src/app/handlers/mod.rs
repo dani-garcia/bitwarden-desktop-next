@@ -11,4 +11,5 @@ pub(super) mod magnify;
 #[cfg(target_os = "macos")]
 mod magnify_macos_fix;
 mod platform;
+mod screenshot_confirm;
 mod sidebar;

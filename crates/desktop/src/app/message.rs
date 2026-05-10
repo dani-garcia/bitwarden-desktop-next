@@ -6,7 +6,8 @@ use crate::{
     views::{
         about::AboutMessage, export::ExportMessage, fingerprint_phrase::FingerprintMessage,
         generator::GeneratorMessage, import::ImportMessage, login::LoginMessage,
-        magnify::MagnifyMessage, new_folder::NewFolderMessage, send::SendMessage,
+        magnify::MagnifyMessage, new_folder::NewFolderMessage,
+        screenshot_confirm::ScreenshotConfirmMessage, send::SendMessage,
         settings::SettingsMessage, title_bar::TitleBarMessage, vault::VaultMessage,
     },
 };
@@ -38,6 +39,10 @@ pub enum Message {
     /// lives directly on `App` (single string + fade), and the actions
     /// handle in one place without needing `UpdateCtx`.
     Fingerprint(FingerprintMessage),
+    /// Settings → Allow screenshots confirm-still-visible dialog. Routed at
+    /// the top level for the same reason as `Fingerprint`: a tiny modal
+    /// whose state lives on `App`, no `UpdateCtx` needed.
+    ScreenshotConfirm(ScreenshotConfirmMessage),
 }
 
 /// Sub-view messages, bundled so `App::update` builds `UpdateCtx` in one

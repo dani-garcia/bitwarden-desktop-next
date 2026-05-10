@@ -13,6 +13,7 @@ pub mod i18n;
 pub mod instance_lock;
 pub mod menu;
 pub mod preferences;
+pub mod screenshot_protection;
 pub mod sdk;
 pub mod search;
 pub mod session_timeout;

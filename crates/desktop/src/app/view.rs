@@ -169,6 +169,12 @@ impl App {
             crate::views::fingerprint_phrase::modal_view(&self.fingerprint, rctx.colors)
                 .map(|el| el.map(Message::fingerprint));
 
+        let screenshot_confirm_modal = crate::views::screenshot_confirm::modal_view(
+            &self.screenshot_confirm,
+            rctx.colors,
+        )
+        .map(|el| el.map(Message::ScreenshotConfirm));
+
         let use_custom_menu_bar = crate::services::menu::should_use_custom_menu_bar();
 
         let tb: Element<'_, Message, AppTheme> = if use_custom_menu_bar {
@@ -206,6 +212,7 @@ impl App {
             export_modal,
             new_folder_modal,
             fingerprint_modal,
+            screenshot_confirm_modal,
         ]
         .into_iter()
         .flatten()

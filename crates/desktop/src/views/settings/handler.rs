@@ -75,6 +75,10 @@ impl App {
                 self.refresh_session_timeout_deadline();
             }
 
+            SettingChange::AllowScreenshots(allow) => {
+                return self.apply_allow_screenshots_change(allow);
+            }
+
             // Every remaining variant is currently unwired — the value was
             // persisted above, but the feature doesn't react yet. Let the
             // user know with a toast.
@@ -87,12 +91,59 @@ impl App {
             | SettingChange::SshPromptBehavior(_)
             | SettingChange::DuckDuckGo(_)
             | SettingChange::AutotypeEnabled(_)
-            | SettingChange::AlwaysShowDock(_)
-            | SettingChange::AllowScreenshots(_) => {
+            | SettingChange::AlwaysShowDock(_) => {
                 self.push_toast(crate::views::settings::not_supported_toast());
             }
         }
         Task::none()
+    }
+
+    /// Toggle screen-capture protection on the main window. When enabling
+    /// (`allow == false`), open the "confirm window still visible" dialog
+    /// and schedule a 5 s timeout that auto-reverts if the user doesn't
+    /// click OK — protects against the case where they're on a remote-
+    /// desktop session and the window has just become invisible to them.
+    /// Disabling is unconditional: clear protection, close the dialog if
+    /// it happened to be open.
+    fn apply_allow_screenshots_change(&mut self, allow: bool) -> Task<Message> {
+        let protect = !allow;
+        let apply_task = crate::services::screenshot_protection::apply(
+            self.main_window,
+            protect,
+        )
+        .discard();
+
+        if !protect {
+            // User just allowed screenshots — clear protection and any
+            // in-flight confirm dialog (timeout will see a stale version
+            // and no-op).
+            self.screenshot_confirm.close();
+            return apply_task;
+        }
+
+        // Linux: protection didn't actually do anything; show a one-shot
+        // toast and skip the confirm dialog.
+        if cfg!(not(any(target_os = "windows", target_os = "macos"))) {
+            self.push_toast(crate::components::toast::Toast::warning(
+                crate::fl!("settings-allow-screenshots-unsupported"),
+                None,
+            ));
+            return apply_task;
+        }
+
+        // Windows / macOS: open the dialog and schedule the auto-revert.
+        // `abortable` returns a handle whose `abort_on_drop` will cancel
+        // the pending sleep when the user clicks OK (or re-opens the
+        // modal), so the modal owns the lifetime of its own timeout.
+        let revert_after = crate::views::screenshot_confirm::REVERT_AFTER;
+        let timeout_task = Task::perform(tokio::time::sleep(revert_after), |_| {
+            Message::ScreenshotConfirm(
+                crate::views::screenshot_confirm::ScreenshotConfirmMessage::Timeout,
+            )
+        });
+        let (timeout_task, handle) = timeout_task.abortable();
+        self.screenshot_confirm.open(handle);
+        Task::batch([apply_task, timeout_task])
     }
 
     /// Ensure the tray reflects `self.settings.wants_tray()` — create one on
