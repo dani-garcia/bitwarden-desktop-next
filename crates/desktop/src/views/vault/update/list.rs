@@ -191,3 +191,179 @@ pub(super) fn clipboard_outcome(
         }
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::filter_items;
+    use crate::{
+        test_support::fixtures::{CipherSpec, login_kind, make_cipher},
+        views::vault::VaultFilter,
+    };
+    use bitwarden_core::OrganizationId;
+    use bitwarden_vault::{CipherListViewType, CipherType};
+
+    #[test]
+    fn all_items_excludes_deleted_and_archived() {
+        let alive = make_cipher(CipherSpec {
+            name: "Alive",
+            ..Default::default()
+        });
+        let deleted = make_cipher(CipherSpec {
+            name: "Trashed",
+            deleted: true,
+            ..Default::default()
+        });
+        let archived = make_cipher(CipherSpec {
+            name: "Archived",
+            archived: true,
+            ..Default::default()
+        });
+        let all = vec![alive, deleted, archived];
+
+        let out = filter_items(&all, VaultFilter::AllItems, "");
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].name, "Alive");
+    }
+
+    #[test]
+    fn trash_shows_only_deleted() {
+        let alive = make_cipher(CipherSpec {
+            name: "Alive",
+            ..Default::default()
+        });
+        let deleted = make_cipher(CipherSpec {
+            name: "Trashed",
+            deleted: true,
+            ..Default::default()
+        });
+
+        let out = filter_items(&[alive, deleted], VaultFilter::Trash, "");
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].name, "Trashed");
+    }
+
+    #[test]
+    fn archive_shows_only_archived() {
+        let alive = make_cipher(CipherSpec {
+            name: "Alive",
+            ..Default::default()
+        });
+        let archived = make_cipher(CipherSpec {
+            name: "Archived",
+            archived: true,
+            ..Default::default()
+        });
+
+        let out = filter_items(&[alive, archived], VaultFilter::Archive, "");
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].name, "Archived");
+    }
+
+    #[test]
+    fn favorites_excludes_deleted() {
+        // Soft-deleting a favorite shouldn't leave it in the Favorites view.
+        let fave = make_cipher(CipherSpec {
+            name: "Fave",
+            favorite: true,
+            ..Default::default()
+        });
+        let deleted_fave = make_cipher(CipherSpec {
+            name: "TrashedFave",
+            favorite: true,
+            deleted: true,
+            ..Default::default()
+        });
+        let plain = make_cipher(CipherSpec {
+            name: "Plain",
+            ..Default::default()
+        });
+
+        let out = filter_items(&[fave, deleted_fave, plain], VaultFilter::Favorites, "");
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].name, "Fave");
+    }
+
+    #[test]
+    fn personal_excludes_org_items() {
+        let org = OrganizationId::new_v4();
+        let personal = make_cipher(CipherSpec {
+            name: "Personal",
+            ..Default::default()
+        });
+        let org_item = make_cipher(CipherSpec {
+            name: "Org",
+            organization: Some(org),
+            ..Default::default()
+        });
+
+        let out = filter_items(&[personal, org_item], VaultFilter::Personal, "");
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].name, "Personal");
+    }
+
+    #[test]
+    fn organization_filter_shows_only_matching_org() {
+        let org_a = OrganizationId::new_v4();
+        let org_b = OrganizationId::new_v4();
+        let a = make_cipher(CipherSpec {
+            name: "A",
+            organization: Some(org_a),
+            ..Default::default()
+        });
+        let b = make_cipher(CipherSpec {
+            name: "B",
+            organization: Some(org_b),
+            ..Default::default()
+        });
+
+        let out = filter_items(&[a, b], VaultFilter::Organization(org_a), "");
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].name, "A");
+    }
+
+    #[test]
+    fn category_filter_matches_only_that_kind() {
+        let login = make_cipher(CipherSpec {
+            name: "Login",
+            kind: login_kind(None),
+            ..Default::default()
+        });
+        let note = make_cipher(CipherSpec {
+            name: "Note",
+            kind: CipherListViewType::SecureNote,
+            ..Default::default()
+        });
+
+        let out = filter_items(
+            &[login, note],
+            VaultFilter::Category(CipherType::Login),
+            "",
+        );
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].name, "Login");
+    }
+
+    #[test]
+    fn query_filter_combines_with_type_filter() {
+        // "github" should match the login by URI, not the note that shares
+        // the substring in its name — Category gates first, then query.
+        let gh_login = make_cipher(CipherSpec {
+            name: "GH",
+            kind: login_kind(Some("https://github.com")),
+            ..Default::default()
+        });
+        let gh_note = make_cipher(CipherSpec {
+            name: "github tips",
+            kind: CipherListViewType::SecureNote,
+            ..Default::default()
+        });
+
+        let out = filter_items(
+            &[gh_login, gh_note],
+            VaultFilter::Category(CipherType::Login),
+            "github",
+        );
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].name, "GH");
+    }
+}

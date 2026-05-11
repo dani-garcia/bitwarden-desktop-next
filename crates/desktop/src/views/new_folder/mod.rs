@@ -107,6 +107,16 @@ impl NewFolderView {
         }
     }
 
+    #[cfg(test)]
+    fn name_for_test(&self) -> &str {
+        &self.name
+    }
+
+    #[cfg(test)]
+    fn is_saving_for_test(&self) -> bool {
+        self.saving
+    }
+
     pub fn modal_view<'a>(
         &'a self,
         ctx: &crate::app::RenderCtx<'a>,
@@ -161,5 +171,187 @@ impl NewFolderView {
             container(body),
             NewFolderMessage::Close,
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests_snapshot {
+    use super::*;
+    use crate::{test_support, test_support::TestRenderCtx};
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn new_folder_modal() {
+        test_support::init();
+        let mut view = NewFolderView::new();
+        view.open();
+        test_support::settle_animations();
+
+        let mut render = TestRenderCtx::default();
+        for (theme, suffix) in [
+            (AppTheme::light(), "light"),
+            (AppTheme::dark(), "dark"),
+        ] {
+            render.colors = theme.colors;
+            let element = view
+                .modal_view(&render.as_ctx())
+                .expect("modal renders while open");
+            test_support::assert_snapshot(
+                format!("tests/snapshots/new_folder_modal_{suffix}"),
+                &theme,
+                element,
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests_interaction {
+    use super::*;
+    use crate::test_support::{self, TestRenderCtx, TestUpdateCtx};
+
+    fn run(view: &mut NewFolderView, msg: NewFolderMessage) -> Outcome<NewFolderView> {
+        let mut owned = TestUpdateCtx::default();
+        view.update(msg, owned.as_ctx())
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn type_name_then_click_save_submits() {
+        test_support::init();
+        let mut view = NewFolderView::new();
+        view.open();
+        test_support::settle_animations();
+
+        let render = TestRenderCtx::default();
+
+        // Focus the name field via its stable widget::Id, then type.
+        let element = view
+            .modal_view(&render.as_ctx())
+            .expect("modal renders while open");
+        let messages = test_support::drive_element(element, |ui| {
+            ui.click(NAME_FIELD_ID.clone())
+                .expect("name field has a click target");
+            ui.typewrite("Social");
+        });
+
+        // text_input emits one NameChanged per keystroke with the cumulative
+        // text. Apply them all so the next render reflects the full typed
+        // value.
+        for msg in messages {
+            let _ = run(&mut view, msg);
+        }
+        assert_eq!(view.name_for_test(), "Social");
+        assert!(!view.is_saving_for_test());
+
+        // With a non-empty name the Save button is now enabled. Click it.
+        let element = view
+            .modal_view(&render.as_ctx())
+            .expect("modal renders while open");
+        let messages = test_support::drive_element(element, |ui| {
+            ui.click("Save").expect("Save button enabled");
+        });
+        let saw_submit = messages
+            .iter()
+            .any(|m| matches!(m, NewFolderMessage::Submit));
+        assert!(saw_submit, "expected Submit in {messages:?}");
+
+        for msg in messages {
+            let _ = run(&mut view, msg);
+        }
+        assert!(view.is_saving_for_test(), "Submit flipped saving=true");
+    }
+}
+
+#[cfg(test)]
+mod tests_update {
+    use super::*;
+    use crate::{
+        components::toast::ToastStatus,
+        test_support::{OutcomeExt, TestUpdateCtx},
+    };
+
+    fn run(view: &mut NewFolderView, msg: NewFolderMessage) -> Outcome<NewFolderView> {
+        let mut owned = TestUpdateCtx::default();
+        view.update(msg, owned.as_ctx())
+    }
+
+    #[test]
+    fn name_changed_updates_when_not_saving() {
+        let mut view = NewFolderView::new();
+        run(&mut view, NewFolderMessage::NameChanged("Social".into())).expect_none();
+        assert_eq!(view.name_for_test(), "Social");
+    }
+
+    #[test]
+    fn name_changed_is_ignored_while_saving() {
+        let mut view = NewFolderView::new();
+        // Get into the saving state first.
+        view.open();
+        run(&mut view, NewFolderMessage::NameChanged("First".into())).expect_none();
+        let _ = run(&mut view, NewFolderMessage::Submit);
+        assert!(view.is_saving_for_test());
+
+        run(&mut view, NewFolderMessage::NameChanged("Second".into())).expect_none();
+        assert_eq!(
+            view.name_for_test(),
+            "First",
+            "name field is locked while the SDK call is in flight"
+        );
+    }
+
+    #[test]
+    fn submit_with_empty_name_returns_none() {
+        let mut view = NewFolderView::new();
+        run(&mut view, NewFolderMessage::Submit).expect_none();
+        assert!(!view.is_saving_for_test());
+    }
+
+    #[test]
+    fn submit_with_whitespace_only_name_returns_none() {
+        let mut view = NewFolderView::new();
+        let _ = run(&mut view, NewFolderMessage::NameChanged("   \t".into()));
+        run(&mut view, NewFolderMessage::Submit).expect_none();
+        assert!(!view.is_saving_for_test());
+    }
+
+    #[test]
+    fn submit_with_valid_name_emits_run_event_and_flips_saving() {
+        let mut view = NewFolderView::new();
+        let _ = run(&mut view, NewFolderMessage::NameChanged("  Social  ".into()));
+        let NewFolderEvent::Run(name) = run(&mut view, NewFolderMessage::Submit).expect_event();
+        assert_eq!(name, "Social");
+        assert!(view.is_saving_for_test());
+    }
+
+    #[test]
+    fn submit_while_already_saving_returns_none() {
+        let mut view = NewFolderView::new();
+        let _ = run(&mut view, NewFolderMessage::NameChanged("Social".into()));
+        let _ = run(&mut view, NewFolderMessage::Submit);
+        assert!(view.is_saving_for_test());
+
+        run(&mut view, NewFolderMessage::Submit).expect_none();
+        assert!(view.is_saving_for_test(), "still saving");
+    }
+
+    #[test]
+    fn saved_ok_clears_saving_and_emits_success_toast() {
+        let mut view = NewFolderView::new();
+        let _ = run(&mut view, NewFolderMessage::NameChanged("Social".into()));
+        let _ = run(&mut view, NewFolderMessage::Submit);
+
+        let toast = run(&mut view, NewFolderMessage::Saved(Ok(()))).expect_toast();
+        assert!(matches!(toast.status, ToastStatus::Success));
+        assert!(!view.is_saving_for_test());
+    }
+
+    #[test]
+    fn saved_err_clears_saving_and_emits_error_toast() {
+        let mut view = NewFolderView::new();
+        let _ = run(&mut view, NewFolderMessage::NameChanged("Social".into()));
+        let _ = run(&mut view, NewFolderMessage::Submit);
+
+        let toast = run(&mut view, NewFolderMessage::Saved(Err("boom".into()))).expect_toast();
+        assert!(matches!(toast.status, ToastStatus::Error));
+        assert!(!view.is_saving_for_test());
     }
 }

@@ -316,3 +316,34 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::format_code;
+
+    #[test]
+    fn six_digit_code_gets_split() {
+        assert_eq!(format_code("123456"), "123 456");
+        assert_eq!(format_code("000000"), "000 000");
+    }
+
+    #[test]
+    fn steam_codes_pass_through() {
+        // Steam guard codes are 5 alphanumeric chars; leave them alone.
+        assert_eq!(format_code("X4F2K"), "X4F2K");
+    }
+
+    #[test]
+    fn non_six_digit_codes_pass_through() {
+        assert_eq!(format_code("12345"), "12345");
+        assert_eq!(format_code("1234567"), "1234567");
+        assert_eq!(format_code(""), "");
+    }
+
+    #[test]
+    fn non_digit_six_chars_pass_through() {
+        // The all-digits branch must not trigger for mixed content.
+        assert_eq!(format_code("12345A"), "12345A");
+        assert_eq!(format_code("ABCDEF"), "ABCDEF");
+    }
+}

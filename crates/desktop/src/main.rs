@@ -10,6 +10,9 @@ mod services;
 mod theme;
 mod views;
 
+#[cfg(test)]
+mod test_support;
+
 /// Convenience wrapper around [`i18n_embed_fl::fl!`] that passes our static
 /// [`i18n::LANGUAGE_LOADER`] implicitly. Usage:
 ///

@@ -907,6 +907,7 @@ dependencies = [
  "i18n-embed",
  "i18n-embed-fl",
  "iced",
+ "iced_test",
  "image",
  "lilt",
  "muda",

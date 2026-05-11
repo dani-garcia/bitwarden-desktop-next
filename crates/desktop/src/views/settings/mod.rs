@@ -365,3 +365,89 @@ pub(super) use crate::components::section_heading;
 pub fn not_supported_toast() -> Toast {
     Toast::warning(fl!("settings-toast-not-supported"), None)
 }
+
+#[cfg(test)]
+mod tests_snapshot {
+    use super::*;
+    use crate::{test_support, test_support::TestRenderCtx};
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn settings_modal() {
+        test_support::init();
+        let mut view = SettingsView::new();
+        view.open_with(SettingsSnapshot::default());
+        test_support::settle_animations();
+
+        let mut render = TestRenderCtx::default();
+        for (theme, suffix) in [
+            (AppTheme::light(), "light"),
+            (AppTheme::dark(), "dark"),
+        ] {
+            render.colors = theme.colors;
+            let element = view
+                .modal_view(&render.as_ctx())
+                .expect("modal renders while open");
+            test_support::assert_snapshot(
+                format!("tests/snapshots/settings_modal_{suffix}"),
+                &theme,
+                element,
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests_update {
+    use super::*;
+    use crate::test_support::{OutcomeExt, TestUpdateCtx};
+
+    fn run(view: &mut SettingsView, msg: SettingsMessage) -> Outcome<SettingsView> {
+        let mut owned = TestUpdateCtx::default();
+        view.update(msg, owned.as_ctx())
+    }
+
+    #[test]
+    fn select_category_flips_active_tab() {
+        let mut view = SettingsView::new();
+        assert_eq!(view.active, CategoryKind::Security);
+
+        run(
+            &mut view,
+            SettingsMessage::SelectCategory(CategoryKind::Appearance),
+        )
+        .expect_none();
+        assert_eq!(view.active, CategoryKind::Appearance);
+    }
+
+    #[test]
+    fn setting_changed_mutates_snapshot_and_emits_applied_event() {
+        let mut view = SettingsView::new();
+        assert_eq!(view.snapshot.settings.theme, ThemePreference::System);
+
+        let SettingsEvent::Applied(change) = run(
+            &mut view,
+            SettingsMessage::SettingChanged(SettingChange::Theme(ThemePreference::Dark)),
+        )
+        .expect_event();
+
+        assert_eq!(
+            view.snapshot.settings.theme,
+            ThemePreference::Dark,
+            "snapshot mirrors the edit so the next frame renders with it"
+        );
+        assert!(matches!(
+            change,
+            SettingChange::Theme(ThemePreference::Dark)
+        ));
+    }
+
+    #[test]
+    fn close_transitions_fade_to_closing() {
+        let mut view = SettingsView::new();
+        view.open_with(SettingsSnapshot::default());
+        assert!(view.is_open());
+
+        run(&mut view, SettingsMessage::Close).expect_none();
+        assert!(!view.is_open(), "logical open flag flips immediately");
+    }
+}

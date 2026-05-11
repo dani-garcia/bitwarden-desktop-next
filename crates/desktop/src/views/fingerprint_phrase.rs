@@ -163,3 +163,80 @@ pub fn modal_view<'a>(
 pub fn open_learn_more() {
     clipboard::launch_url(LEARN_MORE_URL);
 }
+
+#[cfg(test)]
+mod tests_snapshot {
+    use super::*;
+    use crate::{test_support, theme::AppTheme};
+
+    #[test]
+    fn fingerprint_modal() {
+        test_support::init();
+
+        let mut state = FingerprintModal::default();
+        state.open_with("apple banana carrot dolphin eagle".to_owned());
+        test_support::settle_animations();
+
+        for (theme, suffix) in [
+            (AppTheme::light(), "light"),
+            (AppTheme::dark(), "dark"),
+        ] {
+            let element = modal_view(&state, &theme.colors).expect("modal renders while open");
+            test_support::assert_snapshot(
+                format!("tests/snapshots/fingerprint_modal_{suffix}"),
+                &theme,
+                element,
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests_interaction {
+    use super::*;
+    use crate::{fl, test_support, theme::AppTheme};
+
+    #[test]
+    fn close_button_emits_close() {
+        test_support::init();
+        let mut state = FingerprintModal::default();
+        state.open_with("apple banana carrot dolphin eagle".to_owned());
+        test_support::settle_animations();
+
+        let colors = AppTheme::light().colors;
+        let element = modal_view(&state, &colors).expect("modal renders while open");
+        let close_label = fl!("menu-fingerprint-close");
+        let messages = test_support::drive_element(element, |ui| {
+            ui.click(close_label.as_str()).expect("Close button");
+        });
+
+        assert!(
+            messages
+                .iter()
+                .any(|m| matches!(m, FingerprintMessage::Close)),
+            "expected at least one Close message in {messages:?}",
+        );
+    }
+
+    #[test]
+    fn learn_more_button_emits_open_learn_more() {
+        test_support::init();
+        let mut state = FingerprintModal::default();
+        state.open_with("apple banana carrot dolphin eagle".to_owned());
+        test_support::settle_animations();
+
+        let colors = AppTheme::light().colors;
+        let element = modal_view(&state, &colors).expect("modal renders while open");
+        let learn_more = fl!("menu-fingerprint-learn-more");
+        let messages = test_support::drive_element(element, |ui| {
+            ui.click(learn_more.as_str()).expect("Learn more button");
+        });
+
+        assert!(
+            messages
+                .iter()
+                .any(|m| matches!(m, FingerprintMessage::OpenLearnMore)),
+            "expected at least one OpenLearnMore message in {messages:?}",
+        );
+    }
+}
