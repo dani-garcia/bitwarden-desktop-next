@@ -32,18 +32,17 @@ pub fn info_string() -> String {
 }
 
 pub(crate) fn view<'a>(ctx: &RenderCtx<'a>) -> Element<'a, AboutMessage, AppTheme> {
-    let colors = ctx.colors;
     // "Bitwarden" is the product name — kept untranslated.
     let title = text("Bitwarden")
         .size(28)
-        .color(colors.text_primary)
+        .color(ctx.colors.text_primary)
         .font(crate::APP_FONT_BOLD);
 
     let info_line = |label: String, value: String| -> Element<'_, AboutMessage, AppTheme> {
         row![
-            text(label).size(14).color(colors.text_secondary),
+            text(label).size(14).color(ctx.colors.text_secondary),
             Space::new().width(Fill),
-            text(value).size(14).color(colors.text_primary),
+            text(value).size(14).color(ctx.colors.text_primary),
         ]
         .spacing(8)
         .align_y(Alignment::Center)

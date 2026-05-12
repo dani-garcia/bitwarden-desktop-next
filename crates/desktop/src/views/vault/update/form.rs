@@ -14,7 +14,7 @@ use crate::{
 
 use crate::views::vault::{
     VaultEvent, VaultMessage,
-    message::FormOptions,
+    message::{ForUserMessage, FormOptions},
     state::VaultView,
     widgets::cipher_edit::{CipherEditMessage, CipherForm, FolderOption, FormEvent},
 };
@@ -79,7 +79,9 @@ impl VaultView {
                     collections,
                 }
             },
-            move |opts| VaultMessage::FormOptionsLoaded(uid, NoDebug(opts)),
+            move |opts| {
+                VaultMessage::ForUser(uid, ForUserMessage::FormOptionsLoaded(NoDebug(opts)))
+            },
         )
     }
 
@@ -90,7 +92,9 @@ impl VaultView {
         };
         ctx.perform_with_active_client(
             move |client| client.soft_delete_cipher(cipher_id),
-            move |uid, res| VaultMessage::DeleteCompleted(uid, cipher_id, res),
+            move |uid, res| {
+                VaultMessage::ForUser(uid, ForUserMessage::DeleteCompleted(cipher_id, res))
+            },
         )
     }
 
@@ -128,22 +132,24 @@ impl VaultView {
                 ctx.perform_with_active_client(
                     move |client| client.save_cipher(cipher_view),
                     move |uid, res| {
-                        VaultMessage::SaveCompleted(uid, res.map(|v| NoDebug(Box::new(v))))
+                        VaultMessage::ForUser(
+                            uid,
+                            ForUserMessage::SaveCompleted(res.map(|v| NoDebug(Box::new(v)))),
+                        )
                     },
                 )
             }
         }
     }
 
+    /// Caller (`VaultMessage::ForUser` dispatch) has already verified the
+    /// uid matches the active user.
     pub(super) fn handle_form_options_loaded(
         &mut self,
-        ctx: &UpdateCtx<'_>,
-        msg_uid: UserId,
+        _ctx: &UpdateCtx<'_>,
+        _msg_uid: UserId,
         opts: FormOptions,
     ) -> Outcome<Self> {
-        if !ctx.is_active_user(&msg_uid) {
-            return Outcome::None;
-        }
         let Some(form) = self.selection.form.as_mut() else {
             return Outcome::None;
         };
@@ -156,15 +162,14 @@ impl VaultView {
         Outcome::None
     }
 
+    /// Caller (`VaultMessage::ForUser` dispatch) has already verified the
+    /// uid matches the active user.
     pub(super) fn handle_save_completed(
         &mut self,
-        ctx: &UpdateCtx<'_>,
+        _ctx: &UpdateCtx<'_>,
         msg_uid: UserId,
         result: Result<NoDebug<Box<CipherView>>, String>,
     ) -> Outcome<Self> {
-        if !ctx.is_active_user(&msg_uid) {
-            return Outcome::None;
-        }
         match result {
             Ok(NoDebug(view)) => {
                 // For new-item saves `selection.id` was None until now; sync
@@ -189,16 +194,15 @@ impl VaultView {
         }
     }
 
+    /// Caller (`VaultMessage::ForUser` dispatch) has already verified the
+    /// uid matches the active user.
     pub(super) fn handle_delete_completed(
         &mut self,
-        ctx: &UpdateCtx<'_>,
+        _ctx: &UpdateCtx<'_>,
         msg_uid: UserId,
         cipher_id: CipherId,
         result: Result<(), String>,
     ) -> Outcome<Self> {
-        if !ctx.is_active_user(&msg_uid) {
-            return Outcome::None;
-        }
         match result {
             Ok(()) => {
                 self.selection.clear();

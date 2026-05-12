@@ -156,12 +156,14 @@ pub enum LoginMessage {
     AccountSwitcher(AccountSwitcherMessage),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, derive_more::From)]
 pub enum LoginEvent {
     /// Unlock attempt completed successfully — App should flip to the vault
     /// screen and kick off the vault list load for this user.
+    #[from(skip)]
     Unlocked { uid: UserId },
     /// Email + password login completed.
+    #[from(skip)]
     LoggedIn { uid: UserId },
     /// Account-switcher action. Forwarded verbatim to
     /// `App::handle_account_switcher_event` so login, vault, and send share
@@ -467,19 +469,13 @@ impl View for LoginView {
             }
 
             LoginMessage::AccountSwitcher(m) => {
-                return Outcome::from_option(
-                    m.consume(open_overlay, Overlay::AccountSwitcher)
-                        .map(LoginEvent::AccountSwitcher),
-                );
+                return m.route(open_overlay, Overlay::AccountSwitcher);
             }
         }
         Outcome::None
     }
 
     fn view<'a>(&'a self, ctx: &RenderCtx<'a>) -> Element<'a, LoginMessage, AppTheme> {
-        let colors = ctx.colors;
-        let email = ctx.active_email;
-        let server = ctx.active_server_url;
         let (center_content, status_bar) = match &self.auth_page {
             AuthPage::Unlock {
                 method,
@@ -489,13 +485,13 @@ impl View for LoginView {
                 let center = unlock::view(
                     *method,
                     &self.unlock_alternatives,
-                    email,
+                    ctx.active_email,
                     password_input,
                     pin_input,
                     self.unlock_in_progress,
-                    colors,
+                    ctx.colors,
                 );
-                let status = server_selector::simple_status(server, colors);
+                let status = server_selector::simple_status(ctx.active_server_url, ctx.colors);
                 (center, status)
             }
             AuthPage::LoginEmail {
@@ -504,8 +500,9 @@ impl View for LoginView {
                 selected_server,
             } => {
                 let server_selector_open = ctx.open_overlay == Some(Overlay::ServerSelector);
-                let center = login_email::view(email_input, *remember_email, colors);
-                let status = server_selector::view(selected_server, server_selector_open, colors);
+                let center = login_email::view(email_input, *remember_email, ctx.colors);
+                let status =
+                    server_selector::view(selected_server, server_selector_open, ctx.colors);
                 (center, status)
             }
             AuthPage::LoginPassword {
@@ -513,9 +510,9 @@ impl View for LoginView {
                 password_input,
                 selected_server,
             } => {
-                let center = login_password::view(email, password_input, colors);
+                let center = login_password::view(email, password_input, ctx.colors);
                 let status =
-                    server_selector::simple_status(&selected_server.display_name(), colors);
+                    server_selector::simple_status(&selected_server.display_name(), ctx.colors);
                 (center, status)
             }
         };
@@ -524,10 +521,10 @@ impl View for LoginView {
         layout::auth_page_shell(
             center_content,
             status_bar,
-            email,
+            ctx.active_email,
             ctx.accounts,
             account_switcher_open,
-            colors,
+            ctx.colors,
         )
     }
 

@@ -10,13 +10,12 @@ impl App {
     pub(crate) fn handle_login_event(&mut self, event: LoginEvent) -> Task<Message> {
         match event {
             LoginEvent::Unlocked { uid } | LoginEvent::LoggedIn { uid } => {
-                if self.active_user != Some(uid) {
-                    tracing::debug!(
-                        %uid,
-                        "unlock event dropped: active user changed while in flight"
-                    );
-                    return Task::none();
-                }
+                // `LoginView::update`'s `UnlockCompleted` / `LoginCompleted`
+                // arms have already verified `uid == active_user` — events
+                // run synchronously after the view's update inside one
+                // `App::update` call, so there's no window for the active
+                // user to change between then and now.
+                //
                 // Stamp `last_activity` so neither timer has a retroactive
                 // head-start — the throttle path doesn't matter here since
                 // there's no prior entry to suppress against.

@@ -38,6 +38,10 @@ impl App {
             .get(&window_id)
             .map(|info| info.size.width)
             .unwrap_or(1024.0);
+        let (open_title_bar_menu, open_title_bar_submenu) = match self.open_overlay {
+            Some(Overlay::TitleBarMenu { menu, submenu }) => (Some(menu), submenu),
+            _ => (None, None),
+        };
         RenderCtx {
             colors: &self.theme.current.colors,
             favicon: &self.favicon,
@@ -48,6 +52,10 @@ impl App {
             active_server_url: active.map(|a| a.server_url.as_str()).unwrap_or(""),
             accounts: &self.cache.accounts,
             open_overlay: self.open_overlay,
+            is_maximized: self.main_window_maximized(),
+            menu_state: self.menu_state(),
+            open_title_bar_menu,
+            open_title_bar_submenu,
         }
     }
 
@@ -104,25 +112,7 @@ impl App {
 
         let use_custom_menu_bar = crate::services::menu::should_use_custom_menu_bar();
 
-        let tb: Element<'_, Message, AppTheme> = if use_custom_menu_bar {
-            let menu_state = self.menu_state();
-            let (open_menu, open_submenu) = match self.open_overlay {
-                Some(Overlay::TitleBarMenu { menu, submenu }) => (Some(menu), submenu),
-                _ => (None, None),
-            };
-            self.views
-                .title_bar
-                .view(
-                    self.main_window_maximized(),
-                    &menu_state,
-                    open_menu,
-                    open_submenu,
-                    colors,
-                )
-                .map(Into::into)
-        } else {
-            title_bar::TitleBarView::view_empty().map(Into::into)
-        };
+        let tb: Element<'_, Message, AppTheme> = self.views.title_bar.view(&rctx).map(Into::into);
 
         let main_column: Element<'_, Message, AppTheme> =
             iced::widget::column![tb, page].height(iced::Fill).into();
@@ -205,8 +195,8 @@ impl App {
     /// stack above the active screen this frame, in z-order. The active
     /// screen's `view()` is rendered separately as the page content; its
     /// `overlays()` (sheet + sub-modal) come first, then the global modals
-    /// (Settings, Generator, etc.) on top, then the free-function modals
-    /// (fingerprint, screenshot confirm).
+    /// (Settings, Generator, etc.) on top, then the small confirmation
+    /// modals (fingerprint, screenshot confirm).
     fn collect_overlays<'a>(&'a self, rctx: &RenderCtx<'a>) -> Vec<Element<'a, Message, AppTheme>> {
         let mut out: Vec<Element<'a, Message, AppTheme>> = Vec::new();
 
@@ -228,19 +218,8 @@ impl App {
         self.views.import.push_into(rctx, &mut out);
         self.views.export.push_into(rctx, &mut out);
         self.views.new_folder.push_into(rctx, &mut out);
-
-        // Free-function modals — not full `View` impls because their state is
-        // held on `App` rather than a dedicated view struct.
-        if let Some(el) =
-            crate::views::fingerprint_phrase::modal_view(&self.fingerprint, rctx.colors)
-        {
-            out.push(el.map(Into::into));
-        }
-        if let Some(el) =
-            crate::views::screenshot_confirm::modal_view(&self.screenshot_confirm, rctx.colors)
-        {
-            out.push(el.map(Into::into));
-        }
+        self.views.fingerprint.push_into(rctx, &mut out);
+        self.views.screenshot_confirm.push_into(rctx, &mut out);
 
         out
     }

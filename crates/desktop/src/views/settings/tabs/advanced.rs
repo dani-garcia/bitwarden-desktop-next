@@ -9,16 +9,14 @@ use crate::{
 };
 
 use super::{
-    super::{SettingChange, SettingsSnapshot, section_heading},
-    setting_checkbox,
+    super::{SettingChange, SettingsSnapshot},
+    SECTION_GAP_PX, setting_checkbox, settings_section,
 };
 
 pub fn view<'a>(
     snap: &'a SettingsSnapshot,
     colors: &'a AppColors,
 ) -> Element<'a, SettingChange, AppTheme> {
-    let tray_heading = section_heading(fl!("settings-advanced-tray"), colors);
-
     let tray_enabled = setting_checkbox(
         snap.settings.show_tray_icon,
         fl!("settings-advanced-tray-enable"),
@@ -34,8 +32,6 @@ pub fn view<'a>(
         fl!("settings-advanced-close-to-tray"),
         SettingChange::CloseToTray,
     );
-
-    let platform_heading = section_heading(fl!("settings-advanced-platform"), colors);
 
     let always_dock = setting_checkbox(
         snap.settings.always_show_dock,
@@ -54,13 +50,17 @@ pub fn view<'a>(
     );
 
     column![
-        tray_heading,
-        Space::new().height(8),
-        column![tray_enabled, min_to_tray, close_to_tray].spacing(10),
-        Space::new().height(24),
-        platform_heading,
-        Space::new().height(8),
-        column![always_dock, hardware_accel, allow_screenshots].spacing(10),
+        settings_section(
+            fl!("settings-advanced-tray"),
+            column![tray_enabled, min_to_tray, close_to_tray].spacing(10),
+            colors,
+        ),
+        Space::new().height(SECTION_GAP_PX),
+        settings_section(
+            fl!("settings-advanced-platform"),
+            column![always_dock, hardware_accel, allow_screenshots].spacing(10),
+            colors,
+        ),
     ]
     .width(Fill)
     .into()

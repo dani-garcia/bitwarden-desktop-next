@@ -118,6 +118,7 @@ crates/desktop/src/
 │   ├── spinner.rs / virtual_list.rs / totp.rs
 │   ├── bottom_sheet.rs / modal.rs  # window-level overlays composed at App root
 │   ├── collapsible_pane.rs         # list/detail split that stays mounted on close
+│   ├── list_pane.rs                # shared list-screen chrome (header + render shell)
 │   ├── shell_scope.rs              # Stack capture-leak isolation wrapper
 │   ├── sidebar.rs                  # app-level nav chrome (see "Sidebar + shared chrome")
 │   ├── toast/                      # folder: multi-file component
@@ -828,10 +829,29 @@ the page layout):
 In addition, two **window-level overlay archetypes** are composed at the App root (above
 the main column, including the sidebar and title bar):
 
-- **Modal dialogs** — `components::modal::{view, dialog, confirm_dialog}`. Backdrop scrim,
-  click-to-dismiss, drop shadow, and animated open/close via `FadeInOut`. The dialog body
-  is itself wrapped in `opaque` so clicks on its empty space don't dismiss; the entire
-  stack is wrapped in `opaque` so hover doesn't leak through to widgets behind.
+- **Modal dialogs** — `components::modal::{view, dialog, confirm_dialog, info_dialog}`.
+  Backdrop scrim, click-to-dismiss, drop shadow, and animated open/close via `FadeInOut`.
+  The dialog body is itself wrapped in `opaque` so clicks on its empty space don't dismiss;
+  the entire stack is wrapped in `opaque` so hover doesn't leak through to widgets behind.
+
+  Canonical scaffolding for app-level modals:
+
+  ```rust
+  let header = modal::dialog_header(title, M::Close, ctx.colors);
+  // …build body fields…
+  let footer = modal::footer_actions(save_label, on_save, cancel_label, M::Close);
+  let body = column![header, …fields, footer]
+      .spacing(N)
+      .padding(modal::BODY_PADDING)
+      .width(Fill);
+  modal::dialog(width, None, |c| c.card_bg, progress, body, M::Close)
+  ```
+
+  Use `modal::info_dialog(width, icon, title, body, actions, …)` instead when the modal
+  is a confirmation/notification with an accent-coloured icon ring up top — it bakes in
+  the ring + ring-shadow + centered title + button stack so the per-call site shrinks to
+  the body element and the action button list. `modal::confirm_dialog` is the shorthand
+  for the common "title + body text + Cancel/Confirm" shape.
 - **Bottom sheet** — `components::bottom_sheet`. Narrow-mode detail/form pane. Same
   scrim + opaque pattern. Open/close uses a `FadeInOut` on the owning view's `Selection`;
   the close path defers `selection.clear()` by the outro duration so the sheet has content

@@ -143,8 +143,6 @@ impl App {
 
             open_overlay: None,
             toasts: Vec::new(),
-            fingerprint: crate::views::fingerprint_phrase::FingerprintModal::default(),
-            screenshot_confirm: crate::views::screenshot_confirm::ScreenshotConfirmModal::default(),
 
             cache: ViewCache::default(),
         };

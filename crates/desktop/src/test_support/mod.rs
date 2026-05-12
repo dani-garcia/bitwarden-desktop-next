@@ -241,6 +241,10 @@ pub struct TestRenderCtx {
     pub active_server_url: String,
     pub accounts: Vec<AccountEntry>,
     pub open_overlay: Option<Overlay>,
+    pub is_maximized: bool,
+    pub menu_state: crate::services::menu::MenuState,
+    pub open_title_bar_menu: Option<usize>,
+    pub open_title_bar_submenu: Option<usize>,
 }
 
 impl Default for TestRenderCtx {
@@ -255,6 +259,10 @@ impl Default for TestRenderCtx {
             active_server_url: String::new(),
             accounts: Vec::new(),
             open_overlay: None,
+            is_maximized: false,
+            menu_state: crate::services::menu::MenuState::default(),
+            open_title_bar_menu: None,
+            open_title_bar_submenu: None,
         }
     }
 }
@@ -271,6 +279,10 @@ impl TestRenderCtx {
             active_server_url: &self.active_server_url,
             accounts: &self.accounts,
             open_overlay: self.open_overlay,
+            is_maximized: self.is_maximized,
+            menu_state: self.menu_state.clone(),
+            open_title_bar_menu: self.open_title_bar_menu,
+            open_title_bar_submenu: self.open_title_bar_submenu,
         }
     }
 }

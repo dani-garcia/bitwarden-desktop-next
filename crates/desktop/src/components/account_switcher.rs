@@ -4,6 +4,7 @@ use iced::{
 };
 
 use crate::{
+    app::{Outcome, View},
     components::{self, buttons, icons},
     domain::UserId,
     fl,
@@ -36,44 +37,39 @@ pub enum AccountSwitcherEvent {
 }
 
 impl AccountSwitcherMessage {
-    /// Lift a non-toggle message into its app-level event. `ToggleDropdown`
-    /// only flips the overlay so it returns `None`.
-    pub fn into_event(self) -> Option<AccountSwitcherEvent> {
-        match self {
-            Self::ToggleDropdown => None,
-            Self::SwitchUser(uid) => Some(AccountSwitcherEvent::SwitchUser { uid }),
-            Self::AddAccount => Some(AccountSwitcherEvent::AddAccount),
-            Self::LockAll => Some(AccountSwitcherEvent::LockAll),
-            Self::Settings => Some(AccountSwitcherEvent::Settings),
-            Self::LockActive => Some(AccountSwitcherEvent::LockActive),
-            Self::LogOut => Some(AccountSwitcherEvent::LogOut),
-        }
-    }
-
-    /// Apply a switcher message to the caller-owned overlay cell:
-    /// `ToggleDropdown` flips it on/off against `self_overlay`; every other
-    /// variant closes any open overlay and returns the outbound event for
-    /// App to route. Generic over the overlay enum so this helper avoids
-    /// importing `app::Overlay`.
-    pub fn consume<O: Copy + PartialEq>(
-        self,
-        open_overlay: &mut Option<O>,
-        self_overlay: O,
-    ) -> Option<AccountSwitcherEvent> {
-        match self {
+    /// Standard dispatch for a screen that hosts the account switcher.
+    /// `ToggleDropdown` flips `open_overlay` on/off against `self_overlay`
+    /// and returns [`Outcome::None`] (no event to bubble). Every other variant
+    /// closes any open overlay and lifts the corresponding
+    /// [`AccountSwitcherEvent`] into the caller view's `Event` enum via
+    /// [`From`] — each hosting view derives `derive_more::From` on its
+    /// `Event` so the `AccountSwitcher(...)` arm satisfies the bound for
+    /// free. Generic over the overlay enum so this helper stays decoupled
+    /// from `app::Overlay`.
+    pub fn route<V, O>(self, open_overlay: &mut Option<O>, self_overlay: O) -> Outcome<V>
+    where
+        V: View,
+        V::Event: From<AccountSwitcherEvent>,
+        O: Copy + PartialEq,
+    {
+        let event = match self {
             Self::ToggleDropdown => {
                 *open_overlay = if *open_overlay == Some(self_overlay) {
                     None
                 } else {
                     Some(self_overlay)
                 };
-                None
+                return Outcome::None;
             }
-            other => {
-                *open_overlay = None;
-                other.into_event()
-            }
-        }
+            Self::SwitchUser(uid) => AccountSwitcherEvent::SwitchUser { uid },
+            Self::AddAccount => AccountSwitcherEvent::AddAccount,
+            Self::LockAll => AccountSwitcherEvent::LockAll,
+            Self::Settings => AccountSwitcherEvent::Settings,
+            Self::LockActive => AccountSwitcherEvent::LockActive,
+            Self::LogOut => AccountSwitcherEvent::LogOut,
+        };
+        *open_overlay = None;
+        Outcome::event(event.into())
     }
 }
 

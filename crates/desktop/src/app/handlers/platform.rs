@@ -414,7 +414,7 @@ impl App {
                     return Task::none();
                 };
                 self.open_overlay = None;
-                self.fingerprint.open_with(phrase);
+                self.views.fingerprint.open_with(phrase);
             }
             MenuAction::OpenStaticUrl(url) => {
                 crate::services::clipboard::launch_url(url);

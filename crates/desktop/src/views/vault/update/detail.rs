@@ -102,22 +102,17 @@ impl VaultView {
         }
     }
 
+    /// Caller (`VaultMessage::ForUser` dispatch) has already verified the
+    /// uid matches the active user. A second stale-check on the cipher id
+    /// is still required because the user may have clicked a different item
+    /// while this full_cipher call was in flight.
     pub(super) fn handle_detail_loaded(
         &mut self,
-        ctx: &UpdateCtx<'_>,
-        msg_uid: UserId,
+        _ctx: &UpdateCtx<'_>,
+        _msg_uid: UserId,
         id: CipherId,
         result: Result<NoDebug<Box<CipherView>>, String>,
     ) -> Outcome<Self> {
-        // Stale-check: user switched while full_cipher was in flight.
-        if !ctx.is_active_user(&msg_uid) {
-            tracing::debug!(
-                uid = %msg_uid,
-                cipher_id = %id,
-                "full_cipher result dropped: active user changed while in flight"
-            );
-            return Outcome::None;
-        }
         match result {
             Ok(NoDebug(view)) => {
                 // Stale-check on the cipher id itself: if the user clicked

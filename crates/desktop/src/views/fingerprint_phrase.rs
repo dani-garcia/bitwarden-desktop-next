@@ -2,25 +2,23 @@
 //!
 //! Single-shot dialog: opened from the menu with a precomputed phrase, closed
 //! via the Close button or backdrop click. The "Learn more" link opens
-//! Bitwarden's fingerprint help page in the default browser. State lives on
-//! `App` rather than as its own `View` because the modal carries one string
-//! and emits three App-level signals — full MVU plumbing would be boilerplate.
-//!
-//! Pure helper, not a `View`: `modal_view` is generic over a message type
-//! `M` and takes its three message instances by parameter, so this module
-//! never imports `crate::app::Message`. The caller (App) constructs the
-//! concrete `Message` values and passes them in.
+//! Bitwarden's fingerprint help page in the default browser. The `Copy`
+//! action surfaces as an event because pushing to the clipboard + emitting
+//! the success toast lives at the App level — both reach state outside
+//! `UpdateCtx` (the [`crate::services::clipboard::ClipboardManager`] and the
+//! toast sink).
 
 use iced::{
-    Alignment, Border, Color, Element, Fill, Length, Padding, Shadow, Vector,
-    widget::{Space, column, container, row, text, text::Wrapping},
+    Alignment, Element, Length, Padding,
+    widget::{row, text, text::Wrapping},
 };
 
 use crate::{
+    app::{Outcome, RenderCtx, UpdateCtx, View},
     components::{FadeInOut, buttons, icons, modal},
     fl,
     services::clipboard,
-    theme::{AppColors, AppTheme},
+    theme::AppTheme,
 };
 
 /// Actions emitted from the Account → Fingerprint phrase modal.
@@ -34,10 +32,17 @@ pub enum FingerprintMessage {
     Copy,
 }
 
-const LEARN_MORE_URL: &str = "https://bitwarden.com/help/fingerprint-phrase/";
+/// Events bubbled up to App. Side effects (clipboard, browser launch) live
+/// at the App level because they touch state outside [`UpdateCtx`].
+#[derive(Debug, Clone)]
+pub enum FingerprintEvent {
+    /// Open the fingerprint help page in the default browser.
+    OpenLearnMore,
+    /// Push the current phrase onto the clipboard and surface a copy toast.
+    Copy(String),
+}
 
-/// Info-icon ring diameter in px. The icon glyph is centered inside.
-const RING_DIAMETER: f32 = 48.0;
+const LEARN_MORE_URL: &str = "https://bitwarden.com/help/fingerprint-phrase/";
 
 #[derive(Default)]
 pub struct FingerprintModal {
@@ -51,112 +56,85 @@ impl FingerprintModal {
         self.fade.open();
     }
 
-    pub fn close(&mut self) {
-        self.fade.close();
-    }
-
-    pub fn phrase(&self) -> &str {
+    #[cfg(test)]
+    fn phrase_for_test(&self) -> &str {
         &self.phrase
     }
 }
 
-/// Returns `None` while fully closed so App can drop the slot from its
-/// overlay stack rather than rendering an invisible layer.
-pub fn modal_view<'a>(
-    state: &'a FingerprintModal,
-    colors: &'a AppColors,
-) -> Option<Element<'a, FingerprintMessage, AppTheme>> {
-    let progress = state.fade.progress_if_visible()?;
+impl View for FingerprintModal {
+    type Message = FingerprintMessage;
+    type Event = FingerprintEvent;
 
-    let icon_ring = container(
-        icons::INFO_CIRCLE_FILL.render::<FingerprintMessage, AppTheme>(28.0, colors.accent),
-    )
-    .width(Length::Fixed(RING_DIAMETER))
-    .height(Length::Fixed(RING_DIAMETER))
-    .align_x(Alignment::Center)
-    .align_y(Alignment::Center)
-    .style(|theme: &AppTheme| {
-        container::Style::default()
-            .background(Color {
-                a: 0.12,
-                ..theme.colors.accent
-            })
-            .border(Border::default().rounded(RING_DIAMETER / 2.0))
-            .shadow(Shadow {
-                color: Color {
-                    a: 0.18,
-                    ..theme.colors.accent
-                },
-                offset: Vector::new(0.0, 2.0),
-                blur_radius: 12.0,
-            })
-    });
+    fn update(&mut self, msg: FingerprintMessage, _ctx: UpdateCtx<'_>) -> Outcome<Self> {
+        match msg {
+            FingerprintMessage::Close => {
+                self.fade.close();
+                Outcome::None
+            }
+            FingerprintMessage::OpenLearnMore => {
+                self.fade.close();
+                Outcome::event(FingerprintEvent::OpenLearnMore)
+            }
+            FingerprintMessage::Copy => {
+                if self.phrase.is_empty() {
+                    return Outcome::None;
+                }
+                Outcome::event(FingerprintEvent::Copy(self.phrase.clone()))
+            }
+        }
+    }
 
-    let title = text(fl!("menu-fingerprint-title"))
-        .size(16)
-        .color(colors.text_primary)
-        .font(crate::APP_FONT_BOLD);
+    fn should_render(&self) -> bool {
+        self.fade.is_visible()
+    }
 
-    let phrase_row = row![
-        text(state.phrase.as_str())
-            .size(14)
-            .color(colors.text_primary)
-            .wrapping(Wrapping::None),
-        buttons::icon_button(icons::BWI_COPY, FingerprintMessage::Copy, colors),
-    ]
-    .spacing(6)
-    .align_y(Alignment::Center);
-
-    let learn_more = buttons::primary(
-        row![
-            text(fl!("menu-fingerprint-learn-more")).size(14),
-            icons::BWI_EXTERNAL_LINK.render::<FingerprintMessage, AppTheme>(12.0, colors.card_bg),
+    fn view<'a>(&'a self, ctx: &RenderCtx<'a>) -> Element<'a, FingerprintMessage, AppTheme> {
+        let phrase_row = row![
+            text(self.phrase.as_str())
+                .size(14)
+                .color(ctx.colors.text_primary)
+                .wrapping(Wrapping::None),
+            buttons::icon_button(icons::BWI_COPY, FingerprintMessage::Copy, ctx.colors),
         ]
-        .spacing(8)
-        .align_y(Alignment::Center),
-    )
-    .on_press(FingerprintMessage::OpenLearnMore)
-    .padding(Padding::from([10, 20]))
-    .width(Length::Fill);
+        .spacing(6)
+        .align_y(Alignment::Center);
 
-    let close_button = buttons::secondary(
-        text(fl!("menu-fingerprint-close"))
-            .size(14)
-            .color(colors.accent),
-    )
-    .on_press(FingerprintMessage::Close)
-    .padding(Padding::from([10, 20]))
-    .width(Length::Fill);
-
-    let body = column![
-        container(icon_ring).width(Fill).align_x(Alignment::Center),
-        Space::new().height(Length::Fixed(8.0)),
-        column![title, phrase_row]
+        let learn_more = buttons::primary(
+            row![
+                text(fl!("menu-fingerprint-learn-more")).size(14),
+                icons::BWI_EXTERNAL_LINK
+                    .render::<FingerprintMessage, AppTheme>(12.0, ctx.colors.card_bg),
+            ]
             .spacing(8)
-            .align_x(Alignment::Center)
-            .width(Fill),
-        Space::new().height(Length::Fixed(8.0)),
-        learn_more,
-        close_button,
-    ]
-    .spacing(10)
-    .padding(Padding {
-        top: 24.0,
-        right: 24.0,
-        bottom: 20.0,
-        left: 24.0,
-    })
-    .align_x(Alignment::Center)
-    .width(Fill);
+            .align_y(Alignment::Center),
+        )
+        .on_press(FingerprintMessage::OpenLearnMore)
+        .padding(Padding::from([10, 20]))
+        .width(Length::Fill)
+        .into();
 
-    Some(modal::dialog(
-        440.0,
-        None,
-        |c| c.card_bg,
-        progress,
-        body,
-        FingerprintMessage::Close,
-    ))
+        let close_button = buttons::secondary(
+            text(fl!("menu-fingerprint-close"))
+                .size(14)
+                .color(ctx.colors.accent),
+        )
+        .on_press(FingerprintMessage::Close)
+        .padding(Padding::from([10, 20]))
+        .width(Length::Fill)
+        .into();
+
+        modal::info_dialog(
+            440.0,
+            icons::INFO_CIRCLE_FILL,
+            fl!("menu-fingerprint-title"),
+            phrase_row,
+            vec![learn_more, close_button],
+            FingerprintMessage::Close,
+            ctx.colors,
+            self.fade.progress_when_visible(),
+        )
+    }
 }
 
 /// Open the fingerprint help page in the default browser.
@@ -167,18 +145,20 @@ pub fn open_learn_more() {
 #[cfg(test)]
 mod tests_snapshot {
     use super::*;
-    use crate::{test_support, theme::AppTheme};
+    use crate::{test_support, test_support::TestRenderCtx, theme::AppTheme};
 
-    #[test]
-    fn fingerprint_modal() {
+    #[tokio::test(flavor = "current_thread")]
+    async fn fingerprint_modal() {
         test_support::init();
 
-        let mut state = FingerprintModal::default();
-        state.open_with("apple banana carrot dolphin eagle".to_owned());
+        let mut view = FingerprintModal::default();
+        view.open_with("apple banana carrot dolphin eagle".to_owned());
         test_support::settle_animations();
 
+        let mut render = TestRenderCtx::default();
         for (theme, suffix) in [(AppTheme::light(), "light"), (AppTheme::dark(), "dark")] {
-            let element = modal_view(&state, &theme.colors).expect("modal renders while open");
+            render.colors = theme.colors;
+            let element = view.view(&render.as_ctx());
             test_support::assert_snapshot(
                 format!("tests/snapshots/fingerprint_modal_{suffix}"),
                 &theme,
@@ -191,17 +171,20 @@ mod tests_snapshot {
 #[cfg(test)]
 mod tests_interaction {
     use super::*;
-    use crate::{fl, test_support, theme::AppTheme};
+    use crate::{fl, test_support, test_support::TestRenderCtx, theme::AppTheme};
 
-    #[test]
-    fn close_button_emits_close() {
+    #[tokio::test(flavor = "current_thread")]
+    async fn close_button_emits_close() {
         test_support::init();
-        let mut state = FingerprintModal::default();
-        state.open_with("apple banana carrot dolphin eagle".to_owned());
+        let mut view = FingerprintModal::default();
+        view.open_with("apple banana carrot dolphin eagle".to_owned());
         test_support::settle_animations();
 
-        let colors = AppTheme::light().colors;
-        let element = modal_view(&state, &colors).expect("modal renders while open");
+        let render = TestRenderCtx {
+            colors: AppTheme::light().colors,
+            ..TestRenderCtx::default()
+        };
+        let element = view.view(&render.as_ctx());
         let close_label = fl!("menu-fingerprint-close");
         let messages = test_support::drive_element(element, |ui| {
             ui.click(close_label.as_str()).expect("Close button");
@@ -215,15 +198,18 @@ mod tests_interaction {
         );
     }
 
-    #[test]
-    fn learn_more_button_emits_open_learn_more() {
+    #[tokio::test(flavor = "current_thread")]
+    async fn learn_more_button_emits_open_learn_more() {
         test_support::init();
-        let mut state = FingerprintModal::default();
-        state.open_with("apple banana carrot dolphin eagle".to_owned());
+        let mut view = FingerprintModal::default();
+        view.open_with("apple banana carrot dolphin eagle".to_owned());
         test_support::settle_animations();
 
-        let colors = AppTheme::light().colors;
-        let element = modal_view(&state, &colors).expect("modal renders while open");
+        let render = TestRenderCtx {
+            colors: AppTheme::light().colors,
+            ..TestRenderCtx::default()
+        };
+        let element = view.view(&render.as_ctx());
         let learn_more = fl!("menu-fingerprint-learn-more");
         let messages = test_support::drive_element(element, |ui| {
             ui.click(learn_more.as_str()).expect("Learn more button");
@@ -235,5 +221,48 @@ mod tests_interaction {
                 .any(|m| matches!(m, FingerprintMessage::OpenLearnMore)),
             "expected at least one OpenLearnMore message in {messages:?}",
         );
+    }
+}
+
+#[cfg(test)]
+mod tests_update {
+    use super::*;
+    use crate::test_support::{OutcomeExt, run_update as run};
+
+    #[test]
+    fn close_closes_fade() {
+        let mut view = FingerprintModal::default();
+        view.open_with("apple".into());
+        run(&mut view, FingerprintMessage::Close).expect_none();
+        assert!(!view.fade.is_open());
+    }
+
+    #[test]
+    fn open_learn_more_closes_fade_and_emits_event() {
+        let mut view = FingerprintModal::default();
+        view.open_with("apple".into());
+        let ev = run(&mut view, FingerprintMessage::OpenLearnMore).expect_event();
+        assert!(matches!(ev, FingerprintEvent::OpenLearnMore));
+        assert!(!view.fade.is_open());
+    }
+
+    #[test]
+    fn copy_emits_event_with_phrase() {
+        let mut view = FingerprintModal::default();
+        view.open_with("apple banana".into());
+        let ev = run(&mut view, FingerprintMessage::Copy).expect_event();
+        match ev {
+            FingerprintEvent::Copy(p) => assert_eq!(p, "apple banana"),
+            _ => panic!("expected Copy"),
+        }
+        // Modal stays open after Copy — copy_and_toast still drops onto the
+        // clipboard, but the dialog isn't dismissed.
+        assert_eq!(view.phrase_for_test(), "apple banana");
+    }
+
+    #[test]
+    fn copy_with_empty_phrase_returns_none() {
+        let mut view = FingerprintModal::default();
+        run(&mut view, FingerprintMessage::Copy).expect_none();
     }
 }

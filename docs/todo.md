@@ -45,35 +45,6 @@ Carry-overs from the [`View`](../crates/desktop/src/app/ctx.rs) trait consolidat
 `M: From<Self::Message>`. These items finish the shape — none are blocking, all are loose
 ends.
 
-- **Fold `TitleBarView` into the trait properly** `[M]` — `TitleBarView` is the one
-  outlier: its trait `view` is `unreachable!()` and `should_render` returns `false`
-  because the real render needs
-  `(is_maximized, &MenuState, open_menu, open_submenu, &AppColors)` — args that don't fit
-  `(&self, &RenderCtx)`. Fix by adding those four window-state fields to
-  [`RenderCtx`](../crates/desktop/src/app/ctx.rs) (populated in `App::render_ctx`),
-  changing the inherent `TitleBarView::view` signature to `(&self, &RenderCtx)`, and
-  dropping the `should_render: false` workaround and the inherent-call carve-out in
-  [`app/view.rs`](../crates/desktop/src/app/view.rs). Once done, `App::collect_overlays`
-  can route the title bar through `push_into` like every other view.
-
-- **Promote `fingerprint_phrase` and `screenshot_confirm` to real `View` impls** `[M]` —
-  both are free-function `modal_view(...)` with their state living on `App` directly
-  (single string + fade, single bool + fade respectively). `App::collect_overlays` has a
-  special-case for each:
-
-  ```rust
-  if let Some(el) = crate::views::fingerprint_phrase::modal_view(&self.fingerprint, rctx.colors) { … }
-  ```
-
-  Make each its own `View` impl (struct already exists; add `Event` enum if non-trivial,
-  otherwise an empty stub; wire `should_render`/`view`/`overlays`). Move the state from
-  `App` into the view struct and update the existing handlers. Then the two special-case
-  branches collapse into `self.fingerprint.push_into(rctx, &mut out)` /
-  `self.screenshot_confirm.push_into(rctx, &mut out)`. Doc rationale in those modules used
-  to say "single-string state didn't warrant the boilerplate" — the trait is smaller now,
-  but it's still ~30 lines per view of scaffolding for purely visual uniformity.
-  Stylistic, not structural.
-
 - **`Modal: View` sub-trait** `[S]` — every modal view currently writes the same one-line
   `close()`/`is_open()` inherent methods that just forward to
   `self.fade.{close,is_open}()`, plus the same
@@ -444,16 +415,18 @@ becomes obvious — either (a) collapse to a single `sidebar: &SidebarState` fie
 push-based: App dispatches `FilterChanged { filter }` to the affected view on sidebar
 clicks instead of threading the current filter through every cycle.
 
-### Shared list-view primitive `[L]` `[defer: 3rd list-style screen]`
+### Shared list-view state primitive `[L]` `[defer: 3rd list-style screen]`
 
-`VaultView` and `SendView` share near-identical structure:
-`Selection { item, id, form, confirm_delete }` / `ItemCache { all, cached }` keyed by
-`UserId`, plus `recompute_filtered` + `filter_items` + search-query and a
-`CollapsiblePane` holding list + detail/form. Both reimplement `apply_filter` / `reset` /
-`remove_user_items` / `focus_search_task`. Two implementations is a coincidence; three is
-a pattern. When the third lands, evaluate extracting `ListView<T, Form>` generic state + a
-`ListViewController` trait with `load_list_task` / `full_item` / `save_item` /
-`delete_item`. Premature here — the shape would lock against an unknown use case.
+View-side chrome (the header row, the wide-mode pane split + rounded-top container) now
+lives in [`components::list_pane`](../crates/desktop/src/components/list_pane.rs); the
+remaining duplication is state-side. `VaultView` and `SendView` both carry
+`Selection { item, id, form, confirm_delete }` and `ItemCache { all, cached }` keyed by
+`UserId`, plus `recompute_filtered` / `filter_items` / search query and reimplement
+`apply_filter` / `reset` / `remove_user_items` / `focus_search_task`. Two implementations
+is still a coincidence; three is a pattern. When the third lands, evaluate extracting
+`ListView<T, Form>` generic state + a `ListViewController` trait with `load_list_task` /
+`full_item` / `save_item` / `delete_item`. Premature here — the shape would lock against
+an unknown use case.
 
 ### Vault + Send event-handler dedup `[S]` `[defer: shared list-view primitive]`
 

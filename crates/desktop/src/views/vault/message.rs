@@ -30,8 +30,8 @@ use super::widgets::{
     search_bar::SearchMessage,
 };
 
-/// Payload for [`VaultMessage::FormOptionsLoaded`]. Delivered as a single
-/// value so the handler has one stale-check + one form-exists check.
+/// Payload for [`ForUserMessage::FormOptionsLoaded`]. Delivered as a single
+/// value so the handler has one form-exists check.
 #[derive(Clone)]
 pub struct FormOptions {
     pub folders: Result<Vec<FolderOption>, String>,
@@ -39,7 +39,7 @@ pub struct FormOptions {
     pub collections: Vec<Collection>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, derive_more::From)]
 pub enum VaultMessage {
     ItemList(ItemListMessage),
     Search(SearchMessage),
@@ -51,29 +51,28 @@ pub enum VaultMessage {
     /// clears the selection. Split out so the sheet has content to render
     /// during its slide-down/fade-out.
     FinalizeSheetClose,
+    #[from(skip)]
     PaneResized(pane_grid::ResizeEvent),
     /// User clicked the +New button — toggle the cipher-type picker dropdown.
     ToggleNewItemMenu,
     /// User picked a type (from the +New dropdown, a File-menu item, or a
     /// keyboard accelerator). Mounts an empty form of that type.
+    #[from(skip)]
     NewItem(CipherType),
     /// User confirmed the delete in the modal — fire the SDK soft-delete.
     ConfirmDeleteSelected,
     /// User dismissed the delete modal (Cancel, backdrop click, etc.).
     CancelDeleteSelected,
+    /// List-load result. Carries a uid but isn't stale-gated — background
+    /// users' caches are still populated; only the filtered view recomputes
+    /// when the result is for the active user.
+    #[from(skip)]
     ListLoaded(UserId, Result<Summary<Vec<Arc<CipherListView>>>, String>),
-    DetailLoaded(UserId, CipherId, Result<NoDebug<Box<CipherView>>, String>),
-    /// Fires once the cipher form's option lists (folders, organizations,
-    /// collections) are all ready. Bundled into a single message because the
-    /// three loads are always triggered together from the Edit handler and
-    /// the UI has no use for a partial population. `folders` is a `Result`
-    /// because it's the one that goes through an async SDK repo call; orgs
-    /// and collections are sync reads off the already-loaded `ClientManager`.
-    /// `FolderOption` is used (not `FolderView`) because `FolderView` isn't
-    /// `Clone` and `VaultMessage` must be.
-    FormOptionsLoaded(UserId, NoDebug<FormOptions>),
-    SaveCompleted(UserId, Result<NoDebug<Box<CipherView>>, String>),
-    DeleteCompleted(UserId, CipherId, Result<(), String>),
+    /// SDK completion routed through a single stale-user guard. The dispatch
+    /// site drops the message when the active user changed during the await,
+    /// so [`ForUserMessage`] handlers don't need their own guards.
+    #[from(skip)]
+    ForUser(UserId, ForUserMessage),
     /// Internal: dispatched on a one-frame delay from screen-mount handlers
     /// (post-unlock, switch-user-already-unlocked) so the focus operation
     /// runs against the freshly-mounted vault widget tree rather than the
@@ -83,13 +82,33 @@ pub enum VaultMessage {
     AutoFocusSearchDelayed,
 }
 
+/// Strictly-stale-gated SDK completions. Wrapped in
+/// [`VaultMessage::ForUser`] so the dispatch site checks
+/// [`crate::app::UpdateCtx::is_active_user`] once and drops the message
+/// when the user switched during the await.
+#[derive(Debug, Clone)]
+pub enum ForUserMessage {
+    DetailLoaded(CipherId, Result<NoDebug<Box<CipherView>>, String>),
+    /// Fires once the cipher form's option lists (folders, organizations,
+    /// collections) are all ready. Bundled into a single message because the
+    /// three loads are always triggered together from the Edit handler and
+    /// the UI has no use for a partial population. `folders` is a `Result`
+    /// because it's the one that goes through an async SDK repo call; orgs
+    /// and collections are sync reads off the already-loaded `ClientManager`.
+    /// `FolderOption` is used (not `FolderView`) because `FolderView` isn't
+    /// `Clone` and `VaultMessage` must be.
+    FormOptionsLoaded(NoDebug<FormOptions>),
+    SaveCompleted(Result<NoDebug<Box<CipherView>>, String>),
+    DeleteCompleted(CipherId, Result<(), String>),
+}
+
 // ── Events ─────────────────────────────────────────────────────────────────
 //
 // Declarative domain facts the vault bubbles up for cross-cutting effects.
 // Routed by App. Anything that only affects the vault's own state stays
 // inside `VaultView::update` and never becomes an event.
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, derive_more::From)]
 pub enum VaultEvent {
     /// Account-switcher action. Forwarded verbatim to
     /// `App::handle_account_switcher_event` so login, vault, and send share
@@ -97,13 +116,16 @@ pub enum VaultEvent {
     AccountSwitcher(AccountSwitcherEvent),
     /// A save completed successfully. App pushes a success toast and kicks
     /// off a list reload so the sidebar reflects renames / ownership moves.
+    #[from(skip)]
     ItemSaved { uid: UserId },
     /// A soft-delete completed successfully. App pushes a success toast and
     /// reloads the list so the deleted row disappears.
+    #[from(skip)]
     ItemDeleted { uid: UserId },
     /// User clicked a copy-to-clipboard button on the detail pane.
     /// Routed to `ClipboardManager::copy`; the handler also pushes a
     /// success toast with `toast_label` as the body.
+    #[from(skip)]
     ClipboardCopyRequested {
         value: String,
         sensitivity: Sensitivity,
@@ -111,5 +133,6 @@ pub enum VaultEvent {
     },
     /// User clicked the launch button on a login's URI.
     /// Routed to `clipboard::launch_url` which enforces scheme allowlist.
+    #[from(skip)]
     LaunchUrlRequested { uri: String },
 }

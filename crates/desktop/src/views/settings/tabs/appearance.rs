@@ -11,16 +11,14 @@ use crate::{
 };
 
 use super::{
-    super::{SettingChange, SettingsSnapshot, section_heading},
-    setting_checkbox,
+    super::{SettingChange, SettingsSnapshot},
+    SECTION_GAP_PX, setting_checkbox, settings_section,
 };
 
 pub fn view<'a>(
     snap: &'a SettingsSnapshot,
     colors: &'a AppColors,
 ) -> Element<'a, SettingChange, AppTheme> {
-    let theme_heading = section_heading(fl!("settings-appearance-theme-heading"), colors);
-
     let theme_field = inputs::select_field(
         fl!("settings-appearance-theme"),
         Some(snap.settings.theme),
@@ -65,8 +63,6 @@ pub fn view<'a>(
         colors,
     );
 
-    let display_heading = section_heading(fl!("settings-appearance-display-heading"), colors);
-
     let favicons = setting_checkbox(
         snap.settings.show_favicons,
         fl!("settings-appearance-show-favicons"),
@@ -74,13 +70,13 @@ pub fn view<'a>(
     );
 
     column![
-        theme_heading,
-        Space::new().height(8),
-        column![theme_field, language_field].spacing(16),
-        Space::new().height(24),
-        display_heading,
-        Space::new().height(8),
-        favicons,
+        settings_section(
+            fl!("settings-appearance-theme-heading"),
+            column![theme_field, language_field].spacing(16),
+            colors,
+        ),
+        Space::new().height(SECTION_GAP_PX),
+        settings_section(fl!("settings-appearance-display-heading"), favicons, colors),
     ]
     .width(Fill)
     .into()

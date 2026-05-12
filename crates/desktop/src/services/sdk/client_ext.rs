@@ -15,7 +15,9 @@ use bitwarden_generators::{
 };
 use bitwarden_pm::PasswordManagerClient;
 use bitwarden_state::repository::Repository;
-use bitwarden_vault::{Cipher, CipherId, CipherListView, CipherView, Folder, FolderView};
+use bitwarden_vault::{
+    Cipher, CipherId, CipherListView, CipherView, EncryptionContext, Folder, FolderView,
+};
 
 /// Acquire the per-user `Cipher` repository, with the registry's error
 /// type stringified to match the rest of the trait.
@@ -162,13 +164,12 @@ impl ClientExt for PasswordManagerClient {
             cipher_view.id = Some(CipherId::new_v4());
         }
 
-        let ctx = self
+        let EncryptionContext { cipher, .. } = self
             .vault()
             .ciphers()
             .encrypt(cipher_view)
             .await
             .map_err(|e| e.to_string())?;
-        let cipher = ctx.cipher;
         let id = cipher
             .id
             .ok_or_else(|| "encrypted cipher missing id".to_string())?;

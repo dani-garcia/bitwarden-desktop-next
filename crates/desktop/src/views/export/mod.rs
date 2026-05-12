@@ -13,7 +13,7 @@
 
 use bitwarden_core::OrganizationId;
 use iced::{
-    Alignment, Element, Fill, Padding,
+    Alignment, Element, Fill,
     widget::{self, column, container, row, text},
 };
 
@@ -392,10 +392,7 @@ impl ExportView {
             ExportMessage::Close,
         );
 
-        let body = body
-            .push(footer)
-            .padding(Padding::from([20, 24]))
-            .width(Fill);
+        let body = body.push(footer).padding(modal::BODY_PADDING).width(Fill);
 
         modal::dialog(
             460.0,
@@ -499,7 +496,7 @@ impl ExportView {
 
         let body = column![header, warning, password_field, helper, footer]
             .spacing(16)
-            .padding(Padding::from([20, 24]))
+            .padding(modal::BODY_PADDING)
             .width(Fill);
 
         modal::dialog(

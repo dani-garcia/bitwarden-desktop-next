@@ -1,17 +1,14 @@
 use std::sync::Arc;
 
 use bitwarden_send::SendView as SdkSendView;
-use iced::{
-    Alignment, Border, Element, Fill, Padding,
-    widget::{Space, column, container, row, text},
-};
+use iced::Element;
 
 use crate::{
     app::{Overlay, RenderCtx},
     components::{
         account_switcher,
         bottom_sheet::{self, SHEET_BREAKPOINT_PX, SHEET_TOP_INSET_PX, SHEET_TOP_RADIUS_PX},
-        buttons, collapsible_pane, icons,
+        list_pane,
     },
     fl,
     theme::{AppColors, AppTheme},
@@ -32,37 +29,25 @@ impl SendView {
             .map(|ic| ic.cached.as_slice())
             .unwrap_or(&[]);
 
-        // Wide: collapsible-pane with the form on the right (kept mounted
-        // so iced's `pane_grid::diff` never drops its child state — see
-        // `components::collapsible_pane` for the details).
-        // Narrow: the form renders as a bottom sheet via `sheet_view`, so
-        // the pane grid drops out entirely here.
-        let content_area_inner: Element<'a, SendMessage, AppTheme> =
-            if ctx.window_width >= SHEET_BREAKPOINT_PX {
-                let right = self
-                    .selection
+        // Below `SHEET_BREAKPOINT_PX` the form renders separately as a bottom
+        // sheet (`render_sheet`), so build the right pane here only in wide
+        // mode.
+        let right_pane = (ctx.window_width >= SHEET_BREAKPOINT_PX)
+            .then(|| {
+                self.selection
                     .form
                     .as_ref()
-                    .map(|_| self.form_pane(ctx.colors, 0.0));
-                collapsible_pane::view(
-                    &self.pane,
-                    self.list_content(ctx, cached_items),
-                    right,
-                    SendMessage::PaneResized,
-                )
-            } else {
-                self.list_content(ctx, cached_items)
-            };
-
-        container(content_area_inner)
-            .width(Fill)
-            .height(Fill)
-            .style(|theme: &AppTheme| {
-                container::Style::default()
-                    .background(theme.colors.background)
-                    .border(Border::default().rounded(iced::border::top_left(10)))
+                    .map(|_| self.form_pane(ctx.colors, 0.0))
             })
-            .into()
+            .flatten();
+
+        list_pane::render(
+            &self.pane,
+            self.list_content(ctx, cached_items),
+            right_pane,
+            SendMessage::PaneResized,
+            ctx.window_width,
+        )
     }
 
     pub(super) fn render_sheet<'a>(
@@ -88,7 +73,6 @@ impl SendView {
         ctx: &RenderCtx<'a>,
     ) -> Option<Element<'a, SendMessage, AppTheme>> {
         let progress = self.selection.confirm_delete.progress_if_visible()?;
-        let colors = ctx.colors;
         let item_name = self
             .selection
             .form
@@ -103,7 +87,7 @@ impl SendView {
             fl!("send-delete-modal-cancel"),
             SendMessage::ConfirmDeleteSelected,
             SendMessage::CancelDeleteSelected,
-            colors,
+            ctx.colors,
             progress,
         ))
     }
@@ -118,7 +102,7 @@ impl SendView {
             .form
             .as_ref()
             .expect("form_pane called without a form");
-        send_edit::view(form, colors, top_radius).map(SendMessage::SendEdit)
+        send_edit::view(form, colors, top_radius).map(Into::into)
     }
 
     fn list_content<'a>(
@@ -126,67 +110,40 @@ impl SendView {
         ctx: &RenderCtx<'a>,
         cached_items: &'a [Arc<SdkSendView>],
     ) -> Element<'a, SendMessage, AppTheme> {
-        let colors = ctx.colors;
         let active_email = ctx.active_email.expect("Screen::Send without active_email");
 
-        let title = text(fl!("send-title"))
-            .size(28)
-            .color(colors.text_primary)
-            .font(crate::APP_FONT_BOLD);
-
-        let new_button = buttons::primary(
-            row![
-                icons::PLUS.render(14.0, colors.card_bg),
-                text(fl!("send-new-button")).size(14),
-            ]
-            .spacing(6)
-            .align_y(Alignment::Center),
-        )
-        .on_press(SendMessage::NewItem)
-        .padding(Padding {
-            top: 8.0,
-            right: 16.0,
-            bottom: 8.0,
-            left: 12.0,
-        });
+        let new_button =
+            list_pane::new_item_button(fl!("send-new-button"), SendMessage::NewItem, ctx.colors);
 
         let account_switcher_open = ctx.open_overlay == Some(Overlay::AccountSwitcher);
         let avatar = account_switcher::header_switcher(
             active_email,
             ctx.accounts,
             account_switcher_open,
-            colors,
+            ctx.colors,
         )
-        .map(SendMessage::AccountSwitcher);
+        .map(Into::into);
 
-        let content_header = container(
-            row![title, Space::new().width(Fill), new_button, avatar]
-                .spacing(12)
-                .align_y(Alignment::Center),
-        )
-        .padding([16, 24])
-        .width(Fill);
-
-        let search = send_list::search_view(&self.search_query).map(SendMessage::Search);
-        let search_row = container(search)
-            .padding(Padding {
-                top: 0.0,
-                right: 24.0,
-                bottom: 8.0,
-                left: 24.0,
-            })
-            .width(Fill);
-
+        let search = send_list::search_view(&self.search_query).map(Into::into);
         let list_body: Element<'a, SendMessage, AppTheme> = if cached_items.is_empty() {
-            send_list::empty_state(colors).map(SendMessage::ItemList)
+            send_list::empty_state(ctx.colors).map(Into::into)
         } else {
-            send_list::view(cached_items, self.selection.item, self.list_scroll, colors)
-                .map(SendMessage::ItemList)
+            send_list::view(
+                cached_items,
+                self.selection.item,
+                self.list_scroll,
+                ctx.colors,
+            )
+            .map(Into::into)
         };
 
-        column![content_header, search_row, list_body]
-            .width(Fill)
-            .height(Fill)
-            .into()
+        list_pane::layout(
+            fl!("send-title"),
+            new_button,
+            avatar,
+            search,
+            list_body,
+            ctx.colors,
+        )
     }
 }

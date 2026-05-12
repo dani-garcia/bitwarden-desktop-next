@@ -5,7 +5,7 @@
 //! `selected_server` on Save.
 
 use iced::{
-    Element, Fill, Padding,
+    Element, Fill,
     widget::{self, column, container, text},
 };
 
@@ -61,7 +61,7 @@ pub fn view<'a>(
 
     let body = column![header, url_field, info_row, footer]
         .spacing(16)
-        .padding(Padding::from([20, 24]))
+        .padding(modal::BODY_PADDING)
         .width(Fill);
 
     Some(modal::dialog(

@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use bitwarden_vault::{CipherListView, CipherType};
 use iced::{
-    Alignment, Border, Color, Element, Fill, Length, Padding,
-    widget::{Space, column, container, row, text},
+    Alignment, Border, Color, Element, Length,
+    widget::{column, container, row, text},
 };
 
 use crate::{
@@ -13,8 +13,9 @@ use crate::{
     components::{
         account_switcher,
         bottom_sheet::{self, SHEET_BREAKPOINT_PX, SHEET_TOP_INSET_PX, SHEET_TOP_RADIUS_PX},
-        buttons, collapsible_pane, drop_down,
+        buttons, drop_down,
         icons::{self, BwiIcon},
+        list_pane,
     },
     fl,
     theme::{AppColors, AppTheme, RADIUS_LG},
@@ -36,34 +37,20 @@ impl VaultView {
         let cached_items: &[Arc<CipherListView>] =
             user_cache.map(|ic| ic.cached.as_slice()).unwrap_or(&[]);
 
-        // Wide: collapsible-pane with the detail/form on the right (kept
-        // mounted so iced's `pane_grid::diff` never drops child state —
-        // see `components::collapsible_pane`).
-        // Narrow: bottom sheet overlay composed at App level via
-        // `sheet_view`, so the grid drops out entirely here.
-        let content_area_inner: Element<'a, VaultMessage, AppTheme> =
-            if ctx.window_width >= SHEET_BREAKPOINT_PX {
-                let right = (self.selection.detail.is_some() || self.selection.form.is_some())
-                    .then(|| self.detail_or_form_pane(ctx.colors, 0.0));
-                collapsible_pane::view(
-                    &self.pane,
-                    self.list_content(ctx, cached_items),
-                    right,
-                    VaultMessage::PaneResized,
-                )
-            } else {
-                self.list_content(ctx, cached_items)
-            };
+        // Below `SHEET_BREAKPOINT_PX` the right pane is composed at the App
+        // level as a bottom sheet (`render_sheet`), so build it here only in
+        // wide mode.
+        let right_pane = (ctx.window_width >= SHEET_BREAKPOINT_PX
+            && (self.selection.detail.is_some() || self.selection.form.is_some()))
+        .then(|| self.detail_or_form_pane(ctx.colors, 0.0));
 
-        container(content_area_inner)
-            .width(Fill)
-            .height(Fill)
-            .style(|theme: &AppTheme| {
-                container::Style::default()
-                    .background(theme.colors.background)
-                    .border(Border::default().rounded(iced::border::top_left(10)))
-            })
-            .into()
+        list_pane::render(
+            &self.pane,
+            self.list_content(ctx, cached_items),
+            right_pane,
+            VaultMessage::PaneResized,
+            ctx.window_width,
+        )
     }
 
     /// In narrow mode (`window_width < SHEET_BREAKPOINT_PX`) with a detail
@@ -98,7 +85,6 @@ impl VaultView {
         ctx: &RenderCtx<'a>,
     ) -> Option<Element<'a, VaultMessage, AppTheme>> {
         let progress = self.selection.confirm_delete.progress_if_visible()?;
-        let colors = ctx.colors;
         let item_name = self
             .selection
             .detail
@@ -113,7 +99,7 @@ impl VaultView {
             fl!("vault-delete-modal-cancel"),
             VaultMessage::ConfirmDeleteSelected,
             VaultMessage::CancelDeleteSelected,
-            colors,
+            ctx.colors,
             progress,
         ))
     }
@@ -126,7 +112,7 @@ impl VaultView {
         top_radius: f32,
     ) -> Element<'a, VaultMessage, AppTheme> {
         if let Some(form) = self.selection.form.as_ref() {
-            cipher_edit::view(form, colors, top_radius).map(VaultMessage::CipherEdit)
+            cipher_edit::view(form, colors, top_radius).map(Into::into)
         } else {
             let item = self
                 .selection
@@ -146,35 +132,19 @@ impl VaultView {
         ctx: &RenderCtx<'a>,
         cached_items: &'a [Arc<CipherListView>],
     ) -> Element<'a, VaultMessage, AppTheme> {
-        let colors = ctx.colors;
         let active_email = ctx
             .active_email
             .expect("Screen::Vault without active_email");
-        let title = text(fl!("vault-title"))
-            .size(28)
-            .color(colors.text_primary)
-            .font(crate::APP_FONT_BOLD);
 
-        let new_button_trigger = buttons::primary(
-            row![
-                icons::PLUS.render(14.0, colors.card_bg),
-                text(fl!("vault-new-button")).size(14),
-            ]
-            .spacing(6)
-            .align_y(Alignment::Center),
-        )
-        .on_press(VaultMessage::ToggleNewItemMenu)
-        .padding(Padding {
-            top: 8.0,
-            right: 16.0,
-            bottom: 8.0,
-            left: 12.0,
-        });
-
+        let new_button_trigger = list_pane::new_item_button(
+            fl!("vault-new-button"),
+            VaultMessage::ToggleNewItemMenu,
+            ctx.colors,
+        );
         let new_item_menu_open = ctx.open_overlay == Some(Overlay::NewItemMenu);
         let new_button = drop_down::DropDown::new(
             new_button_trigger,
-            new_item_menu(colors),
+            new_item_menu(ctx.colors),
             new_item_menu_open,
         )
         .on_dismiss(VaultMessage::ToggleNewItemMenu)
@@ -187,35 +157,22 @@ impl VaultView {
             active_email,
             ctx.accounts,
             account_switcher_open,
-            colors,
+            ctx.colors,
         )
-        .map(VaultMessage::AccountSwitcher);
+        .map(Into::into);
 
-        let content_header = container(
-            row![title, Space::new().width(Fill), new_button, avatar]
-                .spacing(12)
-                .align_y(Alignment::Center),
-        )
-        .padding([16, 24])
-        .width(Fill);
-
-        let search = search_bar::view(&self.search_query).map(VaultMessage::Search);
-        let search_row = container(search)
-            .padding(Padding {
-                top: 0.0,
-                right: 24.0,
-                bottom: 8.0,
-                left: 24.0,
-            })
-            .width(Fill);
-
+        let search = search_bar::view(&self.search_query).map(Into::into);
         let item_list = item_list::view(ctx, cached_items, self.selection.item, self.list_scroll)
-            .map(VaultMessage::ItemList);
+            .map(Into::into);
 
-        column![content_header, search_row, item_list]
-            .width(Fill)
-            .height(Fill)
-            .into()
+        list_pane::layout(
+            fl!("vault-title"),
+            new_button,
+            avatar,
+            search,
+            item_list,
+            ctx.colors,
+        )
     }
 }
 

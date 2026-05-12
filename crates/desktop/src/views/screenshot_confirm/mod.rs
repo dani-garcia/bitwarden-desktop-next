@@ -19,15 +19,13 @@
 
 use std::time::Duration;
 
-use iced::{
-    Alignment, Border, Color, Element, Fill, Length, Padding, Shadow, Vector,
-    widget::{Space, column, container, row, text},
-};
+use iced::{Element, Length, Padding, widget::text};
 
 use crate::{
+    app::{Outcome, RenderCtx, UpdateCtx, View},
     components::{FadeInOut, buttons, icons, modal},
     fl,
-    theme::{AppColors, AppTheme},
+    theme::AppTheme,
 };
 
 /// How long the dialog gives the user to confirm before auto-reverting.
@@ -35,9 +33,6 @@ use crate::{
 /// that a user who can't see the dialog gets their window back quickly,
 /// long enough for a user who can see it to react.
 pub const REVERT_AFTER: Duration = Duration::from_secs(5);
-
-/// Decorative ring around the icon. Matches the fingerprint-phrase modal.
-const RING_DIAMETER: f32 = 48.0;
 
 #[derive(Debug, Clone, Copy)]
 pub enum ScreenshotConfirmMessage {
@@ -48,6 +43,14 @@ pub enum ScreenshotConfirmMessage {
     /// so this variant only ever lands while the modal is genuinely
     /// open and unconfirmed.
     Timeout,
+}
+
+/// User couldn't see the dialog in time — App reverts protection at the
+/// OS level and flips the setting back. Bubbled rather than handled
+/// inline because the mutations reach state outside [`UpdateCtx`].
+#[derive(Debug, Clone, Copy)]
+pub enum ScreenshotConfirmEvent {
+    Revert,
 }
 
 #[derive(Default)]
@@ -81,78 +84,51 @@ impl ScreenshotConfirmModal {
     }
 }
 
-/// Returns `None` while fully closed; App's view code drops the slot
-/// rather than rendering an invisible layer.
-pub fn modal_view<'a>(
-    state: &'a ScreenshotConfirmModal,
-    colors: &'a AppColors,
-) -> Option<Element<'a, ScreenshotConfirmMessage, AppTheme>> {
-    let progress = state.fade.progress_if_visible()?;
+impl View for ScreenshotConfirmModal {
+    type Message = ScreenshotConfirmMessage;
+    type Event = ScreenshotConfirmEvent;
 
-    let icon_ring = container(
-        icons::INFO_CIRCLE_FILL.render::<ScreenshotConfirmMessage, AppTheme>(28.0, colors.accent),
-    )
-    .width(Length::Fixed(RING_DIAMETER))
-    .height(Length::Fixed(RING_DIAMETER))
-    .align_x(Alignment::Center)
-    .align_y(Alignment::Center)
-    .style(|theme: &AppTheme| {
-        container::Style::default()
-            .background(Color {
-                a: 0.12,
-                ..theme.colors.accent
-            })
-            .border(Border::default().rounded(RING_DIAMETER / 2.0))
-            .shadow(Shadow {
-                color: Color {
-                    a: 0.18,
-                    ..theme.colors.accent
-                },
-                offset: Vector::new(0.0, 2.0),
-                blur_radius: 12.0,
-            })
-    });
+    fn update(&mut self, msg: ScreenshotConfirmMessage, _ctx: UpdateCtx<'_>) -> Outcome<Self> {
+        match msg {
+            ScreenshotConfirmMessage::Confirm => {
+                self.close();
+                Outcome::None
+            }
+            ScreenshotConfirmMessage::Timeout => {
+                if !self.is_open() {
+                    // Abort raced with delivery — drop the stale message.
+                    return Outcome::None;
+                }
+                self.close();
+                Outcome::event(ScreenshotConfirmEvent::Revert)
+            }
+        }
+    }
 
-    let title = text(fl!("settings-confirm-window-visible-title"))
-        .size(16)
-        .color(colors.text_primary)
-        .font(crate::APP_FONT_BOLD);
+    fn should_render(&self) -> bool {
+        self.fade.is_visible()
+    }
 
-    let body_text = text(fl!("settings-confirm-window-visible-body"))
-        .size(14)
-        .color(colors.text_secondary);
+    fn view<'a>(&'a self, ctx: &RenderCtx<'a>) -> Element<'a, ScreenshotConfirmMessage, AppTheme> {
+        let body_text = text(fl!("settings-confirm-window-visible-body"))
+            .size(14)
+            .color(ctx.colors.text_secondary);
 
-    let ok_button = buttons::primary(text(fl!("settings-confirm-window-visible-ok")).size(14))
-        .on_press(ScreenshotConfirmMessage::Confirm)
-        .padding(Padding::from([10, 20]))
-        .width(Length::Fill);
+        let ok_button = buttons::primary(text(fl!("settings-confirm-window-visible-ok")).size(14))
+            .on_press(ScreenshotConfirmMessage::Confirm)
+            .padding(Padding::from([10, 20]))
+            .width(Length::Fill)
+            .into();
 
-    let body = column![
-        container(icon_ring).width(Fill).align_x(Alignment::Center),
-        Space::new().height(Length::Fixed(8.0)),
-        column![title, body_text]
-            .spacing(8)
-            .align_x(Alignment::Center)
-            .width(Fill),
-        Space::new().height(Length::Fixed(8.0)),
-        row![ok_button].spacing(8).width(Fill),
-    ]
-    .spacing(10)
-    .padding(Padding {
-        top: 24.0,
-        right: 24.0,
-        bottom: 20.0,
-        left: 24.0,
-    })
-    .align_x(Alignment::Center)
-    .width(Fill);
-
-    Some(modal::dialog(
-        420.0,
-        None,
-        |c| c.card_bg,
-        progress,
-        body,
-        ScreenshotConfirmMessage::Confirm,
-    ))
+        modal::info_dialog(
+            420.0,
+            icons::INFO_CIRCLE_FILL,
+            fl!("settings-confirm-window-visible-title"),
+            body_text,
+            vec![ok_button],
+            ScreenshotConfirmMessage::Confirm,
+            ctx.colors,
+            self.fade.progress_when_visible(),
+        )
+    }
 }

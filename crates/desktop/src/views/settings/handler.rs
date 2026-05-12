@@ -114,7 +114,7 @@ impl App {
             // User just allowed screenshots — clear protection and any
             // in-flight confirm dialog (timeout will see a stale version
             // and no-op).
-            self.screenshot_confirm.close();
+            self.views.screenshot_confirm.close();
             return apply_task;
         }
 
@@ -134,12 +134,10 @@ impl App {
         // modal), so the modal owns the lifetime of its own timeout.
         let revert_after = crate::views::screenshot_confirm::REVERT_AFTER;
         let timeout_task = Task::perform(tokio::time::sleep(revert_after), |_| {
-            Message::ScreenshotConfirm(
-                crate::views::screenshot_confirm::ScreenshotConfirmMessage::Timeout,
-            )
+            crate::views::screenshot_confirm::ScreenshotConfirmMessage::Timeout.into()
         });
         let (timeout_task, handle) = timeout_task.abortable();
-        self.screenshot_confirm.open(handle);
+        self.views.screenshot_confirm.open(handle);
         Task::batch([apply_task, timeout_task])
     }
 

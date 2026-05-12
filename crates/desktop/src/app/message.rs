@@ -44,15 +44,6 @@ pub enum Message {
     /// Routed at the top level (not via `ViewMessage`) because the launcher
     /// owns its own window and can't share `UpdateCtx` with screen views.
     Magnify(MagnifyMessage),
-    /// Account → Fingerprint phrase modal actions. Routed at the top level
-    /// (not via `ViewMessage`) because the modal isn't a `View` — its state
-    /// lives directly on `App` (single string + fade), and the actions
-    /// handle in one place without needing `UpdateCtx`.
-    Fingerprint(FingerprintMessage),
-    /// Settings → Allow screenshots confirm-still-visible dialog. Routed at
-    /// the top level for the same reason as `Fingerprint`: a tiny modal
-    /// whose state lives on `App`, no `UpdateCtx` needed.
-    ScreenshotConfirm(ScreenshotConfirmMessage),
 }
 
 /// Sub-view messages, bundled so `App::update` builds `UpdateCtx` in one
@@ -68,6 +59,8 @@ pub enum ViewMessage {
     Import(ImportMessage),
     Export(ExportMessage),
     NewFolder(NewFolderMessage),
+    Fingerprint(FingerprintMessage),
+    ScreenshotConfirm(ScreenshotConfirmMessage),
 }
 
 /// Chain `XxxMessage -> ViewMessage -> Message` for view sub-messages. With

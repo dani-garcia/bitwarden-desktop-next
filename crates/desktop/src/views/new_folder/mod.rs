@@ -11,7 +11,7 @@
 mod handler;
 
 use iced::{
-    Element, Fill, Padding,
+    Element, Fill,
     widget::{self, column, container, text},
 };
 
@@ -161,7 +161,7 @@ impl View for NewFolderView {
 
         let body = column![header, name_field, helper, footer]
             .spacing(14)
-            .padding(Padding::from([20, 24]))
+            .padding(modal::BODY_PADDING)
             .width(Fill);
 
         modal::dialog(

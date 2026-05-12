@@ -11,16 +11,14 @@ use crate::{
 };
 
 use super::{
-    super::{SettingChange, SettingsSnapshot, section_heading},
-    setting_checkbox,
+    super::{SettingChange, SettingsSnapshot},
+    SECTION_GAP_PX, setting_checkbox, settings_section,
 };
 
 pub fn view<'a>(
     snap: &'a SettingsSnapshot,
     colors: &'a AppColors,
 ) -> Element<'a, SettingChange, AppTheme> {
-    let browser_heading = section_heading(fl!("settings-integrations-browser"), colors);
-
     let browser = setting_checkbox(
         snap.settings.browser_integration,
         fl!("settings-integrations-browser-enable"),
@@ -31,8 +29,6 @@ pub fn view<'a>(
         fl!("settings-integrations-browser-fingerprint"),
         SettingChange::BrowserIntegrationFingerprint,
     );
-
-    let ssh_heading = section_heading(fl!("settings-integrations-ssh"), colors);
 
     let ssh = setting_checkbox(
         snap.settings.ssh_agent,
@@ -48,8 +44,6 @@ pub fn view<'a>(
         colors,
     );
 
-    let other_heading = section_heading(fl!("settings-integrations-other"), colors);
-
     let ddg = setting_checkbox(
         snap.settings.duck_duck_go,
         fl!("settings-integrations-duckduckgo"),
@@ -57,17 +51,19 @@ pub fn view<'a>(
     );
 
     column![
-        browser_heading,
-        Space::new().height(8),
-        column![browser, browser_fp].spacing(10),
-        Space::new().height(24),
-        ssh_heading,
-        Space::new().height(8),
-        column![ssh, ssh_prompt].spacing(16),
-        Space::new().height(24),
-        other_heading,
-        Space::new().height(8),
-        ddg,
+        settings_section(
+            fl!("settings-integrations-browser"),
+            column![browser, browser_fp].spacing(10),
+            colors,
+        ),
+        Space::new().height(SECTION_GAP_PX),
+        settings_section(
+            fl!("settings-integrations-ssh"),
+            column![ssh, ssh_prompt].spacing(16),
+            colors,
+        ),
+        Space::new().height(SECTION_GAP_PX),
+        settings_section(fl!("settings-integrations-other"), ddg, colors),
     ]
     .width(Fill)
     .into()

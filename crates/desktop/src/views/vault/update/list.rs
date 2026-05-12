@@ -12,7 +12,8 @@ use crate::{
 };
 
 use crate::views::vault::{
-    VaultFilter, VaultMessage, state::VaultView, widgets::item_list::ItemListMessage,
+    VaultFilter, VaultMessage, message::ForUserMessage, state::VaultView,
+    widgets::item_list::ItemListMessage,
 };
 
 impl VaultView {
@@ -46,7 +47,10 @@ impl VaultView {
                 return ctx.perform_with_active_client(
                     move |client| client.full_cipher(id),
                     move |uid, res| {
-                        VaultMessage::DetailLoaded(uid, id, res.map(|v| NoDebug(Box::new(v))))
+                        VaultMessage::ForUser(
+                            uid,
+                            ForUserMessage::DetailLoaded(id, res.map(|v| NoDebug(Box::new(v)))),
+                        )
                     },
                 );
             }

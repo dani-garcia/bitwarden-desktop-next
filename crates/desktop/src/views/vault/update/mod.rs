@@ -26,6 +26,7 @@ use crate::{
 
 use super::{
     VaultEvent, VaultFilter, VaultMessage,
+    message::ForUserMessage,
     state::VaultView,
     widgets::{cipher_detail, search_bar::SearchMessage},
 };
@@ -105,20 +106,8 @@ impl View for VaultView {
             VaultMessage::CipherEdit(m) => {
                 return self.handle_cipher_edit(&ctx, m);
             }
-            VaultMessage::FormOptionsLoaded(uid, crate::debug_fmt::NoDebug(opts)) => {
-                return self.handle_form_options_loaded(&ctx, uid, opts);
-            }
-            VaultMessage::SaveCompleted(uid, res) => {
-                return self.handle_save_completed(&ctx, uid, res);
-            }
-            VaultMessage::DeleteCompleted(uid, id, res) => {
-                return self.handle_delete_completed(&ctx, uid, id, res);
-            }
             VaultMessage::AccountSwitcher(m) => {
-                return Outcome::from_option(
-                    m.consume(&mut *ctx.open_overlay, Overlay::AccountSwitcher)
-                        .map(VaultEvent::AccountSwitcher),
-                );
+                return m.route(&mut *ctx.open_overlay, Overlay::AccountSwitcher);
             }
             VaultMessage::ToggleNewItemMenu => {
                 *ctx.open_overlay = if *ctx.open_overlay == Some(Overlay::NewItemMenu) {
@@ -133,8 +122,27 @@ impl View for VaultView {
             VaultMessage::ListLoaded(uid, res) => {
                 return self.handle_list_loaded(&ctx, uid, res);
             }
-            VaultMessage::DetailLoaded(uid, id, res) => {
-                return self.handle_detail_loaded(&ctx, uid, id, res);
+            VaultMessage::ForUser(msg_uid, inner) => {
+                // Single stale-user guard for every SDK completion: drop the
+                // result if the active user changed during the await.
+                if !ctx.is_active_user(&msg_uid) {
+                    tracing::debug!(uid = %msg_uid, ?inner, "vault result dropped: active user changed");
+                    return Outcome::None;
+                }
+                return match inner {
+                    ForUserMessage::DetailLoaded(id, res) => {
+                        self.handle_detail_loaded(&ctx, msg_uid, id, res)
+                    }
+                    ForUserMessage::FormOptionsLoaded(crate::debug_fmt::NoDebug(opts)) => {
+                        self.handle_form_options_loaded(&ctx, msg_uid, opts)
+                    }
+                    ForUserMessage::SaveCompleted(res) => {
+                        self.handle_save_completed(&ctx, msg_uid, res)
+                    }
+                    ForUserMessage::DeleteCompleted(id, res) => {
+                        self.handle_delete_completed(&ctx, msg_uid, id, res)
+                    }
+                };
             }
             VaultMessage::AutoFocusSearchDelayed => {
                 return Outcome::task(self.auto_focus_task());
@@ -150,14 +158,7 @@ impl View for VaultView {
     /// Bottom-sheet (narrow-mode cipher detail) and the delete-confirm
     /// sub-modal, in z-order: sheet first (lower), confirm on top.
     fn overlays<'a>(&'a self, ctx: &RenderCtx<'a>) -> Vec<Element<'a, VaultMessage, AppTheme>> {
-        let mut out = Vec::new();
-        if let Some(el) = self.render_sheet(ctx) {
-            out.push(el);
-        }
-        if let Some(el) = self.render_overlay(ctx) {
-            out.push(el);
-        }
-        out
+        crate::components::list_pane::overlays(self.render_sheet(ctx), self.render_overlay(ctx))
     }
 }
 

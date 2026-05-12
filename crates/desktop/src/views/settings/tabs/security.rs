@@ -11,16 +11,14 @@ use crate::{
 };
 
 use super::{
-    super::{SettingChange, SettingsSnapshot, section_heading},
-    setting_checkbox,
+    super::{SettingChange, SettingsSnapshot},
+    SECTION_GAP_PX, setting_checkbox, settings_section,
 };
 
 pub fn view<'a>(
     snap: &'a SettingsSnapshot,
     colors: &'a AppColors,
 ) -> Element<'a, SettingChange, AppTheme> {
-    let access_heading = section_heading(fl!("settings-security-access-options"), colors);
-
     let open_at_login = setting_checkbox(
         snap.settings.open_at_login,
         fl!("settings-security-open-at-login"),
@@ -36,8 +34,6 @@ pub fn view<'a>(
         fl!("settings-security-unlock-touch"),
         SettingChange::TouchIdUnlock,
     );
-
-    let timeout_heading = section_heading(fl!("settings-security-session-timeout"), colors);
 
     let lock_after = inputs::select_field(
         fl!("settings-security-lock-after"),
@@ -64,17 +60,22 @@ pub fn view<'a>(
     );
 
     column![
-        access_heading,
-        Space::new().height(8),
-        column![open_at_login, pin, touch].spacing(10),
-        Space::new().height(24),
-        timeout_heading,
-        Space::new().height(8),
-        column![lock_after, logout_after].spacing(16),
-        Space::new().height(10),
-        lock_on_system_lock,
+        settings_section(
+            fl!("settings-security-access-options"),
+            column![open_at_login, pin, touch].spacing(10),
+            colors,
+        ),
+        Space::new().height(SECTION_GAP_PX),
+        settings_section(
+            fl!("settings-security-session-timeout"),
+            column![
+                column![lock_after, logout_after].spacing(16),
+                Space::new().height(10),
+                lock_on_system_lock,
+            ],
+            colors,
+        ),
     ]
-    .spacing(0)
     .width(Fill)
     .into()
 }

@@ -156,6 +156,103 @@ where
         .into()
 }
 
+/// Standard body padding for app dialog modals — symmetric 20 px vertical,
+/// 24 px horizontal. Pair with `column![...].spacing(...).padding(BODY_PADDING)`
+/// inside the [`dialog`] body. Used by new-folder, import, export, login
+/// self-hosted, and the info-icon dialogs.
+pub const BODY_PADDING: Padding = Padding {
+    top: 20.0,
+    right: 24.0,
+    bottom: 20.0,
+    left: 24.0,
+};
+
+/// Diameter of the decorative info-icon ring used by [`info_dialog`].
+const INFO_RING_DIAMETER: f32 = 48.0;
+
+/// Centered confirmation dialog with a colored info ring up top, a bold title,
+/// arbitrary `body` content below the title, and a stack of caller-supplied
+/// `actions` at the bottom. Backdrop click + `on_close` route through the same
+/// message. The ring uses the theme accent color with a 12% fill tint and a
+/// matching soft shadow.
+///
+/// `body` is whatever sits *between* the title and the action buttons — a
+/// description paragraph, a phrase row with a copy button, etc. `actions` is
+/// stacked vertically inside the dialog with the same `spacing(10)` as the
+/// rest of the body; full-width buttons (`Length::Fill`) stack neatly.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "explicit args read clearly at the call site; a struct here would be pure boilerplate"
+)]
+pub fn info_dialog<'a, M>(
+    width: f32,
+    icon: icons::Icon,
+    title_text: impl Into<String>,
+    body: impl Into<Element<'a, M, AppTheme>>,
+    actions: Vec<Element<'a, M, AppTheme>>,
+    on_close: M,
+    colors: &'a AppColors,
+    progress: f32,
+) -> Element<'a, M, AppTheme>
+where
+    M: Clone + 'a,
+{
+    let icon_ring = container(icon.render(28.0, colors.accent))
+        .width(Length::Fixed(INFO_RING_DIAMETER))
+        .height(Length::Fixed(INFO_RING_DIAMETER))
+        .align_x(Alignment::Center)
+        .align_y(Alignment::Center)
+        .style(|theme: &AppTheme| {
+            container::Style::default()
+                .background(Color {
+                    a: 0.12,
+                    ..theme.colors.accent
+                })
+                .border(Border::default().rounded(INFO_RING_DIAMETER / 2.0))
+                .shadow(Shadow {
+                    color: Color {
+                        a: 0.18,
+                        ..theme.colors.accent
+                    },
+                    offset: Vector::new(0.0, 2.0),
+                    blur_radius: 12.0,
+                })
+        });
+
+    let title = text(title_text.into())
+        .size(16)
+        .color(colors.text_primary)
+        .font(crate::APP_FONT_BOLD);
+
+    let title_and_body = column![title, body.into()]
+        .spacing(8)
+        .align_x(Alignment::Center)
+        .width(Fill);
+
+    // 24/24/20/24 — 4 px taller top than [`BODY_PADDING`] to balance the
+    // icon ring's visual weight against the buttons below.
+    let mut layout = column![
+        container(icon_ring).width(Fill).align_x(Alignment::Center),
+        Space::new().height(Length::Fixed(8.0)),
+        title_and_body,
+        Space::new().height(Length::Fixed(8.0)),
+    ]
+    .spacing(10)
+    .padding(Padding {
+        top: 24.0,
+        right: 24.0,
+        bottom: 20.0,
+        left: 24.0,
+    })
+    .align_x(Alignment::Center)
+    .width(Fill);
+    for action in actions {
+        layout = layout.push(action);
+    }
+
+    dialog(width, None, |c| c.card_bg, progress, layout, on_close)
+}
+
 /// Confirmation dialog with a title, body text, and primary/secondary
 /// button row. Backdrop click + cancel button both fire `on_cancel`. Width
 /// is fixed at 380 px; height shrinks to content.

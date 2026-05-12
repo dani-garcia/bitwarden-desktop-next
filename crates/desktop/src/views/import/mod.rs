@@ -7,7 +7,7 @@
 
 use bitwarden_core::OrganizationId;
 use iced::{
-    Alignment, Element, Fill, Length, Padding,
+    Alignment, Element, Fill, Length,
     widget::{column, container, row, text, text_editor},
 };
 
@@ -500,7 +500,7 @@ impl View for ImportView {
 
         let body = column![header, destination_card, data_card, footer]
             .spacing(16)
-            .padding(Padding::from([20, 24]))
+            .padding(modal::BODY_PADDING)
             .width(Fill);
 
         modal::dialog(

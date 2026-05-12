@@ -15,6 +15,7 @@ use crate::{
 
 use super::{
     SendEvent, SendFilter, SendMessage,
+    message::ForUserMessage,
     state::SendView,
     widgets::{
         send_edit::{FormEvent, SendEditMessage, SendForm},
@@ -77,22 +78,29 @@ impl View for SendView {
                 self.handle_new_item(&ctx);
             }
             SendMessage::AccountSwitcher(m) => {
-                return Outcome::from_option(
-                    m.consume(&mut *ctx.open_overlay, Overlay::AccountSwitcher)
-                        .map(SendEvent::AccountSwitcher),
-                );
+                return m.route(&mut *ctx.open_overlay, Overlay::AccountSwitcher);
             }
             SendMessage::ListLoaded(uid, res) => {
                 return self.handle_list_loaded(&ctx, uid, res);
             }
-            SendMessage::DetailLoaded(uid, id, res) => {
-                return self.handle_detail_loaded(&ctx, uid, id, res);
-            }
-            SendMessage::SaveCompleted(uid, res) => {
-                return self.handle_save_completed(&ctx, uid, res);
-            }
-            SendMessage::DeleteCompleted(uid, id, res) => {
-                return self.handle_delete_completed(&ctx, uid, id, res);
+            SendMessage::ForUser(msg_uid, inner) => {
+                // Single stale-user guard for every SDK completion: drop the
+                // result if the active user changed during the await.
+                if !ctx.is_active_user(&msg_uid) {
+                    tracing::debug!(uid = %msg_uid, ?inner, "send result dropped: active user changed");
+                    return Outcome::None;
+                }
+                return match inner {
+                    ForUserMessage::DetailLoaded(id, res) => {
+                        self.handle_detail_loaded(&ctx, msg_uid, id, res)
+                    }
+                    ForUserMessage::SaveCompleted(res) => {
+                        self.handle_save_completed(&ctx, msg_uid, res)
+                    }
+                    ForUserMessage::DeleteCompleted(id, res) => {
+                        self.handle_delete_completed(&ctx, msg_uid, id, res)
+                    }
+                };
             }
             SendMessage::PasswordGenerated(res) => {
                 // Mirror the official client: every generated value lands in
@@ -113,14 +121,7 @@ impl View for SendView {
     }
 
     fn overlays<'a>(&'a self, ctx: &RenderCtx<'a>) -> Vec<Element<'a, SendMessage, AppTheme>> {
-        let mut out = Vec::new();
-        if let Some(el) = self.render_sheet(ctx) {
-            out.push(el);
-        }
-        if let Some(el) = self.render_overlay(ctx) {
-            out.push(el);
-        }
-        out
+        crate::components::list_pane::overlays(self.render_sheet(ctx), self.render_overlay(ctx))
     }
 }
 
@@ -150,7 +151,10 @@ impl SendView {
                     .full_send(&uid, id)
                     .map(|v| NoDebug(Box::new(v)))
                     .ok_or_else(|| format!("send {id} not found"));
-                return Outcome::task(Task::done(SendMessage::DetailLoaded(uid, id, result)));
+                return Outcome::task(Task::done(SendMessage::ForUser(
+                    uid,
+                    ForUserMessage::DetailLoaded(id, result),
+                )));
             }
             SendListMessage::Scrolled(viewport) => {
                 self.list_scroll.track(viewport);
@@ -201,9 +205,9 @@ impl SendView {
                 // completion message so handle_save_completed runs the same
                 // path as the future async case.
                 let saved = ctx.client_manager.save_send(uid, view);
-                Outcome::task(Task::done(SendMessage::SaveCompleted(
+                Outcome::task(Task::done(SendMessage::ForUser(
                     uid,
-                    Ok(NoDebug(Box::new(saved))),
+                    ForUserMessage::SaveCompleted(Ok(NoDebug(Box::new(saved)))),
                 )))
             }
             FormEvent::Delete => {
@@ -240,10 +244,9 @@ impl SendView {
             return Outcome::None;
         };
         ctx.client_manager.delete_send(&uid, send_id);
-        Outcome::task(Task::done(SendMessage::DeleteCompleted(
+        Outcome::task(Task::done(SendMessage::ForUser(
             uid,
-            send_id,
-            Ok(()),
+            ForUserMessage::DeleteCompleted(send_id, Ok(())),
         )))
     }
 
@@ -269,16 +272,15 @@ impl SendView {
         Outcome::None
     }
 
+    /// Caller (`SendMessage::ForUser` dispatch) has already verified the
+    /// uid matches the active user.
     fn handle_detail_loaded(
         &mut self,
-        ctx: &UpdateCtx<'_>,
-        msg_uid: UserId,
+        _ctx: &UpdateCtx<'_>,
+        _msg_uid: UserId,
         id: SendId,
         result: Result<NoDebug<Box<SdkSendView>>, String>,
     ) -> Outcome<Self> {
-        if !ctx.is_active_user(&msg_uid) {
-            return Outcome::None;
-        }
         match result {
             Ok(NoDebug(view)) => {
                 if self.selection.id == Some(id) {
@@ -298,15 +300,14 @@ impl SendView {
         Outcome::None
     }
 
+    /// Caller (`SendMessage::ForUser` dispatch) has already verified the
+    /// uid matches the active user.
     fn handle_save_completed(
         &mut self,
-        ctx: &UpdateCtx<'_>,
+        _ctx: &UpdateCtx<'_>,
         msg_uid: UserId,
         result: Result<NoDebug<Box<SdkSendView>>, String>,
     ) -> Outcome<Self> {
-        if !ctx.is_active_user(&msg_uid) {
-            return Outcome::None;
-        }
         match result {
             Ok(NoDebug(view)) => {
                 // Re-bind selection to the persisted id (new sends start with
@@ -348,16 +349,15 @@ impl SendView {
         }
     }
 
+    /// Caller (`SendMessage::ForUser` dispatch) has already verified the
+    /// uid matches the active user.
     fn handle_delete_completed(
         &mut self,
-        ctx: &UpdateCtx<'_>,
+        _ctx: &UpdateCtx<'_>,
         msg_uid: UserId,
         send_id: SendId,
         result: Result<(), String>,
     ) -> Outcome<Self> {
-        if !ctx.is_active_user(&msg_uid) {
-            return Outcome::None;
-        }
         match result {
             Ok(()) => {
                 self.selection.clear();

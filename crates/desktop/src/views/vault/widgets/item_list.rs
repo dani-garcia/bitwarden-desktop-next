@@ -64,18 +64,17 @@ pub fn view<'a>(
     selected_index: Option<usize>,
     scroll: virtual_list::ScrollState,
 ) -> Element<'a, ItemListMessage, AppTheme> {
-    let colors = ctx.colors;
     let table_header = container(
         row![
             text(fl!("vault-column-name"))
                 .size(14)
-                .color(colors.table_header)
+                .color(ctx.colors.table_header)
                 .font(crate::APP_FONT_BOLD),
-            icons::ARROW_DOWN_UP.render(11.0, colors.table_header),
+            icons::ARROW_DOWN_UP.render(11.0, ctx.colors.table_header),
             Space::new().width(Fill),
             text(fl!("vault-column-options"))
                 .size(14)
-                .color(colors.table_header)
+                .color(ctx.colors.table_header)
                 .font(crate::APP_FONT_BOLD),
         ]
         .spacing(4)
@@ -114,10 +113,7 @@ fn row_element<'a>(
     item: &'a CipherListView,
     is_selected: bool,
 ) -> Element<'a, ItemListMessage, AppTheme> {
-    let colors = ctx.colors;
-    let favicon = ctx.favicon;
     let active_user = ctx.active_user.expect("item_list requires active_user");
-    let show_favicons = ctx.show_favicons;
     let subtitle = item.subtitle.as_str();
     let (has_username, has_uri) = match &item.r#type {
         CipherListViewType::Login(login) => (
@@ -132,8 +128,8 @@ fn row_element<'a>(
         _ => (false, false),
     };
 
-    let icon: Element<'a, ItemListMessage, AppTheme> = if !show_favicons {
-        initial_circle(&item.name, colors)
+    let icon: Element<'a, ItemListMessage, AppTheme> = if !ctx.show_favicons {
+        initial_circle(&item.name, ctx.colors)
     } else {
         let handle = match &item.r#type {
             CipherListViewType::Login(login) => {
@@ -142,7 +138,7 @@ fn row_element<'a>(
                     .as_ref()
                     .and_then(|u| u.first())
                     .and_then(|u| u.uri.as_deref());
-                favicon.handle_for_login_uri(active_user, uri)
+                ctx.favicon.handle_for_login_uri(active_user, uri)
             }
             // Non-login ciphers fall back to the generic globe; per-type
             // BWI glyphs are tracked in docs/todo.md.
@@ -154,12 +150,12 @@ fn row_element<'a>(
     let info = column![
         text(&item.name)
             .size(14)
-            .color(colors.text_primary)
+            .color(ctx.colors.text_primary)
             .wrapping(Wrapping::None)
             .ellipsis(Ellipsis::End),
         text(subtitle)
             .size(14)
-            .color(colors.text_secondary)
+            .color(ctx.colors.text_secondary)
             .wrapping(Wrapping::None)
             .ellipsis(Ellipsis::End),
     ]
@@ -171,20 +167,20 @@ fn row_element<'a>(
         actions.push(action_icon(
             icons::BOX_ARROW_UP_RIGHT,
             ItemListMessage::OpenExternal(i),
-            colors,
+            ctx.colors,
         ));
     }
     if has_username {
         actions.push(action_icon(
             icons::COPY,
             ItemListMessage::CopyUsername(i),
-            colors,
+            ctx.colors,
         ));
     }
     actions.push(action_icon(
         icons::THREE_DOTS_VERTICAL,
         ItemListMessage::MoreOptions(i),
-        colors,
+        ctx.colors,
     ));
 
     let actions_row = row(actions).spacing(2).align_y(Alignment::Center);
@@ -200,8 +196,8 @@ fn row_element<'a>(
     let button = buttons::ghost(
         content,
         is_selected,
-        colors.item_hover,
-        colors.item_hover,
+        ctx.colors.item_hover,
+        ctx.colors.item_hover,
         RADIUS_MD,
     )
     .on_press(ItemListMessage::ItemSelected(i))

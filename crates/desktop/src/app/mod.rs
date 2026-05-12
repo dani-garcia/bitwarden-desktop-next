@@ -33,8 +33,9 @@ use crate::{
     },
     theme::{AppTheme, ThemePreference},
     views::{
-        export as export_view, generator as generator_view, import as import_view, login, magnify,
-        new_folder as new_folder_view, send, settings as settings_view, title_bar, vault,
+        export as export_view, fingerprint_phrase, generator as generator_view,
+        import as import_view, login, magnify, new_folder as new_folder_view, screenshot_confirm,
+        send, settings as settings_view, title_bar, vault,
     },
 };
 
@@ -96,13 +97,6 @@ pub struct App {
     /// dismisses any other overlay by construction.
     pub(super) open_overlay: Option<Overlay>,
     pub(super) toasts: Vec<Toast>,
-    /// Account → Fingerprint phrase modal. Closed unless the user explicitly
-    /// opened it via the menu.
-    pub(super) fingerprint: crate::views::fingerprint_phrase::FingerprintModal,
-    /// Settings → Allow screenshots: post-toggle "is the window still
-    /// visible?" dialog with auto-revert. Closed unless the user just
-    /// enabled screen-capture protection.
-    pub(super) screenshot_confirm: crate::views::screenshot_confirm::ScreenshotConfirmModal,
 
     // ── Derived ───────────────────────────────────────────────────────────
     pub(super) cache: ViewCache,
@@ -131,6 +125,13 @@ pub struct Views {
     pub(super) export: export_view::ExportView,
     pub(super) new_folder: new_folder_view::NewFolderView,
     pub(super) title_bar: title_bar::TitleBarView,
+    /// Account → Fingerprint phrase modal. Closed unless the user explicitly
+    /// opened it via the menu.
+    pub(super) fingerprint: fingerprint_phrase::FingerprintModal,
+    /// Settings → Allow screenshots: post-toggle "is the window still
+    /// visible?" dialog with auto-revert. Closed unless the user just
+    /// enabled screen-capture protection.
+    pub(super) screenshot_confirm: screenshot_confirm::ScreenshotConfirmModal,
 }
 
 impl Views {
@@ -145,6 +146,8 @@ impl Views {
             export: export_view::ExportView::new(),
             new_folder: new_folder_view::NewFolderView::new(),
             title_bar: title_bar::TitleBarView::new(),
+            fingerprint: fingerprint_phrase::FingerprintModal::default(),
+            screenshot_confirm: screenshot_confirm::ScreenshotConfirmModal::default(),
         }
     }
 }

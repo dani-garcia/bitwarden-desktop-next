@@ -136,6 +136,19 @@ pub struct RenderCtx<'a> {
     pub active_server_url: &'a str,
     pub accounts: &'a [AccountEntry],
     pub open_overlay: Option<Overlay>,
+    /// Main-window maximized state — read by [`crate::views::title_bar::TitleBarView`]
+    /// to pick the maximize / restore glyph.
+    pub is_maximized: bool,
+    /// Per-frame snapshot of menu-entry gating flags (locked / has-accounts /
+    /// has-lockable). Lives here so the title bar can pull it from the
+    /// trait-shaped `view(&self, &RenderCtx)` signature.
+    pub menu_state: crate::services::menu::MenuState,
+    /// Title-bar menu open state, extracted from [`Overlay::TitleBarMenu`].
+    /// `None` when no menu is open.
+    pub open_title_bar_menu: Option<usize>,
+    /// Title-bar submenu open state — only meaningful when
+    /// `open_title_bar_menu` is `Some`.
+    pub open_title_bar_submenu: Option<usize>,
 }
 
 /// The MVU contract every view implements: owns its own state (`Self`),

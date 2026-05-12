@@ -6,6 +6,7 @@ pub(crate) mod drop_down;
 pub(crate) mod fade_in_out;
 pub(crate) mod icons;
 pub(crate) mod inputs;
+pub(crate) mod list_pane;
 pub(crate) mod modal;
 pub(crate) mod shell_scope;
 pub(crate) mod sidebar;

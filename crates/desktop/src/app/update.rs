@@ -12,8 +12,6 @@ impl App {
             Message::System(m) => self.handle_system_message(m),
             Message::Sidebar(m) => self.handle_sidebar_message(m),
             Message::Magnify(m) => self.handle_magnify_message(m),
-            Message::Fingerprint(m) => self.handle_fingerprint_message(m),
-            Message::ScreenshotConfirm(m) => self.handle_screenshot_confirm_message(m),
             // No-op — the redraw the message triggers is the entire point.
             // Subscription rebuilds and unsubscribes once nothing's animating.
             Message::AnimationTick => Task::none(),
@@ -83,6 +81,16 @@ impl App {
                         .new_folder
                         .update(m, uctx)
                         .dispatch(self, |s, e| s.handle_new_folder_event(e)),
+                    ViewMessage::Fingerprint(m) => self
+                        .views
+                        .fingerprint
+                        .update(m, uctx)
+                        .dispatch(self, |s, e| s.handle_fingerprint_event(e)),
+                    ViewMessage::ScreenshotConfirm(m) => self
+                        .views
+                        .screenshot_confirm
+                        .update(m, uctx)
+                        .dispatch(self, |s, e| s.handle_screenshot_confirm_event(e)),
                 }
             }
         }

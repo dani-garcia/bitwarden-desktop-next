@@ -1,7 +1,7 @@
 use iced::{
     Alignment, Background, Border, Color, Element, Fill, Length, Shadow,
     theme::Base,
-    widget::{Space, button, column, container, row, stack, svg},
+    widget::{Space, button, column, container, row, stack, svg, text},
 };
 
 use crate::{
@@ -118,6 +118,25 @@ pub fn auth_page_shell<'a>(
         .width(Fill)
         .height(Fill)
         .style(|theme: &AppTheme| container::Style::default().background(theme.colors.card_bg))
+        .into()
+}
+
+/// Centered "icon → 28pt title → secondary-text email → card" column shared by
+/// the Unlock and Login-with-Password screens. Login-with-Email diverges (no
+/// email row, plus a trailing "create account" link) so it inlines its own
+/// column rather than calling this helper.
+pub fn icon_title_card<'a>(
+    icon: Element<'a, LoginMessage, AppTheme>,
+    title: impl Into<String>,
+    email: &'a str,
+    card: Element<'a, LoginMessage, AppTheme>,
+    colors: &'a AppColors,
+) -> Element<'a, LoginMessage, AppTheme> {
+    let title_el = text(title.into()).size(28).color(colors.text_primary);
+    let email_el = text(email).size(16).color(colors.text_secondary);
+    column![icon, title_el, email_el, Space::new().height(12), card]
+        .spacing(8)
+        .align_x(Alignment::Center)
         .into()
 }
 

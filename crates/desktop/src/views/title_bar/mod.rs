@@ -10,7 +10,7 @@ use iced::{
 use crate::{
     app::{Outcome, Overlay, UpdateCtx, View},
     services::menu,
-    theme::{AppColors, AppTheme},
+    theme::AppTheme,
 };
 
 use self::window_chrome::{chrome_button, icon as chrome_icon};
@@ -53,7 +53,7 @@ pub enum WindowAction {
     ResizeEdge(iced::window::Direction),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, derive_more::From)]
 pub enum TitleBarEvent {
     /// User invoked a menu entry mapping to a global `MenuAction`.
     MenuInvoked(crate::services::menu::MenuAction),
@@ -123,7 +123,7 @@ impl View for TitleBarView {
                         .get(menu)
                         .and_then(|(_, entries)| entries.get(item))
                         .and_then(|e| e.action)
-                        .map(TitleBarEvent::MenuInvoked),
+                        .map(TitleBarEvent::from),
                 );
             }
             TitleBarMessage::SubMenuItemClicked(menu, parent, sub) => {
@@ -134,7 +134,7 @@ impl View for TitleBarView {
                         .and_then(|(_, entries)| entries.get(parent))
                         .and_then(|e| e.children.get(sub))
                         .and_then(|e| e.action)
-                        .map(TitleBarEvent::MenuInvoked),
+                        .map(TitleBarEvent::from),
                 );
             }
             TitleBarMessage::MinimizeClicked => WindowAction::Minimize,
@@ -146,58 +146,33 @@ impl View for TitleBarView {
         Outcome::event(TitleBarEvent::Window(window_action))
     }
 
-    /// Title bar opts out of the trait render path — its real render is an
-    /// inherent `view` method that takes extra window-state args
-    /// (is_maximized, menu_state, etc.) which don't fit `(&self, &RenderCtx)`.
-    /// `should_render` returns `false` so the trait method is never called;
-    /// App invokes the inherent method directly.
-    fn should_render(&self) -> bool {
-        false
-    }
-
-    fn view<'a>(
-        &'a self,
-        _ctx: &crate::app::RenderCtx<'a>,
-    ) -> Element<'a, TitleBarMessage, AppTheme> {
-        unreachable!("TitleBarView::view called via trait but should_render returns false")
-    }
-}
-
-/// Wrap content with invisible resize handles on all edges.
-pub use self::window_chrome::resize_wrapper;
-
-impl TitleBarView {
-    /// Draw a minimal title bar with no buttons or drag area (used on macOS
-    /// when the native system title bar takes over). Takes no state so it's
-    /// an associated function, not a `&self` method.
-    pub fn view_empty<'a>() -> Element<'a, TitleBarMessage, AppTheme> {
-        container(iced::widget::Space::new())
-            .width(Fill)
-            .height(TITLE_BAR_HEIGHT)
-            .style(|theme: &AppTheme| {
-                container::Style::default().background(theme.colors.header_bg)
-            })
-            .into()
-    }
-
     /// Draw the title bar: menu labels on the left, window buttons on the right.
     /// Each menu label wraps a `DropDown` that shows its panel via iced's overlay
-    /// system. `is_maximized` and `menu_state` come from App (window-level state
-    /// and derived app-state respectively); open-menu and open-submenu are
-    /// extracted from the app-level overlay cell by `App::view_main`.
-    pub fn view<'a>(
-        &self,
-        is_maximized: bool,
-        menu_state: &menu::MenuState,
-        open_menu: Option<usize>,
-        open_submenu: Option<usize>,
-        colors: &AppColors,
+    /// system. All window-state inputs (maximized, derived menu gating, open
+    /// menu/submenu indices) ride through [`crate::app::RenderCtx`].
+    ///
+    /// On platforms that defer to a native system title bar (macOS without
+    /// `DEV_BOTH_MENUS`), this renders a flat header-coloured spacer so the
+    /// app-content column still sits below the OS chrome at the same y.
+    fn view<'a>(
+        &'a self,
+        ctx: &crate::app::RenderCtx<'a>,
     ) -> Element<'a, TitleBarMessage, AppTheme> {
+        if !menu::should_use_custom_menu_bar() {
+            return container(iced::widget::Space::new())
+                .width(Fill)
+                .height(TITLE_BAR_HEIGHT)
+                .style(|theme: &AppTheme| {
+                    container::Style::default().background(theme.colors.header_bg)
+                })
+                .into();
+        }
+
         let menu_items: Vec<Element<'_, TitleBarMessage, AppTheme>> = menu::MENUS
             .iter()
             .enumerate()
             .map(|(i, (label_key, entries))| {
-                let is_open = open_menu == Some(i);
+                let is_open = ctx.open_title_bar_menu == Some(i);
                 let btn = button(
                     text(crate::services::i18n::lookup(label_key))
                         .size(14)
@@ -223,7 +198,13 @@ impl TitleBarView {
                     }
                 });
 
-                let panel = dropdown::menu_panel(entries, i, open_submenu, menu_state, colors);
+                let panel = dropdown::menu_panel(
+                    entries,
+                    i,
+                    ctx.open_title_bar_submenu,
+                    &ctx.menu_state,
+                    ctx.colors,
+                );
                 let dd: Element<'_, TitleBarMessage, AppTheme> =
                     crate::components::drop_down::DropDown::new_no_shadow(btn, panel, is_open)
                         .on_dismiss(TitleBarMessage::DismissMenu)
@@ -232,7 +213,7 @@ impl TitleBarView {
                         .offset(0.0)
                         .into();
 
-                if open_menu.is_some() {
+                if ctx.open_title_bar_menu.is_some() {
                     mouse_area(dd)
                         .on_enter(TitleBarMessage::TopLevelHovered(i))
                         .into()
@@ -247,24 +228,23 @@ impl TitleBarView {
         let minimize_btn = chrome_button(
             chrome_icon::MINIMIZE,
             chrome_icon::FONT,
-            colors.titlebar_btn_hover,
+            ctx.colors.titlebar_btn_hover,
             TitleBarMessage::MinimizeClicked,
         );
-        let max_icon = if is_maximized {
-            chrome_icon::RESTORE
-        } else {
-            chrome_icon::MAXIMIZE
-        };
         let maximize_btn = chrome_button(
-            max_icon,
+            if ctx.is_maximized {
+                chrome_icon::RESTORE
+            } else {
+                chrome_icon::MAXIMIZE
+            },
             chrome_icon::FONT,
-            colors.titlebar_btn_hover,
+            ctx.colors.titlebar_btn_hover,
             TitleBarMessage::MaximizeClicked,
         );
         let close_btn = chrome_button(
             chrome_icon::CLOSE,
             chrome_icon::FONT,
-            colors.titlebar_close_hover,
+            ctx.colors.titlebar_close_hover,
             TitleBarMessage::CloseClicked,
         );
 
@@ -289,3 +269,6 @@ impl TitleBarView {
         mouse_area(bar).on_press(TitleBarMessage::DragStart).into()
     }
 }
+
+/// Wrap content with invisible resize handles on all edges.
+pub use self::window_chrome::resize_wrapper;

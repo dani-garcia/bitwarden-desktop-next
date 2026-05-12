@@ -38,15 +38,14 @@ pub(crate) fn view<'a>(
     state: &'a MagnifyView,
     ctx: &RenderCtx<'a>,
 ) -> Element<'a, MagnifyMessage, AppTheme> {
-    let colors = ctx.colors;
     let body: Element<'a, MagnifyMessage, AppTheme> = match state.mode {
-        Mode::Locked => locked_body(colors),
+        Mode::Locked => locked_body(ctx.colors),
         Mode::Unlocked => unlocked_body(
             state,
             ctx.favicon,
             ctx.show_favicons,
             ctx.active_user,
-            colors,
+            ctx.colors,
         ),
     };
 

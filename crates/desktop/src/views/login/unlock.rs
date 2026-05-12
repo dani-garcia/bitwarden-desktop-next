@@ -1,6 +1,6 @@
 use iced::{
     Alignment, Element, Fill,
-    widget::{self, Space, column, container, svg, text},
+    widget::{self, column, container, svg, text},
 };
 
 use crate::{
@@ -33,14 +33,6 @@ pub fn view<'a>(
         .width(64)
         .height(60);
 
-    let title = text(fl!("login-unlock-title"))
-        .size(28)
-        .color(colors.text_primary);
-
-    let email_label = text(email.unwrap_or(""))
-        .size(16)
-        .color(colors.text_secondary);
-
     let card = layout::auth_card(card_content(
         method,
         alternatives,
@@ -50,10 +42,13 @@ pub fn view<'a>(
         colors,
     ));
 
-    column![lock_icon, title, email_label, Space::new().height(12), card]
-        .spacing(8)
-        .align_x(Alignment::Center)
-        .into()
+    layout::icon_title_card(
+        lock_icon.into(),
+        fl!("login-unlock-title"),
+        email.unwrap_or(""),
+        card,
+        colors,
+    )
 }
 
 fn card_content<'a>(

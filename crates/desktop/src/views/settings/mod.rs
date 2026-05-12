@@ -306,7 +306,7 @@ impl SettingsView {
         .height(Fill);
 
         container(content)
-            .padding(Padding::from([20, 24]))
+            .padding(modal::BODY_PADDING)
             .width(Fill)
             .height(Fill)
             .into()
@@ -354,10 +354,6 @@ fn category_item<'a>(
     .on_press(SettingsMessage::SelectCategory(kind))
     .into()
 }
-
-// ── Small helpers shared by tabs ───────────────────────────────────────────
-
-pub(super) use crate::components::section_heading;
 
 /// Placeholder toast for stubbed settings. Exposed so App can construct the
 /// same toast when it receives a stubbed `Applied` event.

@@ -11,23 +11,19 @@ use crate::{
 };
 
 use super::{
-    super::{SettingChange, SettingsSnapshot, section_heading},
-    setting_checkbox,
+    super::{SettingChange, SettingsSnapshot},
+    SECTION_GAP_PX, setting_checkbox, settings_section,
 };
 
 pub fn view<'a>(
     snap: &'a SettingsSnapshot,
     colors: &'a AppColors,
 ) -> Element<'a, SettingChange, AppTheme> {
-    let autotype_heading = section_heading(fl!("settings-autotype-heading"), colors);
-
     let autotype_enabled = setting_checkbox(
         snap.settings.autotype_enabled,
         fl!("settings-autotype-enable"),
         SettingChange::AutotypeEnabled,
     );
-
-    let clipboard_heading = section_heading(fl!("settings-clipboard-heading"), colors);
 
     let clear_clipboard = inputs::select_field(
         fl!("settings-clipboard-clear-after"),
@@ -45,13 +41,13 @@ pub fn view<'a>(
     );
 
     column![
-        autotype_heading,
-        Space::new().height(8),
-        autotype_enabled,
-        Space::new().height(24),
-        clipboard_heading,
-        Space::new().height(8),
-        column![clear_clipboard, minimize_on_copy].spacing(16),
+        settings_section(fl!("settings-autotype-heading"), autotype_enabled, colors),
+        Space::new().height(SECTION_GAP_PX),
+        settings_section(
+            fl!("settings-clipboard-heading"),
+            column![clear_clipboard, minimize_on_copy].spacing(16),
+            colors,
+        ),
     ]
     .width(Fill)
     .into()
