@@ -364,56 +364,45 @@ pub fn not_supported_toast() -> Toast {
 #[cfg(test)]
 mod tests_snapshot {
     use super::*;
-    use crate::{test_support, test_support::TestRenderCtx};
+    use crate::test_support::{self, ViewTestExt};
 
     #[tokio::test(flavor = "current_thread")]
     async fn settings_modal() {
-        test_support::init();
         let mut view = SettingsView::new();
         view.open_with(SettingsSnapshot::default());
         test_support::settle_animations();
 
-        let mut render = TestRenderCtx::default();
-        for (theme, suffix) in [(AppTheme::light(), "light"), (AppTheme::dark(), "dark")] {
-            render.colors = theme.colors;
-            let element = view.view(&render.as_ctx());
-            test_support::assert_snapshot(
-                format!("tests/snapshots/settings_modal_{suffix}"),
-                &theme,
-                element,
-            );
-        }
+        view.assert_themed_snapshots("settings_modal").await;
     }
 }
 
 #[cfg(test)]
 mod tests_update {
     use super::*;
-    use crate::test_support::{OutcomeExt, run_update as run};
+    use crate::test_support::{OutcomeExt, ViewTestExt};
 
-    #[test]
-    fn select_category_flips_active_tab() {
+    #[tokio::test(flavor = "current_thread")]
+    async fn select_category_flips_active_tab() {
         let mut view = SettingsView::new();
         assert_eq!(view.active, CategoryKind::Security);
 
-        run(
-            &mut view,
-            SettingsMessage::SelectCategory(CategoryKind::Appearance),
-        )
-        .expect_none();
+        view.run(SettingsMessage::SelectCategory(CategoryKind::Appearance))
+            .await
+            .expect_none();
         assert_eq!(view.active, CategoryKind::Appearance);
     }
 
-    #[test]
-    fn setting_changed_mutates_snapshot_and_emits_applied_event() {
+    #[tokio::test(flavor = "current_thread")]
+    async fn setting_changed_mutates_snapshot_and_emits_applied_event() {
         let mut view = SettingsView::new();
         assert_eq!(view.snapshot.settings.theme, ThemePreference::System);
 
-        let SettingsEvent::Applied(change) = run(
-            &mut view,
-            SettingsMessage::SettingChanged(SettingChange::Theme(ThemePreference::Dark)),
-        )
-        .expect_event();
+        let SettingsEvent::Applied(change) = view
+            .run(SettingsMessage::SettingChanged(SettingChange::Theme(
+                ThemePreference::Dark,
+            )))
+            .await
+            .expect_event();
 
         assert_eq!(
             view.snapshot.settings.theme,
@@ -426,13 +415,13 @@ mod tests_update {
         ));
     }
 
-    #[test]
-    fn close_transitions_fade_to_closing() {
+    #[tokio::test(flavor = "current_thread")]
+    async fn close_transitions_fade_to_closing() {
         let mut view = SettingsView::new();
         view.open_with(SettingsSnapshot::default());
         assert!(view.is_open());
 
-        run(&mut view, SettingsMessage::Close).expect_none();
+        view.run(SettingsMessage::Close).await.expect_none();
         assert!(!view.is_open(), "logical open flag flips immediately");
     }
 }

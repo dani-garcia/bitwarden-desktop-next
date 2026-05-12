@@ -26,6 +26,10 @@ impl App {
                 Task::none()
             }
             Message::View(view_msg) => {
+                // Inlined so the borrow splits cleanly: each arm reborrows
+                // `&mut self.views.<view>` alongside the slices that go into
+                // `uctx`. A helper that returns `UpdateCtx<'_>` would
+                // require `&mut self`, conflicting with the view borrow.
                 let active_vault_filter = self.sidebar.active_vault_filter;
                 let active_send_filter = self.sidebar.active_send_filter;
                 let uctx = UpdateCtx {

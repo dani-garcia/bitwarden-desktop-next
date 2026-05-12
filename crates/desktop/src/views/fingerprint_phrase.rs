@@ -55,11 +55,6 @@ impl FingerprintModal {
         self.phrase = phrase;
         self.fade.open();
     }
-
-    #[cfg(test)]
-    fn phrase_for_test(&self) -> &str {
-        &self.phrase
-    }
 }
 
 impl View for FingerprintModal {
@@ -145,33 +140,22 @@ pub fn open_learn_more() {
 #[cfg(test)]
 mod tests_snapshot {
     use super::*;
-    use crate::{test_support, test_support::TestRenderCtx, theme::AppTheme};
+    use crate::test_support::{self, ViewTestExt};
 
     #[tokio::test(flavor = "current_thread")]
     async fn fingerprint_modal() {
-        test_support::init();
-
         let mut view = FingerprintModal::default();
         view.open_with("apple banana carrot dolphin eagle".to_owned());
         test_support::settle_animations();
 
-        let mut render = TestRenderCtx::default();
-        for (theme, suffix) in [(AppTheme::light(), "light"), (AppTheme::dark(), "dark")] {
-            render.colors = theme.colors;
-            let element = view.view(&render.as_ctx());
-            test_support::assert_snapshot(
-                format!("tests/snapshots/fingerprint_modal_{suffix}"),
-                &theme,
-                element,
-            );
-        }
+        view.assert_themed_snapshots("fingerprint_modal").await;
     }
 }
 
 #[cfg(test)]
 mod tests_interaction {
     use super::*;
-    use crate::{fl, test_support, test_support::TestRenderCtx, theme::AppTheme};
+    use crate::{app::App, fl, test_support};
 
     #[tokio::test(flavor = "current_thread")]
     async fn close_button_emits_close() {
@@ -180,22 +164,16 @@ mod tests_interaction {
         view.open_with("apple banana carrot dolphin eagle".to_owned());
         test_support::settle_animations();
 
-        let render = TestRenderCtx {
-            colors: AppTheme::light().colors,
-            ..TestRenderCtx::default()
-        };
-        let element = view.view(&render.as_ctx());
-        let close_label = fl!("menu-fingerprint-close");
+        let app = App::test();
+        let element = view.view(&app.render_ctx_main());
         let messages = test_support::drive_element(element, |ui| {
-            ui.click(close_label.as_str()).expect("Close button");
+            ui.click(fl!("menu-fingerprint-close").as_str())
+                .expect("Close button");
         });
 
-        assert!(
-            messages
-                .iter()
-                .any(|m| matches!(m, FingerprintMessage::Close)),
-            "expected at least one Close message in {messages:?}",
-        );
+        test_support::assert_emitted(&messages, "Close", |m| {
+            matches!(m, FingerprintMessage::Close)
+        });
     }
 
     #[tokio::test(flavor = "current_thread")]
@@ -205,64 +183,61 @@ mod tests_interaction {
         view.open_with("apple banana carrot dolphin eagle".to_owned());
         test_support::settle_animations();
 
-        let render = TestRenderCtx {
-            colors: AppTheme::light().colors,
-            ..TestRenderCtx::default()
-        };
-        let element = view.view(&render.as_ctx());
-        let learn_more = fl!("menu-fingerprint-learn-more");
+        let app = App::test();
+        let element = view.view(&app.render_ctx_main());
         let messages = test_support::drive_element(element, |ui| {
-            ui.click(learn_more.as_str()).expect("Learn more button");
+            ui.click(fl!("menu-fingerprint-learn-more").as_str())
+                .expect("Learn more button");
         });
 
-        assert!(
-            messages
-                .iter()
-                .any(|m| matches!(m, FingerprintMessage::OpenLearnMore)),
-            "expected at least one OpenLearnMore message in {messages:?}",
-        );
+        test_support::assert_emitted(&messages, "OpenLearnMore", |m| {
+            matches!(m, FingerprintMessage::OpenLearnMore)
+        });
     }
 }
 
 #[cfg(test)]
 mod tests_update {
     use super::*;
-    use crate::test_support::{OutcomeExt, run_update as run};
+    use crate::test_support::{OutcomeExt, ViewTestExt};
 
-    #[test]
-    fn close_closes_fade() {
+    #[tokio::test(flavor = "current_thread")]
+    async fn close_closes_fade() {
         let mut view = FingerprintModal::default();
         view.open_with("apple".into());
-        run(&mut view, FingerprintMessage::Close).expect_none();
+        view.run(FingerprintMessage::Close).await.expect_none();
         assert!(!view.fade.is_open());
     }
 
-    #[test]
-    fn open_learn_more_closes_fade_and_emits_event() {
+    #[tokio::test(flavor = "current_thread")]
+    async fn open_learn_more_closes_fade_and_emits_event() {
         let mut view = FingerprintModal::default();
         view.open_with("apple".into());
-        let ev = run(&mut view, FingerprintMessage::OpenLearnMore).expect_event();
+        let ev = view
+            .run(FingerprintMessage::OpenLearnMore)
+            .await
+            .expect_event();
         assert!(matches!(ev, FingerprintEvent::OpenLearnMore));
         assert!(!view.fade.is_open());
     }
 
-    #[test]
-    fn copy_emits_event_with_phrase() {
+    #[tokio::test(flavor = "current_thread")]
+    async fn copy_emits_event_with_phrase() {
         let mut view = FingerprintModal::default();
         view.open_with("apple banana".into());
-        let ev = run(&mut view, FingerprintMessage::Copy).expect_event();
+        let ev = view.run(FingerprintMessage::Copy).await.expect_event();
         match ev {
             FingerprintEvent::Copy(p) => assert_eq!(p, "apple banana"),
             _ => panic!("expected Copy"),
         }
         // Modal stays open after Copy — copy_and_toast still drops onto the
         // clipboard, but the dialog isn't dismissed.
-        assert_eq!(view.phrase_for_test(), "apple banana");
+        assert_eq!(view.phrase, "apple banana");
     }
 
-    #[test]
-    fn copy_with_empty_phrase_returns_none() {
+    #[tokio::test(flavor = "current_thread")]
+    async fn copy_with_empty_phrase_returns_none() {
         let mut view = FingerprintModal::default();
-        run(&mut view, FingerprintMessage::Copy).expect_none();
+        view.run(FingerprintMessage::Copy).await.expect_none();
     }
 }

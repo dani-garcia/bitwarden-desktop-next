@@ -196,3 +196,93 @@ impl VaultView {
         self.selection.detail.as_ref()?.ssh_key.as_ref()
     }
 }
+
+#[cfg(test)]
+mod tests_sheet_close {
+    use super::*;
+    use crate::test_support::{OutcomeExt, ViewTestExt};
+    use bitwarden_vault::{CipherRepromptType, CipherType, CipherView};
+    use chrono::Utc;
+
+    fn dummy_cipher_view() -> CipherView {
+        let now = Utc::now();
+        CipherView {
+            id: None,
+            organization_id: None,
+            folder_id: None,
+            collection_ids: Vec::new(),
+            key: None,
+            name: "test".to_string(),
+            notes: None,
+            r#type: CipherType::SecureNote,
+            login: None,
+            identity: None,
+            card: None,
+            secure_note: None,
+            ssh_key: None,
+            bank_account: None,
+            favorite: false,
+            reprompt: CipherRepromptType::None,
+            organization_use_totp: false,
+            edit: true,
+            permissions: None,
+            view_password: true,
+            local_data: None,
+            attachments: None,
+            attachment_decryption_failures: None,
+            fields: None,
+            password_history: None,
+            creation_date: now,
+            deleted_date: None,
+            revision_date: now,
+            archived_date: None,
+        }
+    }
+
+    fn view_with_open_sheet() -> VaultView {
+        let mut view = VaultView::new();
+        view.selection.detail = Some(dummy_cipher_view());
+        view.selection.item = Some(0);
+        view.selection.sheet_fade.open();
+        view
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn close_cipher_detail_starts_sheet_outro_but_keeps_selection() {
+        // The two-message close exists so the bottom-sheet animation has
+        // content to render during its slide-down. Asserting that
+        // `selection` survives `CloseCipherDetail` pins this contract —
+        // a refactor that cleared selection here would leave the
+        // animation playing against an empty sheet.
+        let mut view = view_with_open_sheet();
+        assert!(view.selection.detail.is_some());
+        assert!(view.selection.sheet_fade.is_open());
+
+        let _outcome = view.run(VaultMessage::CloseCipherDetail).await;
+
+        // sheet_fade.is_open() flips false the moment close starts.
+        assert!(!view.selection.sheet_fade.is_open());
+        // Selection is still populated — outro hasn't finalized yet.
+        assert!(
+            view.selection.detail.is_some(),
+            "detail kept alive for the outro frame"
+        );
+        assert_eq!(view.selection.item, Some(0));
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn finalize_sheet_close_clears_selection() {
+        // The second half of the two-message close: this is what the
+        // delayed Task dispatches once the outro duration elapses.
+        let mut view = view_with_open_sheet();
+        view.run(VaultMessage::CloseCipherDetail).await;
+        // After the outro:
+        view.run(VaultMessage::FinalizeSheetClose)
+            .await
+            .expect_none();
+
+        assert!(view.selection.detail.is_none());
+        assert!(view.selection.item.is_none());
+        assert!(view.selection.id.is_none());
+    }
+}

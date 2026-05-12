@@ -2,44 +2,54 @@
 //! tests (Layer B), Simulator interaction tests (Layer C). Layer A (pure
 //! helpers) needs nothing from here.
 //!
-//! ## Snapshot tests
+//! ## Setting up state
+//!
+//! Tests build an [`App`][crate::app::App] via [`App::test`] (private,
+//! `#[cfg(test)]`-gated) and mutate its fields directly to set up scenario
+//! state. Both [`App::render_ctx`] and [`App::update_ctx`] are then called to
+//! obtain a `RenderCtx` / `UpdateCtx` for the view being tested.
 //!
 //! ```ignore
-//! #[test]
-//! fn fingerprint_modal() {
-//!     test_support::init();
+//! let mut app = App::test();
+//! app.active_user = Some(uid);
+//! app.sidebar.active_vault_filter = VaultFilter::Trash;
+//! let out = view.update(msg, app.update_ctx());
+//! ```
+//!
+//! ## Snapshot tests
+//!
+//! Use [`assert_themed_snapshots`] for the standard light + dark pair:
+//!
+//! ```ignore
+//! #[tokio::test(flavor = "current_thread")]
+//! async fn fingerprint_modal() {
 //!     let mut state = FingerprintModal::default();
 //!     state.open_with("apple banana carrot dolphin eagle".to_owned());
 //!     test_support::settle_animations();
-//!
-//!     for (theme, suffix) in [
-//!         (AppTheme::light(), "light"),
-//!         (AppTheme::dark(), "dark"),
-//!     ] {
-//!         let element = modal_view(&state, &theme.colors).expect("modal renders");
-//!         test_support::assert_snapshot(
-//!             format!("tests/snapshots/fingerprint_modal_{suffix}"),
-//!             &theme,
-//!             element,
-//!         );
-//!     }
+//!     test_support::assert_themed_snapshots(
+//!         "fingerprint_modal",
+//!         |rctx| state.view(rctx),
+//!     );
 //! }
 //! ```
 //!
-//! Baselines land at `tests/snapshots/{name}-tiny-skia.png` — `iced_test`
-//! appends `-{renderer_name}` before the extension. First run writes the
-//! baseline, subsequent runs do an exact-byte compare. Delete the PNG to
-//! re-baseline a view.
+//! Baselines land at `tests/snapshots/{name}-{theme}-tiny-skia.png` —
+//! `iced_test` appends `-{renderer_name}` before the extension. First run
+//! writes the baseline, subsequent runs do an exact-byte compare. Delete the
+//! PNG to re-baseline a view.
 //!
 //! ## View-update unit tests
 //!
+//! All update tests need a tokio runtime because [`App::test`] spawns
+//! [`crate::services::session_timeout::SessionTimeout`] and captures a
+//! runtime handle in [`crate::services::favicon::FaviconService`]. Use
+//! `#[tokio::test(flavor = "current_thread")]`:
+//!
 //! ```ignore
-//! #[test]
-//! fn submit_with_empty_name_is_ignored() {
+//! #[tokio::test(flavor = "current_thread")]
+//! async fn submit_with_empty_name_is_ignored() {
 //!     let mut view = NewFolderView::new();
-//!     let mut owned = test_support::TestUpdateCtx::default();
-//!     let out = view.update(NewFolderMessage::Submit, owned.as_ctx());
-//!     assert!(matches!(out, Outcome::None));
+//!     test_support::run_update(&mut view, NewFolderMessage::Submit).expect_none();
 //! }
 //! ```
 //!
@@ -50,48 +60,34 @@
 //! apply them to your state by hand.
 //!
 //! ```ignore
-//! #[test]
-//! fn close_button_emits_close() {
-//!     test_support::init();
+//! #[tokio::test(flavor = "current_thread")]
+//! async fn close_button_emits_close() {
 //!     let mut state = FingerprintModal::default();
 //!     state.open_with("phrase".into());
 //!     test_support::settle_animations();
-//!     let colors = AppTheme::light().colors;
-//!     let element = modal_view(&state, &colors).unwrap();
-//!     let mut ui = test_support::simulator(element);
-//!     ui.click_text("Close").unwrap();
-//!     let messages: Vec<_> = ui.into_messages().collect();
-//!     assert!(messages
-//!         .iter()
-//!         .any(|m| matches!(m, FingerprintMessage::Close)));
+//!     let mut app = App::test();
+//!     let element = state.view(&app.render_ctx_main());
+//!     let messages = test_support::drive_element(element, |ui| {
+//!         ui.click("Close").unwrap();
+//!     });
+//!     test_support::assert_emitted(&messages, "Close",
+//!         |m| matches!(m, FingerprintMessage::Close));
 //! }
 //! ```
-//!
-//! Tests that need a `RenderCtx` (i.e. call a view's full `modal_view(&self,
-//! &RenderCtx)`) build one via [`TestRenderCtx::default`] + [`TestRenderCtx::as_ctx`].
-//! Constructing the default needs a tokio runtime — mark such tests
-//! `#[tokio::test(flavor = "current_thread")]`. The favicon field is held
-//! but unused for views that don't render row icons.
 
 pub mod fixtures;
 
-use std::{path::Path, sync::Arc, sync::OnceLock, thread, time::Duration};
+use std::{path::Path, sync::OnceLock, thread, time::Duration};
 
 use iced::{Element, Settings};
 use iced_test::simulator::Simulator;
 
 use crate::{
     APP_FONT,
-    app::{Outcome, Overlay, RenderCtx, UpdateCtx, View},
+    app::{App, Outcome, RenderCtx, View},
     assets,
     components::{icons, toast::Toast},
-    domain::UserId,
-    services::{
-        favicon::FaviconService,
-        sdk::{AccountEntry, ClientManager},
-    },
-    theme::{AppColors, AppTheme},
-    views::{send::SendFilter, vault::VaultFilter},
+    theme::AppTheme,
 };
 
 /// Force the headless renderer backend to `tiny-skia` so snapshot bytes are
@@ -154,135 +150,84 @@ pub fn assert_snapshot<'a, M>(
     );
 }
 
-/// Owns the storage a [`UpdateCtx`]'s `&mut` slots borrow from, so tests can
-/// use `Default` and customize fields by struct-update syntax.
+/// Accept either a single message or an array of messages for
+/// [`ViewTestExt::run`]. `T` and `[T; N]` both implement it; if a test
+/// needs a `Vec<T>`, add an impl or collect into an array first.
 ///
-/// `UpdateCtx<'a>` itself can't implement `Default` — it holds `&mut`
-/// references with a borrow lifetime, and `Default::default()` would have to
-/// conjure storage from nowhere (forcing leaks or `'static` shared state).
-/// This wrapper holds the storage by value and yields a fresh borrow via
-/// [`Self::as_ctx`].
+/// Coherence holds because `M ≢ [M; N]` for any actual Rust type — there
+/// is no recursive type that equals an array of itself.
+pub trait IntoMessages<M> {
+    fn into_messages(self) -> Vec<M>;
+}
+
+impl<M> IntoMessages<M> for M {
+    fn into_messages(self) -> Vec<M> {
+        vec![self]
+    }
+}
+
+impl<M, const N: usize> IntoMessages<M> for [M; N] {
+    fn into_messages(self) -> Vec<M> {
+        self.into_iter().collect()
+    }
+}
+
+/// Test-only extension on [`View`]. `view.run(...)` drives one or more
+/// messages through `update()` with a fresh [`App::test`] context per
+/// call. Returns the [`Outcome`] of the last message — chain
+/// `.expect_*()` for single-message assertions; drop the result for
+/// multi-message setup. The body is sync; `async` purely as a
+/// compile-time signal that the test belongs in a
+/// `#[tokio::test(flavor = "current_thread")]`. See the module
+/// docstring for the full failure-mode rationale.
 ///
 /// ```ignore
-/// let mut owned = TestUpdateCtx::default();
-/// let out = view.update(msg, owned.as_ctx());
+/// view.run(NewFolderMessage::NameChanged("Social".into()))
+///     .await
+///     .expect_none();
 ///
-/// // Override a field via struct-update:
-/// let mut owned = TestUpdateCtx {
-///     active_vault_filter: VaultFilter::Trash,
-///     ..Default::default()
-/// };
+/// view.run([
+///     NewFolderMessage::NameChanged("Social".into()),
+///     NewFolderMessage::Submit,
+/// ]).await;
 /// ```
-pub struct TestUpdateCtx {
-    pub client_manager: ClientManager,
-    pub open_overlay: Option<Overlay>,
-    pub active_user: Option<UserId>,
-    pub active_vault_filter: VaultFilter,
-    pub active_send_filter: SendFilter,
+pub trait ViewTestExt: View {
+    fn run(
+        &mut self,
+        msgs: impl IntoMessages<Self::Message>,
+    ) -> impl std::future::Future<Output = Outcome<Self>>;
+
+    /// Snapshot-test the view across the standard light + dark themes in
+    /// one call. Calls [`init`], builds a fresh [`App::test`] per
+    /// iteration with the iteration's theme installed, renders via the
+    /// trait `view()` method, and writes baselines under
+    /// `tests/snapshots/{name}_{light|dark}-tiny-skia.png`. `async` for
+    /// the same compile-time-signal reason as [`Self::run`].
+    ///
+    /// Tests with non-default App state (active user, pre-loaded
+    /// fixtures, etc.) or non-trait render entry points should inline the
+    /// theme loop; this method covers the standard "render the View
+    /// directly" case.
+    fn assert_themed_snapshots(&self, name: &str) -> impl std::future::Future<Output = ()>;
 }
 
-impl Default for TestUpdateCtx {
-    fn default() -> Self {
-        Self {
-            client_manager: ClientManager::empty(),
-            open_overlay: None,
-            active_user: None,
-            active_vault_filter: VaultFilter::AllItems,
-            active_send_filter: SendFilter::AllItems,
+impl<V: View> ViewTestExt for V {
+    async fn run(&mut self, msgs: impl IntoMessages<V::Message>) -> Outcome<V> {
+        let mut app = App::test();
+        let mut last: Outcome<V> = Outcome::None;
+        for msg in msgs.into_messages() {
+            last = self.update(msg, app.update_ctx());
         }
+        last
     }
-}
 
-impl TestUpdateCtx {
-    /// Build a fresh [`UpdateCtx`] borrowing from this owned storage. Call
-    /// once per `view.update(...)` invocation — the borrow can't outlive
-    /// the surrounding statement.
-    pub fn as_ctx(&mut self) -> UpdateCtx<'_> {
-        UpdateCtx {
-            client_manager: &mut self.client_manager,
-            active_user: self.active_user.as_ref(),
-            active_vault_filter: self.active_vault_filter,
-            active_send_filter: self.active_send_filter,
-            open_overlay: &mut self.open_overlay,
-        }
-    }
-}
-
-/// Drive one update on any [`View`] with a default-ctor [`TestUpdateCtx`].
-/// Convenience for the per-test `fn run(view, msg)` helper — replaces:
-///
-/// ```ignore
-/// let mut owned = TestUpdateCtx::default();
-/// view.update(msg, owned.as_ctx())
-/// ```
-///
-/// Tests that need to customize the ctx (active user, filters, pre-loaded
-/// client manager) should construct [`TestUpdateCtx`] directly.
-pub fn run_update<V: View>(view: &mut V, msg: V::Message) -> Outcome<V> {
-    let mut owned = TestUpdateCtx::default();
-    view.update(msg, owned.as_ctx())
-}
-
-/// Owns the storage a [`RenderCtx`]'s `&` slots borrow from. Same shape as
-/// [`TestUpdateCtx`]: `Default::default()` then `.as_ctx()`.
-///
-/// Constructing the default panics outside a tokio runtime because
-/// [`FaviconService::new`] captures the runtime handle — mark tests
-/// `#[tokio::test(flavor = "current_thread")]`. The favicon service is held
-/// but unused unless a view actively calls `.get()`, so this is fine for
-/// most views.
-pub struct TestRenderCtx {
-    pub colors: AppColors,
-    pub favicon: FaviconService,
-    pub show_favicons: bool,
-    pub window_width: f32,
-    pub active_user: Option<UserId>,
-    pub active_email: Option<String>,
-    pub active_server_url: String,
-    pub accounts: Vec<AccountEntry>,
-    pub open_overlay: Option<Overlay>,
-    pub is_maximized: bool,
-    pub menu_state: crate::services::menu::MenuState,
-    pub open_title_bar_menu: Option<usize>,
-    pub open_title_bar_submenu: Option<usize>,
-}
-
-impl Default for TestRenderCtx {
-    fn default() -> Self {
-        Self {
-            colors: AppTheme::light().colors,
-            favicon: FaviconService::new(Arc::new(|_| String::new())),
-            show_favicons: false,
-            window_width: 800.0,
-            active_user: None,
-            active_email: None,
-            active_server_url: String::new(),
-            accounts: Vec::new(),
-            open_overlay: None,
-            is_maximized: false,
-            menu_state: crate::services::menu::MenuState::default(),
-            open_title_bar_menu: None,
-            open_title_bar_submenu: None,
-        }
-    }
-}
-
-impl TestRenderCtx {
-    pub fn as_ctx(&self) -> RenderCtx<'_> {
-        RenderCtx {
-            colors: &self.colors,
-            favicon: &self.favicon,
-            show_favicons: self.show_favicons,
-            window_width: self.window_width,
-            active_user: self.active_user.as_ref(),
-            active_email: self.active_email.as_deref(),
-            active_server_url: &self.active_server_url,
-            accounts: &self.accounts,
-            open_overlay: self.open_overlay,
-            is_maximized: self.is_maximized,
-            menu_state: self.menu_state.clone(),
-            open_title_bar_menu: self.open_title_bar_menu,
-            open_title_bar_submenu: self.open_title_bar_submenu,
+    async fn assert_themed_snapshots(&self, name: &str) {
+        init();
+        for (theme, suffix) in [(AppTheme::light(), "light"), (AppTheme::dark(), "dark")] {
+            let mut app = App::test();
+            app.theme.current = theme.clone();
+            let element = self.view(&app.render_ctx_main());
+            assert_snapshot(format!("tests/snapshots/{name}_{suffix}"), &theme, element);
         }
     }
 }
@@ -294,7 +239,7 @@ impl TestRenderCtx {
 /// `panic!` arm. These helpers compress that to a single method call:
 ///
 /// ```ignore
-/// let ev = view.update(msg, owned.as_ctx()).expect_event();
+/// let ev = run_update(&mut view, msg).expect_event();
 /// assert!(matches!(ev, NewFolderEvent::Run(s) if s == "Social"));
 /// ```
 pub trait OutcomeExt<V: View> {
@@ -343,7 +288,7 @@ fn outcome_kind<V: View>(out: &Outcome<V>) -> &'static str {
 /// + element-borrows-context lifetimes naturally.
 ///
 /// ```ignore
-/// let element = view.modal_view(&render.as_ctx()).expect("modal renders");
+/// let element = view.view(&app.render_ctx_main());
 /// let messages = drive_element(element, |ui| {
 ///     ui.click("Save").expect("Save button");
 /// });
@@ -358,4 +303,112 @@ where
     let mut ui = simulator(element);
     interact(&mut ui);
     ui.into_messages().collect()
+}
+
+/// Assert that at least one message in `messages` satisfies `matcher`,
+/// with a debug-formatted error including the description and all messages
+/// when not. Replaces the pattern:
+///
+/// ```ignore
+/// assert!(
+///     messages.iter().any(|m| matches!(m, FingerprintMessage::Close)),
+///     "expected Close in {messages:?}",
+/// );
+/// ```
+pub fn assert_emitted<M: std::fmt::Debug>(
+    messages: &[M],
+    description: &str,
+    matcher: impl Fn(&M) -> bool,
+) {
+    assert!(
+        messages.iter().any(matcher),
+        "expected {description} in {messages:?}",
+    );
+}
+
+/// Test-only constructors and accessors on [`App`]. Defined here (rather
+/// than in `app/lifecycle.rs` / `app/view.rs`) so test-only methods stay
+/// colocated with the rest of the test scaffolding.
+impl App {
+    /// Build a minimal `App` suitable for unit tests. Skips window creation,
+    /// OS-service registration (menu / tray / hotkey), autostart wiring, and
+    /// the SDK load — everything that needs a windowing system or filesystem.
+    /// Tests construct one, optionally mutate fields, then call
+    /// [`App::render_ctx`] / [`App::update_ctx`] to obtain contexts.
+    pub(crate) fn test() -> Self {
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        use crate::app::Views;
+        use crate::app::window::{WindowInfo, WindowKind};
+        use crate::components::sidebar::SidebarState;
+        use crate::services::sdk::ClientManager;
+        use crate::services::settings::Settings;
+        use crate::theme::ThemePreference;
+
+        let main_window = iced::window::Id::unique();
+        let magnify_id = iced::window::Id::unique();
+        let mut windows = HashMap::new();
+        windows.insert(
+            main_window,
+            WindowInfo::new(WindowKind::Main, crate::app::MAIN_WINDOW_SIZE),
+        );
+
+        let animation = crate::services::animation::AnimationWatermark::new();
+        crate::services::animation::register(&animation);
+
+        Self {
+            active_user: None,
+            client_manager: ClientManager::empty(),
+            settings: Settings::default(),
+
+            screen: crate::domain::Screen::Loading,
+            sidebar: SidebarState::default(),
+
+            views: Views::new(),
+
+            windows,
+            main_window,
+            main_window_focused: true,
+            magnify: crate::views::magnify::MagnifyView::new(magnify_id),
+
+            theme: crate::app::ThemeState::new(ThemePreference::Light),
+            native_menu: None,
+            tray: None,
+
+            clipboard: crate::services::clipboard::ClipboardManager::new(),
+            favicon: crate::services::favicon::FaviconService::new(Arc::new(|_uid| String::new())),
+            animation,
+            session_timeout: crate::services::session_timeout::SessionTimeout::new(),
+
+            open_overlay: None,
+            toasts: Vec::new(),
+
+            cache: crate::app::ViewCache::default(),
+        }
+    }
+
+    /// Build an `UpdateCtx` from the current App state. Test-only —
+    /// production [`App::update`] inlines the equivalent construction
+    /// because returning `UpdateCtx<'_>` from a `&mut self` method would
+    /// block the simultaneous `&mut self.views.<view>` borrow the dispatch
+    /// arms need.
+    pub(crate) fn update_ctx(&mut self) -> crate::app::UpdateCtx<'_> {
+        let active_vault_filter = self.sidebar.active_vault_filter;
+        let active_send_filter = self.sidebar.active_send_filter;
+        crate::app::UpdateCtx {
+            client_manager: &mut self.client_manager,
+            active_user: self.active_user.as_ref(),
+            active_vault_filter,
+            active_send_filter,
+            open_overlay: &mut self.open_overlay,
+        }
+    }
+
+    /// Build a `RenderCtx` keyed to the main window — the standard render
+    /// target for unit tests. Production renders go through per-window
+    /// dispatch in [`App::view`] / [`App::render_ctx`].
+    pub(crate) fn render_ctx_main(&self) -> RenderCtx<'_> {
+        self.render_ctx(self.main_window)
+    }
 }

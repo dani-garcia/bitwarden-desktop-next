@@ -204,7 +204,7 @@ pub trait View {
 }
 
 /// App-level composition helpers on top of [`View`]. Lets the renderer
-/// write `view.push_into(...)` directly instead of threading every view
+/// write `view.push_render(...)` directly instead of threading every view
 /// through a free function. Blanket-implemented for every `View`.
 ///
 /// The target message type `M` is inferred from the sink, and the
@@ -215,7 +215,7 @@ pub trait ViewExt: View {
     /// Push `view()` (gated by [`View::should_render`]) and `overlays()`,
     /// mapping each element to `M` via [`From`]. Use this for modal views
     /// where `view()` *is* an overlay (Settings, NewFolder, etc.).
-    fn push_into<'a, M>(
+    fn push_render<'a, M>(
         &'a self,
         ctx: &RenderCtx<'a>,
         out: &mut Vec<iced::Element<'a, M, crate::theme::AppTheme>>,
@@ -233,7 +233,7 @@ pub trait ViewExt: View {
     /// Push only `overlays()`. Use this for full-screen views whose
     /// `view()` is rendered separately as page content (vault, send,
     /// login) — only their sub-modals belong in the overlay stack.
-    fn push_overlays_into<'a, M>(
+    fn push_overlays<'a, M>(
         &'a self,
         ctx: &RenderCtx<'a>,
         out: &mut Vec<iced::Element<'a, M, crate::theme::AppTheme>>,
@@ -344,4 +344,204 @@ where
 /// decoupled from concrete app state.
 pub trait PushToast {
     fn push_toast(&mut self, toast: Toast);
+}
+
+#[cfg(test)]
+mod tests {
+    //! Direct tests for the trait plumbing in this module. Each fake exists
+    //! purely to make `From<V::Message>` lift, [`Outcome::dispatch`] event /
+    //! toast routing, and the [`ViewExt`] push-sink contracts observable
+    //! without going through a real view.
+
+    use iced::{Element, Task, widget::Space};
+
+    use super::*;
+    use crate::{components::toast::Toast, theme::AppTheme};
+
+    // ── Fakes ────────────────────────────────────────────────────────────────
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    enum FakeMsg {
+        Tagged(u32),
+    }
+
+    struct FakeEvent;
+
+    struct FakeView {
+        renderable: bool,
+        overlay_count: usize,
+    }
+
+    impl View for FakeView {
+        type Message = FakeMsg;
+        type Event = FakeEvent;
+
+        fn update(&mut self, _msg: Self::Message, _ctx: UpdateCtx<'_>) -> Outcome<Self> {
+            Outcome::None
+        }
+
+        fn should_render(&self) -> bool {
+            self.renderable
+        }
+
+        fn view<'a>(&'a self, _ctx: &RenderCtx<'a>) -> Element<'a, FakeMsg, AppTheme> {
+            Space::new().into()
+        }
+
+        fn overlays<'a>(&'a self, _ctx: &RenderCtx<'a>) -> Vec<Element<'a, FakeMsg, AppTheme>> {
+            (0..self.overlay_count)
+                .map(|_| Space::new().into())
+                .collect()
+        }
+    }
+
+    /// Lift target. `dispatch`'s `From<V::Message>` bound has to map
+    /// `FakeMsg` through this on its way out — a broken `From` impl would
+    /// fail at the type level.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    enum TopMsg {
+        View(FakeMsg),
+    }
+
+    impl From<FakeMsg> for TopMsg {
+        fn from(m: FakeMsg) -> Self {
+            Self::View(m)
+        }
+    }
+
+    struct FakeState {
+        toasts: Vec<Toast>,
+        events_seen: u32,
+    }
+
+    impl PushToast for FakeState {
+        fn push_toast(&mut self, toast: Toast) {
+            self.toasts.push(toast);
+        }
+    }
+
+    // ── ViewExt::push_render / push_overlays ────────────────────────────────
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn push_render_emits_view_plus_overlays_when_visible() {
+        let app = crate::app::App::test();
+        let rctx = app.render_ctx_main();
+        let view = FakeView {
+            renderable: true,
+            overlay_count: 3,
+        };
+
+        let mut out: Vec<Element<'_, TopMsg, AppTheme>> = Vec::new();
+        view.push_render(&rctx, &mut out);
+
+        assert_eq!(out.len(), 4, "1 view + 3 overlays");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn push_render_skips_view_when_should_render_is_false() {
+        let app = crate::app::App::test();
+        let rctx = app.render_ctx_main();
+        let view = FakeView {
+            renderable: false,
+            overlay_count: 3,
+        };
+
+        let mut out: Vec<Element<'_, TopMsg, AppTheme>> = Vec::new();
+        view.push_render(&rctx, &mut out);
+
+        assert_eq!(out.len(), 3, "overlays only — view gated off");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn push_overlays_never_emits_view() {
+        let app = crate::app::App::test();
+        let rctx = app.render_ctx_main();
+        let view = FakeView {
+            renderable: true,
+            overlay_count: 2,
+        };
+
+        let mut out: Vec<Element<'_, TopMsg, AppTheme>> = Vec::new();
+        view.push_overlays(&rctx, &mut out);
+
+        assert_eq!(
+            out.len(),
+            2,
+            "view is rendered as page content, not pushed here",
+        );
+    }
+
+    // ── Outcome::dispatch ───────────────────────────────────────────────────
+
+    #[test]
+    fn dispatch_none_touches_neither_handler_nor_toasts() {
+        let mut state = FakeState {
+            toasts: Vec::new(),
+            events_seen: 0,
+        };
+        let out: Outcome<FakeView> = Outcome::None;
+
+        let _task: Task<TopMsg> = out.dispatch(&mut state, |s, _e| {
+            s.events_seen += 1;
+            Task::none()
+        });
+
+        assert_eq!(state.events_seen, 0);
+        assert!(state.toasts.is_empty());
+    }
+
+    #[test]
+    fn dispatch_event_runs_the_handler() {
+        let mut state = FakeState {
+            toasts: Vec::new(),
+            events_seen: 0,
+        };
+        let out: Outcome<FakeView> = Outcome::event(FakeEvent);
+
+        let _task: Task<TopMsg> = out.dispatch(&mut state, |s, _e: FakeEvent| {
+            s.events_seen += 1;
+            Task::none()
+        });
+
+        assert_eq!(state.events_seen, 1);
+        assert!(state.toasts.is_empty());
+    }
+
+    #[test]
+    fn dispatch_toast_routes_through_push_toast() {
+        let mut state = FakeState {
+            toasts: Vec::new(),
+            events_seen: 0,
+        };
+        let out: Outcome<FakeView> = Outcome::toast(Toast::success("body".to_string(), None));
+
+        let _task: Task<TopMsg> = out.dispatch(&mut state, |s, _e| {
+            s.events_seen += 1;
+            Task::none()
+        });
+
+        assert_eq!(state.toasts.len(), 1);
+        assert_eq!(
+            state.events_seen, 0,
+            "toast routing must not invoke the event handler",
+        );
+    }
+
+    /// Compile-time check: `Outcome::Task<V::Message>` lifts to
+    /// `Task<TopMsg>` through the `From<V::Message>` bound on `dispatch`.
+    /// `iced::Task` exposes no introspection, so this verifies the lift at
+    /// the type level — a broken `From` impl would fail to build.
+    #[test]
+    fn dispatch_task_lifts_via_from_impl() {
+        let mut state = FakeState {
+            toasts: Vec::new(),
+            events_seen: 0,
+        };
+        let out: Outcome<FakeView> = Outcome::task(Task::done(FakeMsg::Tagged(7)));
+
+        let _task: Task<TopMsg> = out.dispatch(&mut state, |_s, _e| Task::none());
+
+        assert!(state.toasts.is_empty());
+        assert_eq!(state.events_seen, 0);
+    }
 }

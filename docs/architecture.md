@@ -474,7 +474,7 @@ pub enum ViewMessage {
 Each per-view message type has an `impl From<XxxMessage> for Message` (declared via the
 `impl_from_view_message!` / `impl_from_top_message!` macros in
 [`app/message.rs`](crates/desktop/src/app/message.rs)). Call sites lift with `.into()` /
-`.map(Into::into)` — no per-view wrapper fn needed. Generic helpers (`ViewExt::push_into`,
+`.map(Into::into)` — no per-view wrapper fn needed. Generic helpers (`ViewExt::push_render`,
 `Outcome::dispatch`) carry an `M: From<Self::Message>` bound and infer `M = Message` from
 context.
 
@@ -518,8 +518,11 @@ leave the account-switcher dropdown open.
    `widgets/`) may exceed the cap temporarily; prefer extracting sub-sections (e.g.,
    `cipher_edit/sections/`) over folding growth back into `mod.rs`.
 
-3. **No mandatory test policy** — the app is a POC. Tests are opt-in when a piece of logic
-   is gnarly enough to warrant one. Revisit once the codebase stabilizes.
+3. **Tests are opt-in, not mandatory** — the four-layer setup (pure / update / Simulator /
+   snapshot) and helpers live in [`crate::test_support`](../crates/desktop/src/test_support/mod.rs).
+   Reach for a test when logic has multiple branches with observable effects, when a bug
+   would be silent at runtime, or when a comment says "this is non-obvious". See
+   [docs/testing.md](./testing.md) for the full setup and the "when to skip" rules.
 
 4. **Crate root** — only `main.rs`, `domain.rs`, `paths.rs`, `assets.rs`. Everything else
    has a categorized home.
@@ -728,7 +731,7 @@ view's own folder:
 2. One `From<GeneratorMessage> for Message` entry in `impl_from_view_message!`.
 3. One `generator_view: GeneratorView` field on `App`.
 4. One router arm (calls `.update().dispatch(...)`).
-5. One line in `App::collect_overlays` — `self.views.generator.push_into(rctx, &mut out)`.
+5. One line in `App::collect_overlays` — `self.views.generator.push_render(rctx, &mut out)`.
 
 Plus, as applicable: one `Screen::Generator` variant + `view_main` branch (if the view
 owns a screen), nothing extra for window-level sub-overlays beyond what `overlays()`

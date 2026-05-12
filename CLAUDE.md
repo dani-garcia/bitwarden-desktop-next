@@ -28,6 +28,7 @@ The `gpu` cargo feature (on by default) compiles wgpu into the binary. The runti
 - [docs/decisions.md](docs/decisions.md) — rationale for framework choice, theme system, overlay approach, MVU, startup lazy-load, packaging, etc. Read first when changing an architectural choice.
 - [docs/todo.md](docs/todo.md) — pending work tiers, deferred / upstream items.
 - [docs/design-reference.md](docs/design-reference.md) — official-app findings: button styles, palette, fonts, menu structure, screens.
+- [docs/testing.md](docs/testing.md) — four-layer test setup (pure / update / Simulator / snapshot), `test_support` helpers, when to write a test, when to skip.
 - [.claude/skills/audit/SKILL.md](.claude/skills/audit/SKILL.md) — partition-by-directory + combined-lens audit recipe, runnable via the `audit` skill.
 
 ## Coding Conventions

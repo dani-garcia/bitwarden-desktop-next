@@ -17,7 +17,7 @@ mod lifecycle;
 mod message;
 mod update;
 mod view;
-mod window;
+pub(crate) mod window;
 
 pub use ctx::{Outcome, Overlay, PushToast, RenderCtx, UpdateCtx, View, ViewExt};
 pub use message::{Message, SystemMessage, ViewMessage, WindowMessage};
@@ -41,65 +41,65 @@ use crate::{
 
 use window::WindowInfo;
 
-pub(super) const MAIN_WINDOW_SIZE: iced::Size = iced::Size::new(1024.0, 800.0);
+pub(crate) const MAIN_WINDOW_SIZE: iced::Size = iced::Size::new(1024.0, 800.0);
 
 pub struct App {
     // ── Session ───────────────────────────────────────────────────────────
-    pub(super) active_user: Option<UserId>,
-    pub(super) client_manager: ClientManager,
+    pub(crate) active_user: Option<UserId>,
+    pub(crate) client_manager: ClientManager,
     /// Read once at startup. Lifecycle branches re-read `self.settings.<field>`
     /// at event time (never cached) so live changes apply without a restart.
-    pub(super) settings: Settings,
+    pub(crate) settings: Settings,
 
     // ── Navigation ────────────────────────────────────────────────────────
-    pub(super) screen: Screen,
+    pub(crate) screen: Screen,
     /// Persists across screen transitions so collapse / filter selection
     /// isn't reset when navigating between Vault and Send.
-    pub(super) sidebar: SidebarState,
+    pub(crate) sidebar: SidebarState,
 
     // ── Sub-views ─────────────────────────────────────────────────────────
-    pub(super) views: Views,
+    pub(crate) views: Views,
 
     // ── Windows ───────────────────────────────────────────────────────────
-    pub(super) windows: HashMap<iced::window::Id, WindowInfo>,
+    pub(crate) windows: HashMap<iced::window::Id, WindowInfo>,
     /// Always present from `App::new` until `iced::exit`. Child windows
     /// (About) are not tracked here.
-    pub(super) main_window: iced::window::Id,
+    pub(crate) main_window: iced::window::Id,
     /// Tracked from `WindowMessage::Focused`/`Unfocused` for the main window.
     /// Defaults to `true` because the process is foreground when launched
     /// (and iced doesn't always emit a `Focused` event for the initial
     /// surface). Consumed by `SessionTimeout::expired` so an active+focused
     /// user is exempt from `lock_after`.
-    pub(super) main_window_focused: bool,
-    pub(super) magnify: magnify::MagnifyView,
+    pub(crate) main_window_focused: bool,
+    pub(crate) magnify: magnify::MagnifyView,
 
     // ── Native chrome ─────────────────────────────────────────────────────
-    pub(super) theme: ThemeState,
-    pub(super) native_menu: Option<crate::services::menu::NativeMenuHandle>,
-    pub(super) tray: Option<TrayHandle>,
+    pub(crate) theme: ThemeState,
+    pub(crate) native_menu: Option<crate::services::menu::NativeMenuHandle>,
+    pub(crate) tray: Option<TrayHandle>,
 
     // ── Cross-cutting services ────────────────────────────────────────────
     /// Single writer: every clipboard `set` flows through here so the 30 s
     /// auto-clear bookkeeping sees every write.
-    pub(super) clipboard: ClipboardManager,
-    pub(super) favicon: crate::services::favicon::FaviconService,
+    pub(crate) clipboard: ClipboardManager,
+    pub(crate) favicon: crate::services::favicon::FaviconService,
     /// Drives `App::subscription`'s per-frame gate. Held as `Arc` so the
     /// `services::animation` module can hold a `Weak` and reach it from
     /// animation primitives without threading a reference through every
     /// constructor.
-    pub(super) animation: std::sync::Arc<crate::services::animation::AnimationWatermark>,
+    pub(crate) animation: std::sync::Arc<crate::services::animation::AnimationWatermark>,
     /// Per-user lock/logout timer driver. Owns the deadline watch,
     /// tick-broadcast, and the spawned tokio task (aborted on drop).
-    pub(super) session_timeout: crate::services::session_timeout::SessionTimeout,
+    pub(crate) session_timeout: crate::services::session_timeout::SessionTimeout,
 
     // ── Transient UI ──────────────────────────────────────────────────────
     /// Source of truth for which dropdown/menu is open. Writing auto-
     /// dismisses any other overlay by construction.
-    pub(super) open_overlay: Option<Overlay>,
-    pub(super) toasts: Vec<Toast>,
+    pub(crate) open_overlay: Option<Overlay>,
+    pub(crate) toasts: Vec<Toast>,
 
     // ── Derived ───────────────────────────────────────────────────────────
-    pub(super) cache: ViewCache,
+    pub(crate) cache: ViewCache,
 }
 
 /// Derived data cached across `view()` rebuilds. Refreshed only by handlers
@@ -107,7 +107,7 @@ pub struct App {
 /// load). Cached on App because `view()` returns an `Element<'_, ...>`
 /// borrowing `&self` — slices handed to children can't be built inline.
 #[derive(Default)]
-pub(super) struct ViewCache {
+pub(crate) struct ViewCache {
     pub accounts: Vec<AccountEntry>,
 }
 
@@ -116,22 +116,22 @@ pub(super) struct ViewCache {
 /// self.open_overlay` via `UpdateCtx`, while event handlers reborrow other
 /// App fields (client_manager, settings, etc.) without overlap.
 pub struct Views {
-    pub(super) login: login::LoginView,
-    pub(super) vault: vault::VaultView,
-    pub(super) send: send::SendView,
-    pub(super) settings: settings_view::SettingsView,
-    pub(super) generator: generator_view::GeneratorView,
-    pub(super) import: import_view::ImportView,
-    pub(super) export: export_view::ExportView,
-    pub(super) new_folder: new_folder_view::NewFolderView,
-    pub(super) title_bar: title_bar::TitleBarView,
+    pub(crate) login: login::LoginView,
+    pub(crate) vault: vault::VaultView,
+    pub(crate) send: send::SendView,
+    pub(crate) settings: settings_view::SettingsView,
+    pub(crate) generator: generator_view::GeneratorView,
+    pub(crate) import: import_view::ImportView,
+    pub(crate) export: export_view::ExportView,
+    pub(crate) new_folder: new_folder_view::NewFolderView,
+    pub(crate) title_bar: title_bar::TitleBarView,
     /// Account → Fingerprint phrase modal. Closed unless the user explicitly
     /// opened it via the menu.
-    pub(super) fingerprint: fingerprint_phrase::FingerprintModal,
+    pub(crate) fingerprint: fingerprint_phrase::FingerprintModal,
     /// Settings → Allow screenshots: post-toggle "is the window still
     /// visible?" dialog with auto-revert. Closed unless the user just
     /// enabled screen-capture protection.
-    pub(super) screenshot_confirm: screenshot_confirm::ScreenshotConfirmModal,
+    pub(crate) screenshot_confirm: screenshot_confirm::ScreenshotConfirmModal,
 }
 
 impl Views {
@@ -158,9 +158,9 @@ impl Views {
 /// CI, sandboxed installs); the resolver falls back to a static theme
 /// when the OS scheme can't be queried.
 pub struct ThemeState {
-    pub(super) preference: ThemePreference,
-    pub(super) current: AppTheme,
-    pub(super) system: Option<Rc<system_theme::SystemTheme>>,
+    pub(crate) preference: ThemePreference,
+    pub(crate) current: AppTheme,
+    pub(crate) system: Option<Rc<system_theme::SystemTheme>>,
 }
 
 impl ThemeState {

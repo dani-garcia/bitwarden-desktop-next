@@ -30,8 +30,10 @@ impl App {
     }
 
     /// Build a `RenderCtx` keyed to a specific window's width. Shared between
-    /// `view_main` and the About / Magnify secondary windows.
-    fn render_ctx(&self, window_id: iced::window::Id) -> RenderCtx<'_> {
+    /// `view_main` and the About / Magnify secondary windows. Also called
+    /// from `test_support` to build a render context off an [`App::test`]
+    /// instance.
+    pub(crate) fn render_ctx(&self, window_id: iced::window::Id) -> RenderCtx<'_> {
         let active = self.active_account_entry();
         let window_width = self
             .windows
@@ -203,9 +205,9 @@ impl App {
         // Active screen's sub-overlays. The screen's own `view()` is rendered
         // separately as page content, so only its `overlays()` go here.
         match self.screen {
-            Screen::Vault => self.views.vault.push_overlays_into(rctx, &mut out),
-            Screen::Send => self.views.send.push_overlays_into(rctx, &mut out),
-            Screen::Login => self.views.login.push_overlays_into(rctx, &mut out),
+            Screen::Vault => self.views.vault.push_overlays(rctx, &mut out),
+            Screen::Send => self.views.send.push_overlays(rctx, &mut out),
+            Screen::Login => self.views.login.push_overlays(rctx, &mut out),
             Screen::Loading => {}
         }
 
@@ -213,13 +215,13 @@ impl App {
         // is the modal dialog) plus any nested overlays they own. `Message`
         // is inferred from `out`; each view's local message converts via
         // `impl From<XxxMessage> for Message`.
-        self.views.settings.push_into(rctx, &mut out);
-        self.views.generator.push_into(rctx, &mut out);
-        self.views.import.push_into(rctx, &mut out);
-        self.views.export.push_into(rctx, &mut out);
-        self.views.new_folder.push_into(rctx, &mut out);
-        self.views.fingerprint.push_into(rctx, &mut out);
-        self.views.screenshot_confirm.push_into(rctx, &mut out);
+        self.views.settings.push_render(rctx, &mut out);
+        self.views.generator.push_render(rctx, &mut out);
+        self.views.import.push_render(rctx, &mut out);
+        self.views.export.push_render(rctx, &mut out);
+        self.views.new_folder.push_render(rctx, &mut out);
+        self.views.fingerprint.push_render(rctx, &mut out);
+        self.views.screenshot_confirm.push_render(rctx, &mut out);
 
         out
     }

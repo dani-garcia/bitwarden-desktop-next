@@ -132,3 +132,72 @@ impl View for ScreenshotConfirmModal {
         )
     }
 }
+
+#[cfg(test)]
+mod tests_update {
+    use super::*;
+    use crate::test_support::{OutcomeExt, ViewTestExt};
+
+    /// Build an abortable iced Task purely so we have a `Handle` to pass to
+    /// `open()`. The Task itself is discarded — tests don't drive the iced
+    /// runtime, they just need a non-stub Handle.
+    fn dummy_handle() -> iced::task::Handle {
+        iced::Task::done(()).abortable().1
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn confirm_closes_the_modal() {
+        let mut view = ScreenshotConfirmModal::default();
+        view.open(dummy_handle());
+        assert!(view.is_open());
+
+        view.run(ScreenshotConfirmMessage::Confirm)
+            .await
+            .expect_none();
+        assert!(!view.is_open());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn timeout_while_open_emits_revert_and_closes() {
+        let mut view = ScreenshotConfirmModal::default();
+        view.open(dummy_handle());
+
+        let ev = view
+            .run(ScreenshotConfirmMessage::Timeout)
+            .await
+            .expect_event();
+        assert!(matches!(ev, ScreenshotConfirmEvent::Revert));
+        assert!(!view.is_open());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn timeout_while_closed_drops_silently() {
+        // Abort-on-drop is the modal's primary defense against stale
+        // Timeouts, but it's not airtight: the abort can race with the
+        // task already enqueueing its completion message into iced's
+        // queue. This guard catches the race so a closed modal's stale
+        // Timeout doesn't emit a Revert event.
+        let mut view = ScreenshotConfirmModal::default();
+        // Modal never opened — `is_open()` is false from the start.
+        view.run(ScreenshotConfirmMessage::Timeout)
+            .await
+            .expect_none();
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn close_drops_pending_revert_handle() {
+        // The handle's `abort_on_drop` is the real abort path; this just
+        // verifies the modal drops its stored handle on `close()` so the
+        // drop actually happens.
+        let mut view = ScreenshotConfirmModal::default();
+        view.open(dummy_handle());
+        view.close();
+        // After close, `is_open` is false — and the next Timeout (which
+        // would normally fire from a stale in-flight task) gets the
+        // closed-modal guard treatment.
+        assert!(!view.is_open());
+        view.run(ScreenshotConfirmMessage::Timeout)
+            .await
+            .expect_none();
+    }
+}

@@ -667,3 +667,96 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod tests_update {
+    use super::*;
+    use crate::{app::App, test_support::OutcomeExt};
+
+    fn unlocking_view() -> LoginView {
+        let mut view = LoginView::new();
+        // Simulate the mid-flight state Unlock leaves behind: spinner on,
+        // password field cleared.
+        view.unlock_in_progress = true;
+        view
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn unlock_completed_resets_spinner_even_on_stale_result() {
+        // The spinner reset runs BEFORE the stale-uid check intentionally:
+        // when the user switched accounts mid-unlock, the spinner on the
+        // (now-hidden) original login screen still needs to stop so it
+        // doesn't show a stuck state if the user switches back.
+        let active = UserId::new_v4();
+        let stale = UserId::new_v4();
+
+        let mut app = App::test();
+        app.active_user = Some(active);
+
+        let mut view = unlocking_view();
+        let outcome = view.update(
+            LoginMessage::UnlockCompleted(stale, Ok(())),
+            app.update_ctx(),
+        );
+        outcome.expect_none();
+        assert!(!view.unlock_in_progress, "spinner cleared on stale result");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn unlock_completed_ok_emits_unlocked_event_for_active_user() {
+        let uid = UserId::new_v4();
+        let mut app = App::test();
+        app.active_user = Some(uid);
+
+        let mut view = unlocking_view();
+        let ev = view
+            .update(LoginMessage::UnlockCompleted(uid, Ok(())), app.update_ctx())
+            .expect_event();
+        match ev {
+            LoginEvent::Unlocked { uid: emitted } => assert_eq!(emitted, uid),
+            _ => panic!("expected Unlocked event"),
+        }
+        assert!(!view.unlock_in_progress);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn unlock_completed_err_emits_toast_for_active_user() {
+        // Failure path: spinner clears, sanitized error toast surfaces.
+        // The raw SDK error string is logged at WARN but not exposed to
+        // the user (see the inline comment in `UnlockCompleted`).
+        let uid = UserId::new_v4();
+        let mut app = App::test();
+        app.active_user = Some(uid);
+
+        let mut view = unlocking_view();
+        let toast = view
+            .update(
+                LoginMessage::UnlockCompleted(uid, Err("raw crypto error".to_string())),
+                app.update_ctx(),
+            )
+            .expect_toast();
+        assert!(matches!(
+            toast.status,
+            crate::components::toast::ToastStatus::Error
+        ));
+        assert!(!view.unlock_in_progress);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn unlock_reentry_during_in_flight_is_dropped() {
+        // Re-entry guard: text_input's `on_submit` fires per Enter keypress;
+        // mashing Enter while the SDK call is already running shouldn't
+        // queue duplicate unlock attempts.
+        let uid = UserId::new_v4();
+        let mut app = App::test();
+        app.active_user = Some(uid);
+
+        let mut view = unlocking_view();
+        view.update(LoginMessage::Unlock, app.update_ctx())
+            .expect_none();
+        assert!(
+            view.unlock_in_progress,
+            "still in flight, no new task spawned"
+        );
+    }
+}

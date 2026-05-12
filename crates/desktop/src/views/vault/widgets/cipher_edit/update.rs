@@ -261,3 +261,112 @@ fn identity_set(
         *pick(i) = opt_string(s);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bitwarden_collections::collection::CollectionId;
+    use bitwarden_core::OrganizationId;
+    use bitwarden_vault::CipherType;
+
+    use crate::services::sdk::{Collection, Organization};
+
+    fn org(name: &str) -> Organization {
+        Organization {
+            id: OrganizationId::new_v4(),
+            name: name.to_string(),
+            wrapped_key: None,
+        }
+    }
+
+    fn collection(in_org: OrganizationId, name: &str) -> Collection {
+        Collection {
+            id: CollectionId::new_v4(),
+            organization_id: in_org,
+            name: name.to_string(),
+        }
+    }
+
+    fn form_with_org_setup(
+        orgs: Vec<Organization>,
+        collections: Vec<Collection>,
+        starting_org: Option<OrganizationId>,
+    ) -> CipherForm {
+        let mut form = CipherForm::new(CipherType::Login, starting_org);
+        form.set_organizations(orgs);
+        form.collections = collections;
+        form
+    }
+
+    #[test]
+    fn org_selected_none_clears_all_collection_ids() {
+        // Personal vault has no collections — switching to it must clear
+        // any collection IDs the cipher was carrying from a previous org.
+        let org_a = org("Org A");
+        let org_a_id = org_a.id;
+        let c1 = collection(org_a_id, "Shared");
+        let c1_id = c1.id;
+
+        let mut form = form_with_org_setup(vec![org_a], vec![c1], Some(org_a_id));
+        form.modified.collection_ids = vec![c1_id];
+
+        form.update(CipherEditMessage::OrgSelected(None));
+
+        assert!(form.modified.organization_id.is_none());
+        assert!(
+            form.modified.collection_ids.is_empty(),
+            "collection_ids cleared when leaving any org"
+        );
+    }
+
+    #[test]
+    fn org_selected_filters_collections_to_new_org() {
+        // Switching from Org A to Org B must drop A's collection IDs but
+        // KEEP any IDs that happen to belong to B (multi-collection
+        // assignments survive the switch). The hash-set semantics matter:
+        // a collection from a different org left on the cipher would
+        // silently submit invalid IDs to the SDK.
+        let org_a = org("Org A");
+        let org_b = org("Org B");
+        let org_a_id = org_a.id;
+        let org_b_id = org_b.id;
+        let c_a = collection(org_a_id, "A-shared");
+        let c_b = collection(org_b_id, "B-shared");
+        let c_a_id = c_a.id;
+        let c_b_id = c_b.id;
+
+        // Cipher is currently in Org A with both collection IDs attached
+        // (the B id is hypothetically there from a multi-org scenario).
+        let mut form = form_with_org_setup(vec![org_a, org_b], vec![c_a, c_b], Some(org_a_id));
+        form.modified.collection_ids = vec![c_a_id, c_b_id];
+
+        form.update(CipherEditMessage::OrgSelected(Some(org_b_id)));
+
+        assert_eq!(form.modified.organization_id, Some(org_b_id));
+        assert_eq!(
+            form.modified.collection_ids,
+            vec![c_b_id],
+            "A's collection dropped, B's collection retained"
+        );
+    }
+
+    #[test]
+    fn collection_toggled_adds_then_removes_idempotently() {
+        // Toggle semantics: present → remove, absent → add. The form
+        // doesn't try to dedupe a CollectionToggled message arriving
+        // twice; the second call removes the just-added entry. This is
+        // what makes a checkbox-style multi-select feel right.
+        let org_a = org("Org A");
+        let org_a_id = org_a.id;
+        let c1 = collection(org_a_id, "Shared");
+        let c1_id = c1.id;
+
+        let mut form = form_with_org_setup(vec![org_a], vec![c1], Some(org_a_id));
+
+        form.update(CipherEditMessage::CollectionToggled(c1_id));
+        assert_eq!(form.modified.collection_ids, vec![c1_id]);
+
+        form.update(CipherEditMessage::CollectionToggled(c1_id));
+        assert!(form.modified.collection_ids.is_empty());
+    }
+}

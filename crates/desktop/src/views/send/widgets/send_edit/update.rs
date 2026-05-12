@@ -47,3 +47,72 @@ impl SendForm {
         FormEvent::None
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bitwarden_send::SendType;
+
+    fn form() -> SendForm {
+        SendForm::new(SendType::Text)
+    }
+
+    #[test]
+    fn max_access_count_accepts_digit_strings() {
+        let mut form = form();
+        form.update(SendEditMessage::MaxAccessCountChanged("42".into()));
+        assert_eq!(form.max_access_count_raw, "42");
+    }
+
+    #[test]
+    fn max_access_count_accepts_empty_string() {
+        // Empty is the "unlimited" state — the form must accept it so the
+        // user can clear a previously-typed limit without going through
+        // the decrement button.
+        let mut form = form();
+        form.max_access_count_raw = "9".to_string();
+        form.update(SendEditMessage::MaxAccessCountChanged(String::new()));
+        assert_eq!(form.max_access_count_raw, "");
+    }
+
+    #[test]
+    fn max_access_count_rejects_non_digit_input() {
+        // The text input is filtered: non-digit characters don't update
+        // the field at all (the previous value persists). This is what
+        // makes pasting "1a2" leave just the prior value rather than
+        // partially-accepting it.
+        let mut form = form();
+        form.max_access_count_raw = "5".to_string();
+        form.update(SendEditMessage::MaxAccessCountChanged("abc".into()));
+        assert_eq!(form.max_access_count_raw, "5", "non-digits rejected");
+
+        form.update(SendEditMessage::MaxAccessCountChanged("1.5".into()));
+        assert_eq!(form.max_access_count_raw, "5", "decimal rejected");
+
+        form.update(SendEditMessage::MaxAccessCountChanged("-1".into()));
+        assert_eq!(form.max_access_count_raw, "5", "negative rejected");
+    }
+
+    #[test]
+    fn max_access_count_bump_from_empty_starts_at_one() {
+        // Empty represents "unlimited" / zero. +1 enters the numeric range.
+        let mut form = form();
+        form.update(SendEditMessage::MaxAccessCountIncrement);
+        assert_eq!(form.max_access_count_raw, "1");
+    }
+
+    #[test]
+    fn max_access_count_bump_floors_at_empty() {
+        // Decrementing past zero returns to empty (the "unlimited"
+        // sentinel) rather than producing "-1" or "0". Both 0 and empty
+        // serialize the same to the SDK; empty is the canonical UI shape.
+        let mut form = form();
+        form.max_access_count_raw = "1".to_string();
+        form.update(SendEditMessage::MaxAccessCountDecrement);
+        assert_eq!(form.max_access_count_raw, "");
+
+        // One more decrement stays at empty.
+        form.update(SendEditMessage::MaxAccessCountDecrement);
+        assert_eq!(form.max_access_count_raw, "");
+    }
+}

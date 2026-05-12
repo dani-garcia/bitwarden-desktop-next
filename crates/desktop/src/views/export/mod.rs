@@ -509,3 +509,107 @@ impl ExportView {
         )
     }
 }
+
+#[cfg(test)]
+mod tests_update {
+    use super::*;
+    use crate::test_support::{OutcomeExt, ViewTestExt};
+
+    fn primed_view() -> ExportView {
+        let mut view = ExportView::new();
+        view.open("test@example.com".to_string());
+        view
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn format_switch_away_from_encrypted_json_clears_file_password() {
+        // EncryptedJson is the only format that uses `file_password`. Any
+        // other format MUST clear it so a stale password doesn't sneak
+        // into a later switch-back-and-submit flow.
+        let mut view = primed_view();
+        view.selected_format = ExportFormatChoice::EncryptedJson;
+        view.file_password = "secret".to_string();
+
+        view.run(ExportMessage::FormatSelected(ExportFormatChoice::Json))
+            .await
+            .expect_none();
+        assert!(view.file_password.is_empty());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn format_switch_to_encrypted_json_preserves_file_password() {
+        // The mirror case: switching INTO EncryptedJson must keep any
+        // password the user already typed (clearing here would surprise
+        // them after a brief detour to another format).
+        let mut view = primed_view();
+        view.selected_format = ExportFormatChoice::Json;
+        view.file_password = "secret".to_string();
+
+        view.run(ExportMessage::FormatSelected(
+            ExportFormatChoice::EncryptedJson,
+        ))
+        .await
+        .expect_none();
+        assert_eq!(view.file_password, "secret");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn continue_opens_confirm_dialog_and_resets_state() {
+        // Pressing Continue on the Compose dialog opens the
+        // master-password gate. The master_password field must be empty
+        // on each open — a stale value from a previous run would auto-
+        // fill the gate with the previous attempt's input.
+        let mut view = primed_view();
+        view.master_password = "leftover".to_string();
+        view.validating = true; // simulate a stale flag from a prior run
+
+        let _ = view.run(ExportMessage::Continue).await;
+        assert!(view.confirm_fade.is_open());
+        assert!(view.master_password.is_empty());
+        assert!(!view.validating);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn confirm_submit_with_empty_password_is_dropped() {
+        // Defensive: the Continue button is disabled in the UI when
+        // password is empty, but a stray keyboard-driven submit
+        // shouldn't fire the SDK call either.
+        let mut view = primed_view();
+        view.confirm_fade.open();
+        // master_password left empty
+        view.run(ExportMessage::ConfirmSubmit).await.expect_none();
+        assert!(!view.validating);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn confirm_submit_while_validating_is_dropped() {
+        // Re-entry guard: validation is in flight, don't queue another.
+        let mut view = primed_view();
+        view.confirm_fade.open();
+        view.master_password = "pw".to_string();
+        view.validating = true;
+        view.run(ExportMessage::ConfirmSubmit).await.expect_none();
+        assert!(view.validating, "still validating, no new task spawned");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn validation_failure_clears_validating_and_emits_error_toast() {
+        // Wrong-password path: reset the flag, surface an error toast,
+        // KEEP the confirm dialog open so the user can retry.
+        let mut view = primed_view();
+        view.confirm_fade.open();
+        view.master_password = "wrong".to_string();
+        view.validating = true;
+
+        let toast = view
+            .run(ExportMessage::ValidationCompleted(Err("invalid".into())))
+            .await
+            .expect_toast();
+        assert!(matches!(
+            toast.status,
+            crate::components::toast::ToastStatus::Error
+        ));
+        assert!(!view.validating);
+        assert!(view.confirm_fade.is_open(), "dialog stays open for retry");
+    }
+}

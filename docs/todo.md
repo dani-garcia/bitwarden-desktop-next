@@ -24,7 +24,6 @@ Each entry carries two inline tags so you can size it at a glance:
 
 ## Contents
 
-- [MVU trait follow-ups](#mvu-trait-follow-ups)
 - [Quick wins](#quick-wins)
 - [Auth & onboarding](#auth--onboarding)
 - [Vault & Send](#vault--send)
@@ -34,41 +33,6 @@ Each entry carries two inline tags so you can size it at a glance:
 - [Plan-first](#plan-first)
 - [Blocked on Bitwarden SDK](#blocked-on-bitwarden-sdk)
 - [Blocked / waiting on other upstream](#blocked--waiting-on-other-upstream)
-
----
-
-## MVU trait follow-ups
-
-Carry-overs from the [`View`](../crates/desktop/src/app/ctx.rs) trait consolidation:
-`View` now bundles state + `Message` + `Event` + `update` + `should_render` + `view` +
-`overlays`, with a `ViewExt` blanket-impl handling the App-message lift via
-`M: From<Self::Message>`. These items finish the shape — none are blocking, all are loose
-ends.
-
-- **`Modal: View` sub-trait** `[S]` — every modal view currently writes the same one-line
-  `close()`/`is_open()` inherent methods that just forward to
-  `self.fade.{close,is_open}()`, plus the same
-  `fn should_render() -> bool { self.fade.is_visible() }` trait impl. A `Modal: View`
-  sub-trait with required `fn fade(&self) -> &FadeInOut` +
-  `fn fade_mut(&mut self) -> &mut FadeInOut` and default `close`/`is_open` lets each modal
-  drop those forwarding methods. Without specialization, `should_render` still has to be
-  implemented per-view, so this is mostly type-system documentation rather than a real
-  reduction. Skip unless we discover a generic `<M: Modal>` use site that justifies the
-  trait.
-
-- **Rename `ViewExt::push_into` / `push_overlays_into`** `[S]` — the names don't convey
-  the difference: `push_into` pushes `view()` + `overlays()`, `push_overlays_into` pushes
-  only `overlays()`. Consider `push_render` / `push_overlays`, or a single method
-  `push(include_view: bool)`. Pure rename, all call sites are in
-  [`App::collect_overlays`](../crates/desktop/src/app/view.rs).
-
-- **Direct tests for the trait plumbing** `[S]` —
-  [`Outcome::dispatch`](../crates/desktop/src/app/ctx.rs)'s `From<V::Message>` lift and
-  `PushToast` routing, and `ViewExt::push_into`'s sink-based collection, are covered
-  implicitly by every runtime interaction but have no direct unit tests. A handful of
-  asserts (build a fake view, run `dispatch` against a fake App-like state, verify Task /
-  Event / Toast routing each work) would catch a future broken `From` impl earlier and
-  document the contract.
 
 ---
 

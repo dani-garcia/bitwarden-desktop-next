@@ -414,3 +414,66 @@ fn filter_items(
             .collect()
     }
 }
+
+#[cfg(test)]
+mod tests_update {
+    use super::*;
+    use crate::{
+        app::App, debug_fmt::NoDebug, domain::UserId, test_support::OutcomeExt,
+        views::send::message::ForUserMessage,
+    };
+
+    /// Build a fake SaveCompleted result so we don't have to construct a
+    /// full `SdkSendView` in tests that only care about the dispatch.
+    fn save_completed_payload() -> Result<NoDebug<Box<SdkSendView>>, String> {
+        Err("test stub".to_string())
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn for_user_drops_message_when_active_user_changed() {
+        // The dispatch site in `SendView::update` checks `is_active_user`
+        // once per ForUser batch and drops the entire message if the user
+        // switched during the await. This is the load-bearing guard; the
+        // individual handlers below the dispatch trust the uid is current.
+        let active = UserId::new_v4();
+        let stale = UserId::new_v4();
+
+        let mut app = App::test();
+        app.active_user = Some(active);
+
+        let mut view = SendView::new();
+        view.update(
+            SendMessage::ForUser(
+                stale,
+                ForUserMessage::SaveCompleted(save_completed_payload()),
+            ),
+            app.update_ctx(),
+        )
+        .expect_none();
+        // Nothing to assert on view state — the message was dropped before
+        // any handler ran. The point of the test is that no panic / no
+        // event fires when uid != active.
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn for_user_dispatches_when_uid_matches_active() {
+        let uid = UserId::new_v4();
+        let mut app = App::test();
+        app.active_user = Some(uid);
+
+        let mut view = SendView::new();
+        // Err payload → handle_save_completed emits an error toast. The
+        // assertion here is "we got past the stale-user guard and reached
+        // the handler" (verified by the toast emission).
+        let toast = view
+            .update(
+                SendMessage::ForUser(uid, ForUserMessage::SaveCompleted(save_completed_payload())),
+                app.update_ctx(),
+            )
+            .expect_toast();
+        assert!(matches!(
+            toast.status,
+            crate::components::toast::ToastStatus::Error
+        ));
+    }
+}

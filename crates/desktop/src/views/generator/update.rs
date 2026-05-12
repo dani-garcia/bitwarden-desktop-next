@@ -183,3 +183,65 @@ impl GeneratorView {
         }
     }
 }
+
+#[cfg(test)]
+mod tests_update {
+    use super::*;
+    use crate::{
+        services::sdk::PasswordHistoryEntry,
+        test_support::{OutcomeExt, ViewTestExt},
+    };
+
+    fn entry(value: &str) -> PasswordHistoryEntry {
+        PasswordHistoryEntry {
+            value: value.to_string(),
+            created: chrono::Utc::now(),
+        }
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn copy_history_entry_idx_zero_is_newest() {
+        // History is stored oldest-first but rendered reverse-chronologically.
+        // Row index 0 maps to the last storage entry (newest).
+        let mut view = GeneratorView::new();
+        view.set_history(vec![entry("oldest"), entry("middle"), entry("newest")]);
+
+        let ev = view
+            .run(GeneratorMessage::CopyHistoryEntry(0))
+            .await
+            .expect_event();
+        match ev {
+            GeneratorEvent::Copy(v) => assert_eq!(v, "newest"),
+            _ => panic!("expected Copy"),
+        }
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn copy_history_entry_last_idx_is_oldest() {
+        // Mirrors the previous test in the other direction: the last
+        // rendered row (idx == len-1) maps to storage index 0.
+        let mut view = GeneratorView::new();
+        view.set_history(vec![entry("oldest"), entry("middle"), entry("newest")]);
+
+        let ev = view
+            .run(GeneratorMessage::CopyHistoryEntry(2))
+            .await
+            .expect_event();
+        match ev {
+            GeneratorEvent::Copy(v) => assert_eq!(v, "oldest"),
+            _ => panic!("expected Copy"),
+        }
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn copy_history_entry_out_of_bounds_returns_none() {
+        // Defensive: a row click for an index past the cache shouldn't
+        // crash. Could happen on rapid clear-then-click sequences.
+        let mut view = GeneratorView::new();
+        view.set_history(vec![entry("only")]);
+
+        view.run(GeneratorMessage::CopyHistoryEntry(5))
+            .await
+            .expect_none();
+    }
+}

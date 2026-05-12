@@ -272,3 +272,137 @@ impl View for TitleBarView {
 
 /// Wrap content with invisible resize handles on all edges.
 pub use self::window_chrome::resize_wrapper;
+
+#[cfg(test)]
+mod tests_update {
+    use super::*;
+    use crate::{
+        app::{App, Overlay},
+        test_support::OutcomeExt,
+    };
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn top_level_clicked_opens_menu_when_none_open() {
+        let mut app = App::test();
+        let mut view = TitleBarView::new();
+        view.update(TitleBarMessage::TopLevelClicked(1), app.update_ctx())
+            .expect_none();
+        assert_eq!(
+            app.open_overlay,
+            Some(Overlay::TitleBarMenu {
+                menu: 1,
+                submenu: None,
+            })
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn top_level_clicked_same_index_toggles_closed() {
+        let mut app = App::test();
+        app.open_overlay = Some(Overlay::TitleBarMenu {
+            menu: 0,
+            submenu: None,
+        });
+        let mut view = TitleBarView::new();
+        view.update(TitleBarMessage::TopLevelClicked(0), app.update_ctx())
+            .expect_none();
+        assert_eq!(app.open_overlay, None);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn top_level_clicked_different_index_switches() {
+        let mut app = App::test();
+        app.open_overlay = Some(Overlay::TitleBarMenu {
+            menu: 0,
+            submenu: Some(2),
+        });
+        let mut view = TitleBarView::new();
+        view.update(TitleBarMessage::TopLevelClicked(1), app.update_ctx())
+            .expect_none();
+        // Switching the top-level menu resets `submenu` — the new menu is
+        // freshly opened with no submenu hover-state carried over.
+        assert_eq!(
+            app.open_overlay,
+            Some(Overlay::TitleBarMenu {
+                menu: 1,
+                submenu: None,
+            })
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn dismiss_menu_clears_overlay() {
+        let mut app = App::test();
+        app.open_overlay = Some(Overlay::TitleBarMenu {
+            menu: 0,
+            submenu: None,
+        });
+        let mut view = TitleBarView::new();
+        view.update(TitleBarMessage::DismissMenu, app.update_ctx())
+            .expect_none();
+        assert_eq!(app.open_overlay, None);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn submenu_hovered_max_clears_submenu_slot() {
+        // `usize::MAX` is the sentinel for "no submenu hovered" — used when
+        // the cursor enters the parent panel but is not over any submenu
+        // row. Avoids needing a separate "submenu unhovered" message.
+        let mut app = App::test();
+        app.open_overlay = Some(Overlay::TitleBarMenu {
+            menu: 0,
+            submenu: Some(3),
+        });
+        let mut view = TitleBarView::new();
+        view.update(
+            TitleBarMessage::SubMenuHovered(0, usize::MAX),
+            app.update_ctx(),
+        )
+        .expect_none();
+        assert_eq!(
+            app.open_overlay,
+            Some(Overlay::TitleBarMenu {
+                menu: 0,
+                submenu: None,
+            })
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn item_clicked_with_bogus_indices_returns_none() {
+        let mut app = App::test();
+        app.open_overlay = Some(Overlay::TitleBarMenu {
+            menu: 0,
+            submenu: None,
+        });
+        let mut view = TitleBarView::new();
+        // Far past any real entry — `menu::MENUS.get(...)` returns `None`
+        // and the arm falls through `Outcome::from_option(None)`.
+        view.update(TitleBarMessage::ItemClicked(99, 99), app.update_ctx())
+            .expect_none();
+        // Even on a no-op the overlay is cleared: a click on a menu item
+        // always dismisses the dropdown, valid action or not.
+        assert_eq!(app.open_overlay, None);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn window_chrome_clicks_bubble_window_event() {
+        let mut app = App::test();
+        let mut view = TitleBarView::new();
+
+        let ev = view
+            .update(TitleBarMessage::MinimizeClicked, app.update_ctx())
+            .expect_event();
+        assert!(matches!(ev, TitleBarEvent::Window(WindowAction::Minimize)));
+
+        let ev = view
+            .update(TitleBarMessage::CloseClicked, app.update_ctx())
+            .expect_event();
+        assert!(matches!(ev, TitleBarEvent::Window(WindowAction::Close)));
+
+        let ev = view
+            .update(TitleBarMessage::DragStart, app.update_ctx())
+            .expect_event();
+        assert!(matches!(ev, TitleBarEvent::Window(WindowAction::Drag)));
+    }
+}
