@@ -107,11 +107,8 @@ impl App {
     /// it happened to be open.
     fn apply_allow_screenshots_change(&mut self, allow: bool) -> Task<Message> {
         let protect = !allow;
-        let apply_task = crate::services::screenshot_protection::apply(
-            self.main_window,
-            protect,
-        )
-        .discard();
+        let apply_task =
+            crate::services::screenshot_protection::apply(self.main_window, protect).discard();
 
         if !protect {
             // User just allowed screenshots — clear protection and any

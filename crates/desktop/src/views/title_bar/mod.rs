@@ -8,7 +8,7 @@ use iced::{
 };
 
 use crate::{
-    app::{Outcome, Overlay, ViewTypes},
+    app::{Outcome, Overlay, UpdateCtx, View},
     services::menu,
     theme::{AppColors, AppTheme},
 };
@@ -66,23 +66,19 @@ pub enum TitleBarEvent {
 /// compositional MVU pattern stays uniform across views.
 pub struct TitleBarView;
 
-impl ViewTypes for TitleBarView {
-    type Message = TitleBarMessage;
-    type Event = TitleBarEvent;
-}
-
 impl TitleBarView {
     pub fn new() -> Self {
         Self
     }
+}
+
+impl View for TitleBarView {
+    type Message = TitleBarMessage;
+    type Event = TitleBarEvent;
 
     /// Compositional MVU update. Title bar has no async work so the returned
     /// task is always `Task::none()`; the event carries the domain fact.
-    pub fn update(
-        &mut self,
-        msg: TitleBarMessage,
-        ctx: crate::app::UpdateCtx<'_>,
-    ) -> Outcome<Self> {
+    fn update(&mut self, msg: TitleBarMessage, ctx: UpdateCtx<'_>) -> Outcome<Self> {
         // Read the previously open top-level menu, if any, so toggle-on-
         // same-index can close and clicks on a different index can switch.
         let current_menu = match *ctx.open_overlay {
@@ -148,6 +144,22 @@ impl TitleBarView {
             TitleBarMessage::ResizeEdge(dir) => WindowAction::ResizeEdge(dir),
         };
         Outcome::event(TitleBarEvent::Window(window_action))
+    }
+
+    /// Title bar opts out of the trait render path — its real render is an
+    /// inherent `view` method that takes extra window-state args
+    /// (is_maximized, menu_state, etc.) which don't fit `(&self, &RenderCtx)`.
+    /// `should_render` returns `false` so the trait method is never called;
+    /// App invokes the inherent method directly.
+    fn should_render(&self) -> bool {
+        false
+    }
+
+    fn view<'a>(
+        &'a self,
+        _ctx: &crate::app::RenderCtx<'a>,
+    ) -> Element<'a, TitleBarMessage, AppTheme> {
+        unreachable!("TitleBarView::view called via trait but should_render returns false")
     }
 }
 

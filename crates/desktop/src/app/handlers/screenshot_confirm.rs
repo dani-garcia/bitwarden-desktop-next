@@ -41,8 +41,7 @@ impl App {
                 self.settings.allow_screenshots = true;
                 self.settings.save();
                 self.views.settings.revert_allow_screenshots();
-                crate::services::screenshot_protection::apply(self.main_window, false)
-                    .discard()
+                crate::services::screenshot_protection::apply(self.main_window, false).discard()
             }
         }
     }

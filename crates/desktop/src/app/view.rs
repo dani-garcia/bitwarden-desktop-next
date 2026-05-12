@@ -9,7 +9,7 @@ use crate::{
     views::{title_bar, title_bar::TitleBarMessage},
 };
 
-use super::{App, Message, Overlay, RenderCtx, SystemMessage, window::WindowKind};
+use super::{App, Message, Overlay, RenderCtx, SystemMessage, View, ViewExt, window::WindowKind};
 
 impl App {
     pub fn view(&self, window_id: iced::window::Id) -> Element<'_, Message, AppTheme> {
@@ -17,11 +17,11 @@ impl App {
             Some(WindowKind::Main) => self.view_main(),
             Some(WindowKind::About) => {
                 let rctx = self.render_ctx(window_id);
-                crate::views::about::view(&rctx).map(Message::About)
+                crate::views::about::view(&rctx).map(Into::into)
             }
             Some(WindowKind::Magnify) => {
                 let rctx = self.render_ctx(window_id);
-                crate::views::magnify::view(&self.magnify, &rctx).map(Message::Magnify)
+                crate::views::magnify::view(&self.magnify, &rctx).map(Into::into)
             }
             // Defensive: all windows are inserted at creation, but a stray
             // unknown id renders as empty space rather than panicking.
@@ -63,9 +63,9 @@ impl App {
                 iced::widget::center(crate::components::spinner::spinner(48.0, colors.accent))
                     .into()
             }
-            Screen::Login => self.views.login.view(&rctx).map(Message::login),
-            Screen::Vault => self.views.vault.view(&rctx).map(Message::vault),
-            Screen::Send => self.views.send.view(&rctx).map(Message::send),
+            Screen::Login => self.views.login.view(&rctx).map(Into::into),
+            Screen::Vault => self.views.vault.view(&rctx).map(Into::into),
+            Screen::Send => self.views.send.view(&rctx).map(Into::into),
         };
 
         let page: Element<'_, Message, AppTheme> =
@@ -77,7 +77,7 @@ impl App {
                     .unwrap_or(&[]);
                 let sidebar_el =
                     crate::components::sidebar::view(&self.sidebar, organizations, colors)
-                        .map(Message::Sidebar);
+                        .map(Into::into);
                 let main_row = iced::widget::container(
                     iced::widget::row![sidebar_el, inner].height(iced::Fill),
                 )
@@ -100,80 +100,7 @@ impl App {
 
         let close_toast = |idx| Message::System(SystemMessage::CloseToast(idx));
 
-        let sheet = match self.screen {
-            Screen::Vault => self
-                .views
-                .vault
-                .sheet_view(&rctx)
-                .map(|el| el.map(Message::vault)),
-            Screen::Send => self
-                .views
-                .send
-                .sheet_view(&rctx)
-                .map(|el| el.map(Message::send)),
-            _ => None,
-        };
-
-        let modal = match self.screen {
-            Screen::Vault => self
-                .views
-                .vault
-                .modal_view(&rctx)
-                .map(|el| el.map(Message::vault)),
-            Screen::Send => self
-                .views
-                .send
-                .modal_view(&rctx)
-                .map(|el| el.map(Message::send)),
-            Screen::Login => self
-                .views
-                .login
-                .modal_view(&rctx)
-                .map(|el| el.map(Message::login)),
-            _ => None,
-        };
-
-        let settings_modal = self
-            .views
-            .settings
-            .modal_view(&rctx)
-            .map(|el| el.map(Message::settings));
-
-        // Both `modal_view` returns `None` when closed so the stack stays
-        // cheap (CLAUDE.md → "Stack doesn't cull or clip").
-        let generator_modal = self
-            .views
-            .generator
-            .modal_view(&rctx)
-            .map(|el| el.map(Message::generator));
-
-        let import_modal = self
-            .views
-            .import
-            .modal_view(&rctx)
-            .map(|el| el.map(Message::import));
-
-        let export_modal = self
-            .views
-            .export
-            .modal_view(&rctx)
-            .map(|el| el.map(Message::export));
-
-        let new_folder_modal = self
-            .views
-            .new_folder
-            .modal_view(&rctx)
-            .map(|el| el.map(Message::new_folder));
-
-        let fingerprint_modal =
-            crate::views::fingerprint_phrase::modal_view(&self.fingerprint, rctx.colors)
-                .map(|el| el.map(Message::fingerprint));
-
-        let screenshot_confirm_modal = crate::views::screenshot_confirm::modal_view(
-            &self.screenshot_confirm,
-            rctx.colors,
-        )
-        .map(|el| el.map(Message::ScreenshotConfirm));
+        let mut overlays = self.collect_overlays(&rctx);
 
         let use_custom_menu_bar = crate::services::menu::should_use_custom_menu_bar();
 
@@ -192,31 +119,13 @@ impl App {
                     open_submenu,
                     colors,
                 )
-                .map(Message::title_bar)
+                .map(Into::into)
         } else {
-            title_bar::TitleBarView::view_empty().map(Message::title_bar)
+            title_bar::TitleBarView::view_empty().map(Into::into)
         };
 
         let main_column: Element<'_, Message, AppTheme> =
             iced::widget::column![tb, page].height(iced::Fill).into();
-
-        // Optional layers above `main_column`, in z-order (lowest first).
-        // `flatten()` drops the `None`s so only overlays that need to render
-        // this frame end up in the Vec.
-        let mut overlays: Vec<Element<'_, Message, AppTheme>> = [
-            sheet,
-            modal,
-            settings_modal,
-            generator_modal,
-            import_modal,
-            export_modal,
-            new_folder_modal,
-            fingerprint_modal,
-            screenshot_confirm_modal,
-        ]
-        .into_iter()
-        .flatten()
-        .collect();
 
         // Drag-by-titlebar overlay sits on top when any overlay is up. Only
         // meaningful with the custom title bar — macOS native already handles
@@ -227,7 +136,7 @@ impl App {
                     .width(iced::Fill)
                     .height(iced::Length::Fixed(title_bar::TITLE_BAR_HEIGHT)),
             )
-            .on_press(Message::title_bar(TitleBarMessage::DragStart));
+            .on_press(TitleBarMessage::DragStart.into());
             let filler = iced::widget::container(iced::widget::Space::new())
                 .width(iced::Fill)
                 .height(iced::Fill);
@@ -255,9 +164,7 @@ impl App {
             toast::Manager::new(stacked, &self.toasts, close_toast).into();
 
         if use_custom_menu_bar {
-            title_bar::resize_wrapper(with_toasts, |dir| {
-                Message::title_bar(TitleBarMessage::ResizeEdge(dir))
-            })
+            title_bar::resize_wrapper(with_toasts, |dir| TitleBarMessage::ResizeEdge(dir).into())
         } else {
             with_toasts
         }
@@ -292,5 +199,49 @@ impl App {
             Some(WindowKind::Main) => self.settings.zoom_factor.scale(),
             _ => 1.0,
         }
+    }
+
+    /// Build the list of overlays (sub-modals, sheets, app-level modals) that
+    /// stack above the active screen this frame, in z-order. The active
+    /// screen's `view()` is rendered separately as the page content; its
+    /// `overlays()` (sheet + sub-modal) come first, then the global modals
+    /// (Settings, Generator, etc.) on top, then the free-function modals
+    /// (fingerprint, screenshot confirm).
+    fn collect_overlays<'a>(&'a self, rctx: &RenderCtx<'a>) -> Vec<Element<'a, Message, AppTheme>> {
+        let mut out: Vec<Element<'a, Message, AppTheme>> = Vec::new();
+
+        // Active screen's sub-overlays. The screen's own `view()` is rendered
+        // separately as page content, so only its `overlays()` go here.
+        match self.screen {
+            Screen::Vault => self.views.vault.push_overlays_into(rctx, &mut out),
+            Screen::Send => self.views.send.push_overlays_into(rctx, &mut out),
+            Screen::Login => self.views.login.push_overlays_into(rctx, &mut out),
+            Screen::Loading => {}
+        }
+
+        // App-level modal views. Each renders as an overlay (their `view()`
+        // is the modal dialog) plus any nested overlays they own. `Message`
+        // is inferred from `out`; each view's local message converts via
+        // `impl From<XxxMessage> for Message`.
+        self.views.settings.push_into(rctx, &mut out);
+        self.views.generator.push_into(rctx, &mut out);
+        self.views.import.push_into(rctx, &mut out);
+        self.views.export.push_into(rctx, &mut out);
+        self.views.new_folder.push_into(rctx, &mut out);
+
+        // Free-function modals — not full `View` impls because their state is
+        // held on `App` rather than a dedicated view struct.
+        if let Some(el) =
+            crate::views::fingerprint_phrase::modal_view(&self.fingerprint, rctx.colors)
+        {
+            out.push(el.map(Into::into));
+        }
+        if let Some(el) =
+            crate::views::screenshot_confirm::modal_view(&self.screenshot_confirm, rctx.colors)
+        {
+            out.push(el.map(Into::into));
+        }
+
+        out
     }
 }

@@ -14,11 +14,11 @@
 use bitwarden_core::OrganizationId;
 use iced::{
     Alignment, Element, Fill, Padding,
-    widget::{self, column, container, row, stack, text},
+    widget::{self, column, container, row, text},
 };
 
 use crate::{
-    app::{Outcome, UpdateCtx, ViewTypes},
+    app::{Outcome, RenderCtx, UpdateCtx, View},
     components::{FadeInOut, fade_in_out, icons, inputs, modal, toast::Toast},
     domain::UserId,
     fl,
@@ -156,54 +156,11 @@ pub enum ExportEvent {
     },
 }
 
-impl ViewTypes for ExportView {
+impl View for ExportView {
     type Message = ExportMessage;
     type Event = ExportEvent;
-}
 
-// ── Lifecycle ─────────────────────────────────────────────────────────────
-
-impl ExportView {
-    pub fn new() -> Self {
-        Self {
-            fade: FadeInOut::default(),
-            confirm_fade: FadeInOut::default(),
-            email: String::new(),
-            vault_choices: vec![VaultChoice::Personal],
-            selected_vault: VaultChoice::Personal,
-            selected_format: ExportFormatChoice::Json,
-            file_password: String::new(),
-            master_password: String::new(),
-            validating: false,
-        }
-    }
-
-    pub fn open(&mut self, email: String) {
-        self.fade.open();
-        self.confirm_fade.close();
-        self.email = email;
-        self.selected_vault = VaultChoice::Personal;
-        self.selected_format = ExportFormatChoice::Json;
-        self.file_password.clear();
-        self.master_password.clear();
-        self.validating = false;
-    }
-
-    /// Replace the source-vault dropdown options with "My vault" + the
-    /// active user's org list. Called by App on each open from the cached
-    /// org snapshot held by `VaultView` — same pattern as the import modal.
-    pub fn set_organizations(&mut self, orgs: &[Organization]) {
-        self.vault_choices = VaultChoice::list_with_personal(orgs);
-    }
-
-    fn close_all(&mut self) {
-        self.fade.close();
-        self.confirm_fade.close();
-        self.master_password.clear();
-        self.validating = false;
-    }
-
-    pub fn update(&mut self, msg: ExportMessage, ctx: UpdateCtx<'_>) -> Outcome<Self> {
+    fn update(&mut self, msg: ExportMessage, ctx: UpdateCtx<'_>) -> Outcome<Self> {
         match msg {
             ExportMessage::Close => {
                 self.close_all();
@@ -314,18 +271,64 @@ impl ExportView {
         }
     }
 
-    pub fn modal_view<'a>(
-        &'a self,
-        ctx: &crate::app::RenderCtx<'a>,
-    ) -> Option<Element<'a, ExportMessage, AppTheme>> {
-        let progress = self.fade.progress_if_visible()?;
-        let compose = self.compose_dialog(ctx.colors, progress);
+    fn should_render(&self) -> bool {
+        self.fade.is_visible()
+    }
 
-        let Some(confirm_progress) = self.confirm_fade.progress_if_visible() else {
-            return Some(compose);
-        };
-        let confirm = self.confirm_dialog(ctx.colors, confirm_progress);
-        Some(stack![compose, confirm].into())
+    fn view<'a>(&'a self, ctx: &RenderCtx<'a>) -> Element<'a, ExportMessage, AppTheme> {
+        self.compose_dialog(ctx.colors, self.fade.progress_when_visible())
+    }
+
+    /// Confirm-master-password dialog — sits on top of the compose dialog
+    /// when the user has hit Continue.
+    fn overlays<'a>(&'a self, ctx: &RenderCtx<'a>) -> Vec<Element<'a, ExportMessage, AppTheme>> {
+        match self.confirm_fade.progress_if_visible() {
+            Some(progress) => vec![self.confirm_dialog(ctx.colors, progress)],
+            None => Vec::new(),
+        }
+    }
+}
+
+// ── Lifecycle ─────────────────────────────────────────────────────────────
+
+impl ExportView {
+    pub fn new() -> Self {
+        Self {
+            fade: FadeInOut::default(),
+            confirm_fade: FadeInOut::default(),
+            email: String::new(),
+            vault_choices: vec![VaultChoice::Personal],
+            selected_vault: VaultChoice::Personal,
+            selected_format: ExportFormatChoice::Json,
+            file_password: String::new(),
+            master_password: String::new(),
+            validating: false,
+        }
+    }
+
+    pub fn open(&mut self, email: String) {
+        self.fade.open();
+        self.confirm_fade.close();
+        self.email = email;
+        self.selected_vault = VaultChoice::Personal;
+        self.selected_format = ExportFormatChoice::Json;
+        self.file_password.clear();
+        self.master_password.clear();
+        self.validating = false;
+    }
+
+    /// Replace the source-vault dropdown options with "My vault" + the
+    /// active user's org list. Called by App on each open from the cached
+    /// org snapshot held by `VaultView` — same pattern as the import modal.
+    pub fn set_organizations(&mut self, orgs: &[Organization]) {
+        self.vault_choices = VaultChoice::list_with_personal(orgs);
+    }
+
+    fn close_all(&mut self) {
+        self.fade.close();
+        self.confirm_fade.close();
+        self.master_password.clear();
+        self.validating = false;
     }
 
     fn compose_dialog<'a>(

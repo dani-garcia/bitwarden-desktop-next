@@ -334,11 +334,7 @@ mod tests {
             ..Default::default()
         });
 
-        let out = filter_items(
-            &[login, note],
-            VaultFilter::Category(CipherType::Login),
-            "",
-        );
+        let out = filter_items(&[login, note], VaultFilter::Category(CipherType::Login), "");
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].name, "Login");
     }

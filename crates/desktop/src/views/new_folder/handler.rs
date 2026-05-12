@@ -11,7 +11,7 @@ impl App {
         match event {
             NewFolderEvent::Run(name) => self.perform_with_active_client(
                 move |client| async move { client.create_folder(name).await.map(|_| ()) },
-                |_uid, res| Message::new_folder(NewFolderMessage::Saved(res)),
+                |_uid, res| NewFolderMessage::Saved(res).into(),
             ),
         }
     }
@@ -25,6 +25,5 @@ impl App {
         crate::components::fade_in_out::focus_after_open(
             crate::views::new_folder::NAME_FIELD_ID.clone(),
         )
-        .map(Message::new_folder)
     }
 }

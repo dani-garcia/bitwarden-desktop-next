@@ -1,31 +1,30 @@
 # TODO
 
-Open work, organized by **what it asks of the picker** rather than by importance.
-Pick by what unblocks you or what's interesting — order within each section is
-not a queue.
+Open work, organized by **what it asks of the picker** rather than by importance. Pick by
+what unblocks you or what's interesting — order within each section is not a queue.
 
-**Keep this file in sync.** Finish (or partially finish) a task → update or
-remove its entry in the same change. Reduced scope is fine — shrink the entry
-to what's still left.
+**Keep this file in sync.** Finish (or partially finish) a task → update or remove its
+entry in the same change. Reduced scope is fine — shrink the entry to what's still left.
 
-Completed work isn't tracked here; check `git log` or
-[docs/decisions.md](./decisions.md) for context.
+Completed work isn't tracked here; check `git log` or [docs/decisions.md](./decisions.md)
+for context.
 
 ## Conventions
 
 Each entry carries two inline tags so you can size it at a glance:
 
-| Tag | Meaning |
-|---|---|
-| `[S]` | A few hours; one or two files; spec is unambiguous. |
-| `[M]` | One or two days; spans a feature; a couple of small judgement calls. |
-| `[L]` | Multi-PR, multi-day; meaningful surface area. |
-| `[plan]` | Needs a written plan before code. |
-| `[defer: …]` | Spec is clear, but landing it is wasted work until the named condition holds. |
-| `[blocked: …]` | Can't progress until the named external thing changes. |
+| Tag            | Meaning                                                                       |
+| -------------- | ----------------------------------------------------------------------------- |
+| `[S]`          | A few hours; one or two files; spec is unambiguous.                           |
+| `[M]`          | One or two days; spans a feature; a couple of small judgement calls.          |
+| `[L]`          | Multi-PR, multi-day; meaningful surface area.                                 |
+| `[plan]`       | Needs a written plan before code.                                             |
+| `[defer: …]`   | Spec is clear, but landing it is wasted work until the named condition holds. |
+| `[blocked: …]` | Can't progress until the named external thing changes.                        |
 
 ## Contents
 
+- [MVU trait follow-ups](#mvu-trait-follow-ups)
 - [Quick wins](#quick-wins)
 - [Auth & onboarding](#auth--onboarding)
 - [Vault & Send](#vault--send)
@@ -38,19 +37,113 @@ Each entry carries two inline tags so you can size it at a glance:
 
 ---
 
+## MVU trait follow-ups
+
+Carry-overs from the [`View`](../crates/desktop/src/app/ctx.rs) trait consolidation:
+`View` now bundles state + `Message` + `Event` + `update` + `should_render` + `view` +
+`overlays`, with a `ViewExt` blanket-impl handling the App-message lift via
+`M: From<Self::Message>`. These items finish the shape — none are blocking, all are loose
+ends.
+
+- **Fold `TitleBarView` into the trait properly** `[M]` — `TitleBarView` is the one
+  outlier: its trait `view` is `unreachable!()` and `should_render` returns `false`
+  because the real render needs
+  `(is_maximized, &MenuState, open_menu, open_submenu, &AppColors)` — args that don't fit
+  `(&self, &RenderCtx)`. Fix by adding those four window-state fields to
+  [`RenderCtx`](../crates/desktop/src/app/ctx.rs) (populated in `App::render_ctx`),
+  changing the inherent `TitleBarView::view` signature to `(&self, &RenderCtx)`, and
+  dropping the `should_render: false` workaround and the inherent-call carve-out in
+  [`app/view.rs`](../crates/desktop/src/app/view.rs). Once done, `App::collect_overlays`
+  can route the title bar through `push_into` like every other view.
+
+- **Promote `fingerprint_phrase` and `screenshot_confirm` to real `View` impls** `[M]` —
+  both are free-function `modal_view(...)` with their state living on `App` directly
+  (single string + fade, single bool + fade respectively). `App::collect_overlays` has a
+  special-case for each:
+
+  ```rust
+  if let Some(el) = crate::views::fingerprint_phrase::modal_view(&self.fingerprint, rctx.colors) { … }
+  ```
+
+  Make each its own `View` impl (struct already exists; add `Event` enum if non-trivial,
+  otherwise an empty stub; wire `should_render`/`view`/`overlays`). Move the state from
+  `App` into the view struct and update the existing handlers. Then the two special-case
+  branches collapse into `self.fingerprint.push_into(rctx, &mut out)` /
+  `self.screenshot_confirm.push_into(rctx, &mut out)`. Doc rationale in those modules used
+  to say "single-string state didn't warrant the boilerplate" — the trait is smaller now,
+  but it's still ~30 lines per view of scaffolding for purely visual uniformity.
+  Stylistic, not structural.
+
+- **`Modal: View` sub-trait** `[S]` — every modal view currently writes the same one-line
+  `close()`/`is_open()` inherent methods that just forward to
+  `self.fade.{close,is_open}()`, plus the same
+  `fn should_render() -> bool { self.fade.is_visible() }` trait impl. A `Modal: View`
+  sub-trait with required `fn fade(&self) -> &FadeInOut` +
+  `fn fade_mut(&mut self) -> &mut FadeInOut` and default `close`/`is_open` lets each modal
+  drop those forwarding methods. Without specialization, `should_render` still has to be
+  implemented per-view, so this is mostly type-system documentation rather than a real
+  reduction. Skip unless we discover a generic `<M: Modal>` use site that justifies the
+  trait.
+
+- **Rename `ViewExt::push_into` / `push_overlays_into`** `[S]` — the names don't convey
+  the difference: `push_into` pushes `view()` + `overlays()`, `push_overlays_into` pushes
+  only `overlays()`. Consider `push_render` / `push_overlays`, or a single method
+  `push(include_view: bool)`. Pure rename, all call sites are in
+  [`App::collect_overlays`](../crates/desktop/src/app/view.rs).
+
+- **Direct tests for the trait plumbing** `[S]` —
+  [`Outcome::dispatch`](../crates/desktop/src/app/ctx.rs)'s `From<V::Message>` lift and
+  `PushToast` routing, and `ViewExt::push_into`'s sink-based collection, are covered
+  implicitly by every runtime interaction but have no direct unit tests. A handful of
+  asserts (build a fake view, run `dispatch` against a fake App-like state, verify Task /
+  Event / Toast routing each work) would catch a future broken `From` impl earlier and
+  document the contract.
+
+---
+
 ## Quick wins
 
 Each is small enough to land in one focused session.
 
-- **Master-password hint request** `[S]` — "Get master password hint" link on the login-password screen sends a hint request to the server. One SDK call + one toast.
-- **"Always show dock" (macOS)** `[S]` — `NSApplication.setActivationPolicy`. Single API call; macOS-only build branch.
+- **Master-password hint request** `[S]` — "Get master password hint" link on the
+  login-password screen sends a hint request to the server. One SDK call + one toast.
+- **"Always show dock" (macOS)** `[S]` — `NSApplication.setActivationPolicy`. Single API
+  call; macOS-only build branch.
 - **DuckDuckGo browser integration (macOS)** `[S]` — niche; small toggle wired through.
-- **Edit menu — Undo / Redo / Cut / Copy / Paste / Select all** `[plan]` — currently rendered as **disabled placeholders** (`EnabledWhen::Never`) so the menu still mirrors the official client visually. Iced text widgets already handle all six via the keyboard; menu wiring would need a focused-widget dispatcher. Decide whether to (a) build that dispatcher, or (b) remove the entries entirely and live on keyboard shortcuts only — the official client gets these "for free" via `role: "undo"` etc., a luxury we don't have.
-- **File → Lock vault / Log out per-account submenus** `[M]` — both render as empty submenus ([services/menu/mod.rs](../crates/desktop/src/services/menu/mod.rs) `.sub(&[])` placeholders). Need runtime population: one entry per unlocked account for Lock, one per known account for Log out. The custom title-bar dropdown ([views/title_bar/dropdown.rs](../crates/desktop/src/views/title_bar/dropdown.rs)) reads `entry.children` straight off the static `MENUS` constant, so injecting per-account entries needs either a new `MenuEntry` shape (children as `Cow<'static>`) or a parallel "dynamic submenu" concept. Native muda also needs to populate the same children at attach time and refresh them on lock/unlock/login/logout.
-- **Magnify footer "More" expander** `[S]` — the launcher binds `Ctrl+C / Ctrl+Shift+C / Ctrl+T / Ctrl+U / Ctrl+Shift+N` but the hint bar still surfaces the first three only. Replace the trailing slots with a "More" disclosure (cursor-positioned popover or expand-on-hover row).
-- **Magnify decrypt-failure feedback** `[S]` `[blocked: tray-balloon / OS-notification path]` — `Err` from `full_cipher` only logs at `warn` and the launcher silently dismisses ([handlers/magnify.rs](../crates/desktop/src/app/handlers/magnify.rs) `FieldDecryptCompleted`). Hook into a notification path once one exists.
-- **Tray icon Linux test-VM verification** `[S]` `[blocked: Linux test machine]` — packaging-side wiring is in (`.deb` / `.pacman` declare `libayatana-appindicator3-1` / `libayatana-appindicator`; README notes the SNI-host requirement). Verify GNOME + AppIndicator extension, KDE Plasma, and sway + waybar on a VM.
-- **Per-type item-list icons** `[S]` — non-login ciphers fall back to `favicon::globe_handle()` in [views/vault/widgets/item_list.rs](../crates/desktop/src/views/vault/widgets/item_list.rs). Card / Identity / Note / SSH-key entries each have a BWI glyph already used in the magnify launcher and detail headers; mirror that mapping here so the list shows a type-specific icon.
+- **Edit menu — Undo / Redo / Cut / Copy / Paste / Select all** `[plan]` — currently
+  rendered as **disabled placeholders** (`EnabledWhen::Never`) so the menu still mirrors
+  the official client visually. Iced text widgets already handle all six via the keyboard;
+  menu wiring would need a focused-widget dispatcher. Decide whether to (a) build that
+  dispatcher, or (b) remove the entries entirely and live on keyboard shortcuts only — the
+  official client gets these "for free" via `role: "undo"` etc., a luxury we don't have.
+- **File → Lock vault / Log out per-account submenus** `[M]` — both render as empty
+  submenus ([services/menu/mod.rs](../crates/desktop/src/services/menu/mod.rs) `.sub(&[])`
+  placeholders). Need runtime population: one entry per unlocked account for Lock, one per
+  known account for Log out. The custom title-bar dropdown
+  ([views/title_bar/dropdown.rs](../crates/desktop/src/views/title_bar/dropdown.rs)) reads
+  `entry.children` straight off the static `MENUS` constant, so injecting per-account
+  entries needs either a new `MenuEntry` shape (children as `Cow<'static>`) or a parallel
+  "dynamic submenu" concept. Native muda also needs to populate the same children at
+  attach time and refresh them on lock/unlock/login/logout.
+- **Magnify footer "More" expander** `[S]` — the launcher binds
+  `Ctrl+C / Ctrl+Shift+C / Ctrl+T / Ctrl+U / Ctrl+Shift+N` but the hint bar still surfaces
+  the first three only. Replace the trailing slots with a "More" disclosure
+  (cursor-positioned popover or expand-on-hover row).
+- **Magnify decrypt-failure feedback** `[S]`
+  `[blocked: tray-balloon / OS-notification path]` — `Err` from `full_cipher` only logs at
+  `warn` and the launcher silently dismisses
+  ([handlers/magnify.rs](../crates/desktop/src/app/handlers/magnify.rs)
+  `FieldDecryptCompleted`). Hook into a notification path once one exists.
+- **Tray icon Linux test-VM verification** `[S]` `[blocked: Linux test machine]` —
+  packaging-side wiring is in (`.deb` / `.pacman` declare `libayatana-appindicator3-1` /
+  `libayatana-appindicator`; README notes the SNI-host requirement). Verify GNOME +
+  AppIndicator extension, KDE Plasma, and sway + waybar on a VM.
+- **Per-type item-list icons** `[S]` — non-login ciphers fall back to
+  `favicon::globe_handle()` in
+  [views/vault/widgets/item_list.rs](../crates/desktop/src/views/vault/widgets/item_list.rs).
+  Card / Identity / Note / SSH-key entries each have a BWI glyph already used in the
+  magnify launcher and detail headers; mirror that mapping here so the list shows a
+  type-specific icon.
 
 ---
 
@@ -60,15 +153,23 @@ The login command is the keystone — most of this section flows from it.
 
 ### Implement the login command `[L]`
 
-[crates/desktop/src/views/login/login_email.rs](../crates/desktop/src/views/login/login_email.rs) stubs after `ContinueWithEmail` — no network call, no session creation. Wire `bitwarden_auth`'s password-login API through `ClientManager` so a user with an email + master password can authenticate (not just unlock an existing `fake-data`-seeded SQLite). Handle CAPTCHA / device-verification responses (toast + retry); sanitise SDK errors per the toast rule. 2FA screens are out of scope — see "Two-factor authentication" below.
+[crates/desktop/src/views/login/login_email.rs](../crates/desktop/src/views/login/login_email.rs)
+stubs after `ContinueWithEmail` — no network call, no session creation. Wire
+`bitwarden_auth`'s password-login API through `ClientManager` so a user with an email +
+master password can authenticate (not just unlock an existing `fake-data`-seeded SQLite).
+Handle CAPTCHA / device-verification responses (toast + retry); sanitise SDK errors per
+the toast rule. 2FA screens are out of scope — see "Two-factor authentication" below.
 
 ### Two-factor authentication `[L]`
 
-After a successful `ContinueWithEmail`, the server may demand TOTP / Duo / WebAuthn / email code. Each is its own `AuthPage` variant under `LoginView`. Independent of the login-command landing, but any 2FA-enabled account can't finish logging in without these.
+After a successful `ContinueWithEmail`, the server may demand TOTP / Duo / WebAuthn /
+email code. Each is its own `AuthPage` variant under `LoginView`. Independent of the
+login-command landing, but any 2FA-enabled account can't finish logging in without these.
 
 ### Registration view `[M]`
 
-"Create account" link on login email screen. Email, password, hint fields. New sub-view under `views/register/` plus a new `Register` screen variant or inlined into `LoginView`.
+"Create account" link on login email screen. Email, password, hint fields. New sub-view
+under `views/register/` plus a new `Register` screen variant or inlined into `LoginView`.
 
 ### SSO login flow `[L]`
 
@@ -76,11 +177,22 @@ After a successful `ContinueWithEmail`, the server may demand TOTP / Duo / WebAu
 
 ### Per-user `icons_url` for self-hosted `[M]` `[blocked: login command]`
 
-All users currently resolve to `https://icons.bitwarden.net` via [services/favicon/](../crates/desktop/src/services/favicon/mod.rs). Add `icons_url: String` on `UserEntry` ([services/sdk/](../crates/desktop/src/services/sdk/)), populate from `/api/config`'s `environment.icons` at login (cloud defaults: US `icons.bitwarden.net`, EU `icons.bitwarden.eu` per the Angular clients' `default-environment.service.ts`), expose `ClientManager::icons_url(&uid) -> Option<String>`, and swap the resolver closure in [app/lifecycle.rs](../crates/desktop/src/app/lifecycle.rs) (per-fetch closure → re-auth picks up the new URL without restart, fallback to US cloud when `None`).
+All users currently resolve to `https://icons.bitwarden.net` via
+[services/favicon/](../crates/desktop/src/services/favicon/mod.rs). Add
+`icons_url: String` on `UserEntry` ([services/sdk/](../crates/desktop/src/services/sdk/)),
+populate from `/api/config`'s `environment.icons` at login (cloud defaults: US
+`icons.bitwarden.net`, EU `icons.bitwarden.eu` per the Angular clients'
+`default-environment.service.ts`), expose
+`ClientManager::icons_url(&uid) -> Option<String>`, and swap the resolver closure in
+[app/lifecycle.rs](../crates/desktop/src/app/lifecycle.rs) (per-fetch closure → re-auth
+picks up the new URL without restart, fallback to US cloud when `None`).
 
 ### `LoginView` per-`AuthPage` field grouping `[M]` `[defer: Registration view]`
 
-`AuthPage` carries all per-page state as inline fields; 15 match arms in `LoginView::update` start with `if let AuthPage::Unlock { ... } = &mut self.auth_page`. Extract into `UnlockState` / `LoginEmailState` / `LoginPasswordState` sub-structs. Cheaper to do alongside the Registration touch.
+`AuthPage` carries all per-page state as inline fields; 15 match arms in
+`LoginView::update` start with `if let AuthPage::Unlock { ... } = &mut self.auth_page`.
+Extract into `UnlockState` / `LoginEmailState` / `LoginPasswordState` sub-structs. Cheaper
+to do alongside the Registration touch.
 
 ---
 
@@ -88,67 +200,171 @@ All users currently resolve to `https://icons.bitwarden.net` via [services/favic
 
 ### Bank-account cipher type `[M]`
 
-The SDK exposes `CipherType::BankAccount` / `CipherListViewType::BankAccount`; the desktop UI stubs at every match site (search `TODO(bank-account)`) so existing items don't crash but render with no type-specific section, and the magnify launcher uses the credit-card icon as a stand-in.
+The SDK exposes `CipherType::BankAccount` / `CipherListViewType::BankAccount`; the desktop
+UI stubs at every match site (search `TODO(bank-account)`) so existing items don't crash
+but render with no type-specific section, and the magnify launcher uses the credit-card
+icon as a stand-in.
 
-- New `bank_account` module under [cipher_detail/](../crates/desktop/src/views/vault/widgets/cipher_detail/) mirroring `card` / `identity`, plus the `match` arm in [view.rs:34](../crates/desktop/src/views/vault/widgets/cipher_detail/view.rs).
-- Mirror under [cipher_edit/sections/](../crates/desktop/src/views/vault/widgets/cipher_edit/sections/), the `match` arm in [view.rs:29](../crates/desktop/src/views/vault/widgets/cipher_edit/view.rs), and an `ensure_sub_structs` arm in [state.rs:186](../crates/desktop/src/views/vault/widgets/cipher_edit/state.rs) seeding `BankAccountView`.
-- Add a `BWI_BANK` glyph to [components/icons.rs](../crates/desktop/src/components/icons.rs); use it from the magnify-launcher row + cipher-detail header.
+- New `bank_account` module under
+  [cipher_detail/](../crates/desktop/src/views/vault/widgets/cipher_detail/) mirroring
+  `card` / `identity`, plus the `match` arm in
+  [view.rs:34](../crates/desktop/src/views/vault/widgets/cipher_detail/view.rs).
+- Mirror under
+  [cipher_edit/sections/](../crates/desktop/src/views/vault/widgets/cipher_edit/sections/),
+  the `match` arm in
+  [view.rs:29](../crates/desktop/src/views/vault/widgets/cipher_edit/view.rs), and an
+  `ensure_sub_structs` arm in
+  [state.rs:186](../crates/desktop/src/views/vault/widgets/cipher_edit/state.rs) seeding
+  `BankAccountView`.
+- Add a `BWI_BANK` glyph to
+  [components/icons.rs](../crates/desktop/src/components/icons.rs); use it from the
+  magnify-launcher row + cipher-detail header.
 - "New bank account" entry in the new-item dropdown.
-- Localization: `detail-header-bank-account` / `form-title-edit-bank-account` already exist in en + es; expand once section labels and field strings are fleshed out.
+- Localization: `detail-header-bank-account` / `form-title-edit-bank-account` already
+  exist in en + es; expand once section labels and field strings are fleshed out.
 
 ### Right-click context menu for text inputs `[M]`
 
-Cut / copy / paste / select-all on `TextInput` and the notes `TextEditor` in `cipher_edit`. Iced 0.15 doesn't ship this — text widgets silently swallow right-clicks. Shape: a `components::context_menu` wrapper that stacks `MouseArea::on_right_press` over the child and shows our `DropDown` with the four actions. `TextEditor` already accepts `Action::{Copy,Cut,Paste,SelectAll}` via `on_action` (direct wire-up). `TextInput` needs a `widget::Id` per field + `widget::operation::text_input::{select_all, …}` dispatched as `Task`s; paste reuses iced's clipboard shell. First pass anchors the menu to the field (our `DropDown` is widget-anchored); cursor-anchored variant would need a small `DropDown` extension for absolute-offset placement.
+Cut / copy / paste / select-all on `TextInput` and the notes `TextEditor` in
+`cipher_edit`. Iced 0.15 doesn't ship this — text widgets silently swallow right-clicks.
+Shape: a `components::context_menu` wrapper that stacks `MouseArea::on_right_press` over
+the child and shows our `DropDown` with the four actions. `TextEditor` already accepts
+`Action::{Copy,Cut,Paste,SelectAll}` via `on_action` (direct wire-up). `TextInput` needs a
+`widget::Id` per field + `widget::operation::text_input::{select_all, …}` dispatched as
+`Task`s; paste reuses iced's clipboard shell. First pass anchors the menu to the field
+(our `DropDown` is widget-anchored); cursor-anchored variant would need a small `DropDown`
+extension for absolute-offset placement.
 
 ### Send — wire to real SDK `[L]`
 
-Sends live as decrypted `SendView`s in an in-memory `HashMap` on [`ClientManager`](../crates/desktop/src/services/sdk/mod.rs) (`list_sends` / `full_send` / `save_send` / `delete_send`). Empty at startup; mutations never leave the process. Replace the in-memory map with the SDK's `Repository<Send>` + `SendClient::{encrypt, decrypt, decrypt_list}`. `ClientManager`'s methods are already async + fallible so call sites don't change. Drop the `uuid::Uuid::new_v4()` id fabrication in `save_send`; the placeholder `access_id` should come from `CreateSendResponse`. Once the SDK returns a real `access_id` + key fragment, `SendForm::send_link` ([state.rs](../crates/desktop/src/views/send/widgets/send_edit/state.rs)) can drop its `http://vault.bitwarden.test/#/send/{access_id}` stub and use the user's configured `server_url` with the actual URL shape.
+Sends live as decrypted `SendView`s in an in-memory `HashMap` on
+[`ClientManager`](../crates/desktop/src/services/sdk/mod.rs) (`list_sends` / `full_send` /
+`save_send` / `delete_send`). Empty at startup; mutations never leave the process. Replace
+the in-memory map with the SDK's `Repository<Send>` +
+`SendClient::{encrypt, decrypt, decrypt_list}`. `ClientManager`'s methods are already
+async + fallible so call sites don't change. Drop the `uuid::Uuid::new_v4()` id
+fabrication in `save_send`; the placeholder `access_id` should come from
+`CreateSendResponse`. Once the SDK returns a real `access_id` + key fragment,
+`SendForm::send_link`
+([state.rs](../crates/desktop/src/views/send/widgets/send_edit/state.rs)) can drop its
+`http://vault.bitwarden.test/#/send/{access_id}` stub and use the user's configured
+`server_url` with the actual URL shape.
 
 ### Send — file creation flow `[M]`
 
-The "Choose file" button in the new-file-send branch ([widgets/send_edit/view.rs](../crates/desktop/src/views/send/widgets/send_edit/view.rs) `file_section`) is a placeholder — message fires, handler is a no-op. Needs `rfd::AsyncFileDialog::new().pick_file().await` (already a dep — see [app/handlers/export.rs](../crates/desktop/src/app/handlers/export.rs) for the `Task::perform` recipe) to populate `file_name` + `file_size_name`, plus `SendClient::encrypt_file` / `encrypt_buffer` wiring.
+The "Choose file" button in the new-file-send branch
+([widgets/send_edit/view.rs](../crates/desktop/src/views/send/widgets/send_edit/view.rs)
+`file_section`) is a placeholder — message fires, handler is a no-op. Needs
+`rfd::AsyncFileDialog::new().pick_file().await` (already a dep — see
+[app/handlers/export.rs](../crates/desktop/src/app/handlers/export.rs) for the
+`Task::perform` recipe) to populate `file_name` + `file_size_name`, plus
+`SendClient::encrypt_file` / `encrypt_buffer` wiring.
 
 ### Send form — embedded password generator panel `[M]`
 
-The password regenerate button currently fires `ClientManager::generate_password` with a fixed request (14-char, all charsets, min 1 digit + 1 symbol — see [send/handler.rs](../crates/desktop/src/views/send/handler.rs) `regenerate_send_password`). The official client opens a contextual side-panel generator instead: Password / Passphrase tabs, live preview with its own regenerate, length / charset / min-number / min-special / avoid-ambiguous options, "Use this password" / "Cancel" footer. On apply the value populates the form field; on cancel the form is untouched. Open question: share [`GeneratorView`](../crates/desktop/src/views/generator/) in an embedded "picker" mode (drop the Username tab, expose options + value, fire an apply event) or build a new lightweight view — the embedded path is fewer LOC but adds a mode switch to the existing modal.
+The password regenerate button currently fires `ClientManager::generate_password` with a
+fixed request (14-char, all charsets, min 1 digit + 1 symbol — see
+[send/handler.rs](../crates/desktop/src/views/send/handler.rs)
+`regenerate_send_password`). The official client opens a contextual side-panel generator
+instead: Password / Passphrase tabs, live preview with its own regenerate, length /
+charset / min-number / min-special / avoid-ambiguous options, "Use this password" /
+"Cancel" footer. On apply the value populates the form field; on cancel the form is
+untouched. Open question: share [`GeneratorView`](../crates/desktop/src/views/generator/)
+in an embedded "picker" mode (drop the Username tab, expose options + value, fire an apply
+event) or build a new lightweight view — the embedded path is fewer LOC but adds a mode
+switch to the existing modal.
 
 ### In-form validation surface `[M]` `[defer: 2nd required field on either form]`
 
-Both `CipherForm` and `SendForm` use a single `is_valid()` method + the `toast-required-fields` toast. Once required-field rules grow past one field, replace `is_valid() -> bool` with `validate() -> HashMap<FieldId, &'static str>` returning per-field error messages. Add `show_validation: bool` flipped on the first failed Save — keeps first-view UX clean. Add `inputs::validated_text_field(...)` in [components/inputs/](../crates/desktop/src/components/inputs/mod.rs) that paints a red border via the `text_input::Style` closure when `Some(error)`. Toast stays as the global "can't save yet" nudge but demoted to title only.
+Both `CipherForm` and `SendForm` use a single `is_valid()` method + the
+`toast-required-fields` toast. Once required-field rules grow past one field, replace
+`is_valid() -> bool` with `validate() -> HashMap<FieldId, &'static str>` returning
+per-field error messages. Add `show_validation: bool` flipped on the first failed Save —
+keeps first-view UX clean. Add `inputs::validated_text_field(...)` in
+[components/inputs/](../crates/desktop/src/components/inputs/mod.rs) that paints a red
+border via the `text_input::Style` closure when `Some(error)`. Toast stays as the global
+"can't save yet" nudge but demoted to title only.
 
 ### Precompute lowercase search keys `[M]`
 
-`VaultView::filter_items` re-lowercases `name`, `subtitle`, and URI per item per keystroke. On the 20k loadtest account that's ~60k allocations per keystroke. Wrap `CipherListView` in a `CipherRow { inner: Arc<CipherListView>, name_lc: String, subtitle_lc: String, uri_lc: Option<String> }` populated once on `ListLoaded`; filter against pre-lowered strings. Pairs with the `Arc<[CipherListView]>` micro-opt below.
+`VaultView::filter_items` re-lowercases `name`, `subtitle`, and URI per item per
+keystroke. On the 20k loadtest account that's ~60k allocations per keystroke. Wrap
+`CipherListView` in a
+`CipherRow { inner: Arc<CipherListView>, name_lc: String, subtitle_lc: String, uri_lc: Option<String> }`
+populated once on `ListLoaded`; filter against pre-lowered strings. Pairs with the
+`Arc<[CipherListView]>` micro-opt below.
 
 ### `Arc<[CipherListView]>` micro-optimization `[M]` `[blocked: bench]`
 
-`VaultView.items.all` and `.cached` hold `Vec<Arc<CipherListView>>`, paying a refcount bump per item per clone/filter. Switch to one shared `Arc<[CipherListView]>`, with filter/search operating on indices. `VaultMessage::ListLoaded` simplifies to `Result<Arc<[CipherListView]>, String>`. Bench before/after on the loadtest account; pair with the lowercase-key cache for a bigger win.
+`VaultView.items.all` and `.cached` hold `Vec<Arc<CipherListView>>`, paying a refcount
+bump per item per clone/filter. Switch to one shared `Arc<[CipherListView]>`, with
+filter/search operating on indices. `VaultMessage::ListLoaded` simplifies to
+`Result<Arc<[CipherListView]>, String>`. Bench before/after on the loadtest account; pair
+with the lowercase-key cache for a bigger win.
 
 ---
 
 ## Magnify launcher
 
-V1 ships behind `Ctrl+Shift+Space` ([views/magnify/](../crates/desktop/src/views/magnify/) + [services/global_hotkey/](../crates/desktop/src/services/global_hotkey/mod.rs)).
+V1 ships behind `Ctrl+Shift+Space`
+([views/magnify/](../crates/desktop/src/views/magnify/) +
+[services/global_hotkey/](../crates/desktop/src/services/global_hotkey/mod.rs)).
 
-- **Master enable/disable toggle** `[M]` — no off-switch today; the global hotkey registers unconditionally at startup. Add `Settings::magnify_enabled: bool` (default `true`), gate `services::global_hotkey::install_event_handler` on it, expose a switch in Integrations / Autotype settings. Toggling at runtime should re-register without restart (`GlobalHotKeyManager::unregister` on disable, re-call `install_event_handler` on enable — the `OnceLock<Sender>` must outlive the disable so re-enable doesn't leak a second manager).
-- **Hotkey settings UI** `[M]` — V1 hardcodes `Ctrl+Shift+Space` (`Cmd+Shift+Space` on macOS). Add a binder; persist `Settings::magnify_hotkey` as a parsed `(Modifiers, Code)`; re-register on change via fresh `GlobalHotKeyManager::register`. The hardcoded `"Ctrl+C"` / `"Ctrl+⇧C"` strings in [chip helpers](../crates/desktop/src/views/magnify/widgets/chip.rs) and [row action pills](../crates/desktop/src/views/magnify/widgets/row.rs) should drive off the bound config so the displayed shortcut matches the binding.
-- **Cursor-monitor centering — Linux** `[M]` `[blocked: Wayland needs DE-specific shim]` — Windows + macOS shipped via [services/cursor_monitor/](../crates/desktop/src/services/cursor_monitor/mod.rs) (`GetCursorPos` + `MonitorFromPoint` + `GetDpiForMonitor` on Windows; `NSEvent::mouseLocation` + `NSScreen` on macOS). Linux returns `None`. X11 is doable via `XQueryPointer` + Xinerama (new dep). Wayland has no standard global-cursor protocol — `wlr-layer-shell` or DE-specific.
-- **Action menu per result** `[M]` — Tab cycles through copy options, or `Cmd+1/2/3`. Lets users pick non-default fields without leaving the keyboard.
-- **Recent / smart ranking** `[M]` — sort by last-used; pin manually-favourited items to the top. Per-user usage tracking (small side-table in `data/`).
-- **Multi-user search** `[M]` — currently single-user (active vault only). User badge per row + cross-user merge unlocks "search any unlocked account" UX.
-- **Encapsulate `MagnifyView` state** `[M]` `[defer: next refactor that touches the struct]` — all fields are `pub(crate)` and the App-level handler reaches in directly. Move every field private, expose `set_query` / `set_selected` / `update_scroll_offset` / `clamp_selection`. ~10 fields all read+write — verbose for what it buys in isolation.
-- **Autotype handoff** `[blocked: autotype framework]` — Enter on the highlighted result triggers autotype. V1 leaves Enter as a no-op for exactly this reason.
+- **Master enable/disable toggle** `[M]` — no off-switch today; the global hotkey
+  registers unconditionally at startup. Add `Settings::magnify_enabled: bool` (default
+  `true`), gate `services::global_hotkey::install_event_handler` on it, expose a switch in
+  Integrations / Autotype settings. Toggling at runtime should re-register without restart
+  (`GlobalHotKeyManager::unregister` on disable, re-call `install_event_handler` on enable
+  — the `OnceLock<Sender>` must outlive the disable so re-enable doesn't leak a second
+  manager).
+- **Hotkey settings UI** `[M]` — V1 hardcodes `Ctrl+Shift+Space` (`Cmd+Shift+Space` on
+  macOS). Add a binder; persist `Settings::magnify_hotkey` as a parsed
+  `(Modifiers, Code)`; re-register on change via fresh `GlobalHotKeyManager::register`.
+  The hardcoded `"Ctrl+C"` / `"Ctrl+⇧C"` strings in
+  [chip helpers](../crates/desktop/src/views/magnify/widgets/chip.rs) and
+  [row action pills](../crates/desktop/src/views/magnify/widgets/row.rs) should drive off
+  the bound config so the displayed shortcut matches the binding.
+- **Cursor-monitor centering — Linux** `[M]` `[blocked: Wayland needs DE-specific shim]` —
+  Windows + macOS shipped via
+  [services/cursor_monitor/](../crates/desktop/src/services/cursor_monitor/mod.rs)
+  (`GetCursorPos` + `MonitorFromPoint` + `GetDpiForMonitor` on Windows;
+  `NSEvent::mouseLocation` + `NSScreen` on macOS). Linux returns `None`. X11 is doable via
+  `XQueryPointer` + Xinerama (new dep). Wayland has no standard global-cursor protocol —
+  `wlr-layer-shell` or DE-specific.
+- **Action menu per result** `[M]` — Tab cycles through copy options, or `Cmd+1/2/3`. Lets
+  users pick non-default fields without leaving the keyboard.
+- **Recent / smart ranking** `[M]` — sort by last-used; pin manually-favourited items to
+  the top. Per-user usage tracking (small side-table in `data/`).
+- **Multi-user search** `[M]` — currently single-user (active vault only). User badge per
+  row + cross-user merge unlocks "search any unlocked account" UX.
+- **Encapsulate `MagnifyView` state** `[M]`
+  `[defer: next refactor that touches the struct]` — all fields are `pub(crate)` and the
+  App-level handler reaches in directly. Move every field private, expose `set_query` /
+  `set_selected` / `update_scroll_offset` / `clamp_selection`. ~10 fields all read+write —
+  verbose for what it buys in isolation.
+- **Autotype handoff** `[blocked: autotype framework]` — Enter on the highlighted result
+  triggers autotype. V1 leaves Enter as a no-op for exactly this reason.
 
 ---
 
 ## Settings — runtime wiring
 
-24 settings persist to `data/settings.json`; most are UI-only stubs that emit `settings-toast-not-supported`.
+24 settings persist to `data/settings.json`; most are UI-only stubs that emit
+`settings-toast-not-supported`.
 
 ### OS-glue (no SDK work)
 
-- **Open at device login** `[M]` — platform autostart: registry on Windows, LaunchAgent on macOS, `.desktop` file on Linux.
-- **Allow screenshots — branded screenshot decoy** `[M]` `[defer]` — V1 ships protection-only via [services/screenshot_protection/](../crates/desktop/src/services/screenshot_protection/mod.rs) with the "confirm window still visible" auto-revert dialog. Open follow-up: render a custom branded panel (flat color + logo + "Screen capture is disabled" text) inside a second window stacked just below the main window, so screenshots / RDP captures show that panel instead of the OS's blank exclusion. See chat 2026-05-10 for the design (two-window stack, z-order management). Magnify launcher excluded by design — too short-lived to matter.
+- **Open at device login** `[M]` — platform autostart: registry on Windows, LaunchAgent on
+  macOS, `.desktop` file on Linux.
+- **Allow screenshots — branded screenshot decoy** `[M]` `[defer]` — V1 ships
+  protection-only via
+  [services/screenshot_protection/](../crates/desktop/src/services/screenshot_protection/mod.rs)
+  with the "confirm window still visible" auto-revert dialog. Open follow-up: render a
+  custom branded panel (flat color + logo + "Screen capture is disabled" text) inside a
+  second window stacked just below the main window, so screenshots / RDP captures show
+  that panel instead of the OS's blank exclusion. See chat 2026-05-10 for the design
+  (two-window stack, z-order management). Magnify launcher excluded by design — too
+  short-lived to matter.
 
 ### SDK integration
 
@@ -158,7 +374,8 @@ V1 ships behind `Ctrl+Shift+Space` ([views/magnify/](../crates/desktop/src/views
 
 ### Biometrics `[L]` `[plan: desktop_native study]`
 
-Touch ID / Windows Hello / polkit unlock. Implementation depends on the desktop_native study (under [Plan-first](#plan-first)).
+Touch ID / Windows Hello / polkit unlock. Implementation depends on the desktop_native
+study (under [Plan-first](#plan-first)).
 
 ---
 
@@ -166,38 +383,85 @@ Touch ID / Windows Hello / polkit unlock. Implementation depends on the desktop_
 
 ### Sidebar polish `[M]`
 
-- **Expand/collapse animation.** Sidebar width snaps between `RAIL_WIDTH` and `PANEL_WIDTH`. Wire `lilt::Animated<f32, Instant>` for the width; call `services::animation::extend(...)` on toggle so the App's frame subscription auto-picks-up (mirror the generator's segmented-pill swoosh — see [decisions.md](./decisions.md) → "State-Driven Animation"). The naive form leaks: rendering the expanded panel inside a narrow container makes labels wrap mid-animation. Wrap the body in `container(...).clip(true)` so iced bounds-clips the overflow during the transition; pick the destination panel immediately and animate the width up/down beneath it.
-- **Active-row crossfade.** Three filter axes (`active_vault_filter`, `active_send_filter`, `active_section`), so a single `Animated<bool>` doesn't cover them. Either (a) one `Animated<f32>` per axis transitioning 0→1 on change with the row functions threading per-axis progress through as accent alpha plus tracking previous values so the outgoing row fades back to 0; or (b) one animator per axis and skip the outgoing fade — accept the previous row snapping off (asymmetric, ~half the state). Either way the row helpers (`nav_row` / `parent_header_row` / `standalone_item`) take `Option<f32>` selected-progress instead of `is_selected: bool`; rows already paint via style closures so the swap is contained.
+- **Expand/collapse animation.** Sidebar width snaps between `RAIL_WIDTH` and
+  `PANEL_WIDTH`. Wire `lilt::Animated<f32, Instant>` for the width; call
+  `services::animation::extend(...)` on toggle so the App's frame subscription
+  auto-picks-up (mirror the generator's segmented-pill swoosh — see
+  [decisions.md](./decisions.md) → "State-Driven Animation"). The naive form leaks:
+  rendering the expanded panel inside a narrow container makes labels wrap mid-animation.
+  Wrap the body in `container(...).clip(true)` so iced bounds-clips the overflow during
+  the transition; pick the destination panel immediately and animate the width up/down
+  beneath it.
+- **Active-row crossfade.** Three filter axes (`active_vault_filter`,
+  `active_send_filter`, `active_section`), so a single `Animated<bool>` doesn't cover
+  them. Either (a) one `Animated<f32>` per axis transitioning 0→1 on change with the row
+  functions threading per-axis progress through as accent alpha plus tracking previous
+  values so the outgoing row fades back to 0; or (b) one animator per axis and skip the
+  outgoing fade — accept the previous row snapping off (asymmetric, ~half the state).
+  Either way the row helpers (`nav_row` / `parent_header_row` / `standalone_item`) take
+  `Option<f32>` selected-progress instead of `is_selected: bool`; rows already paint via
+  style closures so the swap is contained.
 
 ### Replace `system_theme` crate with iced's built-in `theme_changes()` `[M]`
 
-[`iced::system::theme_changes()`](../crates/desktop/src/theme/mod.rs) returns a `Subscription<theme::Mode>` against the same OS signal we get from the [`system_theme`](https://crates.io/crates/system-theme) crate today. Switching drops a dep + a tokio observer thread and lets the message carry the new mode directly (current `SystemMessage::ThemeChanged` is no-arg, re-reads via `system.get_scheme()`).
+[`iced::system::theme_changes()`](../crates/desktop/src/theme/mod.rs) returns a
+`Subscription<theme::Mode>` against the same OS signal we get from the
+[`system_theme`](https://crates.io/crates/system-theme) crate today. Switching drops a
+dep + a tokio observer thread and lets the message carry the new mode directly (current
+`SystemMessage::ThemeChanged` is no-arg, re-reads via `system.get_scheme()`).
 
-| Source | `system_theme` | iced via winit |
-|---|---|---|
+| Source  | `system_theme`                                            | iced via winit                               |
+| ------- | --------------------------------------------------------- | -------------------------------------------- |
 | Windows | WinRT `UISettings.ColorValuesChanged` (background thread) | Win32 `WM_SETTINGCHANGE` / `WM_THEMECHANGED` |
-| macOS | NSDistributedNotificationCenter | winit's NSApp observation |
-| Linux | XDG portal `org.freedesktop.appearance/color-scheme` | winit's per-windowing-system reading |
+| macOS   | NSDistributedNotificationCenter                           | winit's NSApp observation                    |
+| Linux   | XDG portal `org.freedesktop.appearance/color-scheme`      | winit's per-windowing-system reading         |
 
 Verify before swapping:
 
-1. **Synchronous initial value.** `ThemeState::new()` calls `system.get_scheme()` synchronously inside `App::new` so first paint renders right. iced's path needs `iced::system::theme()` (a `Task<theme::Mode>`) that resolves on the next message cycle. Test the dark-OS startup flicker is invisible.
-2. **Drop `theme_contrast()` / `theme_accent()`.** winit's event is Light/Dark only; we don't use either today, so OK to drop — note in `decisions.md` for a future a11y pass.
-3. **Linux Wayland coverage.** XDG portals work consistently. winit's Wayland reading has been spottier; test on at least one Wayland compositor.
+1. **Synchronous initial value.** `ThemeState::new()` calls `system.get_scheme()`
+   synchronously inside `App::new` so first paint renders right. iced's path needs
+   `iced::system::theme()` (a `Task<theme::Mode>`) that resolves on the next message
+   cycle. Test the dark-OS startup flicker is invisible.
+2. **Drop `theme_contrast()` / `theme_accent()`.** winit's event is Light/Dark only; we
+   don't use either today, so OK to drop — note in `decisions.md` for a future a11y pass.
+3. **Linux Wayland coverage.** XDG portals work consistently. winit's Wayland reading has
+   been spottier; test on at least one Wayland compositor.
 
-Sketch: drop `system-theme` from `Cargo.toml`; replace `ThemeState.system: Rc<system_theme::SystemTheme>` with the resolved mode; dispatch `iced::system::theme()` from `App::new` (handle as `SystemMessage::SystemThemeResolved(Mode)`); replace `theme_sub` with `iced::system::theme_changes().map(...)` carrying the mode payload directly. Net: −1 crate, −1 thread, ~30 lines simpler.
+Sketch: drop `system-theme` from `Cargo.toml`; replace
+`ThemeState.system: Rc<system_theme::SystemTheme>` with the resolved mode; dispatch
+`iced::system::theme()` from `App::new` (handle as
+`SystemMessage::SystemThemeResolved(Mode)`); replace `theme_sub` with
+`iced::system::theme_changes().map(...)` carrying the mode payload directly. Net: −1
+crate, −1 thread, ~30 lines simpler.
 
 ### `UpdateCtx` filter leak `[M]` `[defer: N=3 sidebar filter]`
 
-[`app/ctx.rs`](../crates/desktop/src/app/ctx.rs) carries `active_vault_filter` + `active_send_filter` as separate fields; every view's `update()` receives both. Generator landed without a sidebar filter (history is internal to the modal), so we're at N=2. Whichever next view introduces a sidebar-driven filter tips this to N=3 and the right move becomes obvious — either (a) collapse to a single `sidebar: &SidebarState` field, or (b) push-based: App dispatches `FilterChanged { filter }` to the affected view on sidebar clicks instead of threading the current filter through every cycle.
+[`app/ctx.rs`](../crates/desktop/src/app/ctx.rs) carries `active_vault_filter` +
+`active_send_filter` as separate fields; every view's `update()` receives both. Generator
+landed without a sidebar filter (history is internal to the modal), so we're at N=2.
+Whichever next view introduces a sidebar-driven filter tips this to N=3 and the right move
+becomes obvious — either (a) collapse to a single `sidebar: &SidebarState` field, or (b)
+push-based: App dispatches `FilterChanged { filter }` to the affected view on sidebar
+clicks instead of threading the current filter through every cycle.
 
 ### Shared list-view primitive `[L]` `[defer: 3rd list-style screen]`
 
-`VaultView` and `SendView` share near-identical structure: `Selection { item, id, form, confirm_delete }` / `ItemCache { all, cached }` keyed by `UserId`, plus `recompute_filtered` + `filter_items` + search-query and a `CollapsiblePane` holding list + detail/form. Both reimplement `apply_filter` / `reset` / `remove_user_items` / `focus_search_task`. Two implementations is a coincidence; three is a pattern. When the third lands, evaluate extracting `ListView<T, Form>` generic state + a `ListViewController` trait with `load_list_task` / `full_item` / `save_item` / `delete_item`. Premature here — the shape would lock against an unknown use case.
+`VaultView` and `SendView` share near-identical structure:
+`Selection { item, id, form, confirm_delete }` / `ItemCache { all, cached }` keyed by
+`UserId`, plus `recompute_filtered` + `filter_items` + search-query and a
+`CollapsiblePane` holding list + detail/form. Both reimplement `apply_filter` / `reset` /
+`remove_user_items` / `focus_search_task`. Two implementations is a coincidence; three is
+a pattern. When the third lands, evaluate extracting `ListView<T, Form>` generic state + a
+`ListViewController` trait with `load_list_task` / `full_item` / `save_item` /
+`delete_item`. Premature here — the shape would lock against an unknown use case.
 
 ### Vault + Send event-handler dedup `[S]` `[defer: shared list-view primitive]`
 
-[`vault/handler.rs`](../crates/desktop/src/views/vault/handler.rs) and [`send/handler.rs`](../crates/desktop/src/views/send/handler.rs) dispatch four overlapping event arms (`AccountSwitcher` / `ItemSaved` / `ItemDeleted` / `ClipboardCopyRequested`), differing only in toast strings and which list-reload task they call. Folds for free into the list-view primitive above via a shared `ListEvent<V>`; don't fix in isolation.
+[`vault/handler.rs`](../crates/desktop/src/views/vault/handler.rs) and
+[`send/handler.rs`](../crates/desktop/src/views/send/handler.rs) dispatch four overlapping
+event arms (`AccountSwitcher` / `ItemSaved` / `ItemDeleted` / `ClipboardCopyRequested`),
+differing only in toast strings and which list-reload task they call. Folds for free into
+the list-view primitive above via a shared `ListEvent<V>`; don't fix in isolation.
 
 ---
 
@@ -207,104 +471,203 @@ These need a written plan and a recommendation before code lands.
 
 ### Integrate `desktop_native` from the old clients `[plan]`
 
-The `clients/` git submodule contains `apps/desktop/desktop_native/` — pure-Rust crates the Electron app calls via NAPI. Two modules are directly useful:
+The `clients/` git submodule contains `apps/desktop/desktop_native/` — pure-Rust crates
+the Electron app calls via NAPI. Two modules are directly useful:
 
-- **`desktop_core::biometric_v2`** ([clients/apps/desktop/desktop_native/core/src/biometric_v2/](../clients/apps/desktop/desktop_native/core/src/biometric_v2)) — per-platform biometric unlock (Windows Hello, Touch ID, polkit); modules `windows.rs`, `windows_focus.rs`, `linux.rs`, `unimplemented.rs` (macOS TBD). Backs the "Unlock with Windows Hello" button currently stubbed to a "not yet supported" toast.
-- **`desktop_core::ssh_agent`** ([clients/apps/desktop/desktop_native/core/src/ssh_agent/](../clients/apps/desktop/desktop_native/core/src/ssh_agent)) — serves keys from the unlocked vault via `russh`. Depends on `bitwarden-russh` (same pin as the SDK). See also the standalone `ssh_agent` binary at `clients/apps/desktop/desktop_native/ssh_agent/`.
+- **`desktop_core::biometric_v2`**
+  ([clients/apps/desktop/desktop_native/core/src/biometric_v2/](../clients/apps/desktop/desktop_native/core/src/biometric_v2))
+  — per-platform biometric unlock (Windows Hello, Touch ID, polkit); modules `windows.rs`,
+  `windows_focus.rs`, `linux.rs`, `unimplemented.rs` (macOS TBD). Backs the "Unlock with
+  Windows Hello" button currently stubbed to a "not yet supported" toast.
+- **`desktop_core::ssh_agent`**
+  ([clients/apps/desktop/desktop_native/core/src/ssh_agent/](../clients/apps/desktop/desktop_native/core/src/ssh_agent))
+  — serves keys from the unlocked vault via `russh`. Depends on `bitwarden-russh` (same
+  pin as the SDK). See also the standalone `ssh_agent` binary at
+  `clients/apps/desktop/desktop_native/ssh_agent/`.
 
 Investigation questions:
 
-1. **Consumable as a direct Cargo dep** from our workspace, or tangled with the NAPI layer? `lib.rs` has module guards but `#[global_allocator] ZeroAlloc` is set at crate root and may conflict.
-2. **License compatibility.** Is `desktop_core` under the GPLv3 that applies to `apps/desktop/`, or split out under Bitwarden SDK's Apache/GPL dual? GPL-only would make our binary GPL too.
-3. **Integration path:** (a) direct path dep on the submodule, (b) git-pinned rev, (c) fork and vendor, (d) extract modules into our workspace.
-4. **Biometric v2 API surface.** Windows Hello requirements (hwnd? UWP runtime?). Does it block the UI thread? Async?
-5. **SSH agent lifecycle.** In-process tokio task or out-of-process (Electron-style)? Lock/unlock behaviour? Key plumbing from the SDK?
+1. **Consumable as a direct Cargo dep** from our workspace, or tangled with the NAPI
+   layer? `lib.rs` has module guards but `#[global_allocator] ZeroAlloc` is set at crate
+   root and may conflict.
+2. **License compatibility.** Is `desktop_core` under the GPLv3 that applies to
+   `apps/desktop/`, or split out under Bitwarden SDK's Apache/GPL dual? GPL-only would
+   make our binary GPL too.
+3. **Integration path:** (a) direct path dep on the submodule, (b) git-pinned rev, (c)
+   fork and vendor, (d) extract modules into our workspace.
+4. **Biometric v2 API surface.** Windows Hello requirements (hwnd? UWP runtime?). Does it
+   block the UI thread? Async?
+5. **SSH agent lifecycle.** In-process tokio task or out-of-process (Electron-style)?
+   Lock/unlock behaviour? Key plumbing from the SDK?
 6. **Platform coverage gaps.** macOS Touch ID is `unimplemented.rs`.
 
-Deliverable: a plan document recommending (integration path) × (biometrics in scope?) × (ssh_agent in scope?).
+Deliverable: a plan document recommending (integration path) × (biometrics in scope?) ×
+(ssh_agent in scope?).
 
 ### Toast API review `[plan]`
 
-Before more call sites accumulate (unlock failure, copy-to-clipboard, sync errors), validate the API:
+Before more call sites accumulate (unlock failure, copy-to-clipboard, sync errors),
+validate the API:
 
-- **`Toast::info/success/warning/error(body, title)` surface** — the `title: Option<&str>` slot is a pain point; default callers pass `None`. Alternatives: builder (`Toast::warning("body").with_title("Title")`), default+titled overloads, or drop title entirely.
-- **`Toast` schema** — today `{ title, body, status }`. Future callers may want action button (Undo), icon override, sticky flag, custom timeout. Plan the schema before ten call sites exist.
+- **`Toast::info/success/warning/error(body, title)` surface** — the `title: Option<&str>`
+  slot is a pain point; default callers pass `None`. Alternatives: builder
+  (`Toast::warning("body").with_title("Title")`), default+titled overloads, or drop title
+  entirely.
+- **`Toast` schema** — today `{ title, body, status }`. Future callers may want action
+  button (Undo), icon override, sticky flag, custom timeout. Plan the schema before ten
+  call sites exist.
 - Document the final design in `decisions.md`.
 
-"Toast emission from anywhere" is already solved: views call `Outcome::toast(Toast::*)` and the dispatch helper routes it directly to `push_toast()` — no per-view `ToastRequested` event variant needed.
+"Toast emission from anywhere" is already solved: views call `Outcome::toast(Toast::*)`
+and the dispatch helper routes it directly to `push_toast()` — no per-view
+`ToastRequested` event variant needed.
 
 ---
 
 ## Blocked on Bitwarden SDK
 
-Park; revisit when the named SDK API lands. Each entry names the upstream
-function or crate it's waiting on so you can grep `sdk-internal` for status.
+Park; revisit when the named SDK API lands. Each entry names the upstream function or
+crate it's waiting on so you can grep `sdk-internal` for status.
 
 ### Export — wire org vault export when SDK lands
 
-The Export modal ([views/export/mod.rs](../crates/desktop/src/views/export/mod.rs)) lets the user pick "My vault" or one of their orgs from the source-vault dropdown; personal exports go through `ExporterClient::export_vault`, but the org branch short-circuits at [`ClientManager::export_organization_vault`](../crates/desktop/src/services/sdk/mod.rs) with `Err("Organization vault export isn't implemented in the SDK yet")`. Surfaces as the generic "Couldn't export the vault" toast.
+The Export modal ([views/export/mod.rs](../crates/desktop/src/views/export/mod.rs)) lets
+the user pick "My vault" or one of their orgs from the source-vault dropdown; personal
+exports go through `ExporterClient::export_vault`, but the org branch short-circuits at
+[`ClientManager::export_organization_vault`](../crates/desktop/src/services/sdk/mod.rs)
+with `Err("Organization vault export isn't implemented in the SDK yet")`. Surfaces as the
+generic "Couldn't export the vault" toast.
 
-The pinned `bitwarden-exporters` rev's `export_organization_vault` in [`crates/bitwarden-exporters/src/export.rs`](https://github.com/bitwarden/sdk-internal/blob/main/crates/bitwarden-exporters/src/export.rs) is `todo!()` (would panic if called). When it lands: replace the early-return in `ClientManager::export_organization_vault` with a real call. The signature already matches what the SDK needs (uid + org id + format) — body needs to load the org's encrypted ciphers (filter the cipher repo by `organization_id`) and the SDK-shape `bitwarden_collections::Collection` for the org, then hand both to `ExporterClient::export_organization_vault`. We don't have a `Repository<Collection>` today; the org-collection load may need a parallel SDK addition.
+The pinned `bitwarden-exporters` rev's `export_organization_vault` in
+[`crates/bitwarden-exporters/src/export.rs`](https://github.com/bitwarden/sdk-internal/blob/main/crates/bitwarden-exporters/src/export.rs)
+is `todo!()` (would panic if called). When it lands: replace the early-return in
+`ClientManager::export_organization_vault` with a real call. The signature already matches
+what the SDK needs (uid + org id + format) — body needs to load the org's encrypted
+ciphers (filter the cipher repo by `organization_id`) and the SDK-shape
+`bitwarden_collections::Collection` for the org, then hand both to
+`ExporterClient::export_organization_vault`. We don't have a `Repository<Collection>`
+today; the org-collection load may need a parallel SDK addition.
 
 ### Import — wire to SDK importers when the crate exists
 
-The Import modal ([views/import/mod.rs](../crates/desktop/src/views/import/mod.rs)) is fully chrome — vault/folder/collection dropdowns seeded from the active user, format picker populated from the upstream `featuredImportOptions` + `regularImportOptions` lists, paste textarea. Submit fires `ImportEvent::Unimplemented` and a "coming soon" toast; nothing is parsed, nothing is written.
+The Import modal ([views/import/mod.rs](../crates/desktop/src/views/import/mod.rs)) is
+fully chrome — vault/folder/collection dropdowns seeded from the active user, format
+picker populated from the upstream `featuredImportOptions` + `regularImportOptions` lists,
+paste textarea. Submit fires `ImportEvent::Unimplemented` and a "coming soon" toast;
+nothing is parsed, nothing is written.
 
-The SDK ships [`bitwarden-exporters`](https://github.com/bitwarden/sdk-internal/tree/main/crates/bitwarden-exporters) (which we use for export) but no parallel `bitwarden-importers` crate yet. The only import-side function is `ExporterClient::import_cxf` — Apple-only Credential Exchange Format. Every other parser still lives in upstream Electron's TypeScript ([clients/libs/importer/](../clients/libs/importer/)); a Rust port isn't on a published roadmap.
+The SDK ships
+[`bitwarden-exporters`](https://github.com/bitwarden/sdk-internal/tree/main/crates/bitwarden-exporters)
+(which we use for export) but no parallel `bitwarden-importers` crate yet. The only
+import-side function is `ExporterClient::import_cxf` — Apple-only Credential Exchange
+Format. Every other parser still lives in upstream Electron's TypeScript
+([clients/libs/importer/](../clients/libs/importer/)); a Rust port isn't on a published
+roadmap.
 
-When a `bitwarden-importers` crate (or equivalent SDK API) lands: replace the `Unimplemented` path in [app/handlers/import.rs](../crates/desktop/src/app/handlers/import.rs) with a real call that takes the chosen `ImportFormat` + file bytes (or paste contents) + destination vault / folder / collection. Handler shape mirrors the export wiring (Task::perform → completion message → success/error toast → close on success). The "Choose file" button — currently also stubbed via `Unimplemented` — should use `rfd::AsyncFileDialog::new().pick_file().await` (already a dep — see [app/handlers/export.rs](../crates/desktop/src/app/handlers/export.rs) for the save-side recipe).
+When a `bitwarden-importers` crate (or equivalent SDK API) lands: replace the
+`Unimplemented` path in
+[app/handlers/import.rs](../crates/desktop/src/app/handlers/import.rs) with a real call
+that takes the chosen `ImportFormat` + file bytes (or paste contents) + destination vault
+/ folder / collection. Handler shape mirrors the export wiring (Task::perform → completion
+message → success/error toast → close on success). The "Choose file" button — currently
+also stubbed via `Unimplemented` — should use
+`rfd::AsyncFileDialog::new().pick_file().await` (already a dep — see
+[app/handlers/export.rs](../crates/desktop/src/app/handlers/export.rs) for the save-side
+recipe).
 
 ### Sync — wire to real SDK
 
-`ClientManager::sync(uid)` ([services/sdk/mod.rs](../crates/desktop/src/services/sdk/mod.rs)) returns `Ok(())` without doing anything — File → Sync now toasts "Vault synced" but no network round-trip happens. The whole vault loads from SQLite at startup (`fake-data` seeds it), so there's no remote to sync against today. When the SDK exposes a sync API: pull ciphers / folders / collections / orgs from the server, persist into the SDK's repos, then return so the toast reflects reality. Subscription-side: the official client also runs sync on a timer (default ~5 min) and on app focus — both can layer on once the manual call works.
+`ClientManager::sync(uid)`
+([services/sdk/mod.rs](../crates/desktop/src/services/sdk/mod.rs)) returns `Ok(())`
+without doing anything — File → Sync now toasts "Vault synced" but no network round-trip
+happens. The whole vault loads from SQLite at startup (`fake-data` seeds it), so there's
+no remote to sync against today. When the SDK exposes a sync API: pull ciphers / folders /
+collections / orgs from the server, persist into the SDK's repos, then return so the toast
+reflects reality. Subscription-side: the official client also runs sync on a timer
+(default ~5 min) and on app focus — both can layer on once the manual call works.
 
 ---
 
 ## Blocked / waiting on other upstream
 
-Park; revisit when the gate lifts. Bitwarden SDK gates have their own
-section above; this bucket is everything else (iced, Bitwarden's Electron
-desktop_native, third-party crates).
+Park; revisit when the gate lifts. Bitwarden SDK gates have their own section above; this
+bucket is everything else (iced, Bitwarden's Electron desktop_native, third-party crates).
 
 ### SSH agent — waiting on upstream V2
 
-`Settings::ssh_agent` (master toggle) and per-user `SshPromptBehavior` (Always / Never / RememberUntilLock) are wired through [tabs/integrations.rs](../crates/desktop/src/views/settings/tabs/integrations.rs) and persisted, but the agent itself isn't started. Upstream has two implementations and neither is a clean target:
+`Settings::ssh_agent` (master toggle) and per-user `SshPromptBehavior` (Always / Never /
+RememberUntilLock) are wired through
+[tabs/integrations.rs](../crates/desktop/src/views/settings/tabs/integrations.rs) and
+persisted, but the agent itself isn't started. Upstream has two implementations and
+neither is a clean target:
 
-- **V1** ([core/src/ssh_agent/](../clients/apps/desktop/desktop_native/core/src/ssh_agent)) is functional (named pipe on Windows, Unix socket elsewhere; `bitwarden-russh` for the agent protocol; `mpsc` request → `broadcast` response — maps cleanly onto our `Subscription::run`). But the module header flags it deprecated, security-only until V2.
-- **V2** ([ssh_agent/](../clients/apps/desktop/desktop_native/ssh_agent)) has the cleaner shape (`ApprovalRequester` async trait, generic `KeyStore`, separate crate), but `BitwardenSSHAgent::start_server()` is a stub (PM-30756) and `InMemoryEncryptedKeyStore::sign_data()` is `todo!()` (PM-30755).
+- **V1**
+  ([core/src/ssh_agent/](../clients/apps/desktop/desktop_native/core/src/ssh_agent)) is
+  functional (named pipe on Windows, Unix socket elsewhere; `bitwarden-russh` for the
+  agent protocol; `mpsc` request → `broadcast` response — maps cleanly onto our
+  `Subscription::run`). But the module header flags it deprecated, security-only until V2.
+- **V2** ([ssh_agent/](../clients/apps/desktop/desktop_native/ssh_agent)) has the cleaner
+  shape (`ApprovalRequester` async trait, generic `KeyStore`, separate crate), but
+  `BitwardenSSHAgent::start_server()` is a stub (PM-30756) and
+  `InMemoryEncryptedKeyStore::sign_data()` is `todo!()` (PM-30755).
 
-Park until V2 ships in the Electron client. When unblocked: `ApprovalRequester` impl pumps approval prompts onto a tokio broadcast channel consumed by `iced::Subscription::run` (mirrors [services/instance_lock](../crates/desktop/src/services/instance_lock/mod.rs)); the prompt opens a small confirmation window (About-window pattern in [app/handlers/platform.rs:225](../crates/desktop/src/app/handlers/platform.rs#L225)) when `SshPromptBehavior` requires it; `Settings::ssh_agent` toggles drive the listener task lifecycle; keystore is fed from the active user's `CipherType::SshKey` ciphers via `ClientManager`. The SDK's `bitwarden-ssh` crate handles key generation/import/export only — it is **not** the agent protocol layer (that's `bitwarden-russh`).
+Park until V2 ships in the Electron client. When unblocked: `ApprovalRequester` impl pumps
+approval prompts onto a tokio broadcast channel consumed by `iced::Subscription::run`
+(mirrors [services/instance_lock](../crates/desktop/src/services/instance_lock/mod.rs));
+the prompt opens a small confirmation window (About-window pattern in
+[app/handlers/platform.rs:225](../crates/desktop/src/app/handlers/platform.rs#L225)) when
+`SshPromptBehavior` requires it; `Settings::ssh_agent` toggles drive the listener task
+lifecycle; keystore is fed from the active user's `CipherType::SshKey` ciphers via
+`ClientManager`. The SDK's `bitwarden-ssh` crate handles key generation/import/export only
+— it is **not** the agent protocol layer (that's `bitwarden-russh`).
 
 ### Drop `ShellScope` if iced fixes `Stack`'s capture leak
 
-`iced::widget::Stack::update` short-circuits between its children on `shell.is_event_captured()`, but the shell is shared across the whole event pass — sibling captures leak. We work around it by wrapping `field_frame`'s output in [`components::shell_scope::ShellScope`](../crates/desktop/src/components/shell_scope.rs) (full write-up: [architecture.md → Shell Capture Isolation](./architecture.md#shell-capture-isolation-shellscope)). The minimal upstream patch is `was_captured_before = shell.is_event_captured()` once at the top of `Stack::update` and short-circuit only on captures that happen during the loop. If accepted upstream, drop `ShellScope` + the wrap call in `field_frame`.
+`iced::widget::Stack::update` short-circuits between its children on
+`shell.is_event_captured()`, but the shell is shared across the whole event pass — sibling
+captures leak. We work around it by wrapping `field_frame`'s output in
+[`components::shell_scope::ShellScope`](../crates/desktop/src/components/shell_scope.rs)
+(full write-up:
+[architecture.md → Shell Capture Isolation](./architecture.md#shell-capture-isolation-shellscope)).
+The minimal upstream patch is `was_captured_before = shell.is_event_captured()` once at
+the top of `Stack::update` and short-circuit only on captures that happen during the loop.
+If accepted upstream, drop `ShellScope` + the wrap call in `field_frame`.
 
 ### Replace `virtual_list` with upstream when iced lands native virtualization
 
 iced has an open issue for first-class virtualized list support:
-<https://github.com/iced-rs/iced/issues/160>, targeted at iced 1.0. When a
-native widget lands, [components/virtual_list.rs](../crates/desktop/src/components/virtual_list.rs)
-can become a thin adapter — or be deleted outright if the upstream API fits
-our usage directly.
+<https://github.com/iced-rs/iced/issues/160>, targeted at iced 1.0. When a native widget
+lands, [components/virtual_list.rs](../crates/desktop/src/components/virtual_list.rs) can
+become a thin adapter — or be deleted outright if the upstream API fits our usage
+directly.
 
 ### Scrollbar minimum thumb height
 
-With 20k+ items in a virtualized list, iced's scroll thumb shrinks to a hardcoded 2px minimum and becomes ungrabbable. The constant is in `iced_widget-0.15/src/scrollable.rs`:
+With 20k+ items in a virtualized list, iced's scroll thumb shrinks to a hardcoded 2px
+minimum and becomes ungrabbable. The constant is in `iced_widget-0.15/src/scrollable.rs`:
 
 ```rust
 let scroller_height = (scrollbar_bounds.height * ratio).max(2.0);
 ```
 
-Upstream PR shape: add `min_scroller_length: f32` (default `2.0`) on `Scrollbar`, builder method, replace `.max(2.0)` with `.max(self.min_scroller_length)` in vertical + horizontal branches. Workaround would be vendoring `scrollable.rs` (~2400 LOC) or an overlay thumb beside `Scrollbar::hidden()` (~150–250 LOC). Wait on upstream.
+Upstream PR shape: add `min_scroller_length: f32` (default `2.0`) on `Scrollbar`, builder
+method, replace `.max(2.0)` with `.max(self.min_scroller_length)` in vertical + horizontal
+branches. Workaround would be vendoring `scrollable.rs` (~2400 LOC) or an overlay thumb
+beside `Scrollbar::hidden()` (~150–250 LOC). Wait on upstream.
 
 ### Tray support — iced PR #3021
 
-iced [PR #3021](https://github.com/iced-rs/iced/pull/3021) adds native tray support, targeting 1.0. If it lands on our pin, re-evaluate swapping our `tray-icon` dep for the native path.
+iced [PR #3021](https://github.com/iced-rs/iced/pull/3021) adds native tray support,
+targeting 1.0. If it lands on our pin, re-evaluate swapping our `tray-icon` dep for the
+native path.
 
 ### Hot reloading
 
-iced [PR #3000](https://github.com/iced-rs/iced/pull/3000) merged into master (June 2025). `hot` feature flag + `subsecond` / `cargo-hot`. Available on 0.15. Worth trying on a feature branch; no core architecture changes required.
+iced [PR #3000](https://github.com/iced-rs/iced/pull/3000) merged into master (June 2025).
+`hot` feature flag + `subsecond` / `cargo-hot`. Available on 0.15. Worth trying on a
+feature branch; no core architecture changes required.
 
 ### SVG logo antialiasing
 
-iced's `resvg` rasterizer doesn't match browser quality. Workaround: pre-rasterized PNG with 2× / 3× variants. Otherwise wait for upstream resvg improvements.
+iced's `resvg` rasterizer doesn't match browser quality. Workaround: pre-rasterized PNG
+with 2× / 3× variants. Otherwise wait for upstream resvg improvements.

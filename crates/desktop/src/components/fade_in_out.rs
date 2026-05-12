@@ -101,6 +101,25 @@ impl FadeInOut {
         let visible = self.inner.value || self.inner.in_progress(now);
         visible.then(|| self.inner.animate_bool(0.0, 1.0, now))
     }
+
+    /// True while the overlay is logically open or its outro animation is
+    /// still in flight. Useful for [`View::should_render`] implementations —
+    /// returns the same boolean as `progress_if_visible().is_some()` without
+    /// allocating an `Option`.
+    pub fn is_visible(&self) -> bool {
+        self.progress_if_visible().is_some()
+    }
+
+    /// Animation progress under the contract that the overlay is currently
+    /// visible (caller has already gated on [`Self::is_visible`] or
+    /// equivalent). Panics if the overlay is fully closed — use
+    /// [`Self::progress_if_visible`] when you can't guarantee visibility.
+    pub fn progress_when_visible(&self) -> f32 {
+        self.progress_if_visible().expect(
+            "progress_when_visible called when FadeInOut is closed — \
+             check View::should_render / is_visible first",
+        )
+    }
 }
 
 /// Returns a [`Task`] that focuses the widget with the given `id` after the

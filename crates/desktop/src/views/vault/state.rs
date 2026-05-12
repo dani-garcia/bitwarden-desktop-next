@@ -11,13 +11,12 @@ use iced::Task;
 use bitwarden_core::OrganizationId;
 
 use crate::{
-    app::ViewTypes,
     components::{FadeInOut, collapsible_pane::CollapsiblePane, virtual_list},
     domain::UserId,
     services::sdk::Organization,
 };
 
-use super::{VaultEvent, VaultMessage, widgets::cipher_edit::CipherForm};
+use super::{VaultMessage, widgets::cipher_edit::CipherForm};
 
 // ── View-local domain ──────────────────────────────────────────────────────
 
@@ -98,11 +97,6 @@ pub struct VaultView {
     /// `ItemListMessage::Scrolled` handler on every scroll event so
     /// `view()` can build only the visible row widgets.
     pub(super) list_scroll: virtual_list::ScrollState,
-}
-
-impl ViewTypes for VaultView {
-    type Message = VaultMessage;
-    type Event = VaultEvent;
 }
 
 impl VaultView {

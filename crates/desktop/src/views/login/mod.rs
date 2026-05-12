@@ -9,7 +9,7 @@ mod unlock;
 use iced::{Element, Task};
 
 use crate::{
-    app::{Outcome, RenderCtx, UpdateCtx, ViewTypes},
+    app::{Outcome, Overlay, RenderCtx, UpdateCtx, View},
     components::{
         FadeInOut,
         account_switcher::{AccountSwitcherEvent, AccountSwitcherMessage},
@@ -194,11 +194,6 @@ pub(in crate::views::login) struct SelfHostedModal {
     pub(super) url_error: bool,
 }
 
-impl ViewTypes for LoginView {
-    type Message = LoginMessage;
-    type Event = LoginEvent;
-}
-
 impl LoginView {
     pub fn new() -> Self {
         Self {
@@ -222,8 +217,13 @@ impl LoginView {
             Vec::new()
         };
     }
+}
 
-    pub fn update(&mut self, msg: LoginMessage, ctx: UpdateCtx<'_>) -> Outcome<Self> {
+impl View for LoginView {
+    type Message = LoginMessage;
+    type Event = LoginEvent;
+
+    fn update(&mut self, msg: LoginMessage, ctx: UpdateCtx<'_>) -> Outcome<Self> {
         let UpdateCtx {
             client_manager,
             active_user,
@@ -405,10 +405,10 @@ impl LoginView {
             }
 
             LoginMessage::ToggleServerSelector => {
-                *open_overlay = if *open_overlay == Some(crate::app::Overlay::ServerSelector) {
+                *open_overlay = if *open_overlay == Some(Overlay::ServerSelector) {
                     None
                 } else {
-                    Some(crate::app::Overlay::ServerSelector)
+                    Some(Overlay::ServerSelector)
                 };
             }
             LoginMessage::SelectServer(server) => {
@@ -468,7 +468,7 @@ impl LoginView {
 
             LoginMessage::AccountSwitcher(m) => {
                 return Outcome::from_option(
-                    m.consume(open_overlay, crate::app::Overlay::AccountSwitcher)
+                    m.consume(open_overlay, Overlay::AccountSwitcher)
                         .map(LoginEvent::AccountSwitcher),
                 );
             }
@@ -476,6 +476,71 @@ impl LoginView {
         Outcome::None
     }
 
+    fn view<'a>(&'a self, ctx: &RenderCtx<'a>) -> Element<'a, LoginMessage, AppTheme> {
+        let colors = ctx.colors;
+        let email = ctx.active_email;
+        let server = ctx.active_server_url;
+        let (center_content, status_bar) = match &self.auth_page {
+            AuthPage::Unlock {
+                method,
+                password_input,
+                pin_input,
+            } => {
+                let center = unlock::view(
+                    *method,
+                    &self.unlock_alternatives,
+                    email,
+                    password_input,
+                    pin_input,
+                    self.unlock_in_progress,
+                    colors,
+                );
+                let status = server_selector::simple_status(server, colors);
+                (center, status)
+            }
+            AuthPage::LoginEmail {
+                email_input,
+                remember_email,
+                selected_server,
+            } => {
+                let server_selector_open = ctx.open_overlay == Some(Overlay::ServerSelector);
+                let center = login_email::view(email_input, *remember_email, colors);
+                let status = server_selector::view(selected_server, server_selector_open, colors);
+                (center, status)
+            }
+            AuthPage::LoginPassword {
+                email,
+                password_input,
+                selected_server,
+            } => {
+                let center = login_password::view(email, password_input, colors);
+                let status =
+                    server_selector::simple_status(&selected_server.display_name(), colors);
+                (center, status)
+            }
+        };
+
+        let account_switcher_open = ctx.open_overlay == Some(Overlay::AccountSwitcher);
+        layout::auth_page_shell(
+            center_content,
+            status_bar,
+            email,
+            ctx.accounts,
+            account_switcher_open,
+            colors,
+        )
+    }
+
+    /// Self-hosted server URL modal — pushed onto the overlay stack only
+    /// when its fade is visible.
+    fn overlays<'a>(&'a self, ctx: &RenderCtx<'a>) -> Vec<Element<'a, LoginMessage, AppTheme>> {
+        self_hosted_modal::view(&self.self_hosted_modal, ctx.colors)
+            .into_iter()
+            .collect()
+    }
+}
+
+impl LoginView {
     /// Reset the login flow to the email-entry page with empty inputs.
     pub fn reset_to_email_entry(&mut self) {
         self.auth_page = AuthPage::new_login_email();
@@ -519,72 +584,6 @@ impl LoginView {
                 ..
             } => Task::none(),
         }
-    }
-
-    /// Returns `None` when the self-hosted modal is closed so App's view
-    /// composer can take a cheap exclusive branch (CLAUDE.md → "Stack
-    /// doesn't cull").
-    pub fn modal_view<'a>(
-        &'a self,
-        ctx: &RenderCtx<'a>,
-    ) -> Option<Element<'a, LoginMessage, AppTheme>> {
-        self_hosted_modal::view(&self.self_hosted_modal, ctx.colors)
-    }
-
-    pub fn view<'a>(&'a self, ctx: &RenderCtx<'a>) -> Element<'a, LoginMessage, AppTheme> {
-        let colors = ctx.colors;
-        let email = ctx.active_email;
-        let server = ctx.active_server_url;
-        let (center_content, status_bar) = match &self.auth_page {
-            AuthPage::Unlock {
-                method,
-                password_input,
-                pin_input,
-            } => {
-                let center = unlock::view(
-                    *method,
-                    &self.unlock_alternatives,
-                    email,
-                    password_input,
-                    pin_input,
-                    self.unlock_in_progress,
-                    colors,
-                );
-                let status = server_selector::simple_status(server, colors);
-                (center, status)
-            }
-            AuthPage::LoginEmail {
-                email_input,
-                remember_email,
-                selected_server,
-            } => {
-                let server_selector_open =
-                    ctx.open_overlay == Some(crate::app::Overlay::ServerSelector);
-                let center = login_email::view(email_input, *remember_email, colors);
-                let status = server_selector::view(selected_server, server_selector_open, colors);
-                (center, status)
-            }
-            AuthPage::LoginPassword {
-                email,
-                password_input,
-                selected_server,
-            } => {
-                let center = login_password::view(email, password_input, colors);
-                let status =
-                    server_selector::simple_status(&selected_server.display_name(), colors);
-                (center, status)
-            }
-        };
-
-        let account_switcher_open = ctx.open_overlay == Some(crate::app::Overlay::AccountSwitcher);
-        layout::auth_page_shell(
-            center_content,
-            status_bar,
-            email,
-            ctx.accounts,
-            account_switcher_open,
-            colors,
-        )
     }
 }
 

@@ -90,8 +90,7 @@ pub fn modal_view<'a>(
     let progress = state.fade.progress_if_visible()?;
 
     let icon_ring = container(
-        icons::INFO_CIRCLE_FILL
-            .render::<ScreenshotConfirmMessage, AppTheme>(28.0, colors.accent),
+        icons::INFO_CIRCLE_FILL.render::<ScreenshotConfirmMessage, AppTheme>(28.0, colors.accent),
     )
     .width(Length::Fixed(RING_DIAMETER))
     .height(Length::Fixed(RING_DIAMETER))

@@ -4,7 +4,7 @@ use bitwarden_vault::{CipherId, CipherView};
 use iced::Task;
 
 use crate::{
-    app::{Outcome, UpdateCtx},
+    app::{Outcome, Overlay, UpdateCtx},
     components::toast::Toast,
     debug_fmt::NoDebug,
     domain::UserId,
@@ -37,7 +37,7 @@ impl VaultView {
         cipher_type: bitwarden_vault::CipherType,
     ) -> Outcome<Self> {
         // Auto-dismiss the +New dropdown if it was the trigger.
-        if *ctx.open_overlay == Some(crate::app::Overlay::NewItemMenu) {
+        if *ctx.open_overlay == Some(Overlay::NewItemMenu) {
             *ctx.open_overlay = None;
         }
         let Some(uid) = ctx.active_user.copied() else {

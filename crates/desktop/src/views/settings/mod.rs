@@ -19,7 +19,7 @@ use iced::{
 };
 
 use crate::{
-    app::{Outcome, UpdateCtx, ViewTypes},
+    app::{Outcome, RenderCtx, UpdateCtx, View},
     components::{self, buttons, icons, modal, toast::Toast},
     fl,
     services::{
@@ -41,9 +41,47 @@ pub struct SettingsView {
     pub(super) snapshot: SettingsSnapshot,
 }
 
-impl ViewTypes for SettingsView {
+impl View for SettingsView {
     type Message = SettingsMessage;
     type Event = SettingsEvent;
+
+    fn update(&mut self, msg: SettingsMessage, _ctx: UpdateCtx<'_>) -> Outcome<Self> {
+        match msg {
+            SettingsMessage::Close => self.fade.close(),
+            SettingsMessage::SelectCategory(kind) => self.active = kind,
+            SettingsMessage::SettingChanged(change) => {
+                self.apply_to_snapshot(&change);
+                return Outcome::event(SettingsEvent::Applied(change));
+            }
+        }
+        Outcome::None
+    }
+
+    fn should_render(&self) -> bool {
+        self.fade.is_visible()
+    }
+
+    fn view<'a>(&'a self, ctx: &RenderCtx<'a>) -> Element<'a, SettingsMessage, AppTheme> {
+        let progress = self.fade.progress_when_visible();
+
+        let sidebar = self.sidebar_view(ctx.colors);
+        let pane = self.content_pane(ctx.colors);
+
+        // Outer dialog: fixed-size, white bg, rounded all corners. The sidebar
+        // paints its own light-gray background with matching LEFT corner radii
+        // so its fill aligns with the dialog's rounded edge instead of masking
+        // it (CLAUDE.md → "Nested container backgrounds mask parent border-radius").
+        let body = row![sidebar, pane].width(Fill).height(Fill);
+
+        modal::dialog(
+            640.0,
+            Some(440.0),
+            |c| c.background,
+            progress,
+            body,
+            SettingsMessage::Close,
+        )
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -182,18 +220,6 @@ impl SettingsView {
         self.snapshot.settings.allow_screenshots = true;
     }
 
-    pub fn update(&mut self, msg: SettingsMessage, _ctx: UpdateCtx<'_>) -> Outcome<Self> {
-        match msg {
-            SettingsMessage::Close => self.fade.close(),
-            SettingsMessage::SelectCategory(kind) => self.active = kind,
-            SettingsMessage::SettingChanged(change) => {
-                self.apply_to_snapshot(&change);
-                return Outcome::event(SettingsEvent::Applied(change));
-            }
-        }
-        Outcome::None
-    }
-
     /// Mirror the edit into the working snapshot so the widget re-renders
     /// with the new value on the next frame — independent of whether App
     /// live-wires the change or just toasts "not supported".
@@ -227,33 +253,6 @@ impl SettingsView {
             SettingChange::HardwareAcceleration(v) => s.hardware_acceleration = *v,
             SettingChange::AllowScreenshots(v) => s.allow_screenshots = *v,
         }
-    }
-
-    /// Returns `None` when the modal is closed — App composes into the
-    /// overlay stack only when this yields `Some(_)`.
-    pub fn modal_view<'a>(
-        &'a self,
-        ctx: &crate::app::RenderCtx<'a>,
-    ) -> Option<Element<'a, SettingsMessage, AppTheme>> {
-        let progress = self.fade.progress_if_visible()?;
-
-        let sidebar = self.sidebar_view(ctx.colors);
-        let pane = self.content_pane(ctx.colors);
-
-        // Outer dialog: fixed-size, white bg, rounded all corners. The sidebar
-        // paints its own light-gray background with matching LEFT corner radii
-        // so its fill aligns with the dialog's rounded edge instead of masking
-        // it (CLAUDE.md → "Nested container backgrounds mask parent border-radius").
-        let body = row![sidebar, pane].width(Fill).height(Fill);
-
-        Some(modal::dialog(
-            640.0,
-            Some(440.0),
-            |c| c.background,
-            progress,
-            body,
-            SettingsMessage::Close,
-        ))
     }
 
     fn sidebar_view<'a>(&'a self, colors: &'a AppColors) -> Element<'a, SettingsMessage, AppTheme> {
@@ -379,14 +378,9 @@ mod tests_snapshot {
         test_support::settle_animations();
 
         let mut render = TestRenderCtx::default();
-        for (theme, suffix) in [
-            (AppTheme::light(), "light"),
-            (AppTheme::dark(), "dark"),
-        ] {
+        for (theme, suffix) in [(AppTheme::light(), "light"), (AppTheme::dark(), "dark")] {
             render.colors = theme.colors;
-            let element = view
-                .modal_view(&render.as_ctx())
-                .expect("modal renders while open");
+            let element = view.view(&render.as_ctx());
             test_support::assert_snapshot(
                 format!("tests/snapshots/settings_modal_{suffix}"),
                 &theme,
@@ -399,12 +393,7 @@ mod tests_snapshot {
 #[cfg(test)]
 mod tests_update {
     use super::*;
-    use crate::test_support::{OutcomeExt, TestUpdateCtx};
-
-    fn run(view: &mut SettingsView, msg: SettingsMessage) -> Outcome<SettingsView> {
-        let mut owned = TestUpdateCtx::default();
-        view.update(msg, owned.as_ctx())
-    }
+    use crate::test_support::{OutcomeExt, run_update as run};
 
     #[test]
     fn select_category_flips_active_tab() {

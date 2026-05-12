@@ -12,7 +12,7 @@ use iced::{
 };
 
 use crate::{
-    app::{Outcome, UpdateCtx, ViewTypes},
+    app::{Outcome, RenderCtx, UpdateCtx, View},
     components::{FadeInOut, buttons, inputs, modal},
     fl,
     services::sdk::{Collection, Organization, VaultChoice},
@@ -369,66 +369,15 @@ pub enum ImportEvent {
     Unimplemented,
 }
 
-impl ViewTypes for ImportView {
+impl View for ImportView {
     type Message = ImportMessage;
     type Event = ImportEvent;
-}
 
-// ── Lifecycle ─────────────────────────────────────────────────────────────
-
-impl ImportView {
-    pub fn new() -> Self {
-        Self {
-            fade: FadeInOut::default(),
-            vault_choices: vec![VaultChoice::Personal],
-            selected_vault: VaultChoice::Personal,
-            folder_choices: Vec::new(),
-            selected_folder: None,
-            collections: Vec::new(),
-            selected_collection: None,
-            selected_format: None,
-            paste_contents: text_editor::Content::new(),
-        }
-    }
-
-    pub fn open(&mut self) {
-        self.fade.open();
-        self.selected_format = None;
-        self.paste_contents = text_editor::Content::new();
-        self.selected_vault = VaultChoice::Personal;
-        // Reset folder dropdown to just the placeholder until the async
-        // SDK call completes via FoldersLoaded.
-        let placeholder = fl!("import-modal-folder-placeholder");
-        self.folder_choices = vec![placeholder.clone()];
-        self.selected_folder = Some(placeholder);
-        self.selected_collection = None;
-    }
-
-    pub fn set_organizations(&mut self, orgs: &[Organization]) {
-        self.vault_choices = VaultChoice::list_with_personal(orgs);
-    }
-
-    pub fn set_collections(&mut self, collections: Vec<Collection>) {
-        self.collections = collections;
-    }
-
-    fn set_folders(&mut self, names: Vec<String>) {
-        let placeholder = fl!("import-modal-folder-placeholder");
-        let mut choices = Vec::with_capacity(names.len() + 1);
-        choices.push(placeholder);
-        choices.extend(names);
-        self.folder_choices = choices;
-        // Keep the placeholder selected — user picks a folder explicitly.
-    }
-
-    pub fn update(&mut self, msg: ImportMessage, _ctx: UpdateCtx<'_>) -> Outcome<Self> {
+    fn update(&mut self, msg: ImportMessage, _ctx: UpdateCtx<'_>) -> Outcome<Self> {
         match msg {
-            ImportMessage::Close => {
-                self.fade.close();
-                Outcome::None
-            }
+            ImportMessage::Close => self.fade.close(),
             ImportMessage::Submit | ImportMessage::ChooseFile => {
-                Outcome::event(ImportEvent::Unimplemented)
+                return Outcome::event(ImportEvent::Unimplemented);
             }
             ImportMessage::VaultSelected(v) => {
                 // Reset the per-vault sub-selection so the collection /
@@ -443,51 +392,22 @@ impl ImportView {
                     }
                 }
                 self.selected_vault = v;
-                Outcome::None
             }
-            ImportMessage::FolderSelected(f) => {
-                self.selected_folder = Some(f);
-                Outcome::None
-            }
-            ImportMessage::CollectionSelected(c) => {
-                self.selected_collection = Some(c);
-                Outcome::None
-            }
-            ImportMessage::FormatSelected(f) => {
-                self.selected_format = Some(f);
-                Outcome::None
-            }
-            ImportMessage::PasteAction(action) => {
-                self.paste_contents.perform(action);
-                Outcome::None
-            }
-            ImportMessage::FoldersLoaded(names) => {
-                self.set_folders(names);
-                Outcome::None
-            }
+            ImportMessage::FolderSelected(f) => self.selected_folder = Some(f),
+            ImportMessage::CollectionSelected(c) => self.selected_collection = Some(c),
+            ImportMessage::FormatSelected(f) => self.selected_format = Some(f),
+            ImportMessage::PasteAction(action) => self.paste_contents.perform(action),
+            ImportMessage::FoldersLoaded(names) => self.set_folders(names),
         }
+        Outcome::None
     }
 
-    /// Collection options for the currently-selected organization, with the
-    /// localized placeholder at the top.
-    fn collection_choices(&self, org_id: OrganizationId) -> Vec<String> {
-        let placeholder = fl!("import-modal-collection-placeholder");
-        let mut out = vec![placeholder];
-        for c in &self.collections {
-            if c.organization_id == org_id {
-                out.push(c.name.clone());
-            }
-        }
-        out
+    fn should_render(&self) -> bool {
+        self.fade.is_visible()
     }
 
-    /// Returns `None` while fully closed so App's overlay composer takes a
-    /// cheap exclusive branch — same pattern as the generator modal.
-    pub fn modal_view<'a>(
-        &'a self,
-        ctx: &crate::app::RenderCtx<'a>,
-    ) -> Option<Element<'a, ImportMessage, AppTheme>> {
-        let progress = self.fade.progress_if_visible()?;
+    fn view<'a>(&'a self, ctx: &RenderCtx<'a>) -> Element<'a, ImportMessage, AppTheme> {
+        let progress = self.fade.progress_when_visible();
 
         let header =
             modal::dialog_header(fl!("import-modal-title"), ImportMessage::Close, ctx.colors);
@@ -583,14 +503,75 @@ impl ImportView {
             .padding(Padding::from([20, 24]))
             .width(Fill);
 
-        Some(modal::dialog(
+        modal::dialog(
             580.0,
             None,
             |c| c.card_bg,
             progress,
             container(body),
             ImportMessage::Close,
-        ))
+        )
+    }
+}
+
+// ── Lifecycle ─────────────────────────────────────────────────────────────
+
+impl ImportView {
+    pub fn new() -> Self {
+        Self {
+            fade: FadeInOut::default(),
+            vault_choices: vec![VaultChoice::Personal],
+            selected_vault: VaultChoice::Personal,
+            folder_choices: Vec::new(),
+            selected_folder: None,
+            collections: Vec::new(),
+            selected_collection: None,
+            selected_format: None,
+            paste_contents: text_editor::Content::new(),
+        }
+    }
+
+    pub fn open(&mut self) {
+        self.fade.open();
+        self.selected_format = None;
+        self.paste_contents = text_editor::Content::new();
+        self.selected_vault = VaultChoice::Personal;
+        // Reset folder dropdown to just the placeholder until the async
+        // SDK call completes via FoldersLoaded.
+        let placeholder = fl!("import-modal-folder-placeholder");
+        self.folder_choices = vec![placeholder.clone()];
+        self.selected_folder = Some(placeholder);
+        self.selected_collection = None;
+    }
+
+    pub fn set_organizations(&mut self, orgs: &[Organization]) {
+        self.vault_choices = VaultChoice::list_with_personal(orgs);
+    }
+
+    pub fn set_collections(&mut self, collections: Vec<Collection>) {
+        self.collections = collections;
+    }
+
+    fn set_folders(&mut self, names: Vec<String>) {
+        let placeholder = fl!("import-modal-folder-placeholder");
+        let mut choices = Vec::with_capacity(names.len() + 1);
+        choices.push(placeholder);
+        choices.extend(names);
+        self.folder_choices = choices;
+        // Keep the placeholder selected — user picks a folder explicitly.
+    }
+
+    /// Collection options for the currently-selected organization, with the
+    /// localized placeholder at the top.
+    fn collection_choices(&self, org_id: OrganizationId) -> Vec<String> {
+        let placeholder = fl!("import-modal-collection-placeholder");
+        let mut out = vec![placeholder];
+        for c in &self.collections {
+            if c.organization_id == org_id {
+                out.push(c.name.clone());
+            }
+        }
+        out
     }
 }
 

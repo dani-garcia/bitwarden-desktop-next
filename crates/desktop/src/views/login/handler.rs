@@ -59,7 +59,7 @@ impl App {
                 self.active_user = None;
                 self.views.login.reset_to_email_entry();
                 self.set_screen(Screen::Login);
-                self.views.login.auto_focus_task().map(Message::login)
+                self.views.login.auto_focus_task().map(Into::into)
             }
         }
     }

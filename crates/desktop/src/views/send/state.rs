@@ -6,12 +6,11 @@ use bitwarden_send::{SendId, SendView as SdkSendView};
 use iced::Task;
 
 use crate::{
-    app::ViewTypes,
     components::{FadeInOut, collapsible_pane::CollapsiblePane, virtual_list},
     domain::UserId,
 };
 
-use super::{SendEvent, SendMessage, widgets::send_edit::SendForm};
+use super::{SendMessage, widgets::send_edit::SendForm};
 
 // ── View-local domain ──────────────────────────────────────────────────────
 
@@ -67,11 +66,6 @@ pub struct SendView {
     pub(super) selection: Selection,
     pub(super) items: HashMap<UserId, ItemCache>,
     pub(super) list_scroll: virtual_list::ScrollState,
-}
-
-impl ViewTypes for SendView {
-    type Message = SendMessage;
-    type Event = SendEvent;
 }
 
 impl SendView {

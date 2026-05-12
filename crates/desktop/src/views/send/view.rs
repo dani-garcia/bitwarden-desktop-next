@@ -7,7 +7,7 @@ use iced::{
 };
 
 use crate::{
-    app::RenderCtx,
+    app::{Overlay, RenderCtx},
     components::{
         account_switcher,
         bottom_sheet::{self, SHEET_BREAKPOINT_PX, SHEET_TOP_INSET_PX, SHEET_TOP_RADIUS_PX},
@@ -24,7 +24,7 @@ use super::{
 };
 
 impl SendView {
-    pub fn view<'a>(&'a self, ctx: &RenderCtx<'a>) -> Element<'a, SendMessage, AppTheme> {
+    pub(super) fn render<'a>(&'a self, ctx: &RenderCtx<'a>) -> Element<'a, SendMessage, AppTheme> {
         let active_user = ctx.active_user.expect("Screen::Send without active_user");
         let cached_items: &[Arc<SdkSendView>] = self
             .items
@@ -65,7 +65,7 @@ impl SendView {
             .into()
     }
 
-    pub fn sheet_view<'a>(
+    pub(super) fn render_sheet<'a>(
         &'a self,
         ctx: &RenderCtx<'a>,
     ) -> Option<Element<'a, SendMessage, AppTheme>> {
@@ -83,7 +83,7 @@ impl SendView {
         ))
     }
 
-    pub fn modal_view<'a>(
+    pub(super) fn render_overlay<'a>(
         &'a self,
         ctx: &RenderCtx<'a>,
     ) -> Option<Element<'a, SendMessage, AppTheme>> {
@@ -150,7 +150,7 @@ impl SendView {
             left: 12.0,
         });
 
-        let account_switcher_open = ctx.open_overlay == Some(crate::app::Overlay::AccountSwitcher);
+        let account_switcher_open = ctx.open_overlay == Some(Overlay::AccountSwitcher);
         let avatar = account_switcher::header_switcher(
             active_email,
             ctx.accounts,

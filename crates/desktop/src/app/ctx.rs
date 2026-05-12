@@ -86,7 +86,7 @@ impl UpdateCtx<'_> {
         on_complete: impl Fn(UserId, T) -> V::Message + Send + 'static,
     ) -> Outcome<V>
     where
-        V: ViewTypes,
+        V: View,
         V::Message: Send + 'static,
         Spawn: FnOnce(PasswordManagerClient) -> Fut,
         Fut: Future<Output = T> + Send + 'static,
@@ -109,7 +109,7 @@ impl UpdateCtx<'_> {
         on_complete: impl Fn(T) -> V::Message + Send + 'static,
     ) -> Outcome<V>
     where
-        V: ViewTypes,
+        V: View,
         V::Message: Send + 'static,
         Spawn: FnOnce(PasswordManagerClient) -> Fut,
         Fut: Future<Output = T> + Send + 'static,
@@ -138,13 +138,102 @@ pub struct RenderCtx<'a> {
     pub open_overlay: Option<Overlay>,
 }
 
-/// Ties each view to its own Message + Event types so [`Outcome`] takes a
-/// single type parameter — `Outcome<Self>` instead of
-/// `Outcome<LoginMessage, LoginEvent>` at every handler signature.
-pub trait ViewTypes {
+/// The MVU contract every view implements: owns its own state (`Self`),
+/// names its Message + Event types, and provides update + render methods.
+///
+/// `update` is expected to be pure with respect to `(self, msg, ctx)`.
+/// Observable side effects (SDK calls, navigation, clipboard) must leave
+/// via [`Outcome::Event`] or [`Outcome::Task`] so the App orchestrator
+/// owns scheduling. Logging and animation timestamps are the two known
+/// exceptions; everything else routes through `Outcome`.
+///
+/// Rendering is split into:
+/// - [`Self::should_render`] — predicate gating whether [`Self::view`] should
+///   be called this frame. Modal views return `false` when fully closed so
+///   their dialog drops out of the tree entirely; full-screen views inherit
+///   the default `true`.
+/// - [`Self::view`] — the view's primary render surface. Always returns an
+///   `Element`; callers must check [`Self::should_render`] first.
+/// - [`Self::overlays`] — secondary surfaces stacked on top of the primary.
+///   Sub-modals, bottom sheets, in-view confirmations. Each view manages
+///   its own visibility internally and only pushes elements that should
+///   render this frame.
+pub trait View {
     type Message: 'static;
     type Event;
+
+    fn update(&mut self, msg: Self::Message, ctx: UpdateCtx<'_>) -> Outcome<Self>;
+
+    /// True when [`Self::view`] should be called this frame. Default `true`
+    /// (full-screen views always render). Modal views override to gate on
+    /// their `FadeInOut` visibility.
+    fn should_render(&self) -> bool {
+        true
+    }
+
+    /// Primary render surface. Caller must check [`Self::should_render`]
+    /// first — implementations may assume that and panic / misrender if
+    /// it's false.
+    fn view<'a>(
+        &'a self,
+        ctx: &RenderCtx<'a>,
+    ) -> iced::Element<'a, Self::Message, crate::theme::AppTheme>;
+
+    /// Secondary surfaces stacked on top of [`Self::view`] in z-order
+    /// (first element = lowest layer). Sub-modals, bottom sheets,
+    /// confirmations. Returns an empty `Vec` by default.
+    fn overlays<'a>(
+        &'a self,
+        _ctx: &RenderCtx<'a>,
+    ) -> Vec<iced::Element<'a, Self::Message, crate::theme::AppTheme>> {
+        Vec::new()
+    }
 }
+
+/// App-level composition helpers on top of [`View`]. Lets the renderer
+/// write `view.push_into(...)` directly instead of threading every view
+/// through a free function. Blanket-implemented for every `View`.
+///
+/// The target message type `M` is inferred from the sink, and the
+/// `M: From<Self::Message>` bound replaces a per-view fn pointer — each
+/// view just needs `impl From<XxxMessage> for app::Message` (one line
+/// each, defined alongside `Message`).
+pub trait ViewExt: View {
+    /// Push `view()` (gated by [`View::should_render`]) and `overlays()`,
+    /// mapping each element to `M` via [`From`]. Use this for modal views
+    /// where `view()` *is* an overlay (Settings, NewFolder, etc.).
+    fn push_into<'a, M>(
+        &'a self,
+        ctx: &RenderCtx<'a>,
+        out: &mut Vec<iced::Element<'a, M, crate::theme::AppTheme>>,
+    ) where
+        M: From<Self::Message> + 'static,
+    {
+        if self.should_render() {
+            out.push(self.view(ctx).map(M::from));
+        }
+        for el in self.overlays(ctx) {
+            out.push(el.map(M::from));
+        }
+    }
+
+    /// Push only `overlays()`. Use this for full-screen views whose
+    /// `view()` is rendered separately as page content (vault, send,
+    /// login) — only their sub-modals belong in the overlay stack.
+    fn push_overlays_into<'a, M>(
+        &'a self,
+        ctx: &RenderCtx<'a>,
+        out: &mut Vec<iced::Element<'a, M, crate::theme::AppTheme>>,
+    ) where
+        M: From<Self::Message> + 'static,
+    {
+        for el in self.overlays(ctx) {
+            out.push(el.map(M::from));
+        }
+    }
+}
+
+impl<V: View> ViewExt for V {}
 
 /// The return shape for a view's `update()`. Mutually-exclusive cases:
 ///
@@ -162,14 +251,14 @@ pub trait ViewTypes {
 /// The "both task and event" case is deliberately excluded — views that need
 /// to trigger "refresh list + push toast" emit a richer event (e.g.
 /// `VaultEvent::ItemSaved`) and App's handler fires both effects.
-pub enum Outcome<V: ViewTypes> {
+pub enum Outcome<V: View + ?Sized> {
     None,
     Task(Task<V::Message>),
     Event(V::Event),
     Toast(Toast),
 }
 
-impl<V: ViewTypes> Outcome<V> {
+impl<V: View> Outcome<V> {
     /// Named constructor because a blanket `From<V::Event>` impl would
     /// conflict with stdlib's reflexive `From<T> for T`.
     pub fn event(event: V::Event) -> Self {
@@ -197,7 +286,7 @@ impl<V: ViewTypes> Outcome<V> {
     }
 }
 
-impl<V: ViewTypes> Outcome<V>
+impl<V: View> Outcome<V>
 where
     V::Message: Send + 'static,
 {
@@ -209,29 +298,37 @@ where
         Self::Task(Task::perform(future, on_complete))
     }
 
-    /// App-side router: lifts the view's `Message` via `wrap`, dispatches
-    /// events through `handle_event`, and forwards toasts directly via
-    /// `push_toast`. The `state` reference threads `&mut App` through both
-    /// closures so callers don't have to capture it twice (which would
+    /// App-side router: lifts the view's `Message` into `TopMsg` via
+    /// [`From`], dispatches events through `handle_event`, and forwards
+    /// toasts via the [`PushToast`] impl on `state`. The `state`
+    /// reference threads `&mut App` through the closure and the toast
+    /// push so callers don't have to capture it twice (which would
     /// borrow-check as overlapping `&mut self`).
-    pub fn dispatch<S, TopMsg: Send + 'static, F>(
-        self,
-        state: &mut S,
-        wrap: fn(V::Message) -> TopMsg,
-        handle_event: F,
-        push_toast: fn(&mut S, Toast),
-    ) -> Task<TopMsg>
+    ///
+    /// `TopMsg` is typically `app::Message`; each view's local message
+    /// converts via the `impl From<XxxMessage> for Message` defined
+    /// alongside the message enum.
+    pub fn dispatch<S, TopMsg, F>(self, state: &mut S, handle_event: F) -> Task<TopMsg>
     where
+        S: PushToast,
+        TopMsg: From<V::Message> + Send + 'static,
         F: FnOnce(&mut S, V::Event) -> Task<TopMsg>,
     {
         match self {
             Self::None => Task::none(),
-            Self::Task(t) => t.map(wrap),
+            Self::Task(t) => t.map(Into::into),
             Self::Event(e) => handle_event(state, e),
             Self::Toast(t) => {
-                push_toast(state, t);
+                state.push_toast(t);
                 Task::none()
             }
         }
     }
+}
+
+/// Toast routing contract for the state type that drives [`Outcome::dispatch`].
+/// `App` is the only impl in practice; the trait exists so `Outcome` stays
+/// decoupled from concrete app state.
+pub trait PushToast {
+    fn push_toast(&mut self, toast: Toast);
 }

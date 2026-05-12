@@ -144,8 +144,7 @@ impl App {
             open_overlay: None,
             toasts: Vec::new(),
             fingerprint: crate::views::fingerprint_phrase::FingerprintModal::default(),
-            screenshot_confirm:
-                crate::views::screenshot_confirm::ScreenshotConfirmModal::default(),
+            screenshot_confirm: crate::views::screenshot_confirm::ScreenshotConfirmModal::default(),
 
             cache: ViewCache::default(),
         };
@@ -272,7 +271,7 @@ impl App {
             "favicon",
             self.favicon.event_sender(),
         )
-        .map(Message::Favicon);
+        .map(Into::into);
 
         // Only subscribed while at least one transition might still be
         // running. Reads the App-owned watermark directly; animation

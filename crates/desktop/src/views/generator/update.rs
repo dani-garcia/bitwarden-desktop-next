@@ -2,11 +2,14 @@
 
 use std::time::{Duration, Instant};
 
+use iced::Element;
+
 use crate::{
-    app::{Outcome, UpdateCtx},
+    app::{Outcome, RenderCtx, UpdateCtx, View},
     components::toast::Toast,
     fl,
     services::animation,
+    theme::AppTheme,
 };
 
 use super::{
@@ -15,8 +18,11 @@ use super::{
     state::{Mode, TabKind, accept_digits, bump_clamped},
 };
 
-impl GeneratorView {
-    pub fn update(&mut self, msg: GeneratorMessage, ctx: UpdateCtx<'_>) -> Outcome<Self> {
+impl View for GeneratorView {
+    type Message = GeneratorMessage;
+    type Event = GeneratorEvent;
+
+    fn update(&mut self, msg: GeneratorMessage, ctx: UpdateCtx<'_>) -> Outcome<Self> {
         match msg {
             GeneratorMessage::Close => {
                 self.fade.close();
@@ -145,6 +151,16 @@ impl GeneratorView {
         }
     }
 
+    fn should_render(&self) -> bool {
+        self.fade.is_visible()
+    }
+
+    fn view<'a>(&'a self, ctx: &RenderCtx<'a>) -> Element<'a, GeneratorMessage, AppTheme> {
+        self.render(ctx)
+    }
+}
+
+impl GeneratorView {
     pub(super) fn regenerate_event(&self) -> Outcome<Self> {
         Outcome::event(GeneratorEvent::Generate(self.current_request()))
     }

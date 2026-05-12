@@ -16,7 +16,7 @@ use iced::{
 };
 
 use crate::{
-    app::{Outcome, UpdateCtx, ViewTypes},
+    app::{Outcome, RenderCtx, UpdateCtx, View},
     components::{FadeInOut, inputs, modal, toast::Toast},
     fl,
     theme::AppTheme,
@@ -49,11 +49,6 @@ pub enum NewFolderEvent {
     Run(String),
 }
 
-impl ViewTypes for NewFolderView {
-    type Message = NewFolderMessage;
-    type Event = NewFolderEvent;
-}
-
 // ── Lifecycle ─────────────────────────────────────────────────────────────
 
 impl NewFolderView {
@@ -71,7 +66,22 @@ impl NewFolderView {
         self.saving = false;
     }
 
-    pub fn update(&mut self, msg: NewFolderMessage, _ctx: UpdateCtx<'_>) -> Outcome<Self> {
+    #[cfg(test)]
+    fn name_for_test(&self) -> &str {
+        &self.name
+    }
+
+    #[cfg(test)]
+    fn is_saving_for_test(&self) -> bool {
+        self.saving
+    }
+}
+
+impl View for NewFolderView {
+    type Message = NewFolderMessage;
+    type Event = NewFolderEvent;
+
+    fn update(&mut self, msg: NewFolderMessage, _ctx: UpdateCtx<'_>) -> Outcome<Self> {
         match msg {
             NewFolderMessage::Close => {
                 self.fade.close();
@@ -107,21 +117,12 @@ impl NewFolderView {
         }
     }
 
-    #[cfg(test)]
-    fn name_for_test(&self) -> &str {
-        &self.name
+    fn should_render(&self) -> bool {
+        self.fade.is_visible()
     }
 
-    #[cfg(test)]
-    fn is_saving_for_test(&self) -> bool {
-        self.saving
-    }
-
-    pub fn modal_view<'a>(
-        &'a self,
-        ctx: &crate::app::RenderCtx<'a>,
-    ) -> Option<Element<'a, NewFolderMessage, AppTheme>> {
-        let progress = self.fade.progress_if_visible()?;
+    fn view<'a>(&'a self, ctx: &RenderCtx<'a>) -> Element<'a, NewFolderMessage, AppTheme> {
+        let progress = self.fade.progress_when_visible();
 
         let header = modal::dialog_header(
             fl!("new-folder-modal-title"),
@@ -163,14 +164,14 @@ impl NewFolderView {
             .padding(Padding::from([20, 24]))
             .width(Fill);
 
-        Some(modal::dialog(
+        modal::dialog(
             480.0,
             None,
             |c| c.card_bg,
             progress,
             container(body),
             NewFolderMessage::Close,
-        ))
+        )
     }
 }
 
@@ -187,14 +188,9 @@ mod tests_snapshot {
         test_support::settle_animations();
 
         let mut render = TestRenderCtx::default();
-        for (theme, suffix) in [
-            (AppTheme::light(), "light"),
-            (AppTheme::dark(), "dark"),
-        ] {
+        for (theme, suffix) in [(AppTheme::light(), "light"), (AppTheme::dark(), "dark")] {
             render.colors = theme.colors;
-            let element = view
-                .modal_view(&render.as_ctx())
-                .expect("modal renders while open");
+            let element = view.view(&render.as_ctx());
             test_support::assert_snapshot(
                 format!("tests/snapshots/new_folder_modal_{suffix}"),
                 &theme,
@@ -207,12 +203,7 @@ mod tests_snapshot {
 #[cfg(test)]
 mod tests_interaction {
     use super::*;
-    use crate::test_support::{self, TestRenderCtx, TestUpdateCtx};
-
-    fn run(view: &mut NewFolderView, msg: NewFolderMessage) -> Outcome<NewFolderView> {
-        let mut owned = TestUpdateCtx::default();
-        view.update(msg, owned.as_ctx())
-    }
+    use crate::test_support::{self, TestRenderCtx, run_update as run};
 
     #[tokio::test(flavor = "current_thread")]
     async fn type_name_then_click_save_submits() {
@@ -224,9 +215,7 @@ mod tests_interaction {
         let render = TestRenderCtx::default();
 
         // Focus the name field via its stable widget::Id, then type.
-        let element = view
-            .modal_view(&render.as_ctx())
-            .expect("modal renders while open");
+        let element = view.view(&render.as_ctx());
         let messages = test_support::drive_element(element, |ui| {
             ui.click(NAME_FIELD_ID.clone())
                 .expect("name field has a click target");
@@ -243,9 +232,7 @@ mod tests_interaction {
         assert!(!view.is_saving_for_test());
 
         // With a non-empty name the Save button is now enabled. Click it.
-        let element = view
-            .modal_view(&render.as_ctx())
-            .expect("modal renders while open");
+        let element = view.view(&render.as_ctx());
         let messages = test_support::drive_element(element, |ui| {
             ui.click("Save").expect("Save button enabled");
         });
@@ -266,13 +253,8 @@ mod tests_update {
     use super::*;
     use crate::{
         components::toast::ToastStatus,
-        test_support::{OutcomeExt, TestUpdateCtx},
+        test_support::{OutcomeExt, run_update as run},
     };
-
-    fn run(view: &mut NewFolderView, msg: NewFolderMessage) -> Outcome<NewFolderView> {
-        let mut owned = TestUpdateCtx::default();
-        view.update(msg, owned.as_ctx())
-    }
 
     #[test]
     fn name_changed_updates_when_not_saving() {
@@ -316,7 +298,10 @@ mod tests_update {
     #[test]
     fn submit_with_valid_name_emits_run_event_and_flips_saving() {
         let mut view = NewFolderView::new();
-        let _ = run(&mut view, NewFolderMessage::NameChanged("  Social  ".into()));
+        let _ = run(
+            &mut view,
+            NewFolderMessage::NameChanged("  Social  ".into()),
+        );
         let NewFolderEvent::Run(name) = run(&mut view, NewFolderMessage::Submit).expect_event();
         assert_eq!(name, "Social");
         assert!(view.is_saving_for_test());

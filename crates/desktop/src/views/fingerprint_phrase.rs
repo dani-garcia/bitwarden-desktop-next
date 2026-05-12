@@ -177,10 +177,7 @@ mod tests_snapshot {
         state.open_with("apple banana carrot dolphin eagle".to_owned());
         test_support::settle_animations();
 
-        for (theme, suffix) in [
-            (AppTheme::light(), "light"),
-            (AppTheme::dark(), "dark"),
-        ] {
+        for (theme, suffix) in [(AppTheme::light(), "light"), (AppTheme::dark(), "dark")] {
             let element = modal_view(&state, &theme.colors).expect("modal renders while open");
             test_support::assert_snapshot(
                 format!("tests/snapshots/fingerprint_modal_{suffix}"),

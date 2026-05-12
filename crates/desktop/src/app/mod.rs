@@ -19,7 +19,7 @@ mod update;
 mod view;
 mod window;
 
-pub use ctx::{Outcome, Overlay, RenderCtx, UpdateCtx, ViewTypes};
+pub use ctx::{Outcome, Overlay, PushToast, RenderCtx, UpdateCtx, View, ViewExt};
 pub use message::{Message, SystemMessage, ViewMessage, WindowMessage};
 
 use std::{collections::HashMap, rc::Rc};

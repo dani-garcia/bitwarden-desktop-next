@@ -49,7 +49,7 @@ impl App {
                     }
                 }
             },
-            |_uid, names| Message::import(ImportMessage::FoldersLoaded(names)),
+            |_uid, names| ImportMessage::FoldersLoaded(names).into(),
         )
     }
 }

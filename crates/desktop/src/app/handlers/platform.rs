@@ -298,7 +298,7 @@ impl App {
             }
             MenuAction::SearchVault => {
                 if self.screen == Screen::Vault {
-                    return self.views.vault.focus_search_task().map(Message::vault);
+                    return self.views.vault.focus_search_task().map(Into::into);
                 }
             }
             MenuAction::SyncNow => {
@@ -389,9 +389,7 @@ impl App {
                     self.set_screen(Screen::Vault);
                 }
                 self.open_overlay = None;
-                return Task::done(Message::vault(crate::views::vault::VaultMessage::NewItem(
-                    t,
-                )));
+                return Task::done(crate::views::vault::VaultMessage::NewItem(t).into());
             }
             MenuAction::CopyUsername => {
                 return self.copy_from_active_selection(

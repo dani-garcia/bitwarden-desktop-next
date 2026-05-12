@@ -20,7 +20,7 @@ impl App {
             AccountSwitcherEvent::AddAccount => {
                 self.views.login.reset_to_email_entry();
                 self.set_screen(Screen::Login);
-                self.views.login.auto_focus_task().map(Message::login)
+                self.views.login.auto_focus_task().map(Into::into)
             }
             AccountSwitcherEvent::LockAll => self.handle_menu_action(MenuAction::LockAllVaults),
             AccountSwitcherEvent::Settings => self.handle_menu_action(MenuAction::Settings),

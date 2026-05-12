@@ -33,7 +33,7 @@ use std::time::Instant;
 
 use lilt::{Animated, Easing};
 
-use crate::{app::ViewTypes, components, services::sdk::PasswordHistoryEntry};
+use crate::{components, services::sdk::PasswordHistoryEntry};
 
 pub use message::{GenerateKind, GeneratorEvent, GeneratorMessage};
 pub use state::{TabKind, UsernameKind};
@@ -62,11 +62,6 @@ pub struct GeneratorView {
     /// user. App refreshes this on modal open and after every successful
     /// `Generated` result.
     history: Vec<PasswordHistoryEntry>,
-}
-
-impl ViewTypes for GeneratorView {
-    type Message = GeneratorMessage;
-    type Event = GeneratorEvent;
 }
 
 impl GeneratorView {

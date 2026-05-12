@@ -220,8 +220,8 @@ impl App {
                 iced::window::Mode::Hidden => Task::batch([
                     iced::window::set_mode(id, iced::window::Mode::Windowed),
                     iced::window::gain_focus(id),
-                    iced::widget::operation::focus(MAGNIFY_SEARCH_ID).map(Message::Magnify),
-                    iced::widget::operation::select_all(MAGNIFY_SEARCH_ID).map(Message::Magnify),
+                    iced::widget::operation::focus(MAGNIFY_SEARCH_ID),
+                    iced::widget::operation::select_all(MAGNIFY_SEARCH_ID),
                 ]),
                 iced::window::Mode::Windowed | iced::window::Mode::Fullscreen => {
                     iced::window::set_mode(id, iced::window::Mode::Hidden)

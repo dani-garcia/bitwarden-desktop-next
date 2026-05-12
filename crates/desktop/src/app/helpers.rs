@@ -275,7 +275,7 @@ impl App {
             .login
             .show_unlock_for(self.active_user.as_ref(), &self.client_manager);
         self.set_screen(Screen::Login);
-        self.views.login.auto_focus_task().map(Message::login)
+        self.views.login.auto_focus_task().map(Into::into)
     }
 
     /// Standard post-unlock transition: load both the vault list and the
@@ -287,19 +287,18 @@ impl App {
         Task::batch([
             self.load_vault_list_task(uid),
             self.load_send_list_task(uid),
-            crate::views::vault::VaultView::delayed_auto_focus_task().map(Message::vault),
+            crate::views::vault::VaultView::delayed_auto_focus_task().map(Into::into),
         ])
     }
 
     /// Lift `VaultView::load_list_task` into a top-level `Task<Message>`,
-    /// hiding the per-call-site `.map(Message::vault)`.
+    /// hiding the per-call-site `.map(Into::into)`.
     pub(crate) fn load_vault_list_task(&self, uid: UserId) -> Task<Message> {
-        crate::views::vault::VaultView::load_list_task(uid, &self.client_manager)
-            .map(Message::vault)
+        crate::views::vault::VaultView::load_list_task(uid, &self.client_manager).map(Into::into)
     }
 
     pub(crate) fn load_send_list_task(&self, uid: UserId) -> Task<Message> {
-        crate::views::send::SendView::load_list_task(uid, &self.client_manager).map(Message::send)
+        crate::views::send::SendView::load_list_task(uid, &self.client_manager).map(Into::into)
     }
 
     /// Synthesize a `VaultMessage::CipherDetail(...)` so the Edit-menu copy
@@ -314,9 +313,7 @@ impl App {
         if self.screen != Screen::Vault {
             return Task::none();
         }
-        Task::done(Message::vault(
-            crate::views::vault::VaultMessage::CipherDetail(msg),
-        ))
+        Task::done(crate::views::vault::VaultMessage::CipherDetail(msg).into())
     }
 
     pub(crate) fn menu_state(&self) -> crate::services::menu::MenuState {
@@ -333,6 +330,15 @@ impl App {
             has_accounts,
             has_lockable_accounts: has_lockable,
         }
+    }
+}
+
+// `Outcome::dispatch` reaches `push_toast` through the `PushToast` trait.
+// The inherent method above is kept for direct `self.push_toast(...)`
+// calls in handlers.
+impl crate::app::PushToast for App {
+    fn push_toast(&mut self, toast: crate::components::toast::Toast) {
+        App::push_toast(self, toast);
     }
 }
 

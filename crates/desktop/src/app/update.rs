@@ -2,7 +2,7 @@
 
 use iced::Task;
 
-use super::{App, Message, UpdateCtx, ViewMessage};
+use super::{App, Message, UpdateCtx, View, ViewMessage};
 
 impl App {
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -38,87 +38,51 @@ impl App {
                     open_overlay: &mut self.open_overlay,
                 };
                 match view_msg {
-                    ViewMessage::Login(m) => {
-                        let outcome = self.views.login.update(m, uctx);
-                        outcome.dispatch(
-                            self,
-                            Message::login,
-                            |s, e| s.handle_login_event(e),
-                            App::push_toast,
-                        )
-                    }
-                    ViewMessage::Vault(m) => {
-                        let outcome = self.views.vault.update(m, uctx);
-                        outcome.dispatch(
-                            self,
-                            Message::vault,
-                            |s, e| s.handle_vault_event(e),
-                            App::push_toast,
-                        )
-                    }
-                    ViewMessage::Send(m) => {
-                        let outcome = self.views.send.update(m, uctx);
-                        outcome.dispatch(
-                            self,
-                            Message::send,
-                            |s, e| s.handle_send_event(e),
-                            App::push_toast,
-                        )
-                    }
-                    ViewMessage::TitleBar(m) => {
-                        let outcome = self.views.title_bar.update(m, uctx);
-                        outcome.dispatch(
-                            self,
-                            Message::title_bar,
-                            |s, e| s.handle_titlebar_event(e),
-                            App::push_toast,
-                        )
-                    }
-                    ViewMessage::Settings(m) => {
-                        let outcome = self.views.settings.update(m, uctx);
-                        outcome.dispatch(
-                            self,
-                            Message::settings,
-                            |s, e| s.handle_settings_event(e),
-                            App::push_toast,
-                        )
-                    }
-                    ViewMessage::Generator(m) => {
-                        let outcome = self.views.generator.update(m, uctx);
-                        outcome.dispatch(
-                            self,
-                            Message::generator,
-                            |s, e| s.handle_generator_event(e),
-                            App::push_toast,
-                        )
-                    }
-                    ViewMessage::Import(m) => {
-                        let outcome = self.views.import.update(m, uctx);
-                        outcome.dispatch(
-                            self,
-                            Message::import,
-                            |s, e| s.handle_import_event(e),
-                            App::push_toast,
-                        )
-                    }
-                    ViewMessage::Export(m) => {
-                        let outcome = self.views.export.update(m, uctx);
-                        outcome.dispatch(
-                            self,
-                            Message::export,
-                            |s, e| s.handle_export_event(e),
-                            App::push_toast,
-                        )
-                    }
-                    ViewMessage::NewFolder(m) => {
-                        let outcome = self.views.new_folder.update(m, uctx);
-                        outcome.dispatch(
-                            self,
-                            Message::new_folder,
-                            |s, e| s.handle_new_folder_event(e),
-                            App::push_toast,
-                        )
-                    }
+                    ViewMessage::Login(m) => self
+                        .views
+                        .login
+                        .update(m, uctx)
+                        .dispatch(self, |s, e| s.handle_login_event(e)),
+                    ViewMessage::Vault(m) => self
+                        .views
+                        .vault
+                        .update(m, uctx)
+                        .dispatch(self, |s, e| s.handle_vault_event(e)),
+                    ViewMessage::Send(m) => self
+                        .views
+                        .send
+                        .update(m, uctx)
+                        .dispatch(self, |s, e| s.handle_send_event(e)),
+                    ViewMessage::TitleBar(m) => self
+                        .views
+                        .title_bar
+                        .update(m, uctx)
+                        .dispatch(self, |s, e| s.handle_titlebar_event(e)),
+                    ViewMessage::Settings(m) => self
+                        .views
+                        .settings
+                        .update(m, uctx)
+                        .dispatch(self, |s, e| s.handle_settings_event(e)),
+                    ViewMessage::Generator(m) => self
+                        .views
+                        .generator
+                        .update(m, uctx)
+                        .dispatch(self, |s, e| s.handle_generator_event(e)),
+                    ViewMessage::Import(m) => self
+                        .views
+                        .import
+                        .update(m, uctx)
+                        .dispatch(self, |s, e| s.handle_import_event(e)),
+                    ViewMessage::Export(m) => self
+                        .views
+                        .export
+                        .update(m, uctx)
+                        .dispatch(self, |s, e| s.handle_export_event(e)),
+                    ViewMessage::NewFolder(m) => self
+                        .views
+                        .new_folder
+                        .update(m, uctx)
+                        .dispatch(self, |s, e| s.handle_new_folder_event(e)),
                 }
             }
         }

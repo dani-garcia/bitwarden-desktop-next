@@ -9,12 +9,12 @@ use iced::{
 };
 
 use crate::{
-    app::RenderCtx,
+    app::{Overlay, RenderCtx},
     components::{
         account_switcher,
         bottom_sheet::{self, SHEET_BREAKPOINT_PX, SHEET_TOP_INSET_PX, SHEET_TOP_RADIUS_PX},
-        buttons, collapsible_pane, drop_down, icons,
-        icons::BwiIcon,
+        buttons, collapsible_pane, drop_down,
+        icons::{self, BwiIcon},
     },
     fl,
     theme::{AppColors, AppTheme, RADIUS_LG},
@@ -30,7 +30,7 @@ use super::{
 };
 
 impl VaultView {
-    pub fn view<'a>(&'a self, ctx: &RenderCtx<'a>) -> Element<'a, VaultMessage, AppTheme> {
+    pub(super) fn render<'a>(&'a self, ctx: &RenderCtx<'a>) -> Element<'a, VaultMessage, AppTheme> {
         let active_user = ctx.active_user.expect("Screen::Vault without active_user");
         let user_cache = self.items.get(active_user);
         let cached_items: &[Arc<CipherListView>] =
@@ -70,7 +70,7 @@ impl VaultView {
     /// selected, returns the bottom-sheet element that the app composes on
     /// top of the entire window (including sidebar and title bar). Returns
     /// `None` otherwise.
-    pub fn sheet_view<'a>(
+    pub(super) fn render_sheet<'a>(
         &'a self,
         ctx: &RenderCtx<'a>,
     ) -> Option<Element<'a, VaultMessage, AppTheme>> {
@@ -93,7 +93,7 @@ impl VaultView {
     /// Returns the delete-confirmation modal when armed, `None` otherwise.
     /// Composed by the App on top of the vault view so the backdrop covers
     /// the sidebar and title bar.
-    pub fn modal_view<'a>(
+    pub(super) fn render_overlay<'a>(
         &'a self,
         ctx: &RenderCtx<'a>,
     ) -> Option<Element<'a, VaultMessage, AppTheme>> {
@@ -171,7 +171,7 @@ impl VaultView {
             left: 12.0,
         });
 
-        let new_item_menu_open = ctx.open_overlay == Some(crate::app::Overlay::NewItemMenu);
+        let new_item_menu_open = ctx.open_overlay == Some(Overlay::NewItemMenu);
         let new_button = drop_down::DropDown::new(
             new_button_trigger,
             new_item_menu(colors),
@@ -182,7 +182,7 @@ impl VaultView {
         .width(220.0)
         .offset(4.0);
 
-        let account_switcher_open = ctx.open_overlay == Some(crate::app::Overlay::AccountSwitcher);
+        let account_switcher_open = ctx.open_overlay == Some(Overlay::AccountSwitcher);
         let avatar = account_switcher::header_switcher(
             active_email,
             ctx.accounts,

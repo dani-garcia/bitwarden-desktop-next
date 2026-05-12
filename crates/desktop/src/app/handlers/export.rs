@@ -32,7 +32,7 @@ impl App {
                     move |client| {
                         pick_and_export(client, organization_id, format, extension, default_name)
                     },
-                    |r| Message::export(ExportMessage::Completed(r)),
+                    |r| ExportMessage::Completed(r).into(),
                 )
             }
         }

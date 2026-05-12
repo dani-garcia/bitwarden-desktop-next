@@ -7,20 +7,30 @@ use crate::{
         about::AboutMessage, export::ExportMessage, fingerprint_phrase::FingerprintMessage,
         generator::GeneratorMessage, import::ImportMessage, login::LoginMessage,
         magnify::MagnifyMessage, new_folder::NewFolderMessage,
-        screenshot_confirm::ScreenshotConfirmMessage, send::SendMessage,
-        settings::SettingsMessage, title_bar::TitleBarMessage, vault::VaultMessage,
+        screenshot_confirm::ScreenshotConfirmMessage, send::SendMessage, settings::SettingsMessage,
+        title_bar::TitleBarMessage, vault::VaultMessage,
     },
 };
 
 // ── Top-level Message ──────────────────────────────────────────────────────
 // `View` carries sub-view messages (all need `UpdateCtx`, factored into one
 // shared construction site). The rest are app-level signals.
+//
+// `derive_more::From` generates `From<VariantType> for Message` for every
+// tuple variant *except* `View(ViewMessage)` — that one's skipped because
+// the blanket below already covers `T: Into<ViewMessage>` (and the reflexive
+// `From<ViewMessage> for ViewMessage` would otherwise produce a duplicate
+// impl). `Window(WindowMessage)` is also skipped because its handler routes
+// per-window-id rather than via a single typed conversion.
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, derive_more::From)]
 pub enum Message {
+    #[from(skip)]
     View(ViewMessage),
     About(AboutMessage),
+    #[from(skip)]
     Window(WindowMessage),
+    #[from(skip)]
     System(SystemMessage),
     /// Sidebar chrome (collapse, section/filter selection). Handled at App
     /// level because it persists across authenticated screens.
@@ -47,7 +57,7 @@ pub enum Message {
 
 /// Sub-view messages, bundled so `App::update` builds `UpdateCtx` in one
 /// place and the `&mut App::open_overlay` borrow has a single scope.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, derive_more::From)]
 pub enum ViewMessage {
     Login(LoginMessage),
     Vault(VaultMessage),
@@ -60,47 +70,13 @@ pub enum ViewMessage {
     NewFolder(NewFolderMessage),
 }
 
-// Convenience constructors so call sites can use fn-pointer form
-// (`.map(Message::login)`) without the `View(ViewMessage::Login(..))` wrap.
-impl Message {
-    pub fn login(m: LoginMessage) -> Self {
-        Self::View(ViewMessage::Login(m))
-    }
-
-    pub fn vault(m: VaultMessage) -> Self {
-        Self::View(ViewMessage::Vault(m))
-    }
-
-    pub fn send(m: SendMessage) -> Self {
-        Self::View(ViewMessage::Send(m))
-    }
-
-    pub fn title_bar(m: TitleBarMessage) -> Self {
-        Self::View(ViewMessage::TitleBar(m))
-    }
-
-    pub fn settings(m: SettingsMessage) -> Self {
-        Self::View(ViewMessage::Settings(m))
-    }
-
-    pub fn generator(m: GeneratorMessage) -> Self {
-        Self::View(ViewMessage::Generator(m))
-    }
-
-    pub fn import(m: ImportMessage) -> Self {
-        Self::View(ViewMessage::Import(m))
-    }
-
-    pub fn export(m: ExportMessage) -> Self {
-        Self::View(ViewMessage::Export(m))
-    }
-
-    pub fn new_folder(m: NewFolderMessage) -> Self {
-        Self::View(ViewMessage::NewFolder(m))
-    }
-
-    pub fn fingerprint(m: FingerprintMessage) -> Self {
-        Self::Fingerprint(m)
+/// Chain `XxxMessage -> ViewMessage -> Message` for view sub-messages. With
+/// this, `vault_msg.into()` produces a `Message` directly via the per-view
+/// `derive_more::From` impls on `ViewMessage` plus this lift, instead of
+/// needing two `.into()` calls.
+impl<T: Into<ViewMessage>> From<T> for Message {
+    fn from(t: T) -> Self {
+        Self::View(t.into())
     }
 }
 

@@ -82,7 +82,7 @@ use iced_test::simulator::Simulator;
 
 use crate::{
     APP_FONT,
-    app::{Outcome, Overlay, RenderCtx, UpdateCtx, ViewTypes},
+    app::{Outcome, Overlay, RenderCtx, UpdateCtx, View},
     assets,
     components::{icons, toast::Toast},
     domain::UserId,
@@ -146,9 +146,7 @@ pub fn assert_snapshot<'a, M>(
     let path = path.as_ref();
     let mut ui = simulator(element);
     let snapshot = ui.snapshot(theme).expect("rendered snapshot");
-    let matched = snapshot
-        .matches_image(path)
-        .expect("snapshot comparison");
+    let matched = snapshot.matches_image(path).expect("snapshot comparison");
     assert!(
         matched,
         "snapshot drift at {}; delete the .png to re-baseline",
@@ -208,6 +206,21 @@ impl TestUpdateCtx {
             open_overlay: &mut self.open_overlay,
         }
     }
+}
+
+/// Drive one update on any [`View`] with a default-ctor [`TestUpdateCtx`].
+/// Convenience for the per-test `fn run(view, msg)` helper — replaces:
+///
+/// ```ignore
+/// let mut owned = TestUpdateCtx::default();
+/// view.update(msg, owned.as_ctx())
+/// ```
+///
+/// Tests that need to customize the ctx (active user, filters, pre-loaded
+/// client manager) should construct [`TestUpdateCtx`] directly.
+pub fn run_update<V: View>(view: &mut V, msg: V::Message) -> Outcome<V> {
+    let mut owned = TestUpdateCtx::default();
+    view.update(msg, owned.as_ctx())
 }
 
 /// Owns the storage a [`RenderCtx`]'s `&` slots borrow from. Same shape as
@@ -272,7 +285,7 @@ impl TestRenderCtx {
 /// let ev = view.update(msg, owned.as_ctx()).expect_event();
 /// assert!(matches!(ev, NewFolderEvent::Run(s) if s == "Social"));
 /// ```
-pub trait OutcomeExt<V: ViewTypes> {
+pub trait OutcomeExt<V: View> {
     /// Panic unless the outcome is [`Outcome::None`].
     fn expect_none(self);
     /// Panic unless the outcome is [`Outcome::Event`]; return the event.
@@ -281,7 +294,7 @@ pub trait OutcomeExt<V: ViewTypes> {
     fn expect_toast(self) -> Toast;
 }
 
-impl<V: ViewTypes> OutcomeExt<V> for Outcome<V> {
+impl<V: View> OutcomeExt<V> for Outcome<V> {
     fn expect_none(self) {
         if !matches!(self, Outcome::None) {
             panic!("expected Outcome::None, got {}", outcome_kind(&self));
@@ -303,7 +316,7 @@ impl<V: ViewTypes> OutcomeExt<V> for Outcome<V> {
     }
 }
 
-fn outcome_kind<V: ViewTypes>(out: &Outcome<V>) -> &'static str {
+fn outcome_kind<V: View>(out: &Outcome<V>) -> &'static str {
     match out {
         Outcome::None => "Outcome::None",
         Outcome::Task(_) => "Outcome::Task(_)",

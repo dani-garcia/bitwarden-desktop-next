@@ -14,13 +14,14 @@ mod list;
 use std::sync::Arc;
 
 use bitwarden_vault::{FieldView, LoginView, SshKeyView};
-use iced::Task;
+use iced::{Element, Task};
 
 use crate::{
-    app::{Outcome, UpdateCtx},
+    app::{Outcome, Overlay, RenderCtx, UpdateCtx, View},
     debug_fmt::Summary,
     domain::UserId,
     services::sdk::{ClientExt, ClientManager},
+    theme::AppTheme,
 };
 
 use super::{
@@ -57,14 +58,17 @@ impl VaultView {
 
 // ── Update dispatch ────────────────────────────────────────────────────────
 
-impl VaultView {
+impl View for VaultView {
+    type Message = VaultMessage;
+    type Event = VaultEvent;
+
     /// Compositional MVU update. Returns a task (for async work the view
     /// owns) and an optional event (cross-cutting fact for App to route).
     ///
     /// `ctx` carries the SDK handle + active user; it's built fresh on every
     /// `App::update` call so the view can construct `Task::perform` calls
     /// without owning shared state.
-    pub fn update(&mut self, msg: VaultMessage, mut ctx: UpdateCtx<'_>) -> Outcome<Self> {
+    fn update(&mut self, msg: VaultMessage, mut ctx: UpdateCtx<'_>) -> Outcome<Self> {
         match msg {
             VaultMessage::ItemList(m) => {
                 return self.handle_item_list(&ctx, m);
@@ -112,15 +116,15 @@ impl VaultView {
             }
             VaultMessage::AccountSwitcher(m) => {
                 return Outcome::from_option(
-                    m.consume(&mut *ctx.open_overlay, crate::app::Overlay::AccountSwitcher)
+                    m.consume(&mut *ctx.open_overlay, Overlay::AccountSwitcher)
                         .map(VaultEvent::AccountSwitcher),
                 );
             }
             VaultMessage::ToggleNewItemMenu => {
-                *ctx.open_overlay = if *ctx.open_overlay == Some(crate::app::Overlay::NewItemMenu) {
+                *ctx.open_overlay = if *ctx.open_overlay == Some(Overlay::NewItemMenu) {
                     None
                 } else {
-                    Some(crate::app::Overlay::NewItemMenu)
+                    Some(Overlay::NewItemMenu)
                 };
             }
             VaultMessage::NewItem(t) => {
@@ -139,6 +143,25 @@ impl VaultView {
         Outcome::None
     }
 
+    fn view<'a>(&'a self, ctx: &RenderCtx<'a>) -> Element<'a, VaultMessage, AppTheme> {
+        self.render(ctx)
+    }
+
+    /// Bottom-sheet (narrow-mode cipher detail) and the delete-confirm
+    /// sub-modal, in z-order: sheet first (lower), confirm on top.
+    fn overlays<'a>(&'a self, ctx: &RenderCtx<'a>) -> Vec<Element<'a, VaultMessage, AppTheme>> {
+        let mut out = Vec::new();
+        if let Some(el) = self.render_sheet(ctx) {
+            out.push(el);
+        }
+        if let Some(el) = self.render_overlay(ctx) {
+            out.push(el);
+        }
+        out
+    }
+}
+
+impl VaultView {
     /// Called by App when the active vault filter changes. Clears the
     /// current selection (what's selected may no longer be in the list) and
     /// recomputes the cached list for the active user.

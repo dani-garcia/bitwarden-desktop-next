@@ -9,6 +9,7 @@ use iced::{
 };
 
 use crate::{
+    app::RenderCtx,
     components::{self, buttons, icons, modal, shell_scope::ShellScope},
     fl,
     theme::{AppColors, AppTheme, RADIUS_LG, RADIUS_PILL},
@@ -22,13 +23,13 @@ use super::{
 };
 
 impl GeneratorView {
-    /// Returns `None` when the modal is closed so App's view composer can
-    /// take a cheap exclusive branch (see CLAUDE.md → "Stack doesn't cull").
-    pub fn modal_view<'a>(
+    /// Caller must check [`crate::components::FadeInOut::is_visible`] /
+    /// `View::should_render` first — assumes the fade is visible.
+    pub(super) fn render<'a>(
         &'a self,
-        ctx: &crate::app::RenderCtx<'a>,
-    ) -> Option<Element<'a, GeneratorMessage, AppTheme>> {
-        let progress = self.fade.progress_if_visible()?;
+        ctx: &RenderCtx<'a>,
+    ) -> Element<'a, GeneratorMessage, AppTheme> {
+        let progress = self.fade.progress_when_visible();
 
         let body = match self.mode {
             Mode::Generator => self.generator_body(ctx.colors),
@@ -69,14 +70,14 @@ impl GeneratorView {
             .width(Fill)
             .height(Fill);
 
-        Some(modal::dialog(
+        modal::dialog(
             680.0,
             Some(620.0),
             |c| c.card_bg,
             progress,
             body,
             GeneratorMessage::Close,
-        ))
+        )
     }
 
     fn generator_body<'a>(

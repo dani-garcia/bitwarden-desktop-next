@@ -1,15 +1,16 @@
 use std::sync::Arc;
 
 use bitwarden_send::{SendId, SendType, SendView as SdkSendView};
-use iced::Task;
+use iced::{Element, Task};
 
 use crate::{
-    app::{Outcome, UpdateCtx},
+    app::{Outcome, Overlay, RenderCtx, UpdateCtx, View},
     components::toast::Toast,
     debug_fmt::{NoDebug, Summary},
     domain::UserId,
     fl,
     services::sdk::ClientManager,
+    theme::AppTheme,
 };
 
 use super::{
@@ -35,8 +36,11 @@ impl SendView {
 
 // ── Update dispatch ────────────────────────────────────────────────────────
 
-impl SendView {
-    pub fn update(&mut self, msg: SendMessage, mut ctx: UpdateCtx<'_>) -> Outcome<Self> {
+impl View for SendView {
+    type Message = SendMessage;
+    type Event = SendEvent;
+
+    fn update(&mut self, msg: SendMessage, mut ctx: UpdateCtx<'_>) -> Outcome<Self> {
         match msg {
             SendMessage::ItemList(m) => {
                 return self.handle_item_list(&ctx, m);
@@ -74,7 +78,7 @@ impl SendView {
             }
             SendMessage::AccountSwitcher(m) => {
                 return Outcome::from_option(
-                    m.consume(&mut *ctx.open_overlay, crate::app::Overlay::AccountSwitcher)
+                    m.consume(&mut *ctx.open_overlay, Overlay::AccountSwitcher)
                         .map(SendEvent::AccountSwitcher),
                 );
             }
@@ -102,6 +106,21 @@ impl SendView {
             }
         }
         Outcome::None
+    }
+
+    fn view<'a>(&'a self, ctx: &RenderCtx<'a>) -> Element<'a, SendMessage, AppTheme> {
+        self.render(ctx)
+    }
+
+    fn overlays<'a>(&'a self, ctx: &RenderCtx<'a>) -> Vec<Element<'a, SendMessage, AppTheme>> {
+        let mut out = Vec::new();
+        if let Some(el) = self.render_sheet(ctx) {
+            out.push(el);
+        }
+        if let Some(el) = self.render_overlay(ctx) {
+            out.push(el);
+        }
+        out
     }
 }
 

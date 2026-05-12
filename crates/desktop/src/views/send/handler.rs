@@ -51,7 +51,7 @@ impl App {
         };
         self.perform_with_active_client(
             move |client| client.generate_password(req),
-            |_uid, res| Message::send(SendMessage::PasswordGenerated(res.map(NoDebug))),
+            |_uid, res| SendMessage::PasswordGenerated(res.map(NoDebug)).into(),
         )
     }
 }

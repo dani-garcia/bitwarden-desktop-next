@@ -45,9 +45,7 @@ fn apply_windows(w: &dyn window::Window, protect: bool) {
     use iced::window::raw_window_handle::RawWindowHandle;
     use windows_sys::Win32::{
         Foundation::HWND,
-        UI::WindowsAndMessaging::{
-            SetWindowDisplayAffinity, WDA_EXCLUDEFROMCAPTURE, WDA_NONE,
-        },
+        UI::WindowsAndMessaging::{SetWindowDisplayAffinity, WDA_EXCLUDEFROMCAPTURE, WDA_NONE},
     };
 
     let Ok(handle) = w.window_handle() else {
@@ -59,7 +57,11 @@ fn apply_windows(w: &dyn window::Window, protect: bool) {
         return;
     };
     let hwnd: HWND = h.hwnd.get() as *mut _;
-    let affinity = if protect { WDA_EXCLUDEFROMCAPTURE } else { WDA_NONE };
+    let affinity = if protect {
+        WDA_EXCLUDEFROMCAPTURE
+    } else {
+        WDA_NONE
+    };
     // SAFETY: hwnd came from winit via raw-window-handle; valid for the
     // lifetime of the window. SetWindowDisplayAffinity is documented as
     // safe to call from any thread for any window the process owns.

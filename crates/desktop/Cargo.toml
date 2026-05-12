@@ -42,6 +42,7 @@ arboard = { version = "3.6", default-features = false, features = [
     "wayland-data-control",
 ] }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+derive_more = { version = "2", default-features = false, features = ["from"] }
 global-hotkey = "0.8"
 image = "0.25"
 i18n-embed = { version = "0.16", features = [

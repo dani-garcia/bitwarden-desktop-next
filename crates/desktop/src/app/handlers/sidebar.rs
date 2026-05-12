@@ -73,13 +73,13 @@ impl App {
     fn switch_to_list_screen(&mut self, target: Screen) -> Task<Message> {
         let (auto_focus, focus, load) = match target {
             Screen::Vault => (
-                self.views.vault.auto_focus_task().map(Message::vault),
-                self.views.vault.focus_search_task().map(Message::vault),
+                self.views.vault.auto_focus_task().map(Into::into),
+                self.views.vault.focus_search_task().map(Into::into),
                 self.active_user.map(|uid| self.load_vault_list_task(uid)),
             ),
             Screen::Send => (
-                self.views.send.auto_focus_task().map(Message::send),
-                self.views.send.focus_search_task().map(Message::send),
+                self.views.send.auto_focus_task().map(Into::into),
+                self.views.send.focus_search_task().map(Into::into),
                 self.active_user.map(|uid| self.load_send_list_task(uid)),
             ),
             Screen::Loading | Screen::Login => return Task::none(),

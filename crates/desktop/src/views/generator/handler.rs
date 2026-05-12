@@ -40,7 +40,7 @@ impl App {
                     GenerateKind::Username(req) => client.generate_username(req).await,
                 }
             },
-            |_uid, r| Message::generator(GeneratorMessage::Generated(r)),
+            |_uid, r| GeneratorMessage::Generated(r).into(),
         )
     }
 
