@@ -3,6 +3,7 @@
 //! `item_details` header and the universal `additional_options` /
 //! `custom_fields` footers.
 
+pub(super) mod bank_account;
 pub(super) mod card;
 pub(super) mod identity;
 pub(super) mod login;

@@ -363,6 +363,17 @@ new-folder-toast-success = Cartella creata
 new-folder-toast-failed-title = Impossibile creare la cartella
 new-folder-toast-failed-body = Non è stato possibile salvare la cartella. Riprova.
 
+## New-item picker modal
+picker-title = Scegli un elemento da aggiungere
+picker-folder = Cartella
+picker-login-subtitle = Sito web o app
+picker-card-subtitle = Carta di credito o debito
+picker-bank-account-subtitle = Dati bancari
+picker-identity-subtitle = Informazioni personali
+picker-secure-note-subtitle = Testo importante
+picker-ssh-key-subtitle = Token di accesso al server
+picker-folder-subtitle = Organizza i tuoi elementi
+
 ## Tray
 tray-show-hide = Mostra / Nascondi
 tray-lock-vault = Blocca cassaforte

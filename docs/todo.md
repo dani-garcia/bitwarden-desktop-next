@@ -124,31 +124,6 @@ to do alongside the Registration touch.
 
 ## Vault & Send
 
-### Bank-account cipher type `[M]`
-
-The SDK exposes `CipherType::BankAccount` / `CipherListViewType::BankAccount`; the desktop
-UI stubs at every match site (search `TODO(bank-account)`) so existing items don't crash
-but render with no type-specific section, and the magnify launcher uses the credit-card
-icon as a stand-in.
-
-- New `bank_account` module under
-  [cipher_detail/](../crates/desktop/src/views/vault/widgets/cipher_detail/) mirroring
-  `card` / `identity`, plus the `match` arm in
-  [view.rs:34](../crates/desktop/src/views/vault/widgets/cipher_detail/view.rs).
-- Mirror under
-  [cipher_edit/sections/](../crates/desktop/src/views/vault/widgets/cipher_edit/sections/),
-  the `match` arm in
-  [view.rs:29](../crates/desktop/src/views/vault/widgets/cipher_edit/view.rs), and an
-  `ensure_sub_structs` arm in
-  [state.rs:186](../crates/desktop/src/views/vault/widgets/cipher_edit/state.rs) seeding
-  `BankAccountView`.
-- Add a `BWI_BANK` glyph to
-  [components/icons.rs](../crates/desktop/src/components/icons.rs); use it from the
-  magnify-launcher row + cipher-detail header.
-- "New bank account" entry in the new-item dropdown.
-- Localization: `detail-header-bank-account` / `form-title-edit-bank-account` already
-  exist in en + es; expand once section labels and field strings are fleshed out.
-
 ### Right-click context menu for text inputs `[M]`
 
 Cut / copy / paste / select-all on `TextInput` and the notes `TextEditor` in
@@ -327,6 +302,27 @@ study (under [Plan-first](#plan-first)).
   Either way the row helpers (`nav_row` / `parent_header_row` / `standalone_item`) take
   `Option<f32>` selected-progress instead of `is_selected: bool`; rows already paint via
   style closures so the swap is contained.
+
+### Icon audit — migrate bootstrap-icons to bwi `[M]`
+
+[`components::icons`](../crates/desktop/src/components/icons.rs) hosts two parallel fonts:
+the Bootstrap Icons set (`FONT`, codepoints auto-generated at build time from
+`assets/bootstrap-icons-*.css` via `build.rs::generate_bootstrap_icons`) and the
+Bitwarden-branded `bwi-font` (`BWI_FONT`, codepoints transcribed by hand from
+`clients/libs/angular/src/scss/bwicons/styles/style.scss`). The official client uses bwi
+glyphs everywhere; mixing in Bootstrap icons drifts us off-brand. Sweep call sites and
+prefer `BwiIcon` for anything bwi has a parity glyph for, downgrading Bootstrap to a
+last-resort fallback for icons bwi genuinely lacks. Stretch: if the audit ends with zero
+Bootstrap usages, drop the dep + font file + `FONT` / `Icon` types entirely. If a handful
+remain, leave Bootstrap in place but document the residual cases.
+
+Stretch follow-up — **automate bwi codepoint generation.** Once bwi is the canonical font,
+extend `build.rs` to parse `clients/libs/angular/src/scss/bwicons/styles/style.scss` (or
+the bwi `.css`, whichever is more stable) and emit a `bwi_icons_generated.rs` next to
+`bootstrap_icons_generated.rs`. Mirror `FONT_VERSION` bookkeeping so the regen step is the
+same recipe. Removes the manual codepoint table at
+[icons.rs:78](../crates/desktop/src/components/icons.rs#L78) and prevents drift when
+upstream adds glyphs.
 
 ### Replace `system_theme` crate with iced's built-in `theme_changes()` `[M]`
 

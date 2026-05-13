@@ -53,9 +53,11 @@ pub enum VaultMessage {
     FinalizeSheetClose,
     #[from(skip)]
     PaneResized(pane_grid::ResizeEvent),
-    /// User clicked the +New button — toggle the cipher-type picker dropdown.
-    ToggleNewItemMenu,
-    /// User picked a type (from the +New dropdown, a File-menu item, or a
+    /// User clicked the +New button — open the new-item picker modal.
+    /// Bubbles up to App via [`VaultEvent::OpenNewItemPicker`] which calls
+    /// `App::open_new_item_picker`.
+    OpenNewItemPicker,
+    /// User picked a type (from the picker modal, a File-menu item, or a
     /// keyboard accelerator). Mounts an empty form of that type.
     #[from(skip)]
     NewItem(CipherType),
@@ -135,4 +137,7 @@ pub enum VaultEvent {
     /// Routed to `clipboard::launch_url` which enforces scheme allowlist.
     #[from(skip)]
     LaunchUrlRequested { uri: String },
+    /// User clicked the vault header's `+ New` button. App opens the
+    /// new-item picker modal.
+    OpenNewItemPicker,
 }

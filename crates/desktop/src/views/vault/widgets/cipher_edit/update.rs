@@ -2,7 +2,8 @@
 //! `CipherView` mutations.
 
 use bitwarden_vault::{
-    CipherRepromptType, CipherView, FieldType, FieldView, IdentityView, LoginUriView, UriMatchType,
+    BankAccountView, CipherRepromptType, CipherView, FieldType, FieldView, IdentityView,
+    LoginUriView, UriMatchType,
 };
 
 use super::{
@@ -185,6 +186,32 @@ impl CipherForm {
             }
             IdentityCountryChanged(s) => identity_set(&mut self.modified, |i| &mut i.country, s),
 
+            // Bank account
+            BankNameChanged(s) => bank_set(&mut self.modified, |b| &mut b.bank_name, s),
+            BankNameOnAccountChanged(s) => {
+                bank_set(&mut self.modified, |b| &mut b.name_on_account, s)
+            }
+            BankAccountTypeSelected(s) => {
+                if let Some(b) = self.modified.bank_account.as_mut() {
+                    b.account_type = s;
+                }
+            }
+            BankAccountNumberChanged(s) => {
+                bank_set(&mut self.modified, |b| &mut b.account_number, s)
+            }
+            BankRoutingNumberChanged(s) => {
+                bank_set(&mut self.modified, |b| &mut b.routing_number, s)
+            }
+            BankBranchNumberChanged(s) => {
+                bank_set(&mut self.modified, |b| &mut b.branch_number, s)
+            }
+            BankPinChanged(s) => bank_set(&mut self.modified, |b| &mut b.pin, s),
+            BankSwiftCodeChanged(s) => bank_set(&mut self.modified, |b| &mut b.swift_code, s),
+            BankIbanChanged(s) => bank_set(&mut self.modified, |b| &mut b.iban, s),
+            BankContactPhoneChanged(s) => {
+                bank_set(&mut self.modified, |b| &mut b.bank_contact_phone, s)
+            }
+
             // Custom fields
             CustomFieldAdded => {
                 let fields = self.modified.fields.get_or_insert_default();
@@ -259,6 +286,16 @@ fn identity_set(
 ) {
     if let Some(i) = cv.identity.as_mut() {
         *pick(i) = opt_string(s);
+    }
+}
+
+fn bank_set(
+    cv: &mut CipherView,
+    pick: impl Fn(&mut BankAccountView) -> &mut Option<String>,
+    s: String,
+) {
+    if let Some(b) = cv.bank_account.as_mut() {
+        *pick(b) = opt_string(s);
     }
 }
 

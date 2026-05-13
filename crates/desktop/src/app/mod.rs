@@ -34,8 +34,9 @@ use crate::{
     theme::{AppTheme, ThemePreference},
     views::{
         export as export_view, fingerprint_phrase, generator as generator_view,
-        import as import_view, login, magnify, new_folder as new_folder_view, screenshot_confirm,
-        send, settings as settings_view, title_bar, vault,
+        import as import_view, login, magnify, new_folder as new_folder_view,
+        new_item_picker as new_item_picker_view, screenshot_confirm, send,
+        settings as settings_view, title_bar, vault,
     },
 };
 
@@ -132,6 +133,7 @@ pub struct Views {
     pub(crate) import: import_view::ImportView,
     pub(crate) export: export_view::ExportView,
     pub(crate) new_folder: new_folder_view::NewFolderView,
+    pub(crate) new_item_picker: new_item_picker_view::NewItemPickerView,
     pub(crate) title_bar: title_bar::TitleBarView,
     /// Account → Fingerprint phrase modal. Closed unless the user explicitly
     /// opened it via the menu.
@@ -153,6 +155,7 @@ impl Views {
             import: import_view::ImportView::new(),
             export: export_view::ExportView::new(),
             new_folder: new_folder_view::NewFolderView::new(),
+            new_item_picker: new_item_picker_view::NewItemPickerView::default(),
             title_bar: title_bar::TitleBarView::new(),
             fingerprint: fingerprint_phrase::FingerprintModal::default(),
             screenshot_confirm: screenshot_confirm::ScreenshotConfirmModal::default(),

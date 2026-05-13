@@ -363,6 +363,17 @@ new-folder-toast-success = Ordner erstellt
 new-folder-toast-failed-title = Ordner konnte nicht erstellt werden
 new-folder-toast-failed-body = Der Ordner konnte nicht gespeichert werden. Versuche es erneut.
 
+## New-item picker modal
+picker-title = Element zum Hinzufügen wählen
+picker-folder = Ordner
+picker-login-subtitle = Website oder App
+picker-card-subtitle = Kredit- oder Debitkarte
+picker-bank-account-subtitle = Bankdaten
+picker-identity-subtitle = Persönliche Informationen
+picker-secure-note-subtitle = Wichtiger Text
+picker-ssh-key-subtitle = Server-Anmeldetoken
+picker-folder-subtitle = Elemente organisieren
+
 ## Tray
 tray-show-hide = Anzeigen / Ausblenden
 tray-lock-vault = Tresor sperren

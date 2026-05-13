@@ -363,6 +363,17 @@ new-folder-toast-success = 文件夹已创建
 new-folder-toast-failed-title = 无法创建文件夹
 new-folder-toast-failed-body = 无法保存文件夹。请重试。
 
+## New-item picker modal
+picker-title = 选择要添加的项目
+picker-folder = 文件夹
+picker-login-subtitle = 网站或应用
+picker-card-subtitle = 信用卡或借记卡
+picker-bank-account-subtitle = 银行账户信息
+picker-identity-subtitle = 个人信息
+picker-secure-note-subtitle = 重要文本
+picker-ssh-key-subtitle = 服务器登录令牌
+picker-folder-subtitle = 整理项目
+
 ## Tray
 tray-show-hide = 显示 / 隐藏
 tray-lock-vault = 锁定密码库

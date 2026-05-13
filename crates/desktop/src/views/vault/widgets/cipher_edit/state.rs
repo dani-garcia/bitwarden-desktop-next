@@ -3,8 +3,8 @@
 use bitwarden_core::OrganizationId;
 use bitwarden_ssh::generator::{KeyAlgorithm, generate_sshkey};
 use bitwarden_vault::{
-    CardView, CipherRepromptType, CipherType, CipherView, FolderId, FolderView, IdentityView,
-    LoginView, SecureNoteType, SecureNoteView,
+    BankAccountView, CardView, CipherRepromptType, CipherType, CipherView, FolderId, FolderView,
+    IdentityView, LoginView, SecureNoteType, SecureNoteView,
 };
 use chrono::Utc;
 use iced::widget::{combo_box, text_editor};
@@ -298,8 +298,20 @@ impl CipherForm {
                 });
             }
             CipherType::SshKey => { /* SSH key fields read-only for now */ }
-            // TODO(bank-account): no editable sub-struct yet. See docs/todo.md.
-            CipherType::BankAccount => {}
+            CipherType::BankAccount => {
+                self.modified.bank_account.get_or_insert(BankAccountView {
+                    bank_name: None,
+                    name_on_account: None,
+                    account_type: None,
+                    account_number: None,
+                    routing_number: None,
+                    branch_number: None,
+                    pin: None,
+                    swift_code: None,
+                    iban: None,
+                    bank_contact_phone: None,
+                });
+            }
         }
     }
 }

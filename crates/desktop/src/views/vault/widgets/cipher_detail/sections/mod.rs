@@ -3,6 +3,7 @@
 //! read-only rendering lives in `{type}.rs` here and the editable
 //! rendering lives in the parallel file under `cipher_edit/sections`.
 
+pub(super) mod bank_account;
 pub(super) mod card;
 pub(super) mod identity;
 pub(super) mod login;

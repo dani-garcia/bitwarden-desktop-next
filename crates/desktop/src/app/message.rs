@@ -7,7 +7,8 @@ use crate::{
         about::AboutMessage, export::ExportMessage, fingerprint_phrase::FingerprintMessage,
         generator::GeneratorMessage, import::ImportMessage, login::LoginMessage,
         magnify::MagnifyMessage, new_folder::NewFolderMessage,
-        screenshot_confirm::ScreenshotConfirmMessage, send::SendMessage, settings::SettingsMessage,
+        new_item_picker::NewItemPickerMessage, screenshot_confirm::ScreenshotConfirmMessage,
+        send::SendMessage, settings::SettingsMessage,
         title_bar::TitleBarMessage, vault::VaultMessage,
     },
 };
@@ -59,6 +60,7 @@ pub enum ViewMessage {
     Import(ImportMessage),
     Export(ExportMessage),
     NewFolder(NewFolderMessage),
+    NewItemPicker(NewItemPickerMessage),
     Fingerprint(FingerprintMessage),
     ScreenshotConfirm(ScreenshotConfirmMessage),
 }

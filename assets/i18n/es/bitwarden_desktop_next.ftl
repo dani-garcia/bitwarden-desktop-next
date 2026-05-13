@@ -129,6 +129,7 @@ detail-section-card-details = Detalles de la tarjeta
 detail-section-personal-details = Datos personales
 detail-section-note = Nota
 detail-section-ssh-key = Clave SSH
+detail-section-bank-account = Cuenta bancaria
 
 ## Detail pane — fields
 detail-field-name = Nombre
@@ -154,6 +155,17 @@ detail-field-fingerprint = Huella digital
 detail-empty-credentials = Sin credenciales
 detail-empty-card = Sin detalles de tarjeta
 detail-empty-identity = Sin datos de identidad
+detail-empty-bank-account = Sin datos de cuenta bancaria
+detail-field-bank-name = Nombre del banco
+detail-field-bank-name-on-account = Titular de la cuenta
+detail-field-bank-account-type = Tipo de cuenta
+detail-field-bank-account-number = Número de cuenta
+detail-field-bank-routing-number = Número de ruta
+detail-field-bank-branch-number = Número de sucursal / institución
+detail-field-bank-pin = PIN
+detail-field-bank-swift-code = Código SWIFT
+detail-field-bank-iban = IBAN
+detail-field-bank-contact-phone = Teléfono de contacto del banco
 detail-section-custom-fields = Campos personalizados
 detail-field-passkey = Clave de acceso
 detail-field-passkey-created = Creada { $date }
@@ -185,6 +197,7 @@ form-section-identification = Identificación
 form-section-contact-info = Información de contacto
 form-section-address = Dirección
 form-section-ssh-key = Clave SSH
+form-section-bank-account = Cuenta bancaria
 form-section-additional-options = Opciones adicionales
 form-section-custom-fields = Campos personalizados
 
@@ -253,6 +266,25 @@ form-ssh-public-key = Clave pública
 form-ssh-private-key = Clave privada
 form-ssh-fingerprint = Huella digital
 
+## Cipher form — bank account
+form-bank-name = Nombre del banco
+form-bank-name-on-account = Titular de la cuenta
+form-bank-account-type = Tipo de cuenta
+form-bank-account-type-placeholder = -- Tipo de cuenta --
+form-bank-account-type-checking = Corriente
+form-bank-account-type-savings = Ahorros
+form-bank-account-type-brokerage = Inversión
+form-bank-account-type-money-market = Mercado monetario
+form-bank-account-type-cd = Certificado de depósito (CD)
+form-bank-account-type-other = Otro
+form-bank-account-number = Número de cuenta
+form-bank-routing-number = Número de ruta
+form-bank-branch-number = Número de sucursal / institución
+form-bank-pin = PIN
+form-bank-swift-code = Código SWIFT
+form-bank-iban = IBAN
+form-bank-contact-phone = Teléfono de contacto del banco
+
 ## Cipher form — custom fields
 form-custom-field-type = Tipo
 form-custom-field-name = Nombre
@@ -285,6 +317,7 @@ menu-file-new-item-card = Tarjeta
 menu-file-new-item-identity = Identidad
 menu-file-new-item-secure-note = Nota segura
 menu-file-new-item-ssh-key = Clave SSH
+menu-file-new-item-bank-account = Cuenta bancaria
 menu-file-new-folder = Nueva carpeta
 menu-file-sync-now = Sincronizar ahora
 menu-file-import = Importar
@@ -360,6 +393,17 @@ new-folder-modal-cancel = Cancelar
 new-folder-toast-success = Carpeta creada
 new-folder-toast-failed-title = No se pudo crear la carpeta
 new-folder-toast-failed-body = No fue posible guardar la carpeta. Inténtalo de nuevo.
+
+## New-item picker modal
+picker-title = Elige un elemento para añadir
+picker-folder = Carpeta
+picker-login-subtitle = Sitio web o aplicación
+picker-card-subtitle = Tarjeta de crédito o débito
+picker-bank-account-subtitle = Datos bancarios
+picker-identity-subtitle = Información personal
+picker-secure-note-subtitle = Texto importante
+picker-ssh-key-subtitle = Token de inicio de sesión del servidor
+picker-folder-subtitle = Organiza tus elementos
 
 ## Bandeja
 tray-show-hide = Mostrar / Ocultar

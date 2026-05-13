@@ -46,6 +46,9 @@ pub fn menu_tree() -> MenuTree {
                 item(fl!("menu-file-new-item-ssh-key"))
                     .key(cmd_shift('k'))
                     .action(NewItem(CipherType::SshKey)),
+                item(fl!("menu-file-new-item-bank-account"))
+                    .key(cmd_shift('b'))
+                    .action(NewItem(CipherType::BankAccount)),
             ]),
             item(fl!("menu-file-new-folder")).when(Unlocked).action(NewFolder),
             sep(),

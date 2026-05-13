@@ -363,6 +363,17 @@ new-folder-toast-success = Dossier créé
 new-folder-toast-failed-title = Impossible de créer le dossier
 new-folder-toast-failed-body = Le dossier n'a pas pu être enregistré. Réessayez.
 
+## New-item picker modal
+picker-title = Choisir l'élément à ajouter
+picker-folder = Dossier
+picker-login-subtitle = Site web ou application
+picker-card-subtitle = Carte de crédit ou de débit
+picker-bank-account-subtitle = Informations bancaires
+picker-identity-subtitle = Informations personnelles
+picker-secure-note-subtitle = Texte important
+picker-ssh-key-subtitle = Jeton de connexion au serveur
+picker-folder-subtitle = Organisez vos éléments
+
 ## Tray
 tray-show-hide = Afficher / Masquer
 tray-lock-vault = Verrouiller le coffre

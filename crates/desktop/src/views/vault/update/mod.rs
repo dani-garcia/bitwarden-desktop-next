@@ -109,12 +109,8 @@ impl View for VaultView {
             VaultMessage::AccountSwitcher(m) => {
                 return m.route(&mut *ctx.open_overlay, Overlay::AccountSwitcher);
             }
-            VaultMessage::ToggleNewItemMenu => {
-                *ctx.open_overlay = if *ctx.open_overlay == Some(Overlay::NewItemMenu) {
-                    None
-                } else {
-                    Some(Overlay::NewItemMenu)
-                };
+            VaultMessage::OpenNewItemPicker => {
+                return Outcome::event(VaultEvent::OpenNewItemPicker);
             }
             VaultMessage::NewItem(t) => {
                 return self.handle_new_item(&mut ctx, t);

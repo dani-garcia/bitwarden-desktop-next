@@ -6,6 +6,7 @@ pub(crate) mod import;
 pub(crate) mod login;
 pub(crate) mod magnify;
 pub(crate) mod new_folder;
+pub(crate) mod new_item_picker;
 pub(crate) mod screenshot_confirm;
 pub(crate) mod send;
 pub(crate) mod settings;

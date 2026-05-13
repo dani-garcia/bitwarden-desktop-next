@@ -33,8 +33,8 @@ use bitwarden_state::{
     repository::{Repository, RepositoryError, RepositoryItem},
 };
 use bitwarden_vault::{
-    CardView, Cipher, CipherRepromptType, CipherType, CipherView, Folder, FolderView, IdentityView,
-    LoginUriView, LoginView, SshKeyView, UriMatchType,
+    BankAccountView, CardView, Cipher, CipherRepromptType, CipherType, CipherView, Folder,
+    FolderView, IdentityView, LoginUriView, LoginView, SshKeyView, UriMatchType,
 };
 
 use crate::passkey::PasskeySpec;
@@ -442,10 +442,10 @@ fn build_login(name: &str, username: Option<&str>, uri: Option<&str>) -> CipherV
 /// The caller plugs in the type-specific view via the `kind` closure.
 fn cipher_with(name: &str, notes: Option<String>, kind: CipherKind) -> CipherView {
     let now = Utc::now();
-    let (r#type, login, card, identity, secure_note, ssh_key) = match kind {
-        CipherKind::Login(l) => (CipherType::Login, Some(*l), None, None, None, None),
-        CipherKind::Card(c) => (CipherType::Card, None, Some(*c), None, None, None),
-        CipherKind::Identity(i) => (CipherType::Identity, None, None, Some(*i), None, None),
+    let (r#type, login, card, identity, secure_note, ssh_key, bank_account) = match kind {
+        CipherKind::Login(l) => (CipherType::Login, Some(*l), None, None, None, None, None),
+        CipherKind::Card(c) => (CipherType::Card, None, Some(*c), None, None, None, None),
+        CipherKind::Identity(i) => (CipherType::Identity, None, None, Some(*i), None, None, None),
         CipherKind::SecureNote => (
             CipherType::SecureNote,
             None,
@@ -455,8 +455,12 @@ fn cipher_with(name: &str, notes: Option<String>, kind: CipherKind) -> CipherVie
                 r#type: bitwarden_vault::SecureNoteType::Generic,
             }),
             None,
+            None,
         ),
-        CipherKind::SshKey(k) => (CipherType::SshKey, None, None, None, None, Some(*k)),
+        CipherKind::SshKey(k) => (CipherType::SshKey, None, None, None, None, Some(*k), None),
+        CipherKind::BankAccount(b) => {
+            (CipherType::BankAccount, None, None, None, None, None, Some(*b))
+        }
     };
     CipherView {
         id: Some(bitwarden_vault::CipherId::new(uuid::Uuid::new_v4())),
@@ -472,7 +476,7 @@ fn cipher_with(name: &str, notes: Option<String>, kind: CipherKind) -> CipherVie
         card,
         secure_note,
         ssh_key,
-        bank_account: None,
+        bank_account,
         favorite: false,
         reprompt: CipherRepromptType::None,
         organization_use_totp: false,
@@ -497,6 +501,7 @@ enum CipherKind {
     Identity(Box<IdentityView>),
     SecureNote,
     SshKey(Box<SshKeyView>),
+    BankAccount(Box<BankAccountView>),
 }
 
 fn note(name: &str) -> CipherEntry {
@@ -588,6 +593,38 @@ fn ssh_key(name: &str, comment: &str) -> CipherEntry {
     view.public_key = format!("{} {comment}", view.public_key);
     (
         cipher_with(name, None, CipherKind::SshKey(Box::new(view))),
+        None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn bank_account(
+    name: &str,
+    bank_name: &str,
+    name_on_account: &str,
+    account_type: &str,
+    account_number: &str,
+    routing_number: &str,
+    pin: Option<&str>,
+    iban: Option<&str>,
+) -> CipherEntry {
+    (
+        cipher_with(
+            name,
+            None,
+            CipherKind::BankAccount(Box::new(BankAccountView {
+                bank_name: Some(bank_name.to_string()),
+                name_on_account: Some(name_on_account.to_string()),
+                account_type: Some(account_type.to_string()),
+                account_number: Some(account_number.to_string()),
+                routing_number: Some(routing_number.to_string()),
+                branch_number: None,
+                pin: pin.map(|p| p.to_string()),
+                swift_code: None,
+                iban: iban.map(|i| i.to_string()),
+                bank_contact_phone: None,
+            })),
+        ),
         None,
     )
 }
@@ -736,6 +773,27 @@ fn personal_ciphers() -> Vec<CipherEntry> {
         // SSH
         ssh_key("GitHub SSH Key", "alice@desktop"),
         ssh_key("Home Server", "alice@homelab"),
+        // Bank accounts
+        bank_account(
+            "Primary Checking",
+            "My Bank",
+            "Alice Johnson",
+            "Checking",
+            "000123456789",
+            "021000021",
+            Some("1234"),
+            None,
+        ),
+        bank_account(
+            "Travel Savings",
+            "Example Credit Union",
+            "Alice Johnson",
+            "Savings",
+            "987654321",
+            "021000089",
+            None,
+            Some("GB29NWBK60161331926819"),
+        ),
     ]
 }
 
@@ -937,6 +995,17 @@ fn work_ciphers() -> Vec<CipherEntry> {
         // SSH
         ssh_key("Deploy SSH Key", "deploy@acmecorp"),
         ssh_key("Staging Bastion", "alice@staging"),
+        // Bank accounts
+        bank_account(
+            "Operating Account",
+            "Acme Business Bank",
+            "Acme Corp",
+            "Checking",
+            "111222333444",
+            "026009593",
+            None,
+            None,
+        ),
     ]
 }
 

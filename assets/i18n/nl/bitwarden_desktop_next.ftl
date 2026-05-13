@@ -363,6 +363,17 @@ new-folder-toast-success = Map aangemaakt
 new-folder-toast-failed-title = Map kon niet worden aangemaakt
 new-folder-toast-failed-body = De map kon niet worden opgeslagen. Probeer het opnieuw.
 
+## New-item picker modal
+picker-title = Kies een item om toe te voegen
+picker-folder = Map
+picker-login-subtitle = Website of app
+picker-card-subtitle = Creditcard of debetkaart
+picker-bank-account-subtitle = Bankgegevens
+picker-identity-subtitle = Persoonlijke informatie
+picker-secure-note-subtitle = Belangrijke tekst
+picker-ssh-key-subtitle = Server-aanmeldtoken
+picker-folder-subtitle = Organiseer je items
+
 ## Tray
 tray-show-hide = Tonen / Verbergen
 tray-lock-vault = Kluis vergrendelen

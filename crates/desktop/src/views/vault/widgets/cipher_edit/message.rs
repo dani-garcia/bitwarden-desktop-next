@@ -59,6 +59,18 @@ pub enum CipherEditMessage {
     IdentityPostalCodeChanged(String),
     IdentityCountryChanged(String),
 
+    // Bank account
+    BankNameChanged(String),
+    BankNameOnAccountChanged(String),
+    BankAccountTypeSelected(Option<String>),
+    BankAccountNumberChanged(String),
+    BankRoutingNumberChanged(String),
+    BankBranchNumberChanged(String),
+    BankPinChanged(String),
+    BankSwiftCodeChanged(String),
+    BankIbanChanged(String),
+    BankContactPhoneChanged(String),
+
     // Custom fields
     CustomFieldAdded,
     CustomFieldRemoved(usize),

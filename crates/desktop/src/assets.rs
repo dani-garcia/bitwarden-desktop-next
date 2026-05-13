@@ -2,6 +2,10 @@
 
 pub const FONT_MEDIUM: &[u8] = include_bytes!("../../../assets/inter/static/Inter_18pt-Medium.ttf");
 pub const FONT_BOLD: &[u8] = include_bytes!("../../../assets/inter/static/Inter_18pt-Bold.ttf");
+// Mirrored from the pinned `clients` submodule at
+// `libs/angular/src/scss/bwicons/fonts/bwi-font.ttf`. To refresh: bump the
+// submodule, copy the file across, and realign any codepoint constants in
+// `components::icons` against `libs/angular/src/scss/bwicons/styles/style.scss`.
 pub const BWI_FONT: &[u8] = include_bytes!("../../../assets/bwi-font.ttf");
 
 pub const ICON_PNG: &[u8] = include_bytes!("../../../assets/icon.png");

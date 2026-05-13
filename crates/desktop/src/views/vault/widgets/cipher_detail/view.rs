@@ -15,7 +15,7 @@ use crate::{
 
 use super::{
     CipherDetailMessage,
-    sections::{card, identity, login, shared, ssh_key},
+    sections::{bank_account, card, identity, login, shared, ssh_key},
 };
 use crate::views::vault::widgets::field_helpers::{card_with_margin, section_label, styled_card};
 
@@ -79,9 +79,12 @@ pub fn view<'a>(
                 sections.push(ssh_key::ssh_key_card(key, colors));
             }
         }
-        // TODO(bank-account): no type-specific section yet — only the shared
-        // item-details + custom-fields cards render. See docs/todo.md.
-        CipherType::BankAccount => {}
+        CipherType::BankAccount => {
+            if let Some(bank) = item.bank_account.as_ref() {
+                sections.push(section_label(fl!("detail-section-bank-account"), colors));
+                sections.push(bank_account::bank_account_card(bank, colors));
+            }
+        }
     }
 
     if let Some(fields) = item.fields.as_deref().filter(|f| !f.is_empty()) {

@@ -221,6 +221,7 @@ impl App {
         self.views.import.push_render(rctx, &mut out);
         self.views.export.push_render(rctx, &mut out);
         self.views.new_folder.push_render(rctx, &mut out);
+        self.views.new_item_picker.push_render(rctx, &mut out);
         self.views.fingerprint.push_render(rctx, &mut out);
         self.views.screenshot_confirm.push_render(rctx, &mut out);
 

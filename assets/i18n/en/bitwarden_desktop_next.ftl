@@ -129,6 +129,7 @@ detail-section-card-details = Card details
 detail-section-personal-details = Personal details
 detail-section-note = Note
 detail-section-ssh-key = SSH key
+detail-section-bank-account = Bank account
 
 ## Detail pane — fields
 detail-field-name = Name
@@ -154,6 +155,17 @@ detail-field-fingerprint = Fingerprint
 detail-empty-credentials = No credentials
 detail-empty-card = No card details
 detail-empty-identity = No identity details
+detail-empty-bank-account = No bank-account details
+detail-field-bank-name = Bank name
+detail-field-bank-name-on-account = Name on account
+detail-field-bank-account-type = Account type
+detail-field-bank-account-number = Account number
+detail-field-bank-routing-number = Routing number
+detail-field-bank-branch-number = Branch / institution number
+detail-field-bank-pin = PIN
+detail-field-bank-swift-code = SWIFT code
+detail-field-bank-iban = IBAN
+detail-field-bank-contact-phone = Bank contact phone
 detail-section-custom-fields = Custom fields
 detail-field-passkey = Passkey
 detail-field-passkey-created = Created { $date }
@@ -185,6 +197,7 @@ form-section-identification = Identification
 form-section-contact-info = Contact info
 form-section-address = Address
 form-section-ssh-key = SSH key
+form-section-bank-account = Bank account
 form-section-additional-options = Additional options
 form-section-custom-fields = Custom fields
 
@@ -255,6 +268,28 @@ form-ssh-public-key = Public key
 form-ssh-private-key = Private key
 form-ssh-fingerprint = Fingerprint
 
+## Cipher form — bank account
+form-bank-name = Bank name
+form-bank-name-on-account = Name on account
+form-bank-account-type = Account type
+form-bank-account-type-placeholder = -- Account type --
+# Account-type labels. Same convention as card brands / identity titles —
+# the stored value is the canonical English string; these keys only
+# localize the display.
+form-bank-account-type-checking = Checking
+form-bank-account-type-savings = Savings
+form-bank-account-type-brokerage = Brokerage
+form-bank-account-type-money-market = Money market
+form-bank-account-type-cd = Certificate of deposit (CD)
+form-bank-account-type-other = Other
+form-bank-account-number = Account number
+form-bank-routing-number = Routing number
+form-bank-branch-number = Branch / institution number
+form-bank-pin = PIN
+form-bank-swift-code = SWIFT code
+form-bank-iban = IBAN
+form-bank-contact-phone = Bank contact phone
+
 ## Cipher form — custom fields
 form-custom-field-type = Type
 form-custom-field-name = Name
@@ -287,6 +322,7 @@ menu-file-new-item-card = Card
 menu-file-new-item-identity = Identity
 menu-file-new-item-secure-note = Secure note
 menu-file-new-item-ssh-key = SSH key
+menu-file-new-item-bank-account = Bank account
 menu-file-new-folder = New folder
 menu-file-sync-now = Sync now
 menu-file-import = Import
@@ -362,6 +398,17 @@ new-folder-modal-cancel = Cancel
 new-folder-toast-success = Folder created
 new-folder-toast-failed-title = Could not create folder
 new-folder-toast-failed-body = The folder could not be saved. Try again.
+
+## New-item picker modal
+picker-title = Choose item to add
+picker-folder = Folder
+picker-login-subtitle = Website or app
+picker-card-subtitle = Credit or debit card
+picker-bank-account-subtitle = Banking details
+picker-identity-subtitle = Personal info
+picker-secure-note-subtitle = Important text
+picker-ssh-key-subtitle = Server login token
+picker-folder-subtitle = Organize your items
 
 ## Tray
 tray-show-hide = Show / Hide

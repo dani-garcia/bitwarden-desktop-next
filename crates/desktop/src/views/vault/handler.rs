@@ -29,6 +29,7 @@ impl App {
                 clipboard::launch_url(&uri);
                 Task::none()
             }
+            VaultEvent::OpenNewItemPicker => self.open_new_item_picker(),
         }
     }
 }

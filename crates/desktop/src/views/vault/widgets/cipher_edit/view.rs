@@ -55,9 +55,10 @@ pub fn view<'a>(
             sections.push(section_label(fl!("form-section-ssh-key"), colors));
             sections.push(sections::ssh_key::ssh_key_card(form, colors));
         }
-        // TODO(bank-account): no type-specific section yet — only the shared
-        // additional-options + custom-fields cards render. See docs/todo.md.
-        CipherType::BankAccount => {}
+        CipherType::BankAccount => {
+            sections.push(section_label(fl!("form-section-bank-account"), colors));
+            sections.push(sections::bank_account::bank_account_card(form, colors));
+        }
     }
 
     sections.push(section_label(

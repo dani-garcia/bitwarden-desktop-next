@@ -85,6 +85,11 @@ impl App {
                         .new_folder
                         .update(m, uctx)
                         .dispatch(self, |s, e| s.handle_new_folder_event(e)),
+                    ViewMessage::NewItemPicker(m) => self
+                        .views
+                        .new_item_picker
+                        .update(m, uctx)
+                        .dispatch(self, |s, e| s.handle_new_item_picker_event(e)),
                     ViewMessage::Fingerprint(m) => self
                         .views
                         .fingerprint

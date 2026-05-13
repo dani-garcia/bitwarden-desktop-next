@@ -58,9 +58,9 @@ pub fn muda_event_stream() -> impl Stream<Item = muda::MenuEvent> {
 // ── Platform-specific selection ───────────────────────────────────────────
 
 pub fn should_use_custom_menu_bar() -> bool {
-    cfg!(not(target_os = "macos")) || std::env::var("DEV_BOTH_MENUS").is_ok()
+    cfg!(not(target_os = "macos")) || std::env::var("DEV_BOTH_MENUS").as_deref() == Ok("1")
 }
 
 pub fn should_use_native_title_bar() -> bool {
-    cfg!(target_os = "macos") || std::env::var("DEV_BOTH_MENUS").is_ok()
+    cfg!(target_os = "macos") || std::env::var("DEV_BOTH_MENUS").as_deref() == Ok("1")
 }
