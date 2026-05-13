@@ -55,6 +55,7 @@ impl App {
             accounts: &self.cache.accounts,
             open_overlay: self.open_overlay,
             is_maximized: self.main_window_maximized(),
+            menu: &self.menu,
             menu_state: self.menu_state(),
             open_title_bar_menu,
             open_title_bar_submenu,

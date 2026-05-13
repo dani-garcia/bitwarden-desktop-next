@@ -39,14 +39,23 @@ impl App {
                 self.theme.current = p.resolve(self.theme.system.as_deref());
             }
             SettingChange::Language(tag) => {
-                if tag.is_empty() {
+                let did_change = if tag.is_empty() {
                     // Empty = follow OS locale. Re-run the initial selection
                     // so the next `fl!()` call picks up the OS preference.
                     crate::services::i18n::init();
+                    true
                 } else if let Ok(lang_id) = tag.parse() {
                     crate::services::i18n::set_language(lang_id);
+                    true
                 } else {
                     tracing::warn!(%tag, "unparseable language tag; ignoring");
+                    false
+                };
+                if did_change {
+                    // Menu labels are baked at build time; rebuild so the
+                    // custom dropdown + native muda menu pick up the new
+                    // translations on the next frame.
+                    self.rebuild_menu();
                 }
             }
             SettingChange::ClearClipboard(delay) => {

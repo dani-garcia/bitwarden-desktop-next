@@ -24,8 +24,10 @@ use std::sync::OnceLock;
 use iced::futures::Stream;
 use tokio::sync::broadcast;
 
-pub use definitions::{MENUS, find_shortcut_action};
-pub use entry::{EnabledWhen, MenuAction, MenuEntry, MenuState};
+pub use definitions::menu_tree;
+pub use entry::{
+    DynamicSubmenu, EnabledWhen, MenuAction, MenuChildren, MenuEntry, MenuState, MenuTree,
+};
 pub use native::{NativeMenuHandle, attach_menu};
 
 // ── Event forwarding (push callback → broadcast → iced subscription) ──────

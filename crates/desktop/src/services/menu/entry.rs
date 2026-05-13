@@ -1,14 +1,25 @@
-//! Per-entry data shared by the custom and native menu renderers.
+//! Menu data model — the tree, sections, entries, and the dynamic-children
+//! mechanism.
 //!
-//! - [`MenuState`] / [`EnabledWhen`] — gate per-entry enabled status from the
-//!   live App state (locked, has accounts, etc.)
-//! - [`MenuAction`] — the verb the entry triggers when clicked.
-//! - [`MenuEntry`] — flat struct + small const builder. The `MENUS` table
-//!   in [`super::definitions`] composes these.
+//! [`MenuTree`] / [`MenuSection`] / [`MenuEntry`] form a three-tier shape:
+//! the tree owns top-level sections (File, Edit, …), each section owns
+//! ordered entries, and entries are either leaves (shortcut + action) or
+//! submenus whose children are fixed at build time
+//! ([`MenuChildren::Static`]) or computed from live state at render time
+//! ([`MenuChildren::Dynamic`]).
+//!
+//! Labels are owned `String`s constructed via the [`crate::fl!`] macro,
+//! which validates against the Fluent catalogue at compile time. The whole
+//! tree is rebuilt by [`super::menu_tree`] on language change.
+
+use std::borrow::Cow;
 
 use bitwarden_vault::CipherType;
 
 use super::shortcut::Shortcut;
+use crate::{domain::UserId, services::sdk::AccountEntry};
+
+// ── Enable gating ──────────────────────────────────────────────────────────
 
 #[derive(Clone, Debug)]
 pub struct MenuState {
@@ -37,7 +48,7 @@ pub enum EnabledWhen {
     /// for menu items that exist on the official client but have no behaviour
     /// in this stub (Edit → Undo / Redo / Cut / Copy / Paste / Select all).
     /// Keyboard shortcuts still pass through to focused text widgets
-    /// unaffected, since they have no `MenuAction`.
+    /// unaffected, since they have no [`MenuAction`].
     Never,
 }
 
@@ -53,10 +64,18 @@ impl EnabledWhen {
     }
 }
 
+// ── Actions ────────────────────────────────────────────────────────────────
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum MenuAction {
     Quit,
     LockAllVaults,
+    /// Lock a specific user's vault. Emitted by the File → Lock vault
+    /// per-account submenu ([`DynamicSubmenu::PerLockableAccount`]).
+    LockAccount(UserId),
+    /// Log a specific user out. Emitted by the File → Log out per-account
+    /// submenu ([`DynamicSubmenu::PerKnownAccount`]).
+    LogOutAccount(UserId),
     SyncNow,
     SearchVault,
     ToggleFullScreen,
@@ -90,104 +109,162 @@ pub enum MenuAction {
     OpenWebVault(Option<&'static str>),
 }
 
-#[derive(Clone, Copy)]
-pub struct MenuEntry {
-    pub label: &'static str,
-    pub shortcut: Option<Shortcut>,
-    pub enabled: EnabledWhen,
-    pub action: Option<MenuAction>,
-    pub children: &'static [MenuEntry],
-    /// When `true`, `label` is rendered verbatim instead of being looked up
-    /// as a Fluent key. Use `L()` instead of `E()` for brand names and
-    /// platform names ("Chrome", "iOS", …) that shouldn't be translated.
-    pub literal: bool,
+// ── Tree / section / entry ─────────────────────────────────────────────────
+
+#[derive(Clone)]
+pub struct MenuTree {
+    pub sections: Vec<MenuSection>,
 }
 
-pub(super) const SEP: MenuEntry = MenuEntry {
-    label: "",
-    shortcut: None,
-    enabled: EnabledWhen::Always,
-    action: None,
-    children: &[],
-    literal: false,
-};
-
-/// `label` is a Fluent message ID.
-#[expect(non_snake_case)]
-pub(super) const fn E(label: &'static str) -> MenuEntry {
-    MenuEntry {
-        label,
-        shortcut: None,
-        enabled: EnabledWhen::Always,
-        action: None,
-        children: &[],
-        literal: false,
+impl MenuTree {
+    pub fn new(sections: Vec<MenuSection>) -> Self {
+        Self { sections }
     }
 }
 
-/// **Literal** label — rendered verbatim, no Fluent lookup. Use for brand /
-/// platform names that shouldn't be translated (Chrome, Firefox, iOS, …).
-#[expect(non_snake_case)]
-pub(super) const fn L(label: &'static str) -> MenuEntry {
-    MenuEntry {
-        label,
-        shortcut: None,
-        enabled: EnabledWhen::Always,
-        action: None,
-        children: &[],
-        literal: true,
+#[derive(Clone)]
+pub struct MenuSection {
+    pub label: String,
+    pub entries: Vec<MenuEntry>,
+}
+
+#[derive(Clone)]
+pub struct MenuEntry {
+    pub label: String,
+    pub shortcut: Option<Shortcut>,
+    pub enabled: EnabledWhen,
+    pub action: Option<MenuAction>,
+    pub children: MenuChildren,
+}
+
+/// Children of a [`MenuEntry`]. The three variants make the leaf case
+/// (`None`), the fixed-set case (`Static`), and the live-state case
+/// (`Dynamic`) explicit at the type level. Renderers walk via
+/// [`MenuEntry::effective_children`] so the static / dynamic split is
+/// invisible to them.
+#[derive(Clone)]
+pub enum MenuChildren {
+    None,
+    Static(Vec<MenuEntry>),
+    Dynamic(DynamicSubmenu),
+}
+
+/// Names a class of runtime-computed submenu. Fully resolved at render
+/// time from the active accounts via [`DynamicSubmenu::resolve`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DynamicSubmenu {
+    /// One entry per currently-unlocked account; clicking locks that
+    /// account. Combined with [`EnabledWhen::HasLockable`] so the parent
+    /// is disabled when no entries would appear.
+    PerLockableAccount,
+    /// One entry per known account; clicking logs that account out.
+    /// Combined with [`EnabledWhen::HasAccounts`].
+    PerKnownAccount,
+}
+
+impl DynamicSubmenu {
+    pub fn resolve(self, accounts: &[AccountEntry]) -> Vec<MenuEntry> {
+        match self {
+            Self::PerLockableAccount => accounts
+                .iter()
+                .filter(|a| !a.locked)
+                .map(|a| lit(&a.email).action(MenuAction::LockAccount(a.user_id)))
+                .collect(),
+            Self::PerKnownAccount => accounts
+                .iter()
+                .map(|a| lit(&a.email).action(MenuAction::LogOutAccount(a.user_id)))
+                .collect(),
+        }
     }
 }
 
 impl MenuEntry {
-    pub(super) const fn key(mut self, s: Shortcut) -> Self {
+    pub fn key(mut self, s: Shortcut) -> Self {
         self.shortcut = Some(s);
         self
     }
-    pub(super) const fn when(mut self, e: EnabledWhen) -> Self {
+    pub fn when(mut self, e: EnabledWhen) -> Self {
         self.enabled = e;
         self
     }
-    pub(super) const fn action(mut self, a: MenuAction) -> Self {
+    pub fn action(mut self, a: MenuAction) -> Self {
         self.action = Some(a);
         self
     }
-    pub(super) const fn sub(mut self, items: &'static [MenuEntry]) -> Self {
-        self.children = items;
+    pub fn children(mut self, items: Vec<MenuEntry>) -> Self {
+        self.children = MenuChildren::Static(items);
+        self
+    }
+    pub fn dynamic(mut self, kind: DynamicSubmenu) -> Self {
+        self.children = MenuChildren::Dynamic(kind);
         self
     }
 
     pub fn is_separator(&self) -> bool {
-        self.label.is_empty() && self.children.is_empty()
+        self.label.is_empty()
+            && matches!(self.children, MenuChildren::None)
+            && self.action.is_none()
     }
+
     pub fn is_submenu(&self) -> bool {
-        !self.children.is_empty() || self.is_submenu_placeholder()
+        !matches!(self.children, MenuChildren::None)
     }
+
     pub fn is_enabled(&self, state: &MenuState) -> bool {
         self.enabled.check(state)
     }
 
-    /// Submenus with empty children (e.g. "Lock vault", "Log out") are placeholders
-    /// for dynamically populated content. They still render as submenus.
-    fn is_submenu_placeholder(&self) -> bool {
-        matches!(
-            self.enabled,
-            EnabledWhen::HasLockable | EnabledWhen::HasAccounts
-        ) && self.action.is_none()
-            && self.shortcut.is_none()
-            && self.children.is_empty()
-            && !self.label.is_empty()
+    /// Children to render this frame. Borrows the fixed slice for static
+    /// submenus; expands a [`DynamicSubmenu`] against `accounts` into an
+    /// owned `Vec` otherwise. Both renderers walk this uniformly so the
+    /// static / dynamic split stays out of their loops.
+    pub fn effective_children<'a>(&'a self, accounts: &[AccountEntry]) -> Cow<'a, [MenuEntry]> {
+        match &self.children {
+            MenuChildren::None => Cow::Borrowed(&[]),
+            MenuChildren::Static(v) => Cow::Borrowed(v.as_slice()),
+            MenuChildren::Dynamic(kind) => Cow::Owned(kind.resolve(accounts)),
+        }
     }
 
     pub fn shortcut_display(&self) -> Option<String> {
         self.shortcut.map(|s| s.display())
     }
+}
 
-    pub fn display_label(&self) -> String {
-        if self.literal {
-            self.label.to_string()
-        } else {
-            crate::services::i18n::lookup(self.label)
-        }
+// ── Builders ───────────────────────────────────────────────────────────────
+
+/// Build a top-level menu section (File, Edit, …).
+pub fn section(label: String, entries: Vec<MenuEntry>) -> MenuSection {
+    MenuSection { label, entries }
+}
+
+/// Build a menu entry with the given label. Chain `.key()`, `.when()`,
+/// `.action()`, `.children()`, or `.dynamic()` to configure.
+pub fn item(label: String) -> MenuEntry {
+    MenuEntry {
+        label,
+        shortcut: None,
+        enabled: EnabledWhen::Always,
+        action: None,
+        children: MenuChildren::None,
     }
+}
+
+/// Visual separator inside a menu — empty-label entry with no action.
+pub fn sep() -> MenuEntry {
+    MenuEntry {
+        label: String::new(),
+        shortcut: None,
+        enabled: EnabledWhen::Always,
+        action: None,
+        children: MenuChildren::None,
+    }
+}
+
+/// Entry with a **literal** label — rendered verbatim, no Fluent lookup.
+/// Use for brand and platform names (Chrome, iOS, …) that shouldn't be
+/// localized. The runtime resolver for [`DynamicSubmenu`] also uses this
+/// for email labels.
+pub fn lit(s: &str) -> MenuEntry {
+    item(s.to_string())
 }

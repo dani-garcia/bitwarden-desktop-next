@@ -373,7 +373,9 @@ impl App {
             magnify: crate::views::magnify::MagnifyView::new(magnify_id),
 
             theme: crate::app::ThemeState::new(ThemePreference::Light),
+            menu: crate::services::menu::menu_tree(),
             native_menu: None,
+            main_window_raw_id: None,
             tray: None,
 
             clipboard: crate::services::clipboard::ClipboardManager::new(),

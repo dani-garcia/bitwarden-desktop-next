@@ -115,10 +115,3 @@ pub fn language_label(tag: &str) -> String {
         .cloned()
         .unwrap_or_else(|| tag.to_string())
 }
-
-/// Runtime key lookup. Prefer [`fl!`][crate::fl] for literal keys (compile-
-/// time-validated against the `.ftl` files). Use this only for keys known at
-/// runtime (e.g. menu labels in a `const` table that can't call the macro).
-pub fn lookup(key: &str) -> String {
-    LANGUAGE_LOADER.get(key)
-}

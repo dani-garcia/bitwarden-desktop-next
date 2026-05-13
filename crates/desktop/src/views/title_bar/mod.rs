@@ -31,9 +31,13 @@ const WINDOW_BTN_WIDTH: f32 = 46.0;
 pub enum TitleBarMessage {
     TopLevelClicked(usize),
     TopLevelHovered(usize),
-    ItemClicked(usize, usize),
+    /// Leaf-item click. Carries the resolved [`menu::MenuAction`] directly —
+    /// the renderer looks the action up via [`menu::MenuEntry::effective_children`]
+    /// at the click site so dispatch is action-driven rather than index-driven.
+    /// Works uniformly for top-level leaves and submenu entries (static and
+    /// dynamic).
+    ItemAction(menu::MenuAction),
     SubMenuHovered(usize, usize),
-    SubMenuItemClicked(usize, usize, usize),
     DismissMenu,
     MinimizeClicked,
     MaximizeClicked,
@@ -116,26 +120,9 @@ impl View for TitleBarView {
                 *ctx.open_overlay = Some(Overlay::TitleBarMenu { menu, submenu });
                 return Outcome::None;
             }
-            TitleBarMessage::ItemClicked(menu, item) => {
+            TitleBarMessage::ItemAction(action) => {
                 *ctx.open_overlay = None;
-                return Outcome::from_option(
-                    crate::services::menu::MENUS
-                        .get(menu)
-                        .and_then(|(_, entries)| entries.get(item))
-                        .and_then(|e| e.action)
-                        .map(TitleBarEvent::from),
-                );
-            }
-            TitleBarMessage::SubMenuItemClicked(menu, parent, sub) => {
-                *ctx.open_overlay = None;
-                return Outcome::from_option(
-                    crate::services::menu::MENUS
-                        .get(menu)
-                        .and_then(|(_, entries)| entries.get(parent))
-                        .and_then(|e| e.children.get(sub))
-                        .and_then(|e| e.action)
-                        .map(TitleBarEvent::from),
-                );
+                return Outcome::event(TitleBarEvent::MenuInvoked(action));
             }
             TitleBarMessage::MinimizeClicked => WindowAction::Minimize,
             TitleBarMessage::MaximizeClicked => WindowAction::Maximize,
@@ -168,40 +155,39 @@ impl View for TitleBarView {
                 .into();
         }
 
-        let menu_items: Vec<Element<'_, TitleBarMessage, AppTheme>> = menu::MENUS
+        let menu_items: Vec<Element<'_, TitleBarMessage, AppTheme>> = ctx
+            .menu
+            .sections
             .iter()
             .enumerate()
-            .map(|(i, (label_key, entries))| {
+            .map(|(i, section)| {
                 let is_open = ctx.open_title_bar_menu == Some(i);
-                let btn = button(
-                    text(crate::services::i18n::lookup(label_key))
-                        .size(14)
-                        .color(Color::WHITE),
-                )
-                .on_press(TitleBarMessage::TopLevelClicked(i))
-                .padding([4, 10])
-                .style(move |theme: &AppTheme, status| {
-                    let bg = if is_open {
-                        theme.colors.titlebar_btn_hover
-                    } else {
-                        match status {
-                            button::Status::Hovered => theme.colors.titlebar_btn_hover,
-                            _ => Color::TRANSPARENT,
+                let btn = button(text(section.label.clone()).size(14).color(Color::WHITE))
+                    .on_press(TitleBarMessage::TopLevelClicked(i))
+                    .padding([4, 10])
+                    .style(move |theme: &AppTheme, status| {
+                        let bg = if is_open {
+                            theme.colors.titlebar_btn_hover
+                        } else {
+                            match status {
+                                button::Status::Hovered => theme.colors.titlebar_btn_hover,
+                                _ => Color::TRANSPARENT,
+                            }
+                        };
+                        button::Style {
+                            background: Some(Background::Color(bg)),
+                            text_color: Color::WHITE,
+                            border: Border::default(),
+                            shadow: Shadow::default(),
+                            snap: false,
                         }
-                    };
-                    button::Style {
-                        background: Some(Background::Color(bg)),
-                        text_color: Color::WHITE,
-                        border: Border::default(),
-                        shadow: Shadow::default(),
-                        snap: false,
-                    }
-                });
+                    });
 
                 let panel = dropdown::menu_panel(
-                    entries,
+                    &section.entries,
                     i,
                     ctx.open_title_bar_submenu,
+                    ctx.accounts,
                     &ctx.menu_state,
                     ctx.colors,
                 );
@@ -369,19 +355,24 @@ mod tests_update {
     }
 
     #[tokio::test(flavor = "current_thread")]
-    async fn item_clicked_with_bogus_indices_returns_none() {
+    async fn item_action_clears_overlay_and_emits_menu_invoked() {
         let mut app = App::test();
         app.open_overlay = Some(Overlay::TitleBarMenu {
             menu: 0,
             submenu: None,
         });
         let mut view = TitleBarView::new();
-        // Far past any real entry — `menu::MENUS.get(...)` returns `None`
-        // and the arm falls through `Outcome::from_option(None)`.
-        view.update(TitleBarMessage::ItemClicked(99, 99), app.update_ctx())
-            .expect_none();
-        // Even on a no-op the overlay is cleared: a click on a menu item
-        // always dismisses the dropdown, valid action or not.
+        let ev = view
+            .update(
+                TitleBarMessage::ItemAction(menu::MenuAction::Quit),
+                app.update_ctx(),
+            )
+            .expect_event();
+        assert!(matches!(
+            ev,
+            TitleBarEvent::MenuInvoked(menu::MenuAction::Quit)
+        ));
+        // Any click on a menu item dismisses the dropdown.
         assert_eq!(app.open_overlay, None);
     }
 

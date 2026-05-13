@@ -51,15 +51,6 @@ Each is small enough to land in one focused session.
   menu wiring would need a focused-widget dispatcher. Decide whether to (a) build that
   dispatcher, or (b) remove the entries entirely and live on keyboard shortcuts only — the
   official client gets these "for free" via `role: "undo"` etc., a luxury we don't have.
-- **File → Lock vault / Log out per-account submenus** `[M]` — both render as empty
-  submenus ([services/menu/mod.rs](../crates/desktop/src/services/menu/mod.rs) `.sub(&[])`
-  placeholders). Need runtime population: one entry per unlocked account for Lock, one per
-  known account for Log out. The custom title-bar dropdown
-  ([views/title_bar/dropdown.rs](../crates/desktop/src/views/title_bar/dropdown.rs)) reads
-  `entry.children` straight off the static `MENUS` constant, so injecting per-account
-  entries needs either a new `MenuEntry` shape (children as `Cow<'static>`) or a parallel
-  "dynamic submenu" concept. Native muda also needs to populate the same children at
-  attach time and refresh them on lock/unlock/login/logout.
 - **Magnify footer "More" expander** `[S]` — the launcher binds
   `Ctrl+C / Ctrl+Shift+C / Ctrl+T / Ctrl+U / Ctrl+Shift+N` but the hint bar still surfaces
   the first three only. Replace the trailing slots with a "More" disclosure

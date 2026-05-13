@@ -1,227 +1,217 @@
-//! The static [`MENUS`] table — the single source of truth for both the
-//! custom title-bar menu (Win/Linux) and the native muda menu (macOS).
+//! The application menu tree — the single source of truth for both the
+//! custom title-bar dropdown (Win/Linux) and the native muda menu (macOS).
 //!
-//! Also hosts [`find_shortcut_action`] which the keyboard-event handler uses
-//! to dispatch shortcuts that aren't already routed through a focused widget.
+//! Built fresh by [`menu_tree`] on app start and on every language change.
+//! Every label flows through the [`crate::fl!`] macro, which validates the
+//! Fluent message ID against the catalogue at compile time.
+//!
+//! Also hosts [`find_shortcut_action`] which the keyboard-event handler
+//! uses to dispatch shortcuts that aren't already routed through a focused
+//! widget.
 
 use bitwarden_vault::CipherType;
 
 use super::{
+    DynamicSubmenu,
     EnabledWhen::*,
-    MenuAction::*,
-    entry::{E, L, MenuAction, MenuEntry, MenuState, SEP},
+    MenuAction::{self, *},
+    MenuChildren, MenuEntry, MenuState, MenuTree,
+    entry::{item, lit, section, sep},
     shortcut::{cmd, cmd_shift, fkey},
 };
+use crate::fl;
 
-// Menu labels are Fluent message IDs resolved via `i18n::lookup()`. Brand /
-// platform names are plain strings (no translation). Unlike `fl!()`, these
-// keys aren't compile-time-checked — `tests/menu_labels.rs` validates them.
-pub const MENUS: &[(&str, &[MenuEntry])] = &[
-    (
-        "menu-file",
-        &[
-            E("menu-file-new-login")
+/// Build the full menu tree against the currently-loaded language.
+/// Called once at app start and again whenever the user changes language.
+pub fn menu_tree() -> MenuTree {
+    MenuTree::new(vec![
+        section(fl!("menu-file"), vec![
+            item(fl!("menu-file-new-login"))
                 .key(cmd('n'))
                 .when(Unlocked)
                 .action(NewItem(CipherType::Login)),
-            E("menu-file-new-item").when(Unlocked).sub(&[
-                E("menu-file-new-item-login")
+            item(fl!("menu-file-new-item")).when(Unlocked).children(vec![
+                item(fl!("menu-file-new-item-login"))
                     .key(cmd_shift('l'))
                     .action(NewItem(CipherType::Login)),
-                E("menu-file-new-item-card")
+                item(fl!("menu-file-new-item-card"))
                     .key(cmd_shift('c'))
                     .action(NewItem(CipherType::Card)),
-                E("menu-file-new-item-identity")
+                item(fl!("menu-file-new-item-identity"))
                     .key(cmd_shift('i'))
                     .action(NewItem(CipherType::Identity)),
-                E("menu-file-new-item-secure-note")
+                item(fl!("menu-file-new-item-secure-note"))
                     .key(cmd_shift('s'))
                     .action(NewItem(CipherType::SecureNote)),
-                E("menu-file-new-item-ssh-key")
+                item(fl!("menu-file-new-item-ssh-key"))
                     .key(cmd_shift('k'))
                     .action(NewItem(CipherType::SshKey)),
             ]),
-            E("menu-file-new-folder").when(Unlocked).action(NewFolder),
-            SEP,
-            E("menu-file-sync-now").when(HasAccounts).action(SyncNow),
-            E("menu-file-import").when(Unlocked).action(Import),
-            E("menu-file-export").when(Unlocked).action(Export),
-            SEP,
-            E("menu-file-settings")
+            item(fl!("menu-file-new-folder")).when(Unlocked).action(NewFolder),
+            sep(),
+            item(fl!("menu-file-sync-now")).when(HasAccounts).action(SyncNow),
+            item(fl!("menu-file-import")).when(Unlocked).action(Import),
+            item(fl!("menu-file-export")).when(Unlocked).action(Export),
+            sep(),
+            item(fl!("menu-file-settings"))
                 .key(cmd(','))
                 .when(Unlocked)
                 .action(Settings),
-            // Dynamically populated with account emails at runtime.
-            E("menu-file-lock-vault").when(HasLockable).sub(&[]),
-            E("menu-file-lock-all-vaults")
+            item(fl!("menu-file-lock-vault"))
+                .when(HasLockable)
+                .dynamic(DynamicSubmenu::PerLockableAccount),
+            item(fl!("menu-file-lock-all-vaults"))
                 .key(cmd('l'))
                 .when(HasAccounts)
                 .action(LockAllVaults),
-            E("menu-file-log-out").when(HasAccounts).sub(&[]),
-            SEP,
-            E("menu-file-quit").action(Quit),
-        ],
-    ),
-    (
-        "menu-edit",
-        &[
+            item(fl!("menu-file-log-out"))
+                .when(HasAccounts)
+                .dynamic(DynamicSubmenu::PerKnownAccount),
+            sep(),
+            item(fl!("menu-file-quit")).action(Quit),
+        ]),
+        section(fl!("menu-edit"), vec![
             // Undo/Redo/Cut/Copy/Paste/Select-all: text widgets handle these
             // via the keyboard already; menu wiring would need a focused-
             // widget dispatcher we haven't built. Disabled placeholders for
             // now — see docs/todo.md.
-            E("menu-edit-undo").key(cmd('z')).when(Never),
-            E("menu-edit-redo").key(cmd('y')).when(Never),
-            SEP,
-            E("menu-edit-cut").key(cmd('x')).when(Never),
-            E("menu-edit-copy").key(cmd('c')).when(Never),
-            E("menu-edit-paste").key(cmd('v')).when(Never),
-            SEP,
-            E("menu-edit-select-all").key(cmd('a')).when(Never),
-            SEP,
-            E("menu-edit-copy-username")
+            item(fl!("menu-edit-undo")).key(cmd('z')).when(Never),
+            item(fl!("menu-edit-redo")).key(cmd('y')).when(Never),
+            sep(),
+            item(fl!("menu-edit-cut")).key(cmd('x')).when(Never),
+            item(fl!("menu-edit-copy")).key(cmd('c')).when(Never),
+            item(fl!("menu-edit-paste")).key(cmd('v')).when(Never),
+            sep(),
+            item(fl!("menu-edit-select-all")).key(cmd('a')).when(Never),
+            sep(),
+            item(fl!("menu-edit-copy-username"))
                 .key(cmd('u'))
                 .when(Unlocked)
                 .action(CopyUsername),
-            E("menu-edit-copy-password")
+            item(fl!("menu-edit-copy-password"))
                 .key(cmd('p'))
                 .when(Unlocked)
                 .action(CopyPassword),
-            E("menu-edit-copy-totp")
+            item(fl!("menu-edit-copy-totp"))
                 .key(cmd('t'))
                 .when(Unlocked)
                 .action(CopyTotp),
-        ],
-    ),
-    (
-        "menu-view",
-        &[
-            E("menu-view-search")
+        ]),
+        section(fl!("menu-view"), vec![
+            item(fl!("menu-view-search"))
                 .key(cmd('f'))
                 .when(Unlocked)
                 .action(SearchVault),
-            SEP,
-            E("menu-view-generator")
+            sep(),
+            item(fl!("menu-view-generator"))
                 .key(cmd('g'))
                 .when(Unlocked)
                 .action(Generator),
-            E("menu-view-generator-history")
+            item(fl!("menu-view-generator-history"))
                 .when(Unlocked)
                 .action(GeneratorHistory),
-            SEP,
+            sep(),
             // Bound to '=' rather than '+' so users on US/EU layouts hit the
             // shortcut without holding shift — matches Firefox / Chrome.
-            E("menu-view-zoom-in").key(cmd('=')).action(ZoomIn),
-            E("menu-view-zoom-out").key(cmd('-')).action(ZoomOut),
-            E("menu-view-reset-zoom").key(cmd('0')).action(ZoomReset),
-            SEP,
-            E("menu-view-toggle-fullscreen")
-                .key(fkey(11))
-                .action(ToggleFullScreen),
-        ],
-    ),
-    (
-        "menu-account",
-        &[
-            E("menu-account-premium")
+            item(fl!("menu-view-zoom-in")).key(cmd('=')).action(ZoomIn),
+            item(fl!("menu-view-zoom-out")).key(cmd('-')).action(ZoomOut),
+            item(fl!("menu-view-reset-zoom")).key(cmd('0')).action(ZoomReset),
+            sep(),
+            item(fl!("menu-view-toggle-fullscreen")).key(fkey(11)).action(ToggleFullScreen),
+        ]),
+        section(fl!("menu-account"), vec![
+            item(fl!("menu-account-premium"))
                 .when(Unlocked)
                 .action(OpenWebVault(Some("#/settings/subscription/premium"))),
-            E("menu-account-change-password")
+            item(fl!("menu-account-change-password"))
                 .when(Unlocked)
-                .action(OpenWebVault(Some(
-                    "#/settings/security/change-master-password",
-                ))),
-            E("menu-account-two-step")
+                .action(OpenWebVault(Some("#/settings/security/change-master-password"))),
+            item(fl!("menu-account-two-step"))
                 .when(Unlocked)
                 .action(OpenWebVault(Some("#/settings/security/two-factor"))),
-            E("menu-account-fingerprint")
+            item(fl!("menu-account-fingerprint"))
                 .when(Unlocked)
                 .action(FingerprintPhrase),
-            SEP,
-            E("menu-account-delete")
+            sep(),
+            item(fl!("menu-account-delete"))
                 .when(Unlocked)
-                .action(OpenWebVault(Some(
-                    "#/settings/security/delete-account",
-                ))),
-        ],
-    ),
-    (
-        "menu-window",
-        &[
-            E("menu-window-minimize").key(cmd('m')).action(Minimize),
-            E("menu-window-hide-to-tray")
-                .key(cmd_shift('m'))
-                .action(HideToTray),
-            E("menu-window-always-on-top")
-                .key(cmd_shift('t'))
-                .action(ToggleAlwaysOnTop),
-            SEP,
-            E("menu-window-close").key(cmd('w')).action(Close),
-        ],
-    ),
-    (
-        "menu-help",
-        &[
-            E("menu-help-feedback").action(OpenStaticUrl("https://bitwarden.com/help")),
-            E("menu-help-bug").action(OpenStaticUrl("https://github.com/bitwarden/clients/issues")),
-            E("menu-help-legal").sub(&[
-                E("menu-help-legal-tos").action(OpenStaticUrl("https://bitwarden.com/terms/")),
-                E("menu-help-legal-privacy")
-                    .action(OpenStaticUrl("https://bitwarden.com/privacy/")),
+                .action(OpenWebVault(Some("#/settings/security/delete-account"))),
+        ]),
+        section(fl!("menu-window"), vec![
+            item(fl!("menu-window-minimize")).key(cmd('m')).action(Minimize),
+            item(fl!("menu-window-hide-to-tray")).key(cmd_shift('m')).action(HideToTray),
+            item(fl!("menu-window-always-on-top")).key(cmd_shift('t')).action(ToggleAlwaysOnTop),
+            sep(),
+            item(fl!("menu-window-close")).key(cmd('w')).action(Close),
+        ]),
+        section(fl!("menu-help"), vec![
+            item(fl!("menu-help-feedback")).action(OpenStaticUrl("https://bitwarden.com/help")),
+            item(fl!("menu-help-bug")).action(OpenStaticUrl("https://github.com/bitwarden/clients/issues")),
+            item(fl!("menu-help-legal")).children(vec![
+                item(fl!("menu-help-legal-tos")).action(OpenStaticUrl("https://bitwarden.com/terms/")),
+                item(fl!("menu-help-legal-privacy")).action(OpenStaticUrl("https://bitwarden.com/privacy/")),
             ]),
-            SEP,
-            E("menu-help-follow").sub(&[
-                L("Blog").action(OpenStaticUrl("https://blog.bitwarden.com")),
-                L("Twitter").action(OpenStaticUrl("https://twitter.com/bitwarden")),
-                L("Facebook").action(OpenStaticUrl("https://www.facebook.com/bitwarden/")),
-                L("GitHub").action(OpenStaticUrl("https://github.com/bitwarden")),
-                L("Mastodon").action(OpenStaticUrl("https://fosstodon.org/@bitwarden")),
+            sep(),
+            item(fl!("menu-help-follow")).children(vec![
+                lit("Blog").action(OpenStaticUrl("https://blog.bitwarden.com")),
+                lit("Twitter").action(OpenStaticUrl("https://twitter.com/bitwarden")),
+                lit("Facebook").action(OpenStaticUrl("https://www.facebook.com/bitwarden/")),
+                lit("GitHub").action(OpenStaticUrl("https://github.com/bitwarden")),
+                lit("Mastodon").action(OpenStaticUrl("https://fosstodon.org/@bitwarden")),
             ]),
-            SEP,
-            E("menu-help-web-vault").action(OpenWebVault(None)),
-            SEP,
-            E("menu-help-mobile-app").sub(&[
-                L("iOS").action(OpenStaticUrl(
+            sep(),
+            item(fl!("menu-help-web-vault")).action(OpenWebVault(None)),
+            sep(),
+            item(fl!("menu-help-mobile-app")).children(vec![
+                lit("iOS").action(OpenStaticUrl(
                     "https://itunes.apple.com/app/bitwarden-free-password-manager/id1137397744?mt=8",
                 )),
-                L("Android").action(OpenStaticUrl(
+                lit("Android").action(OpenStaticUrl(
                     "https://play.google.com/store/apps/details?id=com.x8bit.bitwarden",
                 )),
             ]),
-            E("menu-help-browser-extension").sub(&[
-                L("Chrome").action(OpenStaticUrl(
+            item(fl!("menu-help-browser-extension")).children(vec![
+                lit("Chrome").action(OpenStaticUrl(
                     "https://chromewebstore.google.com/detail/bitwarden-free-password-m/nngceckbapebfimnlniiiahkandclblb",
                 )),
-                L("Firefox").action(OpenStaticUrl(
+                lit("Firefox").action(OpenStaticUrl(
                     "https://addons.mozilla.org/firefox/addon/bitwarden-password-manager/",
                 )),
-                L("Opera").action(OpenStaticUrl(
+                lit("Opera").action(OpenStaticUrl(
                     "https://addons.opera.com/extensions/details/bitwarden-free-password-manager/",
                 )),
-                L("Edge").action(OpenStaticUrl(
+                lit("Edge").action(OpenStaticUrl(
                     "https://microsoftedge.microsoft.com/addons/detail/jbkfoedolllekgbhcbcoahefnbanhhlh",
                 )),
-                L("Safari").action(OpenStaticUrl("https://bitwarden.com/download/")),
+                lit("Safari").action(OpenStaticUrl("https://bitwarden.com/download/")),
             ]),
-            SEP,
-            E("menu-help-troubleshooting")
-                .sub(&[E("menu-help-troubleshooting-gpu").action(ToggleHardwareAcceleration)]),
-            SEP,
-            E("menu-help-about").action(About),
-        ],
-    ),
-];
+            sep(),
+            item(fl!("menu-help-troubleshooting")).children(vec![
+                item(fl!("menu-help-troubleshooting-gpu")).action(ToggleHardwareAcceleration),
+            ]),
+            sep(),
+            item(fl!("menu-help-about")).action(About),
+        ]),
+    ])
+}
 
-pub fn find_shortcut_action(
-    key: &iced::keyboard::Key,
-    modifiers: iced::keyboard::Modifiers,
-    state: &MenuState,
-) -> Option<MenuAction> {
-    for (_label, entries) in MENUS {
-        if let Some(action) = find_in_entries(entries, key, modifiers, state) {
-            return Some(action);
+impl MenuTree {
+    /// Resolve a keyboard event to a [`MenuAction`] by walking every
+    /// shortcut bound in the tree. Used by the App-level keyboard handler
+    /// for shortcuts that don't land on a focused widget first.
+    pub fn find_shortcut_action(
+        &self,
+        key: &iced::keyboard::Key,
+        modifiers: iced::keyboard::Modifiers,
+        state: &MenuState,
+    ) -> Option<MenuAction> {
+        for sec in &self.sections {
+            if let Some(action) = find_in_entries(&sec.entries, key, modifiers, state) {
+                return Some(action);
+            }
         }
+        None
     }
-    None
 }
 
 fn find_in_entries(
@@ -238,8 +228,11 @@ fn find_in_entries(
         {
             return Some(action);
         }
-        if !entry.children.is_empty()
-            && let Some(action) = find_in_entries(entry.children, key, modifiers, state)
+        // Dynamic submenu entries don't carry shortcuts (they're pure
+        // click-to-act per-account rows), so only the static branch
+        // recurses.
+        if let MenuChildren::Static(children) = &entry.children
+            && let Some(action) = find_in_entries(children, key, modifiers, state)
         {
             return Some(action);
         }
@@ -294,16 +287,18 @@ mod tests {
 
     #[test]
     fn cmd_n_blocked_when_locked() {
+        let tree = menu_tree();
         // File → New login is `Unlocked`-gated.
         assert_eq!(
-            find_shortcut_action(&key_char("n"), cmd_only(), &locked_no_accounts()),
+            tree.find_shortcut_action(&key_char("n"), cmd_only(), &locked_no_accounts()),
             None
         );
     }
 
     #[test]
     fn cmd_n_routes_to_new_login_when_unlocked() {
-        let action = find_shortcut_action(&key_char("n"), cmd_only(), &unlocked());
+        let tree = menu_tree();
+        let action = tree.find_shortcut_action(&key_char("n"), cmd_only(), &unlocked());
         assert_eq!(
             action,
             Some(MenuAction::NewItem(bitwarden_vault::CipherType::Login))
@@ -312,24 +307,26 @@ mod tests {
 
     #[test]
     fn cmd_l_requires_has_accounts() {
+        let tree = menu_tree();
         // Lock all vaults requires HasAccounts even when the vault is locked.
         assert_eq!(
-            find_shortcut_action(&key_char("l"), cmd_only(), &locked_no_accounts()),
+            tree.find_shortcut_action(&key_char("l"), cmd_only(), &locked_no_accounts()),
             None
         );
         assert_eq!(
-            find_shortcut_action(&key_char("l"), cmd_only(), &locked_with_accounts()),
+            tree.find_shortcut_action(&key_char("l"), cmd_only(), &locked_with_accounts()),
             Some(MenuAction::LockAllVaults)
         );
     }
 
     #[test]
     fn never_gated_entries_never_fire() {
+        let tree = menu_tree();
         // Edit → Undo is `EnabledWhen::Never`. The shortcut must always
         // return `None` so it falls through to focused text widgets.
         for state in [unlocked(), locked_no_accounts(), locked_with_accounts()] {
             assert_eq!(
-                find_shortcut_action(&key_char("z"), cmd_only(), &state),
+                tree.find_shortcut_action(&key_char("z"), cmd_only(), &state),
                 None,
                 "cmd+Z fired in state {state:?}",
             );
@@ -338,8 +335,9 @@ mod tests {
 
     #[test]
     fn shortcut_in_submenu_resolves() {
+        let tree = menu_tree();
         // File → New item → Secure note (cmd+shift+S) lives inside a sub.
-        let action = find_shortcut_action(&key_char("s"), cmd_shift_mods(), &unlocked());
+        let action = tree.find_shortcut_action(&key_char("s"), cmd_shift_mods(), &unlocked());
         assert_eq!(
             action,
             Some(MenuAction::NewItem(bitwarden_vault::CipherType::SecureNote))
@@ -348,49 +346,55 @@ mod tests {
 
     #[test]
     fn fkey_shortcut_with_no_modifiers_resolves() {
+        let tree = menu_tree();
         // F11 → ToggleFullScreen, always-enabled.
-        let action = find_shortcut_action(&Key::Named(Named::F11), Modifiers::empty(), &unlocked());
+        let action =
+            tree.find_shortcut_action(&Key::Named(Named::F11), Modifiers::empty(), &unlocked());
         assert_eq!(action, Some(MenuAction::ToggleFullScreen));
     }
 
     #[test]
     fn unbound_combination_returns_none() {
+        let tree = menu_tree();
         // No menu binds cmd+shift+`q`.
         assert_eq!(
-            find_shortcut_action(&key_char("q"), cmd_shift_mods(), &unlocked()),
+            tree.find_shortcut_action(&key_char("q"), cmd_shift_mods(), &unlocked()),
             None
         );
     }
 
     #[test]
     fn shortcut_requires_correct_modifiers() {
+        let tree = menu_tree();
         // cmd+`n` is bound; `n` alone (no modifiers) is not.
         assert_eq!(
-            find_shortcut_action(&key_char("n"), Modifiers::empty(), &unlocked()),
+            tree.find_shortcut_action(&key_char("n"), Modifiers::empty(), &unlocked()),
             None
         );
         // Adding shift shouldn't match either.
         assert_eq!(
-            find_shortcut_action(&key_char("n"), cmd_shift_mods(), &unlocked()),
+            tree.find_shortcut_action(&key_char("n"), cmd_shift_mods(), &unlocked()),
             None
         );
     }
 
-    // ── MENUS table-wide invariants ───────────────────────────────────────
+    // ── menu_tree() table-wide invariants ─────────────────────────────────
 
     /// Recursively collect every `(modifiers, key)` triple bound by an entry
     /// that *can* fire (anything but `Never`).
-    fn collect_active_shortcuts(
-        entries: &[MenuEntry],
-        out: &mut Vec<((bool, bool, ShortcutKey), &'static str)>,
+    fn collect_active_shortcuts<'a>(
+        entries: &'a [MenuEntry],
+        out: &mut Vec<((bool, bool, ShortcutKey), &'a str)>,
     ) {
         for entry in entries {
             if let Some(s) = entry.shortcut
                 && !matches!(entry.enabled, EnabledWhen::Never)
             {
-                out.push(((s.ctrl_cmd, s.shift, s.key), entry.label));
+                out.push(((s.ctrl_cmd, s.shift, s.key), entry.label.as_str()));
             }
-            collect_active_shortcuts(entry.children, out);
+            if let MenuChildren::Static(children) = &entry.children {
+                collect_active_shortcuts(children, out);
+            }
         }
     }
 
@@ -399,9 +403,10 @@ mod tests {
         // A duplicate `(ctrl_cmd, shift, key)` between two non-`Never` entries
         // means `find_shortcut_action` returns whichever appears first in the
         // walk — the second one is silently unreachable.
+        let tree = menu_tree();
         let mut all = Vec::new();
-        for (_label, entries) in MENUS {
-            collect_active_shortcuts(entries, &mut all);
+        for sec in &tree.sections {
+            collect_active_shortcuts(&sec.entries, &mut all);
         }
         for (i, (a, label_a)) in all.iter().enumerate() {
             for (b, label_b) in all.iter().skip(i + 1) {
@@ -421,9 +426,10 @@ mod tests {
         // `muda::accelerator::Accelerator` — otherwise the native macOS menu
         // silently drops it. Cheap to assert here because our `display()`
         // and muda's parser are the contract we own.
+        let tree = menu_tree();
         let mut all = Vec::new();
-        for (_label, entries) in MENUS {
-            collect_active_shortcuts(entries, &mut all);
+        for sec in &tree.sections {
+            collect_active_shortcuts(&sec.entries, &mut all);
         }
         for ((ctrl_cmd, shift, key), label) in all {
             let s = super::super::shortcut::Shortcut {

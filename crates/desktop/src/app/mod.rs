@@ -75,7 +75,15 @@ pub struct App {
 
     // ── Native chrome ─────────────────────────────────────────────────────
     pub(crate) theme: ThemeState,
+    /// Rebuilt at startup and on every language change. Source of truth for
+    /// both the custom title-bar dropdown and the native muda menu. See
+    /// [`crate::services::menu::menu_tree`].
+    pub(crate) menu: crate::services::menu::MenuTree,
     pub(crate) native_menu: Option<crate::services::menu::NativeMenuHandle>,
+    /// OS-level handle for the main window. Captured by `WindowMessage::GotRawId`
+    /// once the surface is up; needed to re-attach the native menu when the
+    /// language changes ([`crate::app::App::rebuild_menu`]).
+    pub(crate) main_window_raw_id: Option<u64>,
     pub(crate) tray: Option<TrayHandle>,
 
     // ── Cross-cutting services ────────────────────────────────────────────

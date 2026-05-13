@@ -8,7 +8,7 @@
 //! 1. **Duplicate keys** in any `.ftl` we look at.
 //! 2. **Unused keys** — message IDs declared in the canonical English
 //!    catalogue but never referenced from the workspace's Rust sources via
-//!    `fl!("<id>")` or `E("<id>")`.
+//!    `fl!("<id>")`.
 //! 3. **Locale parity** — for every non-English locale under
 //!    `assets/i18n/<locale>/bitwarden_desktop_next.ftl`, list keys missing
 //!    relative to English (untranslated) and stale keys present only in
@@ -40,18 +40,10 @@ const CATALOGUE_LOCALE: &str = "en";
 const CATALOGUE_FILE: &str = "bitwarden_desktop_next.ftl";
 const SOURCE_ROOTS: &[&str] = &["crates", "bitwarden_license", "tools"];
 
-/// Keys that are referenced indirectly and won't show up in a `fl!(...)` or
-/// `E(...)` scan. Adding to this list is preferable to deleting a key that
-/// is in fact in use somewhere the linter can't see.
+/// Keys that are referenced indirectly and won't show up in a `fl!(...)`
+/// scan. Adding to this list is preferable to deleting a key that is in
+/// fact in use somewhere the linter can't see.
 const ALLOW_EXACT: &[&str] = &[
-    // Top-level menu titles in `services::menu::MENUS` are bare string
-    // literals in a `(&str, &[MenuEntry])` tuple, not wrapped in `E(...)`.
-    "menu-file",
-    "menu-edit",
-    "menu-view",
-    "menu-window",
-    "menu-help",
-    "menu-account",
     // Endonym key, declared by every locale and resolved by
     // `services::i18n::language_label` through a per-locale
     // `FluentLanguageLoader` rather than the active loader.
@@ -350,12 +342,6 @@ fn collect_fl_references(root: &Path, out: &mut BTreeSet<String>) -> Result<(), 
                 let src = fs::read_to_string(&path)
                     .map_err(|e| format!("reading {}: {e}", path.display()))?;
                 extract_string_arg(&src, b"fl!(", out);
-                // Menu service: `E("menu-...")` builds a `MenuEntry` whose
-                // label is resolved at render time via `i18n::lookup`. The
-                // sibling helper `L("...")` is for *literal* labels (brand
-                // names) that bypass i18n — those must NOT be counted, and
-                // an exact-match needle of `E(` won't pick them up.
-                extract_string_arg(&src, b"E(", out);
             }
         }
     }
@@ -363,9 +349,9 @@ fn collect_fl_references(root: &Path, out: &mut BTreeSet<String>) -> Result<(), 
 }
 
 /// Pull the first string-literal argument out of every call matching
-/// `<needle>"..."` in a Rust source string. Used to scrape both `fl!(...)`
-/// and the menu service's `E(...)` constructor — both of which take a
-/// Fluent message ID as their first argument.
+/// `<needle>"..."` in a Rust source string. Used to scrape `fl!(...)`
+/// macro invocations — the only entry point for translatable strings now
+/// that menu labels also flow through `fl!`.
 fn extract_string_arg(src: &str, needle: &[u8], out: &mut BTreeSet<String>) {
     let bytes = src.as_bytes();
     let mut i = 0;

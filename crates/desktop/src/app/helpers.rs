@@ -127,8 +127,12 @@ impl App {
     pub(crate) fn refresh_accounts_cache(&mut self) {
         self.cache.accounts = self.client_manager.accounts();
 
-        if let Some(ref handle) = self.native_menu {
-            handle.sync_enabled(&self.menu_state());
+        // Precompute `MenuState` ahead of the mutable native-menu borrow so
+        // the borrow checker accepts the two field accesses side-by-side.
+        let state = self.menu_state();
+        if let Some(ref mut handle) = self.native_menu {
+            handle.sync_dynamic(&self.cache.accounts);
+            handle.sync_enabled(&state);
         }
     }
 
@@ -235,6 +239,20 @@ impl App {
         self.session_timeout.unenroll(uid);
     }
 
+    /// Log out a specific user from the File → Log out per-account submenu.
+    /// Routes to the active-user transition via `handle_log_out` when the
+    /// uid matches, else does an inline cleanup and refreshes caches.
+    pub(crate) fn handle_log_out_for(&mut self, uid: UserId) -> Task<Message> {
+        if self.active_user.as_ref() == Some(&uid) {
+            self.handle_log_out()
+        } else {
+            self.log_out_user(&uid);
+            self.refresh_accounts_cache();
+            self.refresh_session_timeout_deadline();
+            Task::none()
+        }
+    }
+
     /// Apply session-timeout actions for every signed-in user. Pure
     /// classification lives on [`SessionTimeout::plan_timeout_actions`];
     /// this method only sequences the side effects the plan implies.
@@ -314,6 +332,25 @@ impl App {
             return Task::none();
         }
         Task::done(crate::views::vault::VaultMessage::CipherDetail(msg).into())
+    }
+
+    /// Rebuild the cached menu tree and re-attach the native menu so all
+    /// labels pick up the active language. Call after every
+    /// `i18n::set_language` / `i18n::init` invocation.
+    pub(crate) fn rebuild_menu(&mut self) {
+        self.menu = crate::services::menu::menu_tree();
+        if let Some(raw_id) = self.main_window_raw_id {
+            // Re-attach replaces the OS-level menu pointer; the previous
+            // muda::Menu leak is harmless (the OS released it via
+            // SetMenu/mainMenu replacement). The new handle's
+            // `dynamic_submenus` start empty — populate from current state.
+            self.native_menu = crate::services::menu::attach_menu(raw_id, &self.menu);
+            let state = self.menu_state();
+            if let Some(ref mut handle) = self.native_menu {
+                handle.sync_dynamic(&self.cache.accounts);
+                handle.sync_enabled(&state);
+            }
+        }
     }
 
     pub(crate) fn menu_state(&self) -> crate::services::menu::MenuState {

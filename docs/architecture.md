@@ -96,7 +96,7 @@ crates/desktop/src/
 │   ├── clipboard/                  # ClipboardManager + sensitivity
 │   ├── favicon/                    # FaviconService + fetch stream
 │   ├── global_hotkey/              # OS-level hotkey → Magnify toggle stream
-│   ├── menu/                       # muda binding + MENUS + MenuAction
+│   ├── menu/                       # MenuTree (menu_tree()) + muda binding + MenuAction
 │   ├── tray/                       # TrayHandle + click stream
 │   ├── broadcast_stream.rs         # OnceLock<Receiver> → iced Stream adapter
 │   ├── i18n/                       # fluent loader + fl! macro target
@@ -800,18 +800,34 @@ resulting `*Event::AccountSwitcher` bubbles up through the view's handler and la
 
 ## Menu System
 
-Single `MENUS` static drives both custom and native menus:
+`services::menu::menu_tree()` builds a `MenuTree` at runtime — every label flows through
+the `fl!()` macro at construction so Fluent message IDs are validated against the
+catalogue at compile time. `App::menu` caches the tree; `App::rebuild_menu()` reconstructs
+it (and re-attaches the native menu) on language change so both surfaces below pick up new
+translations on the next frame. Both consumers walk the same tree:
 
 - **Custom title bar** (Windows/Linux): renders labels, dropdowns, shortcuts, submenus via
-  `views/title_bar/`.
+  `views/title_bar/`. Walks `RenderCtx::menu.sections` per frame; `ItemAction(MenuAction)`
+  click messages embed the resolved action so dispatch is a one-liner.
 - **Native muda** (macOS, or `DEV_BOTH_MENUS=1`): `Shortcut::to_accelerator()` adds
   shortcuts; `NativeMenuHandle` bridges events through
   `services::menu::muda_event_stream()`. A push callback registered once at startup via
   `muda::MenuEvent::set_event_handler` fans events out through a
   `tokio::sync::broadcast::Sender`; each subscription run calls `.subscribe()` for a fresh
   receiver.
-- `MenuState { is_locked, has_accounts, has_lockable_accounts }` — three bools driving
-  `EnabledWhen::Always / Unlocked / HasAccounts / HasLockable`.
+
+`MenuChildren` makes the three child shapes explicit:
+
+- `None` — leaf entry (has an action, no children).
+- `Static(Vec<MenuEntry>)` — fixed at build time (e.g. File → New item).
+- `Dynamic(DynamicSubmenu)` — children resolved at render time from live account state.
+  Used by File → Lock vault (per unlocked account) and File → Log out (per known
+  account). Both renderers walk dynamic children via
+  `MenuEntry::effective_children(accounts)`; native muda also tracks the submenu handles
+  and refills them via `NativeMenuHandle::sync_dynamic` from `refresh_accounts_cache`.
+
+`MenuState { is_locked, has_accounts, has_lockable_accounts }` — three bools driving
+`EnabledWhen::Always / Unlocked / HasAccounts / HasLockable`.
 
 ## Overlays
 
@@ -1084,7 +1100,7 @@ Git-pinned checkouts for investigation:
 
 - `iced` (git, 0.15) with `tokio`, `tiny-skia`, `advanced`, `svg`, `image`, `crisp`,
   `hinting`, `web-colors`, `x11`, `wayland` features
-- `muda = "0.18"` — native OS menus
+- `muda = "0.19"` — native OS menus
 - `iced_aw` (0.13, default-features = false) — kept as local source reference for our
   `DropDown` fork
 - `lilt = "0.8"` — renderer-agnostic interruptable transition animations; powers

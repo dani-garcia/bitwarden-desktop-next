@@ -366,12 +366,30 @@ internal. Signature aligns with iced's `button()` for familiarity.
 
 ## Native Menu Unification
 
-**Decision**: Single `MENUS` static drives both custom and native menus.
-`NativeMenuHandle` (on App, not static) bridges events.
+**Decision**: A single `MenuTree`, built by `services::menu::menu_tree()` and cached on
+`App::menu`, drives both the custom title-bar dropdown and the native muda menu.
+`NativeMenuHandle` bridges muda events.
 
 **Rationale**: Avoids duplicating menu structure. `Shortcut::to_accelerator()` reuses
 existing `display()` for muda compatibility. `DEV_BOTH_MENUS=1` shows both simultaneously
 for comparison.
+
+**Why runtime, not static**: an earlier `MENUS: &'static [(&str, &[MenuEntry])]` const
+stored Fluent keys as bare `&str` and resolved them at render time via `i18n::lookup()`.
+That bypassed `i18n-embed-fl`'s compile-time validation (a typo in a menu key compiled
+fine and rendered the raw key string) and forced `tools/i18n-unused` to carry a second
+needle (`E(`) plus an allowlist of top-level menu titles. Building the tree at runtime
+lets every label flow through `fl!()` directly; the linter is back to a single needle and
+the OS menu actually picks up language changes via `App::rebuild_menu()` instead of
+freezing labels at startup.
+
+**Dynamic submenus**: File → Lock vault and File → Log out gain per-account entries via
+`MenuChildren::Dynamic(DynamicSubmenu)`. `DynamicSubmenu::resolve(accounts)` expands the
+parent into one entry per unlocked / known account at render (and click-dispatch) time.
+Renderers walk `MenuEntry::effective_children(accounts)` so the static vs. dynamic split
+stays out of their loops; native muda additionally tracks `(Submenu, DynamicSubmenu)`
+pairs so `NativeMenuHandle::sync_dynamic` can refill them on lock / unlock / login /
+logout.
 
 **MenuState shape**: 3 bools (`is_locked`, `has_accounts`, `has_lockable_accounts`). An
 earlier `has_authenticated_accounts` field was indistinguishable from `has_accounts` in

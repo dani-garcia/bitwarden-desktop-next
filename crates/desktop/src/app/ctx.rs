@@ -139,6 +139,9 @@ pub struct RenderCtx<'a> {
     /// Main-window maximized state — read by [`crate::views::title_bar::TitleBarView`]
     /// to pick the maximize / restore glyph.
     pub is_maximized: bool,
+    /// The application menu tree. Borrowed from `App::menu`; rebuilt on
+    /// language change. The title bar walks this to render dropdowns.
+    pub menu: &'a crate::services::menu::MenuTree,
     /// Per-frame snapshot of menu-entry gating flags (locked / has-accounts /
     /// has-lockable). Lives here so the title bar can pull it from the
     /// trait-shaped `view(&self, &RenderCtx)` signature.

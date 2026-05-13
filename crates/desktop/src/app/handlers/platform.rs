@@ -58,7 +58,15 @@ impl App {
                 }
             }
             WindowMessage::GotRawId(_id, raw_id) => {
-                self.native_menu = crate::services::menu::attach_menu(raw_id);
+                self.main_window_raw_id = Some(raw_id);
+                self.native_menu = crate::services::menu::attach_menu(raw_id, &self.menu);
+                // Populate dynamic submenus immediately so File → Lock vault
+                // / Log out reflect any accounts already loaded from disk.
+                let state = self.menu_state();
+                if let Some(ref mut handle) = self.native_menu {
+                    handle.sync_dynamic(&self.cache.accounts);
+                    handle.sync_enabled(&state);
+                }
                 Task::none()
             }
             WindowMessage::CloseRequested(id) => {
@@ -143,9 +151,7 @@ impl App {
                     return Task::none();
                 }
                 let state = self.menu_state();
-                let Some(action) =
-                    crate::services::menu::find_shortcut_action(&key, modifiers, &state)
-                else {
+                let Some(action) = self.menu.find_shortcut_action(&key, modifiers, &state) else {
                     return Task::none();
                 };
                 self.open_overlay = None;
@@ -277,6 +283,12 @@ impl App {
                 let uids = self.client_manager.user_ids();
                 let tasks: Vec<_> = uids.iter().map(|uid| self.lock_user(uid)).collect();
                 return Task::batch(tasks);
+            }
+            MenuAction::LockAccount(uid) => {
+                return self.lock_user(&uid);
+            }
+            MenuAction::LogOutAccount(uid) => {
+                return self.handle_log_out_for(uid);
             }
             MenuAction::ToggleFullScreen => {
                 let id = self.main_window_id();

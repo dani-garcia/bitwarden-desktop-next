@@ -5,18 +5,33 @@ use iced::{
 
 use crate::{
     components::{self, drop_down::PANEL_SHADOW},
-    services::menu::{MenuEntry, MenuState},
+    services::{
+        menu::{MenuEntry, MenuState},
+        sdk::AccountEntry,
+    },
     theme::{AppColors, AppTheme},
 };
 
 use super::{DROPDOWN_WIDTH, ITEM_PADDING, PANEL_RADIUS, SUBMENU_WIDTH, TitleBarMessage};
 
+// Layout constants for the submenu-offset math. Tuned empirically against
+// the rendered output — 32 placed submenus visibly above the parent row,
+// 34 placed them visibly below; 33 lands roughly flush.
+const ITEM_HEIGHT: f32 = 33.0;
+const SEPARATOR_HEIGHT: f32 = 5.0;
+const COLUMN_SPACING: f32 = 2.0;
+const PANEL_TOP_PADDING: f32 = 6.0;
+
 /// Build the overlay content for a single menu's dropdown.
 /// When a submenu is open, returns a row with the main panel and submenu side-by-side.
+///
+/// `accounts` feeds [`MenuEntry::effective_children`] so dynamic submenus
+/// (per-account Lock / Log out) expand from live state.
 pub fn menu_panel<'a>(
     entries: &[MenuEntry],
     menu_index: usize,
     open_submenu: Option<usize>,
+    accounts: &[AccountEntry],
     state: &MenuState,
     colors: &AppColors,
 ) -> Element<'a, TitleBarMessage, AppTheme> {
@@ -24,34 +39,37 @@ pub fn menu_panel<'a>(
     let main_panel = styled_panel(column(items).spacing(2).width(DROPDOWN_WIDTH));
 
     if let Some(sub_idx) = open_submenu
-        && let Some(entry) = entries.get(sub_idx)
-        && !entry.children.is_empty()
+        && let Some(parent) = entries.get(sub_idx)
     {
-        let v_offset: f32 = entries[..sub_idx]
-            .iter()
-            .map(|e| {
-                if e.is_separator() {
-                    9.0
-                } else {
-                    ITEM_PADDING.top + ITEM_PADDING.bottom + 16.0
-                }
-            })
-            .sum::<f32>()
-            + 6.0;
+        let children = parent.effective_children(accounts);
+        if !children.is_empty() {
+            // Place the submenu's panel top at the parent row's panel-top
+            // y-coordinate. Three contributions: each preceding entry's
+            // height, the column spacing between every pair (sub_idx of
+            // them above the parent), and the panel's top padding.
+            let v_offset: f32 = entries[..sub_idx]
+                .iter()
+                .map(|e| {
+                    if e.is_separator() {
+                        SEPARATOR_HEIGHT
+                    } else {
+                        ITEM_HEIGHT
+                    }
+                })
+                .sum::<f32>()
+                + sub_idx as f32 * COLUMN_SPACING
+                + PANEL_TOP_PADDING;
 
-        let sub_items: Vec<Element<'_, TitleBarMessage, AppTheme>> = entry
-            .children
-            .iter()
-            .enumerate()
-            .map(|(sub_i, sub_entry)| {
-                render_submenu_item(sub_entry, menu_index, sub_idx, sub_i, state, colors)
-            })
-            .collect();
+            let sub_items: Vec<Element<'_, TitleBarMessage, AppTheme>> = children
+                .iter()
+                .map(|sub_entry| render_submenu_item(sub_entry, state, colors))
+                .collect();
 
-        let sub_panel = styled_panel(column(sub_items).spacing(2).width(SUBMENU_WIDTH));
-        let sub_with_offset = column![iced::widget::Space::new().height(v_offset), sub_panel];
+            let sub_panel = styled_panel(column(sub_items).spacing(2).width(SUBMENU_WIDTH));
+            let sub_with_offset = column![iced::widget::Space::new().height(v_offset), sub_panel];
 
-        return row![main_panel, sub_with_offset].spacing(4).into();
+            return row![main_panel, sub_with_offset].spacing(4).into();
+        }
     }
 
     main_panel
@@ -117,7 +135,7 @@ fn render_entry<'a>(
         colors.text_muted
     };
 
-    let label_text = text(entry.display_label()).size(14).color(label_color);
+    let label_text = text(entry.label.clone()).size(14).color(label_color);
 
     let content: Element<'_, TitleBarMessage, AppTheme> = if is_sub {
         row![
@@ -165,8 +183,13 @@ fn render_entry<'a>(
                 }
             });
 
-    if enabled {
-        btn = btn.on_press(TitleBarMessage::ItemClicked(menu_index, item_index));
+    // Leaf clicks fire the resolved `MenuAction`; submenu parents have no
+    // action and only open the submenu via hover.
+    if enabled
+        && !is_sub
+        && let Some(action) = entry.action
+    {
+        btn = btn.on_press(TitleBarMessage::ItemAction(action));
     }
 
     if is_sub && enabled {
@@ -184,9 +207,6 @@ fn render_entry<'a>(
 
 fn render_submenu_item<'a>(
     entry: &MenuEntry,
-    menu_index: usize,
-    parent_index: usize,
-    sub_index: usize,
     state: &MenuState,
     colors: &AppColors,
 ) -> Element<'a, TitleBarMessage, AppTheme> {
@@ -201,7 +221,7 @@ fn render_submenu_item<'a>(
         colors.text_muted
     };
 
-    let label_text = text(entry.display_label()).size(14).color(label_color);
+    let label_text = text(entry.label.clone()).size(14).color(label_color);
 
     let content: Element<'_, TitleBarMessage, AppTheme> =
         if let Some(shortcut_text) = entry.shortcut_display() {
@@ -243,12 +263,8 @@ fn render_submenu_item<'a>(
                 }
             });
 
-    if enabled {
-        btn = btn.on_press(TitleBarMessage::SubMenuItemClicked(
-            menu_index,
-            parent_index,
-            sub_index,
-        ));
+    if enabled && let Some(action) = entry.action {
+        btn = btn.on_press(TitleBarMessage::ItemAction(action));
     }
 
     btn.into()

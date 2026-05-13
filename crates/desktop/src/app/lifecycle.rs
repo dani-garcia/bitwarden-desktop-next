@@ -133,7 +133,9 @@ impl App {
             magnify: magnify::MagnifyView::new(magnify_id),
 
             theme: ThemeState::new(user_theme),
+            menu: crate::services::menu::menu_tree(),
             native_menu: None,
+            main_window_raw_id: None,
             tray,
 
             clipboard: ClipboardManager::new(),
