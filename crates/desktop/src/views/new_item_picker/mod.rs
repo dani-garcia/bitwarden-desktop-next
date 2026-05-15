@@ -87,11 +87,8 @@ impl View for NewItemPickerView {
     fn view<'a>(&'a self, ctx: &RenderCtx<'a>) -> Element<'a, NewItemPickerMessage, AppTheme> {
         let progress = self.fade.progress_when_visible();
 
-        let header = modal::dialog_header(
-            fl!("picker-title"),
-            NewItemPickerMessage::Close,
-            ctx.colors,
-        );
+        let header =
+            modal::dialog_header(fl!("picker-title"), NewItemPickerMessage::Close, ctx.colors);
 
         // Tile rows: two tiles per row except the trailing Folder row which
         // sits alone in the left column (the design leaves the right column
@@ -132,6 +129,18 @@ impl View for NewItemPickerView {
                 fl!("menu-file-new-item-ssh-key"),
                 fl!("picker-ssh-key-subtitle"),
                 NewItemPickerMessage::PickType(CipherType::SshKey),
+            ),
+            (
+                icons::BWI_DRIVERS_LICENSE,
+                fl!("menu-file-new-item-drivers-license"),
+                fl!("picker-drivers-license-subtitle"),
+                NewItemPickerMessage::PickType(CipherType::DriversLicense),
+            ),
+            (
+                icons::BWI_PASSPORT,
+                fl!("menu-file-new-item-passport"),
+                fl!("picker-passport-subtitle"),
+                NewItemPickerMessage::PickType(CipherType::Passport),
             ),
             (
                 icons::BWI_FOLDER,
@@ -191,10 +200,7 @@ mod tests_update {
             .run(NewItemPickerMessage::PickType(CipherType::Login))
             .await
             .expect_event();
-        assert!(matches!(
-            ev,
-            NewItemPickerEvent::NewItem(CipherType::Login)
-        ));
+        assert!(matches!(ev, NewItemPickerEvent::NewItem(CipherType::Login)));
         assert!(!view.fade.is_open());
     }
 

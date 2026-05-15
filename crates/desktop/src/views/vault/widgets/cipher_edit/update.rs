@@ -2,8 +2,8 @@
 //! `CipherView` mutations.
 
 use bitwarden_vault::{
-    BankAccountView, CipherRepromptType, CipherView, FieldType, FieldView, IdentityView,
-    LoginUriView, UriMatchType,
+    BankAccountView, CipherRepromptType, CipherView, DriversLicenseView, FieldType, FieldView,
+    IdentityView, LoginUriView, PassportView, UriMatchType,
 };
 
 use super::{
@@ -202,15 +202,49 @@ impl CipherForm {
             BankRoutingNumberChanged(s) => {
                 bank_set(&mut self.modified, |b| &mut b.routing_number, s)
             }
-            BankBranchNumberChanged(s) => {
-                bank_set(&mut self.modified, |b| &mut b.branch_number, s)
-            }
+            BankBranchNumberChanged(s) => bank_set(&mut self.modified, |b| &mut b.branch_number, s),
             BankPinChanged(s) => bank_set(&mut self.modified, |b| &mut b.pin, s),
             BankSwiftCodeChanged(s) => bank_set(&mut self.modified, |b| &mut b.swift_code, s),
             BankIbanChanged(s) => bank_set(&mut self.modified, |b| &mut b.iban, s),
             BankContactPhoneChanged(s) => {
                 bank_set(&mut self.modified, |b| &mut b.bank_contact_phone, s)
             }
+
+            // Drivers license
+            DlFirstNameChanged(s) => dl_set(&mut self.modified, |d| &mut d.first_name, s),
+            DlMiddleNameChanged(s) => dl_set(&mut self.modified, |d| &mut d.middle_name, s),
+            DlLastNameChanged(s) => dl_set(&mut self.modified, |d| &mut d.last_name, s),
+            DlDateOfBirthChanged(s) => dl_set(&mut self.modified, |d| &mut d.date_of_birth, s),
+            DlLicenseNumberChanged(s) => dl_set(&mut self.modified, |d| &mut d.license_number, s),
+            DlIssuingCountryChanged(s) => dl_set(&mut self.modified, |d| &mut d.issuing_country, s),
+            DlIssuingStateChanged(s) => dl_set(&mut self.modified, |d| &mut d.issuing_state, s),
+            DlIssuingAuthorityChanged(s) => {
+                dl_set(&mut self.modified, |d| &mut d.issuing_authority, s)
+            }
+            DlIssueDateChanged(s) => dl_set(&mut self.modified, |d| &mut d.issue_date, s),
+            DlExpirationDateChanged(s) => dl_set(&mut self.modified, |d| &mut d.expiration_date, s),
+            DlLicenseClassChanged(s) => dl_set(&mut self.modified, |d| &mut d.license_class, s),
+
+            // Passport
+            PpGivenNameChanged(s) => pp_set(&mut self.modified, |p| &mut p.given_name, s),
+            PpSurnameChanged(s) => pp_set(&mut self.modified, |p| &mut p.surname, s),
+            PpDateOfBirthChanged(s) => pp_set(&mut self.modified, |p| &mut p.date_of_birth, s),
+            PpSexChanged(s) => pp_set(&mut self.modified, |p| &mut p.sex, s),
+            PpBirthPlaceChanged(s) => pp_set(&mut self.modified, |p| &mut p.birth_place, s),
+            PpNationalityChanged(s) => pp_set(&mut self.modified, |p| &mut p.nationality, s),
+            PpPassportNumberChanged(s) => pp_set(&mut self.modified, |p| &mut p.passport_number, s),
+            PpPassportTypeChanged(s) => pp_set(&mut self.modified, |p| &mut p.passport_type, s),
+            PpNationalIdNumberChanged(s) => pp_set(
+                &mut self.modified,
+                |p| &mut p.national_identification_number,
+                s,
+            ),
+            PpIssuingCountryChanged(s) => pp_set(&mut self.modified, |p| &mut p.issuing_country, s),
+            PpIssuingAuthorityChanged(s) => {
+                pp_set(&mut self.modified, |p| &mut p.issuing_authority, s)
+            }
+            PpIssueDateChanged(s) => pp_set(&mut self.modified, |p| &mut p.issue_date, s),
+            PpExpirationDateChanged(s) => pp_set(&mut self.modified, |p| &mut p.expiration_date, s),
 
             // Custom fields
             CustomFieldAdded => {
@@ -296,6 +330,22 @@ fn bank_set(
 ) {
     if let Some(b) = cv.bank_account.as_mut() {
         *pick(b) = opt_string(s);
+    }
+}
+
+fn dl_set(
+    cv: &mut CipherView,
+    pick: impl Fn(&mut DriversLicenseView) -> &mut Option<String>,
+    s: String,
+) {
+    if let Some(d) = cv.drivers_license.as_mut() {
+        *pick(d) = opt_string(s);
+    }
+}
+
+fn pp_set(cv: &mut CipherView, pick: impl Fn(&mut PassportView) -> &mut Option<String>, s: String) {
+    if let Some(p) = cv.passport.as_mut() {
+        *pick(p) = opt_string(s);
     }
 }
 

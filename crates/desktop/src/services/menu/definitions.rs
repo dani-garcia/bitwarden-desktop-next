@@ -49,6 +49,12 @@ pub fn menu_tree() -> MenuTree {
                 item(fl!("menu-file-new-item-bank-account"))
                     .key(cmd_shift('b'))
                     .action(NewItem(CipherType::BankAccount)),
+                item(fl!("menu-file-new-item-drivers-license"))
+                    .key(cmd_shift('d'))
+                    .action(NewItem(CipherType::DriversLicense)),
+                item(fl!("menu-file-new-item-passport"))
+                    .key(cmd_shift('p'))
+                    .action(NewItem(CipherType::Passport)),
             ]),
             item(fl!("menu-file-new-folder")).when(Unlocked).action(NewFolder),
             sep(),

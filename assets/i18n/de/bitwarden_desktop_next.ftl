@@ -120,6 +120,8 @@ detail-header-identity = Identität anzeigen
 detail-header-note = Notiz anzeigen
 detail-header-ssh-key = SSH-Schlüssel anzeigen
 detail-header-bank-account = Bankkonto anzeigen
+detail-header-drivers-license = Führerschein anzeigen
+detail-header-passport = Reisepass anzeigen
 
 ## Detail pane — section labels
 detail-section-item-details = Eintragsdetails
@@ -169,6 +171,8 @@ form-title-edit-identity = Identität bearbeiten
 form-title-edit-note = Notiz bearbeiten
 form-title-edit-ssh-key = SSH-Schlüssel bearbeiten
 form-title-edit-bank-account = Bankkonto bearbeiten
+form-title-edit-drivers-license = Führerschein bearbeiten
+form-title-edit-passport = Reisepass bearbeiten
 
 ## Cipher form — buttons
 form-save = Speichern
@@ -369,6 +373,8 @@ picker-folder = Ordner
 picker-login-subtitle = Website oder App
 picker-card-subtitle = Kredit- oder Debitkarte
 picker-bank-account-subtitle = Bankdaten
+picker-drivers-license-subtitle = Führerscheindaten
+picker-passport-subtitle = Reisedokument
 picker-identity-subtitle = Persönliche Informationen
 picker-secure-note-subtitle = Wichtiger Text
 picker-ssh-key-subtitle = Server-Anmeldetoken

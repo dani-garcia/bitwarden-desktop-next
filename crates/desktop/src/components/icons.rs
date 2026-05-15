@@ -102,4 +102,8 @@ pub const BWI_EDIT: BwiIcon = BwiIcon('\u{f142}');
 pub const BWI_LOCK: BwiIcon = BwiIcon('\u{f12b}');
 pub const BWI_HANDSHAKE: BwiIcon = BwiIcon('\u{f135}');
 pub const BWI_BANK: BwiIcon = BwiIcon('\u{f15d}');
+// Aliased glyphs per upstream `style.scss`: `bwi-id-card` shares its codepoint
+// with `bwi-identity` (\f132), `bwi-globe` shares with `bwi-login` (\f12a).
+pub const BWI_DRIVERS_LICENSE: BwiIcon = BwiIcon('\u{f132}');
+pub const BWI_PASSPORT: BwiIcon = BwiIcon('\u{f12a}');
 pub const BWI_FOLDER: BwiIcon = BwiIcon('\u{f139}');

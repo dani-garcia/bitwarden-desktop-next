@@ -15,7 +15,7 @@ use crate::{
 
 use super::{
     CipherDetailMessage,
-    sections::{bank_account, card, identity, login, shared, ssh_key},
+    sections::{bank_account, card, drivers_license, identity, login, passport, shared, ssh_key},
 };
 use crate::views::vault::widgets::field_helpers::{card_with_margin, section_label, styled_card};
 
@@ -85,7 +85,18 @@ pub fn view<'a>(
                 sections.push(bank_account::bank_account_card(bank, colors));
             }
         }
-        CipherType::DriversLicense | CipherType::Passport => unreachable!(),
+        CipherType::DriversLicense => {
+            if let Some(dl) = item.drivers_license.as_ref() {
+                sections.push(section_label(fl!("detail-section-drivers-license"), colors));
+                sections.push(drivers_license::drivers_license_card(dl, colors));
+            }
+        }
+        CipherType::Passport => {
+            if let Some(pp) = item.passport.as_ref() {
+                sections.push(section_label(fl!("detail-section-passport"), colors));
+                sections.push(passport::passport_card(pp, colors));
+            }
+        }
     }
 
     if let Some(fields) = item.fields.as_deref().filter(|f| !f.is_empty()) {
@@ -113,7 +124,8 @@ fn header_row<'a>(
         CipherType::SecureNote => fl!("detail-header-note"),
         CipherType::SshKey => fl!("detail-header-ssh-key"),
         CipherType::BankAccount => fl!("detail-header-bank-account"),
-        CipherType::DriversLicense | CipherType::Passport => unreachable!(),
+        CipherType::DriversLicense => fl!("detail-header-drivers-license"),
+        CipherType::Passport => fl!("detail-header-passport"),
     };
     components::pane_header(category_label, CipherDetailMessage::Close, colors)
 }

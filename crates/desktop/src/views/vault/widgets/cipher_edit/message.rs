@@ -71,6 +71,34 @@ pub enum CipherEditMessage {
     BankIbanChanged(String),
     BankContactPhoneChanged(String),
 
+    // Drivers license
+    DlFirstNameChanged(String),
+    DlMiddleNameChanged(String),
+    DlLastNameChanged(String),
+    DlDateOfBirthChanged(String),
+    DlLicenseNumberChanged(String),
+    DlIssuingCountryChanged(String),
+    DlIssuingStateChanged(String),
+    DlIssuingAuthorityChanged(String),
+    DlIssueDateChanged(String),
+    DlExpirationDateChanged(String),
+    DlLicenseClassChanged(String),
+
+    // Passport
+    PpGivenNameChanged(String),
+    PpSurnameChanged(String),
+    PpDateOfBirthChanged(String),
+    PpSexChanged(String),
+    PpBirthPlaceChanged(String),
+    PpNationalityChanged(String),
+    PpPassportNumberChanged(String),
+    PpPassportTypeChanged(String),
+    PpNationalIdNumberChanged(String),
+    PpIssuingCountryChanged(String),
+    PpIssuingAuthorityChanged(String),
+    PpIssueDateChanged(String),
+    PpExpirationDateChanged(String),
+
     // Custom fields
     CustomFieldAdded,
     CustomFieldRemoved(usize),

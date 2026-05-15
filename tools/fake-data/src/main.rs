@@ -35,8 +35,9 @@ use bitwarden_state::{
     repository::{Repository, RepositoryError, RepositoryItem},
 };
 use bitwarden_vault::{
-    BankAccountView, CardView, Cipher, CipherRepromptType, CipherType, CipherView, Folder,
-    FolderView, IdentityView, LoginUriView, LoginView, SshKeyView, UriMatchType,
+    BankAccountView, CardView, Cipher, CipherRepromptType, CipherType, CipherView,
+    DriversLicenseView, Folder, FolderView, IdentityView, LoginUriView, LoginView, PassportView,
+    SshKeyView, UriMatchType,
 };
 
 use crate::passkey::PasskeySpec;
@@ -459,30 +460,11 @@ fn build_login(name: &str, username: Option<&str>, uri: Option<&str>) -> CipherV
 }
 
 /// Build a `CipherView` of the given type, with cipher-level metadata pre-filled.
-/// The caller plugs in the type-specific view via the `kind` closure.
+/// Starts with everything `None` for the type-specific sub-views, then the
+/// `match` below flips both the discriminant and the matching slot.
 fn cipher_with(name: &str, notes: Option<String>, kind: CipherKind) -> CipherView {
     let now = Utc::now();
-    let (r#type, login, card, identity, secure_note, ssh_key, bank_account) = match kind {
-        CipherKind::Login(l) => (CipherType::Login, Some(*l), None, None, None, None, None),
-        CipherKind::Card(c) => (CipherType::Card, None, Some(*c), None, None, None, None),
-        CipherKind::Identity(i) => (CipherType::Identity, None, None, Some(*i), None, None, None),
-        CipherKind::SecureNote => (
-            CipherType::SecureNote,
-            None,
-            None,
-            None,
-            Some(bitwarden_vault::SecureNoteView {
-                r#type: bitwarden_vault::SecureNoteType::Generic,
-            }),
-            None,
-            None,
-        ),
-        CipherKind::SshKey(k) => (CipherType::SshKey, None, None, None, None, Some(*k), None),
-        CipherKind::BankAccount(b) => {
-            (CipherType::BankAccount, None, None, None, None, None, Some(*b))
-        }
-    };
-    CipherView {
+    let mut view = CipherView {
         id: Some(bitwarden_vault::CipherId::new(uuid::Uuid::new_v4())),
         organization_id: None,
         folder_id: None,
@@ -490,13 +472,13 @@ fn cipher_with(name: &str, notes: Option<String>, kind: CipherKind) -> CipherVie
         key: None,
         name: name.to_string(),
         notes,
-        r#type,
-        login,
-        identity,
-        card,
-        secure_note,
-        ssh_key,
-        bank_account,
+        r#type: CipherType::Login,
+        login: None,
+        identity: None,
+        card: None,
+        secure_note: None,
+        ssh_key: None,
+        bank_account: None,
         drivers_license: None,
         passport: None,
         favorite: false,
@@ -514,7 +496,44 @@ fn cipher_with(name: &str, notes: Option<String>, kind: CipherKind) -> CipherVie
         deleted_date: None,
         revision_date: now,
         archived_date: None,
+    };
+    match kind {
+        CipherKind::Login(l) => {
+            view.r#type = CipherType::Login;
+            view.login = Some(*l);
+        }
+        CipherKind::Card(c) => {
+            view.r#type = CipherType::Card;
+            view.card = Some(*c);
+        }
+        CipherKind::Identity(i) => {
+            view.r#type = CipherType::Identity;
+            view.identity = Some(*i);
+        }
+        CipherKind::SecureNote => {
+            view.r#type = CipherType::SecureNote;
+            view.secure_note = Some(bitwarden_vault::SecureNoteView {
+                r#type: bitwarden_vault::SecureNoteType::Generic,
+            });
+        }
+        CipherKind::SshKey(k) => {
+            view.r#type = CipherType::SshKey;
+            view.ssh_key = Some(*k);
+        }
+        CipherKind::BankAccount(b) => {
+            view.r#type = CipherType::BankAccount;
+            view.bank_account = Some(*b);
+        }
+        CipherKind::DriversLicense(d) => {
+            view.r#type = CipherType::DriversLicense;
+            view.drivers_license = Some(*d);
+        }
+        CipherKind::Passport(p) => {
+            view.r#type = CipherType::Passport;
+            view.passport = Some(*p);
+        }
     }
+    view
 }
 
 enum CipherKind {
@@ -524,6 +543,8 @@ enum CipherKind {
     SecureNote,
     SshKey(Box<SshKeyView>),
     BankAccount(Box<BankAccountView>),
+    DriversLicense(Box<DriversLicenseView>),
+    Passport(Box<PassportView>),
 }
 
 fn note(name: &str) -> CipherEntry {
@@ -645,6 +666,72 @@ fn bank_account(
                 swift_code: None,
                 iban: iban.map(|i| i.to_string()),
                 bank_contact_phone: None,
+            })),
+        ),
+        None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn drivers_license(
+    name: &str,
+    first: &str,
+    last: &str,
+    license_number: &str,
+    issuing_country: &str,
+    issuing_state: &str,
+    license_class: Option<&str>,
+) -> CipherEntry {
+    (
+        cipher_with(
+            name,
+            None,
+            CipherKind::DriversLicense(Box::new(DriversLicenseView {
+                first_name: Some(first.to_string()),
+                middle_name: None,
+                last_name: Some(last.to_string()),
+                date_of_birth: Some("1990-05-12".to_string()),
+                license_number: Some(license_number.to_string()),
+                issuing_country: Some(issuing_country.to_string()),
+                issuing_state: Some(issuing_state.to_string()),
+                issue_date: Some("2022-08-01".to_string()),
+                expiration_date: Some("2032-08-01".to_string()),
+                issuing_authority: None,
+                license_class: license_class.map(|c| c.to_string()),
+            })),
+        ),
+        None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn passport(
+    name: &str,
+    given: &str,
+    surname: &str,
+    passport_number: &str,
+    nationality: &str,
+    issuing_country: &str,
+    issuing_authority: Option<&str>,
+) -> CipherEntry {
+    (
+        cipher_with(
+            name,
+            None,
+            CipherKind::Passport(Box::new(PassportView {
+                surname: Some(surname.to_string()),
+                given_name: Some(given.to_string()),
+                date_of_birth: Some("1990-05-12".to_string()),
+                sex: Some("F".to_string()),
+                birth_place: Some("Springfield, IL".to_string()),
+                nationality: Some(nationality.to_string()),
+                issuing_country: Some(issuing_country.to_string()),
+                passport_number: Some(passport_number.to_string()),
+                passport_type: Some("P".to_string()),
+                national_identification_number: None,
+                issuing_authority: issuing_authority.map(|a| a.to_string()),
+                issue_date: Some("2021-03-15".to_string()),
+                expiration_date: Some("2031-03-15".to_string()),
             })),
         ),
         None,
@@ -815,6 +902,25 @@ fn personal_ciphers() -> Vec<CipherEntry> {
             "021000089",
             None,
             Some("GB29NWBK60161331926819"),
+        ),
+        // Drivers license + passport
+        drivers_license(
+            "Illinois Driver's License",
+            "Alice",
+            "Johnson",
+            "J123-4567-8901",
+            "USA",
+            "IL",
+            Some("D"),
+        ),
+        passport(
+            "US Passport",
+            "Alice",
+            "Johnson",
+            "X12345678",
+            "USA",
+            "USA",
+            Some("U.S. Department of State"),
         ),
     ]
 }

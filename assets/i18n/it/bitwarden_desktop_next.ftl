@@ -120,6 +120,8 @@ detail-header-identity = Visualizza identità
 detail-header-note = Visualizza nota
 detail-header-ssh-key = Visualizza chiave SSH
 detail-header-bank-account = Visualizza conto bancario
+detail-header-drivers-license = Visualizza patente di guida
+detail-header-passport = Visualizza passaporto
 
 ## Detail pane — section labels
 detail-section-item-details = Dettagli elemento
@@ -169,6 +171,8 @@ form-title-edit-identity = Modifica identità
 form-title-edit-note = Modifica nota
 form-title-edit-ssh-key = Modifica chiave SSH
 form-title-edit-bank-account = Modifica conto bancario
+form-title-edit-drivers-license = Modifica patente di guida
+form-title-edit-passport = Modifica passaporto
 
 ## Cipher form — buttons
 form-save = Salva
@@ -369,6 +373,8 @@ picker-folder = Cartella
 picker-login-subtitle = Sito web o app
 picker-card-subtitle = Carta di credito o debito
 picker-bank-account-subtitle = Dati bancari
+picker-drivers-license-subtitle = Dati della patente
+picker-passport-subtitle = Documento di viaggio
 picker-identity-subtitle = Informazioni personali
 picker-secure-note-subtitle = Testo importante
 picker-ssh-key-subtitle = Token di accesso al server

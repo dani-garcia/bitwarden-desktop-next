@@ -42,21 +42,17 @@ pub fn view<'a, M: 'a + Clone>(
         .height(Length::Fixed(CHIP_SIZE))
         .align_x(Alignment::Center)
         .align_y(Alignment::Center)
-        .style(move |_theme: &AppTheme| {
-            container::Style {
-                background: Some(Background::Color(chip_bg)),
-                border: Border::default().rounded(RADIUS_MD),
-                ..Default::default()
-            }
+        .style(move |_theme: &AppTheme| container::Style {
+            background: Some(Background::Color(chip_bg)),
+            border: Border::default().rounded(RADIUS_MD),
+            ..Default::default()
         });
 
     let title_el = text(title.into())
         .size(14)
         .font(crate::APP_FONT_BOLD)
         .color(colors.text_primary);
-    let subtitle_el = text(subtitle.into())
-        .size(12)
-        .color(colors.text_secondary);
+    let subtitle_el = text(subtitle.into()).size(12).color(colors.text_secondary);
 
     let body = row![
         chip,

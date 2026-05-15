@@ -8,8 +8,8 @@ use crate::{
         generator::GeneratorMessage, import::ImportMessage, login::LoginMessage,
         magnify::MagnifyMessage, new_folder::NewFolderMessage,
         new_item_picker::NewItemPickerMessage, screenshot_confirm::ScreenshotConfirmMessage,
-        send::SendMessage, settings::SettingsMessage,
-        title_bar::TitleBarMessage, vault::VaultMessage,
+        send::SendMessage, settings::SettingsMessage, title_bar::TitleBarMessage,
+        vault::VaultMessage,
     },
 };
 

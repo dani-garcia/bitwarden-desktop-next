@@ -120,6 +120,8 @@ detail-header-identity = Ver identidad
 detail-header-note = Ver nota
 detail-header-ssh-key = Ver clave SSH
 detail-header-bank-account = Ver cuenta bancaria
+detail-header-drivers-license = Ver carnet de conducir
+detail-header-passport = Ver pasaporte
 
 ## Detail pane — section labels
 detail-section-item-details = Detalles del elemento
@@ -130,6 +132,8 @@ detail-section-personal-details = Datos personales
 detail-section-note = Nota
 detail-section-ssh-key = Clave SSH
 detail-section-bank-account = Cuenta bancaria
+detail-section-drivers-license = Carnet de conducir
+detail-section-passport = Pasaporte
 
 ## Detail pane — fields
 detail-field-name = Nombre
@@ -166,6 +170,32 @@ detail-field-bank-pin = PIN
 detail-field-bank-swift-code = Código SWIFT
 detail-field-bank-iban = IBAN
 detail-field-bank-contact-phone = Teléfono de contacto del banco
+detail-empty-drivers-license = Sin datos del carnet de conducir
+detail-field-dl-first-name = Nombre
+detail-field-dl-middle-name = Segundo nombre
+detail-field-dl-last-name = Apellido
+detail-field-dl-date-of-birth = Fecha de nacimiento
+detail-field-dl-license-number = Número de carnet
+detail-field-dl-issuing-country = País emisor
+detail-field-dl-issuing-state = Estado / comunidad emisora
+detail-field-dl-issuing-authority = Autoridad emisora
+detail-field-dl-issue-date = Fecha de expedición
+detail-field-dl-expiration-date = Fecha de caducidad
+detail-field-dl-license-class = Clase de carnet
+detail-empty-passport = Sin datos del pasaporte
+detail-field-pp-given-name = Nombre
+detail-field-pp-surname = Apellidos
+detail-field-pp-date-of-birth = Fecha de nacimiento
+detail-field-pp-sex = Sexo
+detail-field-pp-birth-place = Lugar de nacimiento
+detail-field-pp-nationality = Nacionalidad
+detail-field-pp-passport-number = Número de pasaporte
+detail-field-pp-passport-type = Tipo de pasaporte
+detail-field-pp-national-id-number = Número de identificación nacional
+detail-field-pp-issuing-country = País emisor
+detail-field-pp-issuing-authority = Autoridad emisora
+detail-field-pp-issue-date = Fecha de expedición
+detail-field-pp-expiration-date = Fecha de caducidad
 detail-section-custom-fields = Campos personalizados
 detail-field-passkey = Clave de acceso
 detail-field-passkey-created = Creada { $date }
@@ -181,6 +211,8 @@ form-title-edit-identity = Editar identidad
 form-title-edit-note = Editar nota
 form-title-edit-ssh-key = Editar clave SSH
 form-title-edit-bank-account = Editar cuenta bancaria
+form-title-edit-drivers-license = Editar carnet de conducir
+form-title-edit-passport = Editar pasaporte
 
 ## Cipher form — buttons
 form-save = Guardar
@@ -198,6 +230,8 @@ form-section-contact-info = Información de contacto
 form-section-address = Dirección
 form-section-ssh-key = Clave SSH
 form-section-bank-account = Cuenta bancaria
+form-section-drivers-license = Carnet de conducir
+form-section-passport = Pasaporte
 form-section-additional-options = Opciones adicionales
 form-section-custom-fields = Campos personalizados
 
@@ -285,6 +319,34 @@ form-bank-swift-code = Código SWIFT
 form-bank-iban = IBAN
 form-bank-contact-phone = Teléfono de contacto del banco
 
+## Cipher form — drivers license
+form-dl-first-name = Nombre
+form-dl-middle-name = Segundo nombre
+form-dl-last-name = Apellido
+form-dl-date-of-birth = Fecha de nacimiento
+form-dl-license-number = Número de carnet
+form-dl-issuing-country = País emisor
+form-dl-issuing-state = Estado / comunidad emisora
+form-dl-issuing-authority = Autoridad emisora
+form-dl-issue-date = Fecha de expedición
+form-dl-expiration-date = Fecha de caducidad
+form-dl-license-class = Clase de carnet
+
+## Cipher form — passport
+form-pp-given-name = Nombre
+form-pp-surname = Apellidos
+form-pp-date-of-birth = Fecha de nacimiento
+form-pp-sex = Sexo
+form-pp-birth-place = Lugar de nacimiento
+form-pp-nationality = Nacionalidad
+form-pp-passport-number = Número de pasaporte
+form-pp-passport-type = Tipo de pasaporte
+form-pp-national-id-number = Número de identificación nacional
+form-pp-issuing-country = País emisor
+form-pp-issuing-authority = Autoridad emisora
+form-pp-issue-date = Fecha de expedición
+form-pp-expiration-date = Fecha de caducidad
+
 ## Cipher form — custom fields
 form-custom-field-type = Tipo
 form-custom-field-name = Nombre
@@ -318,6 +380,8 @@ menu-file-new-item-identity = Identidad
 menu-file-new-item-secure-note = Nota segura
 menu-file-new-item-ssh-key = Clave SSH
 menu-file-new-item-bank-account = Cuenta bancaria
+menu-file-new-item-drivers-license = Carnet de conducir
+menu-file-new-item-passport = Pasaporte
 menu-file-new-folder = Nueva carpeta
 menu-file-sync-now = Sincronizar ahora
 menu-file-import = Importar
@@ -400,6 +464,8 @@ picker-folder = Carpeta
 picker-login-subtitle = Sitio web o aplicación
 picker-card-subtitle = Tarjeta de crédito o débito
 picker-bank-account-subtitle = Datos bancarios
+picker-drivers-license-subtitle = Credenciales de conducción
+picker-passport-subtitle = Documento de viaje
 picker-identity-subtitle = Información personal
 picker-secure-note-subtitle = Texto importante
 picker-ssh-key-subtitle = Token de inicio de sesión del servidor

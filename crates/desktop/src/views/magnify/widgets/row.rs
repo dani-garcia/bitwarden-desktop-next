@@ -166,7 +166,8 @@ fn icon_for<'a>(
             CipherListViewType::SshKey => icons::BWI_KEY,
             CipherListViewType::Login(_) => icons::BWI_LOGIN,
             CipherListViewType::BankAccount => icons::BWI_BANK,
-            CipherListViewType::Passport | CipherListViewType::DriversLicense => unreachable!(),
+            CipherListViewType::DriversLicense => icons::BWI_DRIVERS_LICENSE,
+            CipherListViewType::Passport => icons::BWI_PASSPORT,
         };
         container(icon.render(20.0, colors.text_primary))
             .width(32)

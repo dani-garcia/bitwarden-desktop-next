@@ -120,6 +120,8 @@ detail-header-identity = 查看身份
 detail-header-note = 查看笔记
 detail-header-ssh-key = 查看 SSH 密钥
 detail-header-bank-account = 查看银行账户
+detail-header-drivers-license = 查看驾照
+detail-header-passport = 查看护照
 
 ## Detail pane — section labels
 detail-section-item-details = 项目详情
@@ -169,6 +171,8 @@ form-title-edit-identity = 编辑身份
 form-title-edit-note = 编辑笔记
 form-title-edit-ssh-key = 编辑 SSH 密钥
 form-title-edit-bank-account = 编辑银行账户
+form-title-edit-drivers-license = 编辑驾照
+form-title-edit-passport = 编辑护照
 
 ## Cipher form — buttons
 form-save = 保存
@@ -369,6 +373,8 @@ picker-folder = 文件夹
 picker-login-subtitle = 网站或应用
 picker-card-subtitle = 信用卡或借记卡
 picker-bank-account-subtitle = 银行账户信息
+picker-drivers-license-subtitle = 驾照信息
+picker-passport-subtitle = 旅行证件
 picker-identity-subtitle = 个人信息
 picker-secure-note-subtitle = 重要文本
 picker-ssh-key-subtitle = 服务器登录令牌

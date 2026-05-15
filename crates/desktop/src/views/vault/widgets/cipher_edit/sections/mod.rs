@@ -5,7 +5,9 @@
 
 pub(super) mod bank_account;
 pub(super) mod card;
+pub(super) mod drivers_license;
 pub(super) mod identity;
 pub(super) mod login;
+pub(super) mod passport;
 pub(super) mod shared;
 pub(super) mod ssh_key;

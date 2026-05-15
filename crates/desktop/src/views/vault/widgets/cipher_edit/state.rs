@@ -3,8 +3,8 @@
 use bitwarden_core::OrganizationId;
 use bitwarden_ssh::generator::{KeyAlgorithm, generate_sshkey};
 use bitwarden_vault::{
-    BankAccountView, CardView, CipherRepromptType, CipherType, CipherView, FolderId, FolderView,
-    IdentityView, LoginView, SecureNoteType, SecureNoteView,
+    CardView, CipherRepromptType, CipherType, CipherView, FolderId, FolderView, IdentityView,
+    LoginView, SecureNoteType, SecureNoteView,
 };
 use chrono::Utc;
 use iced::widget::{combo_box, text_editor};
@@ -301,20 +301,14 @@ impl CipherForm {
             }
             CipherType::SshKey => { /* SSH key fields read-only for now */ }
             CipherType::BankAccount => {
-                self.modified.bank_account.get_or_insert(BankAccountView {
-                    bank_name: None,
-                    name_on_account: None,
-                    account_type: None,
-                    account_number: None,
-                    routing_number: None,
-                    branch_number: None,
-                    pin: None,
-                    swift_code: None,
-                    iban: None,
-                    bank_contact_phone: None,
-                });
+                self.modified.bank_account.get_or_insert_default();
             }
-            CipherType::DriversLicense | CipherType::Passport => unreachable!(),
+            CipherType::DriversLicense => {
+                self.modified.drivers_license.get_or_insert_default();
+            }
+            CipherType::Passport => {
+                self.modified.passport.get_or_insert_default();
+            }
         }
     }
 }

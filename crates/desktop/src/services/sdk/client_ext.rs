@@ -9,7 +9,7 @@
 
 use std::sync::Arc;
 
-use bitwarden_core::{OrganizationId, key_management::SymmetricKeySlotId};
+use bitwarden_core::OrganizationId;
 use bitwarden_generators::{
     PassphraseGeneratorRequest, PasswordGeneratorRequest, UsernameGeneratorRequest,
 };

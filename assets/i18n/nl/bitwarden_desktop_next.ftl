@@ -120,6 +120,8 @@ detail-header-identity = Identiteit bekijken
 detail-header-note = Notitie bekijken
 detail-header-ssh-key = SSH-sleutel bekijken
 detail-header-bank-account = Bankrekening bekijken
+detail-header-drivers-license = Rijbewijs bekijken
+detail-header-passport = Paspoort bekijken
 
 ## Detail pane — section labels
 detail-section-item-details = Itemdetails
@@ -169,6 +171,8 @@ form-title-edit-identity = Identiteit bewerken
 form-title-edit-note = Notitie bewerken
 form-title-edit-ssh-key = SSH-sleutel bewerken
 form-title-edit-bank-account = Bankrekening bewerken
+form-title-edit-drivers-license = Rijbewijs bewerken
+form-title-edit-passport = Paspoort bewerken
 
 ## Cipher form — buttons
 form-save = Opslaan
@@ -369,6 +373,8 @@ picker-folder = Map
 picker-login-subtitle = Website of app
 picker-card-subtitle = Creditcard of debetkaart
 picker-bank-account-subtitle = Bankgegevens
+picker-drivers-license-subtitle = Rijbewijsgegevens
+picker-passport-subtitle = Reisdocument
 picker-identity-subtitle = Persoonlijke informatie
 picker-secure-note-subtitle = Belangrijke tekst
 picker-ssh-key-subtitle = Server-aanmeldtoken

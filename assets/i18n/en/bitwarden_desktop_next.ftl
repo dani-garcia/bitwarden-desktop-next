@@ -120,6 +120,8 @@ detail-header-identity = View identity
 detail-header-note = View note
 detail-header-ssh-key = View SSH key
 detail-header-bank-account = View bank account
+detail-header-drivers-license = View driver's license
+detail-header-passport = View passport
 
 ## Detail pane — section labels
 detail-section-item-details = Item details
@@ -130,6 +132,8 @@ detail-section-personal-details = Personal details
 detail-section-note = Note
 detail-section-ssh-key = SSH key
 detail-section-bank-account = Bank account
+detail-section-drivers-license = Driver's license
+detail-section-passport = Passport
 
 ## Detail pane — fields
 detail-field-name = Name
@@ -166,6 +170,32 @@ detail-field-bank-pin = PIN
 detail-field-bank-swift-code = SWIFT code
 detail-field-bank-iban = IBAN
 detail-field-bank-contact-phone = Bank contact phone
+detail-empty-drivers-license = No driver's license details
+detail-field-dl-first-name = First name
+detail-field-dl-middle-name = Middle name
+detail-field-dl-last-name = Last name
+detail-field-dl-date-of-birth = Date of birth
+detail-field-dl-license-number = License number
+detail-field-dl-issuing-country = Issuing country
+detail-field-dl-issuing-state = Issuing state
+detail-field-dl-issuing-authority = Issuing authority
+detail-field-dl-issue-date = Issue date
+detail-field-dl-expiration-date = Expiration date
+detail-field-dl-license-class = License class
+detail-empty-passport = No passport details
+detail-field-pp-given-name = Given name
+detail-field-pp-surname = Surname
+detail-field-pp-date-of-birth = Date of birth
+detail-field-pp-sex = Sex
+detail-field-pp-birth-place = Place of birth
+detail-field-pp-nationality = Nationality
+detail-field-pp-passport-number = Passport number
+detail-field-pp-passport-type = Passport type
+detail-field-pp-national-id-number = National identification number
+detail-field-pp-issuing-country = Issuing country
+detail-field-pp-issuing-authority = Issuing authority
+detail-field-pp-issue-date = Issue date
+detail-field-pp-expiration-date = Expiration date
 detail-section-custom-fields = Custom fields
 detail-field-passkey = Passkey
 detail-field-passkey-created = Created { $date }
@@ -181,6 +211,8 @@ form-title-edit-identity = Edit identity
 form-title-edit-note = Edit note
 form-title-edit-ssh-key = Edit SSH key
 form-title-edit-bank-account = Edit bank account
+form-title-edit-drivers-license = Edit driver's license
+form-title-edit-passport = Edit passport
 
 ## Cipher form — buttons
 form-save = Save
@@ -198,6 +230,8 @@ form-section-contact-info = Contact info
 form-section-address = Address
 form-section-ssh-key = SSH key
 form-section-bank-account = Bank account
+form-section-drivers-license = Driver's license
+form-section-passport = Passport
 form-section-additional-options = Additional options
 form-section-custom-fields = Custom fields
 
@@ -290,6 +324,34 @@ form-bank-swift-code = SWIFT code
 form-bank-iban = IBAN
 form-bank-contact-phone = Bank contact phone
 
+## Cipher form — drivers license
+form-dl-first-name = First name
+form-dl-middle-name = Middle name
+form-dl-last-name = Last name
+form-dl-date-of-birth = Date of birth
+form-dl-license-number = License number
+form-dl-issuing-country = Issuing country
+form-dl-issuing-state = Issuing state
+form-dl-issuing-authority = Issuing authority
+form-dl-issue-date = Issue date
+form-dl-expiration-date = Expiration date
+form-dl-license-class = License class
+
+## Cipher form — passport
+form-pp-given-name = Given name
+form-pp-surname = Surname
+form-pp-date-of-birth = Date of birth
+form-pp-sex = Sex
+form-pp-birth-place = Place of birth
+form-pp-nationality = Nationality
+form-pp-passport-number = Passport number
+form-pp-passport-type = Passport type
+form-pp-national-id-number = National identification number
+form-pp-issuing-country = Issuing country
+form-pp-issuing-authority = Issuing authority
+form-pp-issue-date = Issue date
+form-pp-expiration-date = Expiration date
+
 ## Cipher form — custom fields
 form-custom-field-type = Type
 form-custom-field-name = Name
@@ -323,6 +385,8 @@ menu-file-new-item-identity = Identity
 menu-file-new-item-secure-note = Secure note
 menu-file-new-item-ssh-key = SSH key
 menu-file-new-item-bank-account = Bank account
+menu-file-new-item-drivers-license = Driver's license
+menu-file-new-item-passport = Passport
 menu-file-new-folder = New folder
 menu-file-sync-now = Sync now
 menu-file-import = Import
@@ -405,6 +469,8 @@ picker-folder = Folder
 picker-login-subtitle = Website or app
 picker-card-subtitle = Credit or debit card
 picker-bank-account-subtitle = Banking details
+picker-drivers-license-subtitle = Driving credentials
+picker-passport-subtitle = Travel document
 picker-identity-subtitle = Personal info
 picker-secure-note-subtitle = Important text
 picker-ssh-key-subtitle = Server login token
