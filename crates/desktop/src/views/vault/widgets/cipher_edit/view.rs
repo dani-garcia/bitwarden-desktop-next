@@ -59,6 +59,7 @@ pub fn view<'a>(
             sections.push(section_label(fl!("form-section-bank-account"), colors));
             sections.push(sections::bank_account::bank_account_card(form, colors));
         }
+        CipherType::DriversLicense | CipherType::Passport => unreachable!(),
     }
 
     sections.push(section_label(
@@ -91,6 +92,7 @@ fn header_row<'a>(
             CipherType::SecureNote => fl!("form-title-edit-note"),
             CipherType::SshKey => fl!("form-title-edit-ssh-key"),
             CipherType::BankAccount => fl!("form-title-edit-bank-account"),
+            CipherType::DriversLicense | CipherType::Passport => unreachable!(),
         }
     } else {
         fl!("form-title-new-item")

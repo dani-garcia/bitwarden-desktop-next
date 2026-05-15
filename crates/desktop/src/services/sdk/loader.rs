@@ -13,9 +13,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use bitwarden_core::{
-    ClientBuilder, ClientSettings, UserId, key_management::LocalUserDataKeyState,
-};
+use bitwarden_core::{UserId, key_management::LocalUserDataKeyState};
 use bitwarden_crypto::{EncString, Kdf};
 use bitwarden_pm::PasswordManagerClient;
 use bitwarden_state::{
@@ -127,31 +125,13 @@ pub async fn load_users() -> HashMap<UserId, Box<UserEntry>> {
 }
 
 async fn build_user_entry(mu: MockUserMeta, data_dir: &Path) -> UserEntry {
-    // Hand-assembled because `PasswordManagerClient::new` pre-sets the
-    // database `OnceLock` to a memory db, blocking our per-user
-    // `initialize_database` call.
-    let token_handler =
-        Arc::new(bitwarden_auth::token_management::PasswordManagerTokenHandler::default());
-    let inner = ClientBuilder::new()
-        .with_token_handler(token_handler)
-        .with_settings(ClientSettings {
-            identity_url: "http://localhost:8080/identity".to_string(),
-            api_url: "http://localhost:8080/api".to_string(),
-            ..Default::default()
-        })
-        .with_state(StateRegistry::new())
-        .build();
-    let client = PasswordManagerClient(inner);
-
-    // `LocalUserDataKeyState` isn't in `get_sdk_managed_migrations()` but
-    // `initialize_user_crypto` writes to it during unlock — register an empty
-    // in-memory repo so unlock doesn't fail. Everything else comes from the
-    // SDK-managed SQLite DB.
-    register_empty_repo::<LocalUserDataKeyState>(&client);
-
-    client
-        .platform()
-        .state()
+    // Build the registry directly (rather than via `client.platform().state()`)
+    // so we can fully prepare it before constructing the client. The persisted
+    // state (user_id, urls, wrapped crypto state) was written into this SQLite
+    // by `cargo run -p fake-data`, so `load_from_state` will find it and
+    // rebuild a locked client bound to the right user + URLs.
+    let registry = StateRegistry::new();
+    registry
         .initialize_database(
             DatabaseConfiguration::Sqlite {
                 db_name: mu.user_id.to_string(),
@@ -161,6 +141,18 @@ async fn build_user_entry(mu: MockUserMeta, data_dir: &Path) -> UserEntry {
         )
         .await
         .expect("sqlite database init must succeed");
+
+    // `LocalUserDataKeyState` isn't in `get_sdk_managed_migrations()` but
+    // `initialize_user_crypto` writes to it during unlock — register an empty
+    // in-memory repo so unlock doesn't fail. Everything else comes from the
+    // SDK-managed SQLite DB.
+    register_empty_repo::<LocalUserDataKeyState>(&registry);
+
+    let token_handler =
+        Arc::new(bitwarden_auth::token_management::PasswordManagerTokenHandler::default());
+    let client = PasswordManagerClient::load_from_state(token_handler, registry)
+        .await
+        .expect("load_from_state must succeed — regenerate via `cargo run -p fake-data`");
 
     UserEntry {
         client,
@@ -172,7 +164,6 @@ async fn build_user_entry(mu: MockUserMeta, data_dir: &Path) -> UserEntry {
             pin: mu.unlock_methods.pin,
             biometrics: mu.unlock_methods.biometrics,
         },
-        sdk_user_id: mu.user_id,
         kdf: mu.kdf,
         encrypted_user_key: mu.encrypted_user_key,
         private_key: mu.private_key,
@@ -181,11 +172,11 @@ async fn build_user_entry(mu: MockUserMeta, data_dir: &Path) -> UserEntry {
     }
 }
 
-fn register_empty_repo<T: RepositoryItem + Clone>(client: &PasswordManagerClient) {
+fn register_empty_repo<T: RepositoryItem + Clone>(registry: &StateRegistry) {
     let repo = Arc::new(MemoryRepo::<T> {
         data: Mutex::new(HashMap::new()),
     });
-    client.platform().state().register_client_managed(repo);
+    registry.register_client_managed(repo);
 }
 
 // ── In-memory repository ───────────────────────────────────────────────────

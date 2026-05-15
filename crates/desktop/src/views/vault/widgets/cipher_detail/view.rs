@@ -85,6 +85,7 @@ pub fn view<'a>(
                 sections.push(bank_account::bank_account_card(bank, colors));
             }
         }
+        CipherType::DriversLicense | CipherType::Passport => unreachable!(),
     }
 
     if let Some(fields) = item.fields.as_deref().filter(|f| !f.is_empty()) {
@@ -112,6 +113,7 @@ fn header_row<'a>(
         CipherType::SecureNote => fl!("detail-header-note"),
         CipherType::SshKey => fl!("detail-header-ssh-key"),
         CipherType::BankAccount => fl!("detail-header-bank-account"),
+        CipherType::DriversLicense | CipherType::Passport => unreachable!(),
     };
     components::pane_header(category_label, CipherDetailMessage::Close, colors)
 }

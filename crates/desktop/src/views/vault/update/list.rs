@@ -177,6 +177,7 @@ fn cipher_list_view_type_to_type(t: &CipherListViewType) -> bitwarden_vault::Cip
         CipherListViewType::Identity => CipherType::Identity,
         CipherListViewType::SshKey => CipherType::SshKey,
         CipherListViewType::BankAccount => CipherType::BankAccount,
+        CipherListViewType::Passport | CipherListViewType::DriversLicense => unreachable!(),
     }
 }
 

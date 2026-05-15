@@ -41,7 +41,6 @@ fn folder_repo(client: &PasswordManagerClient) -> Result<Arc<dyn Repository<Fold
 
 #[async_trait::async_trait]
 pub trait ClientExt {
-    fn is_unlocked(&self) -> bool;
     fn lock(&self);
 
     /// Verify the user's master password against the cached user-key envelope
@@ -97,14 +96,6 @@ pub trait ClientExt {
 
 #[async_trait::async_trait]
 impl ClientExt for PasswordManagerClient {
-    fn is_unlocked(&self) -> bool {
-        self.0
-            .internal
-            .get_key_store()
-            .context()
-            .has_symmetric_key(SymmetricKeySlotId::User)
-    }
-
     fn lock(&self) {
         self.0.internal.get_key_store().clear();
     }

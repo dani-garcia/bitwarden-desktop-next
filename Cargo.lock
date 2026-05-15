@@ -696,8 +696,8 @@ dependencies = [
 
 [[package]]
 name = "bitwarden-api-api"
-version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
+version = "3.0.0"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=10af2ea2f20b6d17ec1e4654892184e37fc4626e#10af2ea2f20b6d17ec1e4654892184e37fc4626e"
 dependencies = [
  "async-trait",
  "bitwarden-api-base",
@@ -712,8 +712,8 @@ dependencies = [
 
 [[package]]
 name = "bitwarden-api-base"
-version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
+version = "3.0.0"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=10af2ea2f20b6d17ec1e4654892184e37fc4626e#10af2ea2f20b6d17ec1e4654892184e37fc4626e"
 dependencies = [
  "http",
  "reqwest",
@@ -725,8 +725,8 @@ dependencies = [
 
 [[package]]
 name = "bitwarden-api-identity"
-version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
+version = "3.0.0"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=10af2ea2f20b6d17ec1e4654892184e37fc4626e#10af2ea2f20b6d17ec1e4654892184e37fc4626e"
 dependencies = [
  "async-trait",
  "bitwarden-api-base",
@@ -741,8 +741,8 @@ dependencies = [
 
 [[package]]
 name = "bitwarden-api-key-connector"
-version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
+version = "3.0.0"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=10af2ea2f20b6d17ec1e4654892184e37fc4626e#10af2ea2f20b6d17ec1e4654892184e37fc4626e"
 dependencies = [
  "async-trait",
  "bitwarden-api-base",
@@ -756,8 +756,8 @@ dependencies = [
 
 [[package]]
 name = "bitwarden-auth"
-version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
+version = "3.0.0"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=10af2ea2f20b6d17ec1e4654892184e37fc4626e#10af2ea2f20b6d17ec1e4654892184e37fc4626e"
 dependencies = [
  "async-trait",
  "bitwarden-api-api",
@@ -776,15 +776,15 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_repr",
- "thiserror 2.0.18",
+ "thiserror 1.0.69",
  "tracing",
  "uuid",
 ]
 
 [[package]]
 name = "bitwarden-collections"
-version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
+version = "3.0.0"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=10af2ea2f20b6d17ec1e4654892184e37fc4626e#10af2ea2f20b6d17ec1e4654892184e37fc4626e"
 dependencies = [
  "bitwarden-api-api",
  "bitwarden-core",
@@ -793,14 +793,14 @@ dependencies = [
  "bitwarden-uuid",
  "serde",
  "serde_repr",
- "thiserror 2.0.18",
+ "thiserror 1.0.69",
  "uuid",
 ]
 
 [[package]]
 name = "bitwarden-core"
-version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
+version = "3.0.0"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=10af2ea2f20b6d17ec1e4654892184e37fc4626e#10af2ea2f20b6d17ec1e4654892184e37fc4626e"
 dependencies = [
  "async-trait",
  "bitwarden-api-api",
@@ -812,6 +812,8 @@ dependencies = [
  "bitwarden-encoding",
  "bitwarden-error",
  "bitwarden-state",
+ "bitwarden-state-bridge-macro",
+ "bitwarden-threading",
  "bitwarden-uuid",
  "chrono",
  "http",
@@ -826,7 +828,7 @@ dependencies = [
  "serde_json",
  "serde_qs",
  "serde_repr",
- "thiserror 2.0.18",
+ "thiserror 1.0.69",
  "tracing",
  "uuid",
  "zeroize",
@@ -835,8 +837,8 @@ dependencies = [
 
 [[package]]
 name = "bitwarden-core-macro"
-version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
+version = "3.0.0"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=10af2ea2f20b6d17ec1e4654892184e37fc4626e#10af2ea2f20b6d17ec1e4654892184e37fc4626e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -845,8 +847,8 @@ dependencies = [
 
 [[package]]
 name = "bitwarden-crypto"
-version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
+version = "3.0.0"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=10af2ea2f20b6d17ec1e4654892184e37fc4626e#10af2ea2f20b6d17ec1e4654892184e37fc4626e"
 dependencies = [
  "aes",
  "argon2",
@@ -876,7 +878,7 @@ dependencies = [
  "sha1 0.11.0",
  "sha2 0.11.0",
  "subtle",
- "thiserror 2.0.18",
+ "thiserror 1.0.69",
  "tracing",
  "typenum",
  "uuid",
@@ -934,27 +936,27 @@ dependencies = [
 
 [[package]]
 name = "bitwarden-encoding"
-version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
+version = "3.0.0"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=10af2ea2f20b6d17ec1e4654892184e37fc4626e#10af2ea2f20b6d17ec1e4654892184e37fc4626e"
 dependencies = [
  "data-encoding",
  "data-encoding-macro",
  "serde",
- "thiserror 2.0.18",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
 name = "bitwarden-error"
-version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
+version = "3.0.0"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=10af2ea2f20b6d17ec1e4654892184e37fc4626e#10af2ea2f20b6d17ec1e4654892184e37fc4626e"
 dependencies = [
  "bitwarden-error-macro",
 ]
 
 [[package]]
 name = "bitwarden-error-macro"
-version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
+version = "3.0.0"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=10af2ea2f20b6d17ec1e4654892184e37fc4626e#10af2ea2f20b6d17ec1e4654892184e37fc4626e"
 dependencies = [
  "darling 0.20.11",
  "proc-macro2",
@@ -964,8 +966,8 @@ dependencies = [
 
 [[package]]
 name = "bitwarden-exporters"
-version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
+version = "3.0.0"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=10af2ea2f20b6d17ec1e4654892184e37fc4626e#10af2ea2f20b6d17ec1e4654892184e37fc4626e"
 dependencies = [
  "bitwarden-collections",
  "bitwarden-core",
@@ -981,17 +983,18 @@ dependencies = [
  "num-traits",
  "serde",
  "serde_json",
- "thiserror 2.0.18",
+ "thiserror 1.0.69",
  "url",
  "uuid",
 ]
 
 [[package]]
 name = "bitwarden-fido"
-version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
+version = "3.0.0"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=10af2ea2f20b6d17ec1e4654892184e37fc4626e#10af2ea2f20b6d17ec1e4654892184e37fc4626e"
 dependencies = [
  "async-trait",
+ "bitwarden-api-api",
  "bitwarden-core",
  "bitwarden-crypto",
  "bitwarden-encoding",
@@ -1005,15 +1008,15 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "thiserror 2.0.18",
+ "thiserror 1.0.69",
  "tracing",
  "uuid",
 ]
 
 [[package]]
 name = "bitwarden-generators"
-version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
+version = "3.0.0"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=10af2ea2f20b6d17ec1e4654892184e37fc4626e#10af2ea2f20b6d17ec1e4654892184e37fc4626e"
 dependencies = [
  "bitwarden-core",
  "bitwarden-crypto",
@@ -1023,13 +1026,13 @@ dependencies = [
  "schemars 1.2.1",
  "serde",
  "serde_json",
- "thiserror 2.0.18",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
 name = "bitwarden-logging"
-version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
+version = "3.0.0"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=10af2ea2f20b6d17ec1e4654892184e37fc4626e#10af2ea2f20b6d17ec1e4654892184e37fc4626e"
 dependencies = [
  "chrono",
  "serde",
@@ -1040,8 +1043,8 @@ dependencies = [
 
 [[package]]
 name = "bitwarden-organizations"
-version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
+version = "3.0.0"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=10af2ea2f20b6d17ec1e4654892184e37fc4626e#10af2ea2f20b6d17ec1e4654892184e37fc4626e"
 dependencies = [
  "bitwarden-core",
  "chrono",
@@ -1052,8 +1055,8 @@ dependencies = [
 
 [[package]]
 name = "bitwarden-pm"
-version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
+version = "3.0.0"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=10af2ea2f20b6d17ec1e4654892184e37fc4626e#10af2ea2f20b6d17ec1e4654892184e37fc4626e"
 dependencies = [
  "async-trait",
  "bitwarden-auth",
@@ -1061,6 +1064,7 @@ dependencies = [
  "bitwarden-exporters",
  "bitwarden-fido",
  "bitwarden-generators",
+ "bitwarden-policies",
  "bitwarden-send",
  "bitwarden-server-communication-config",
  "bitwarden-state",
@@ -1072,21 +1076,20 @@ dependencies = [
 
 [[package]]
 name = "bitwarden-policies"
-version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
+version = "3.0.0"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=10af2ea2f20b6d17ec1e4654892184e37fc4626e#10af2ea2f20b6d17ec1e4654892184e37fc4626e"
 dependencies = [
  "bitwarden-api-api",
  "bitwarden-core",
  "bitwarden-organizations",
  "serde",
- "serde_json",
  "uuid",
 ]
 
 [[package]]
 name = "bitwarden-send"
-version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
+version = "3.0.0"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=10af2ea2f20b6d17ec1e4654892184e37fc4626e#10af2ea2f20b6d17ec1e4654892184e37fc4626e"
 dependencies = [
  "bitwarden-api-api",
  "bitwarden-core",
@@ -1099,15 +1102,15 @@ dependencies = [
  "serde",
  "serde_repr",
  "sha2 0.11.0",
- "thiserror 2.0.18",
+ "thiserror 1.0.69",
  "uuid",
  "zeroize",
 ]
 
 [[package]]
 name = "bitwarden-server-communication-config"
-version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
+version = "3.0.0"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=10af2ea2f20b6d17ec1e4654892184e37fc4626e#10af2ea2f20b6d17ec1e4654892184e37fc4626e"
 dependencies = [
  "async-trait",
  "bitwarden-error",
@@ -1116,15 +1119,15 @@ dependencies = [
  "reqwest",
  "reqwest-middleware",
  "serde",
- "thiserror 2.0.18",
+ "thiserror 1.0.69",
  "tokio",
  "tracing",
 ]
 
 [[package]]
 name = "bitwarden-ssh"
-version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
+version = "3.0.0"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=10af2ea2f20b6d17ec1e4654892184e37fc4626e#10af2ea2f20b6d17ec1e4654892184e37fc4626e"
 dependencies = [
  "bitwarden-error",
  "bitwarden-vault",
@@ -1142,13 +1145,13 @@ dependencies = [
  "serde",
  "ssh-cipher",
  "ssh-key",
- "thiserror 2.0.18",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
 name = "bitwarden-state"
-version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
+version = "3.0.0"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=10af2ea2f20b6d17ec1e4654892184e37fc4626e#10af2ea2f20b6d17ec1e4654892184e37fc4626e"
 dependencies = [
  "async-trait",
  "bitwarden-error",
@@ -1158,32 +1161,42 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
- "thiserror 2.0.18",
+ "thiserror 1.0.69",
  "tokio",
  "tsify",
 ]
 
 [[package]]
+name = "bitwarden-state-bridge-macro"
+version = "3.0.0"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=10af2ea2f20b6d17ec1e4654892184e37fc4626e#10af2ea2f20b6d17ec1e4654892184e37fc4626e"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "bitwarden-sync"
-version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
+version = "3.0.0"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=10af2ea2f20b6d17ec1e4654892184e37fc4626e#10af2ea2f20b6d17ec1e4654892184e37fc4626e"
 dependencies = [
  "async-trait",
  "bitwarden-api-api",
  "bitwarden-core",
  "serde",
- "thiserror 2.0.18",
+ "thiserror 1.0.69",
  "tokio",
 ]
 
 [[package]]
 name = "bitwarden-threading"
-version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
+version = "3.0.0"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=10af2ea2f20b6d17ec1e4654892184e37fc4626e#10af2ea2f20b6d17ec1e4654892184e37fc4626e"
 dependencies = [
  "bitwarden-error",
  "serde",
- "thiserror 2.0.18",
+ "thiserror 1.0.69",
  "tokio",
  "tokio-util",
  "tracing",
@@ -1191,8 +1204,8 @@ dependencies = [
 
 [[package]]
 name = "bitwarden-user-crypto-management"
-version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
+version = "3.0.0"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=10af2ea2f20b6d17ec1e4654892184e37fc4626e#10af2ea2f20b6d17ec1e4654892184e37fc4626e"
 dependencies = [
  "bitwarden-api-api",
  "bitwarden-api-key-connector",
@@ -1206,7 +1219,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_bytes",
- "thiserror 2.0.18",
+ "thiserror 1.0.69",
  "tokio",
  "tracing",
  "uuid",
@@ -1214,16 +1227,16 @@ dependencies = [
 
 [[package]]
 name = "bitwarden-uuid"
-version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
+version = "3.0.0"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=10af2ea2f20b6d17ec1e4654892184e37fc4626e#10af2ea2f20b6d17ec1e4654892184e37fc4626e"
 dependencies = [
  "bitwarden-uuid-macro",
 ]
 
 [[package]]
 name = "bitwarden-uuid-macro"
-version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
+version = "3.0.0"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=10af2ea2f20b6d17ec1e4654892184e37fc4626e#10af2ea2f20b6d17ec1e4654892184e37fc4626e"
 dependencies = [
  "quote",
  "syn 2.0.117",
@@ -1231,8 +1244,8 @@ dependencies = [
 
 [[package]]
 name = "bitwarden-vault"
-version = "2.0.0"
-source = "git+https://github.com/bitwarden/sdk-internal?rev=3aa1201692e5d56efa763c7dec1161254d4c9e4b#3aa1201692e5d56efa763c7dec1161254d4c9e4b"
+version = "3.0.0"
+source = "git+https://github.com/bitwarden/sdk-internal?rev=10af2ea2f20b6d17ec1e4654892184e37fc4626e#10af2ea2f20b6d17ec1e4654892184e37fc4626e"
 dependencies = [
  "async-trait",
  "bitwarden-api-api",
@@ -1257,7 +1270,7 @@ dependencies = [
  "sha1 0.11.0",
  "sha2 0.11.0",
  "subtle",
- "thiserror 2.0.18",
+ "thiserror 1.0.69",
  "tracing",
  "uuid",
  "zxcvbn",
@@ -3846,7 +3859,7 @@ dependencies = [
 [[package]]
 name = "iced"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=cf09909263c0b5a0ef43bbf4158a4843559cc8cb#cf09909263c0b5a0ef43bbf4158a4843559cc8cb"
+source = "git+https://github.com/iced-rs/iced?rev=0d12e964da8c3f0f7a02d3d731e3187eecfe5779#0d12e964da8c3f0f7a02d3d731e3187eecfe5779"
 dependencies = [
  "iced_core",
  "iced_debug",
@@ -3864,7 +3877,7 @@ dependencies = [
 [[package]]
 name = "iced_beacon"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=cf09909263c0b5a0ef43bbf4158a4843559cc8cb#cf09909263c0b5a0ef43bbf4158a4843559cc8cb"
+source = "git+https://github.com/iced-rs/iced?rev=0d12e964da8c3f0f7a02d3d731e3187eecfe5779#0d12e964da8c3f0f7a02d3d731e3187eecfe5779"
 dependencies = [
  "bincode",
  "futures",
@@ -3879,7 +3892,7 @@ dependencies = [
 [[package]]
 name = "iced_core"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=cf09909263c0b5a0ef43bbf4158a4843559cc8cb#cf09909263c0b5a0ef43bbf4158a4843559cc8cb"
+source = "git+https://github.com/iced-rs/iced?rev=0d12e964da8c3f0f7a02d3d731e3187eecfe5779#0d12e964da8c3f0f7a02d3d731e3187eecfe5779"
 dependencies = [
  "bitflags 2.11.1",
  "bytes",
@@ -3897,7 +3910,7 @@ dependencies = [
 [[package]]
 name = "iced_debug"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=cf09909263c0b5a0ef43bbf4158a4843559cc8cb#cf09909263c0b5a0ef43bbf4158a4843559cc8cb"
+source = "git+https://github.com/iced-rs/iced?rev=0d12e964da8c3f0f7a02d3d731e3187eecfe5779#0d12e964da8c3f0f7a02d3d731e3187eecfe5779"
 dependencies = [
  "iced_beacon",
  "iced_core",
@@ -3908,7 +3921,7 @@ dependencies = [
 [[package]]
 name = "iced_devtools"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=cf09909263c0b5a0ef43bbf4158a4843559cc8cb#cf09909263c0b5a0ef43bbf4158a4843559cc8cb"
+source = "git+https://github.com/iced-rs/iced?rev=0d12e964da8c3f0f7a02d3d731e3187eecfe5779#0d12e964da8c3f0f7a02d3d731e3187eecfe5779"
 dependencies = [
  "iced_debug",
  "iced_program",
@@ -3919,7 +3932,7 @@ dependencies = [
 [[package]]
 name = "iced_futures"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=cf09909263c0b5a0ef43bbf4158a4843559cc8cb#cf09909263c0b5a0ef43bbf4158a4843559cc8cb"
+source = "git+https://github.com/iced-rs/iced?rev=0d12e964da8c3f0f7a02d3d731e3187eecfe5779#0d12e964da8c3f0f7a02d3d731e3187eecfe5779"
 dependencies = [
  "futures",
  "iced_core",
@@ -3933,7 +3946,7 @@ dependencies = [
 [[package]]
 name = "iced_graphics"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=cf09909263c0b5a0ef43bbf4158a4843559cc8cb#cf09909263c0b5a0ef43bbf4158a4843559cc8cb"
+source = "git+https://github.com/iced-rs/iced?rev=0d12e964da8c3f0f7a02d3d731e3187eecfe5779#0d12e964da8c3f0f7a02d3d731e3187eecfe5779"
 dependencies = [
  "bitflags 2.11.1",
  "bytemuck",
@@ -3954,7 +3967,7 @@ dependencies = [
 [[package]]
 name = "iced_program"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=cf09909263c0b5a0ef43bbf4158a4843559cc8cb#cf09909263c0b5a0ef43bbf4158a4843559cc8cb"
+source = "git+https://github.com/iced-rs/iced?rev=0d12e964da8c3f0f7a02d3d731e3187eecfe5779#0d12e964da8c3f0f7a02d3d731e3187eecfe5779"
 dependencies = [
  "iced_graphics",
  "iced_runtime",
@@ -3963,7 +3976,7 @@ dependencies = [
 [[package]]
 name = "iced_renderer"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=cf09909263c0b5a0ef43bbf4158a4843559cc8cb#cf09909263c0b5a0ef43bbf4158a4843559cc8cb"
+source = "git+https://github.com/iced-rs/iced?rev=0d12e964da8c3f0f7a02d3d731e3187eecfe5779#0d12e964da8c3f0f7a02d3d731e3187eecfe5779"
 dependencies = [
  "iced_graphics",
  "iced_tiny_skia",
@@ -3975,7 +3988,7 @@ dependencies = [
 [[package]]
 name = "iced_runtime"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=cf09909263c0b5a0ef43bbf4158a4843559cc8cb#cf09909263c0b5a0ef43bbf4158a4843559cc8cb"
+source = "git+https://github.com/iced-rs/iced?rev=0d12e964da8c3f0f7a02d3d731e3187eecfe5779#0d12e964da8c3f0f7a02d3d731e3187eecfe5779"
 dependencies = [
  "bytes",
  "iced_core",
@@ -3987,7 +4000,7 @@ dependencies = [
 [[package]]
 name = "iced_selector"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=cf09909263c0b5a0ef43bbf4158a4843559cc8cb#cf09909263c0b5a0ef43bbf4158a4843559cc8cb"
+source = "git+https://github.com/iced-rs/iced?rev=0d12e964da8c3f0f7a02d3d731e3187eecfe5779#0d12e964da8c3f0f7a02d3d731e3187eecfe5779"
 dependencies = [
  "iced_core",
 ]
@@ -3995,7 +4008,7 @@ dependencies = [
 [[package]]
 name = "iced_test"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=cf09909263c0b5a0ef43bbf4158a4843559cc8cb#cf09909263c0b5a0ef43bbf4158a4843559cc8cb"
+source = "git+https://github.com/iced-rs/iced?rev=0d12e964da8c3f0f7a02d3d731e3187eecfe5779#0d12e964da8c3f0f7a02d3d731e3187eecfe5779"
 dependencies = [
  "iced_futures",
  "iced_program",
@@ -4011,7 +4024,7 @@ dependencies = [
 [[package]]
 name = "iced_tester"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=cf09909263c0b5a0ef43bbf4158a4843559cc8cb#cf09909263c0b5a0ef43bbf4158a4843559cc8cb"
+source = "git+https://github.com/iced-rs/iced?rev=0d12e964da8c3f0f7a02d3d731e3187eecfe5779#0d12e964da8c3f0f7a02d3d731e3187eecfe5779"
 dependencies = [
  "iced_test",
  "iced_widget",
@@ -4022,7 +4035,7 @@ dependencies = [
 [[package]]
 name = "iced_tiny_skia"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=cf09909263c0b5a0ef43bbf4158a4843559cc8cb#cf09909263c0b5a0ef43bbf4158a4843559cc8cb"
+source = "git+https://github.com/iced-rs/iced?rev=0d12e964da8c3f0f7a02d3d731e3187eecfe5779#0d12e964da8c3f0f7a02d3d731e3187eecfe5779"
 dependencies = [
  "bytemuck",
  "cosmic-text",
@@ -4039,7 +4052,7 @@ dependencies = [
 [[package]]
 name = "iced_wgpu"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=cf09909263c0b5a0ef43bbf4158a4843559cc8cb#cf09909263c0b5a0ef43bbf4158a4843559cc8cb"
+source = "git+https://github.com/iced-rs/iced?rev=0d12e964da8c3f0f7a02d3d731e3187eecfe5779#0d12e964da8c3f0f7a02d3d731e3187eecfe5779"
 dependencies = [
  "bitflags 2.11.1",
  "bytemuck",
@@ -4060,7 +4073,7 @@ dependencies = [
 [[package]]
 name = "iced_widget"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=cf09909263c0b5a0ef43bbf4158a4843559cc8cb#cf09909263c0b5a0ef43bbf4158a4843559cc8cb"
+source = "git+https://github.com/iced-rs/iced?rev=0d12e964da8c3f0f7a02d3d731e3187eecfe5779#0d12e964da8c3f0f7a02d3d731e3187eecfe5779"
 dependencies = [
  "iced_renderer",
  "log",
@@ -4074,7 +4087,7 @@ dependencies = [
 [[package]]
 name = "iced_winit"
 version = "0.15.0-dev"
-source = "git+https://github.com/iced-rs/iced?rev=cf09909263c0b5a0ef43bbf4158a4843559cc8cb#cf09909263c0b5a0ef43bbf4158a4843559cc8cb"
+source = "git+https://github.com/iced-rs/iced?rev=0d12e964da8c3f0f7a02d3d731e3187eecfe5779#0d12e964da8c3f0f7a02d3d731e3187eecfe5779"
 dependencies = [
  "arboard",
  "iced_debug",

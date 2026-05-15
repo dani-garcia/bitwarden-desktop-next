@@ -164,6 +164,8 @@ impl CipherForm {
             secure_note: None,
             ssh_key,
             bank_account: None,
+            drivers_license: None,
+            passport: None,
             favorite: false,
             reprompt: CipherRepromptType::None,
             organization_use_totp: false,
@@ -312,6 +314,7 @@ impl CipherForm {
                     bank_contact_phone: None,
                 });
             }
+            CipherType::DriversLicense | CipherType::Passport => unreachable!(),
         }
     }
 }

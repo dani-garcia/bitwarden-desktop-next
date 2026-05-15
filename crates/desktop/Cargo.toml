@@ -104,4 +104,4 @@ windows-sys = { version = "0.61", features = [
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt"] }
-iced_test = { git = "https://github.com/iced-rs/iced", rev = "cf09909263c0b5a0ef43bbf4158a4843559cc8cb" }
+iced_test = { workspace = true }

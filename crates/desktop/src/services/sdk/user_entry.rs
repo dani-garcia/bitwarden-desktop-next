@@ -3,7 +3,6 @@
 //! clone, internally `Arc`'d) or the small bundles assembled by accessors
 //! on `ClientManager`.
 
-use bitwarden_core::UserId;
 use bitwarden_crypto::{EncString, Kdf};
 use bitwarden_pm::PasswordManagerClient;
 
@@ -18,10 +17,6 @@ pub(super) struct UserEntry {
     pub(super) display_name: String,
     pub(super) server_url: String,
     pub(super) unlock_methods: UnlockMethods,
-    /// SDK-side UUID, parsed from the SQLite filename. The SDK binds a
-    /// `UserId` to a `Client` on first `initialize_user_crypto`, so lock/unlock
-    /// cycles MUST pass the same ID.
-    pub(super) sdk_user_id: UserId,
     pub(super) kdf: Kdf,
     pub(super) encrypted_user_key: EncString,
     pub(super) private_key: EncString,

@@ -36,8 +36,10 @@ impl UnlockData {
     /// success the keystore is unlocked in memory.
     pub async fn unlock(self, password: String) -> Result<(), String> {
         let req = InitUserCryptoRequest {
-            // Reuse the Client's bound UserId on every unlock — see the
-            // invariant on `UserEntry::sdk_user_id`.
+            // Reuse the Client's bound UserId on every unlock — the SDK binds
+            // it on first `init_user_id` (called by `load_from_state`), so
+            // subsequent unlocks MUST pass the same id. `init_user_id` is
+            // idempotent for the same value.
             user_id: Some(self.sdk_user_id),
             kdf_params: self.kdf.clone(),
             email: self.email.clone(),

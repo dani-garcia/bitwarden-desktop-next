@@ -57,6 +57,17 @@ fn main() -> iced::Result {
     init_tracing();
     services::i18n::init();
 
+    // Required by `Client::load_from_state` (called by the SDK loader on each
+    // user), which reads `get_host_platform_info()` when constructing
+    // `ClientSettings`. Must be set once before any SDK client construction.
+    bitwarden_core::init_host_platform_info(bitwarden_core::HostPlatformInfo {
+        user_agent: "Bitwarden Rust-SDK".to_string(),
+        device_type: bitwarden_core::DeviceType::SDK,
+        device_identifier: None,
+        bitwarden_client_version: None,
+        bitwarden_package_type: None,
+    });
+
     // Single-instance guard: if another process is already running, tell it
     // to surface its window and exit. Otherwise take over as the primary —
     // `wake_stream` will bind the listener once iced's tokio runtime is up.

@@ -17,7 +17,9 @@ use std::collections::HashMap as StdHashMap;
 
 use bitwarden_collections::collection::CollectionId;
 use bitwarden_core::{
-    ClientBuilder, ClientSettings, OrganizationId, UserId,
+    ClientBuilder, DeviceType, HostPlatformInfo, OrganizationId, UserId,
+    client::persisted_state::BaseUrls,
+    init_host_platform_info,
     key_management::{
         LocalUserDataKeyState, MasterPasswordUnlockData, PrivateKeySlotId,
         account_cryptographic_state::WrappedAccountCryptographicState,
@@ -25,7 +27,7 @@ use bitwarden_core::{
     },
 };
 use bitwarden_crypto::{SymmetricCryptoKey, UnsignedSharedKey};
-use bitwarden_pm::PasswordManagerClient;
+use bitwarden_pm::{PasswordManagerClient, SaveStateData};
 use bitwarden_ssh::generator::{KeyAlgorithm, generate_sshkey};
 use bitwarden_state::{
     DatabaseConfiguration,
@@ -190,6 +192,17 @@ fn data_dir() -> PathBuf {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    // Required by `Client::load_from_state`, which reads `get_host_platform_info()`
+    // when constructing `ClientSettings`. Must be set once before any SDK client
+    // construction; subsequent calls are no-ops.
+    init_host_platform_info(HostPlatformInfo {
+        user_agent: "Bitwarden Rust-SDK".to_string(),
+        device_type: DeviceType::SDK,
+        device_identifier: None,
+        bitwarden_client_version: None,
+        bitwarden_package_type: None,
+    });
+
     let data_dir = data_dir();
     if data_dir.exists() {
         std::fs::remove_dir_all(&data_dir)?;
@@ -214,39 +227,28 @@ async fn main() -> Result<(), Box<dyn Error>> {
 }
 
 async fn build_user(spec: &UserSpec, data_dir: &Path) -> Result<MockUserMeta, Box<dyn Error>> {
-    // TODO: migrate to `PasswordManagerClient::load_from_state` once the SDK
-    // exposes it. We hand-assemble the client because `PasswordManagerClient::new`
-    // defaults the registry to `StateRegistry::new_with_memory_db`, which pre-sets
-    // the database `OnceLock` and prevents our per-user `initialize_database` call.
-    // Mirror the parts of `PasswordManagerClientBuilder::build` we still need:
-    // the `PasswordManagerTokenHandler` and our settings.
-    let token_handler =
-        Arc::new(bitwarden_auth::token_management::PasswordManagerTokenHandler::default());
-    let inner = ClientBuilder::new()
-        .with_token_handler(token_handler)
-        .with_settings(ClientSettings {
-            identity_url: "http://localhost:8080/identity".to_string(),
-            api_url: "http://localhost:8080/api".to_string(),
-            ..Default::default()
-        })
-        .with_state(StateRegistry::new())
-        .build();
-    let client = PasswordManagerClient(inner);
-
     // Fresh random UserId per run — matches how production IDs come from the server.
     // One Client = one user, and this ID is what subsequent SDK calls bind to.
     let sdk_user_id = UserId::new(uuid::Uuid::new_v4());
+    let kdf = bitwarden_crypto::Kdf::default_pbkdf2();
 
-    // `LocalUserDataKeyState` isn't in `get_sdk_managed_migrations()`, but
-    // `initialize_user_crypto` does write to it. Register an empty in-memory
-    // repo so the crypto init path doesn't fail. Everything else in the
-    // migration list (Cipher, Folder, UserKeyState, SettingItem, ...) gets a
-    // table created by `initialize_database` below.
-    register_empty_repo::<LocalUserDataKeyState>(&client);
+    // `make_register_keys` is exposed only as a method on `AuthClient`, but
+    // its body doesn't touch `self.client` — it's pure crypto over (email,
+    // password, kdf). We use a throwaway memory-only client just to access it,
+    // so we have the wrapped private key before building the real registry.
+    let scratch = ClientBuilder::new().build();
+    let reg = scratch.auth().make_register_keys(
+        spec.email.to_string(),
+        spec.password.to_string(),
+        kdf.clone(),
+    )?;
 
-    client
-        .platform()
-        .state()
+    // Build the disk-backed registry and pre-populate it. `save_to_state` needs
+    // a `&StateRegistry`, so it has to run before we hand the registry to
+    // `with_state` (which consumes it). The desktop loader reads these three
+    // settings back via `load_from_state` to rebuild a locked client.
+    let registry = StateRegistry::new();
+    registry
         .initialize_database(
             DatabaseConfiguration::Sqlite {
                 db_name: sdk_user_id.to_string(),
@@ -256,13 +258,31 @@ async fn build_user(spec: &UserSpec, data_dir: &Path) -> Result<MockUserMeta, Bo
         )
         .await?;
 
-    let kdf = bitwarden_crypto::Kdf::default_pbkdf2();
+    PasswordManagerClient::save_to_state(
+        SaveStateData {
+            user_id: sdk_user_id,
+            urls: BaseUrls {
+                identity_url: "http://localhost:8080/identity".to_string(),
+                api_url: "http://localhost:8080/api".to_string(),
+            },
+            crypto_state: WrappedAccountCryptographicState::V1 {
+                private_key: reg.keys.private.clone(),
+            },
+        },
+        &registry,
+    )
+    .await?;
 
-    let reg = client.0.auth().make_register_keys(
-        spec.email.to_string(),
-        spec.password.to_string(),
-        kdf.clone(),
-    )?;
+    // `LocalUserDataKeyState` isn't in `get_sdk_managed_migrations()`, but
+    // `initialize_user_crypto` does write to it. Register an empty in-memory
+    // repo on the bare registry so the crypto init path doesn't fail.
+    register_empty_repo::<LocalUserDataKeyState>(&registry);
+
+    // Reuse the same entry point the desktop loader uses — the URLs come from
+    // `BASE_URLS` (just written) and `user_id` is auto-bound on the client.
+    let token_handler =
+        Arc::new(bitwarden_auth::token_management::PasswordManagerTokenHandler::default());
+    let client = PasswordManagerClient::load_from_state(token_handler, registry).await?;
 
     client
         .crypto()
@@ -383,11 +403,11 @@ async fn build_user(spec: &UserSpec, data_dir: &Path) -> Result<MockUserMeta, Bo
     })
 }
 
-fn register_empty_repo<T: RepositoryItem + Clone>(client: &PasswordManagerClient) {
+fn register_empty_repo<T: RepositoryItem + Clone>(registry: &StateRegistry) {
     let repo = Arc::new(MemoryRepo::<T> {
         data: Mutex::new(HashMap::new()),
     });
-    client.platform().state().register_client_managed(repo);
+    registry.register_client_managed(repo);
 }
 
 // ── Cipher view builders ───────────────────────────────────────────────────
@@ -477,6 +497,8 @@ fn cipher_with(name: &str, notes: Option<String>, kind: CipherKind) -> CipherVie
         secure_note,
         ssh_key,
         bank_account,
+        drivers_license: None,
+        passport: None,
         favorite: false,
         reprompt: CipherRepromptType::None,
         organization_use_totp: false,

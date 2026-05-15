@@ -107,7 +107,7 @@ impl ClientManager {
         let e = self.users.get(uid)?;
         Some(UnlockData {
             client: PasswordManagerClient(e.client.0.clone()),
-            sdk_user_id: e.sdk_user_id,
+            sdk_user_id: *uid,
             kdf: e.kdf.clone(),
             email: e.email.clone(),
             encrypted_user_key: e.encrypted_user_key.clone(),
@@ -138,9 +138,9 @@ impl ClientManager {
     pub fn accounts(&self) -> Vec<AccountEntry> {
         let mut entries: Vec<AccountEntry> = self
             .users
-            .values()
-            .map(|e| AccountEntry {
-                user_id: e.sdk_user_id,
+            .iter()
+            .map(|(uid, e)| AccountEntry {
+                user_id: *uid,
                 email: e.email.clone(),
                 display_name: e.display_name.clone(),
                 server_url: e.server_url.clone(),
@@ -210,7 +210,7 @@ impl ClientManager {
         entry
             .client
             .platform()
-            .user_fingerprint(entry.sdk_user_id.to_string())
+            .user_fingerprint(user_id.to_string())
             .ok()
     }
 

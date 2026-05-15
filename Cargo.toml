@@ -12,21 +12,22 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 
-bitwarden-auth = { git = "https://github.com/bitwarden/sdk-internal", rev = "3aa1201692e5d56efa763c7dec1161254d4c9e4b" }
-bitwarden-collections = { git = "https://github.com/bitwarden/sdk-internal", rev = "3aa1201692e5d56efa763c7dec1161254d4c9e4b" }
-bitwarden-core = { git = "https://github.com/bitwarden/sdk-internal", rev = "3aa1201692e5d56efa763c7dec1161254d4c9e4b" }
-bitwarden-crypto = { git = "https://github.com/bitwarden/sdk-internal", rev = "3aa1201692e5d56efa763c7dec1161254d4c9e4b" }
-bitwarden-exporters = { git = "https://github.com/bitwarden/sdk-internal", rev = "3aa1201692e5d56efa763c7dec1161254d4c9e4b" }
-bitwarden-fido = { git = "https://github.com/bitwarden/sdk-internal", rev = "3aa1201692e5d56efa763c7dec1161254d4c9e4b" }
-bitwarden-generators = { git = "https://github.com/bitwarden/sdk-internal", rev = "3aa1201692e5d56efa763c7dec1161254d4c9e4b" }
-bitwarden-logging = { git = "https://github.com/bitwarden/sdk-internal", rev = "3aa1201692e5d56efa763c7dec1161254d4c9e4b" }
-bitwarden-pm = { git = "https://github.com/bitwarden/sdk-internal", rev = "3aa1201692e5d56efa763c7dec1161254d4c9e4b" }
-bitwarden-send = { git = "https://github.com/bitwarden/sdk-internal", rev = "3aa1201692e5d56efa763c7dec1161254d4c9e4b" }
-bitwarden-ssh = { git = "https://github.com/bitwarden/sdk-internal", rev = "3aa1201692e5d56efa763c7dec1161254d4c9e4b" }
-bitwarden-state = { git = "https://github.com/bitwarden/sdk-internal", rev = "3aa1201692e5d56efa763c7dec1161254d4c9e4b" }
-bitwarden-vault = { git = "https://github.com/bitwarden/sdk-internal", rev = "3aa1201692e5d56efa763c7dec1161254d4c9e4b" }
+bitwarden-auth = { git = "https://github.com/bitwarden/sdk-internal", rev = "10af2ea2f20b6d17ec1e4654892184e37fc4626e" }
+bitwarden-collections = { git = "https://github.com/bitwarden/sdk-internal", rev = "10af2ea2f20b6d17ec1e4654892184e37fc4626e" }
+bitwarden-core = { git = "https://github.com/bitwarden/sdk-internal", rev = "10af2ea2f20b6d17ec1e4654892184e37fc4626e" }
+bitwarden-crypto = { git = "https://github.com/bitwarden/sdk-internal", rev = "10af2ea2f20b6d17ec1e4654892184e37fc4626e" }
+bitwarden-exporters = { git = "https://github.com/bitwarden/sdk-internal", rev = "10af2ea2f20b6d17ec1e4654892184e37fc4626e" }
+bitwarden-fido = { git = "https://github.com/bitwarden/sdk-internal", rev = "10af2ea2f20b6d17ec1e4654892184e37fc4626e" }
+bitwarden-generators = { git = "https://github.com/bitwarden/sdk-internal", rev = "10af2ea2f20b6d17ec1e4654892184e37fc4626e" }
+bitwarden-logging = { git = "https://github.com/bitwarden/sdk-internal", rev = "10af2ea2f20b6d17ec1e4654892184e37fc4626e" }
+bitwarden-pm = { git = "https://github.com/bitwarden/sdk-internal", rev = "10af2ea2f20b6d17ec1e4654892184e37fc4626e" }
+bitwarden-send = { git = "https://github.com/bitwarden/sdk-internal", rev = "10af2ea2f20b6d17ec1e4654892184e37fc4626e" }
+bitwarden-ssh = { git = "https://github.com/bitwarden/sdk-internal", rev = "10af2ea2f20b6d17ec1e4654892184e37fc4626e" }
+bitwarden-state = { git = "https://github.com/bitwarden/sdk-internal", rev = "10af2ea2f20b6d17ec1e4654892184e37fc4626e" }
+bitwarden-vault = { git = "https://github.com/bitwarden/sdk-internal", rev = "10af2ea2f20b6d17ec1e4654892184e37fc4626e" }
 
-iced = { git = "https://github.com/iced-rs/iced", rev = "cf09909263c0b5a0ef43bbf4158a4843559cc8cb", default-features = false }
+iced = { git = "https://github.com/iced-rs/iced", rev = "0d12e964da8c3f0f7a02d3d731e3187eecfe5779", default-features = false }
+iced_test = { git = "https://github.com/iced-rs/iced", rev = "0d12e964da8c3f0f7a02d3d731e3187eecfe5779" }
 
 # Compile all dependencies with some optimizations when building this crate on debug
 # This slows down clean builds by about 50%, but the resulting binaries can be orders of magnitude faster
